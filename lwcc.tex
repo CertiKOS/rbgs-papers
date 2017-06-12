@@ -1,0 +1,148 @@
+\documentclass{beamer}
+\usepackage{bussproofs}
+\usepackage{stmaryrd}
+
+\title{Lightweight Compositional Compcert}
+\subtitle{a POPL paper pitch}
+\author{J\'er\'emie Koenig}
+
+\newcommand{\EC}{\text{EC}}
+\newcommand{\nEC}{\overline{\EC}}
+\newcommand{\ECEC}{\EC \Rightarrow \EC}
+%\newcommand{\ECEC}{\bar{*} \vee *}
+\newcommand{\kw}[1]{\texttt{#1}}
+\newcommand{\word}[1]{\mathbf{#1}}
+\newcommand{\sys}{\textbf{sys}}
+\newcommand{\env}{\textbf{env}}
+\newcommand{\ident}{\kw{ident}}
+\newcommand{\val}{\kw{val}}
+\newcommand{\mem}{\kw{mem}}
+\newcommand{\Y}{\mathbf{Y}}
+\newcommand{\E}{\mathcal{E}}
+
+\setlength{\parskip}{1ex}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}{Bottom line} %{{{
+Deploy the same ideas we use for thread linking
+in the context of separate compilation:
+\begin{itemize}
+\item Define a game semantics for Clight and Asm
+\item Game semantics + extcall oracle = original semantics
+\item CompcertX just turned into a compositional complier
+\end{itemize}
+\end{frame}
+%}}}
+
+\begin{frame}{Games} %{{{
+For this application,
+we're only interested in 2 games: $\EC$ and $\ECEC$,
+with possible moves
+$e ::= \kw{call}(f, \vec{v}, m) \ \vert\ \kw{ret}(v, m')$.
+
+In $\EC$, the players $\sys$ and $\env$ alternate:
+\begin{itemize}
+\item $\env$ plays $\kw{call}\ (f, \vec{v}, m) \in \ident \times \val^* \times \mem$;
+\item $\sys$ plays $\kw{ret}\ (v, m) \in \val \times \mem$.
+\end{itemize}
+
+In $\ECEC$ aka $\nEC \vee \EC$, $\env$ starts with $\kw{call}$ but
+$\sys$ can call back in a well-bracketed way.
+\end{frame}
+%}}}
+
+\begin{frame}{Semantics} %{{{
+For a Clight module $M$ with operational semantics $\rightarrow$,
+the strategy $\llbracket M \rrbracket : \ECEC$ is defined by:
+\[
+	\AxiomC{$\kw{replay}(\word{u})
+		\rightarrow^?
+		\kw{Callstate}(f, \vec{v}, k, m)$}
+	\UnaryInfC{$\llbracket M \rrbracket \ni
+		\word{u} \cdot \kw{call}(f, \vec{v}, m)$}
+	\DisplayProof
+\]
+\[
+	\AxiomC{$\kw{replay}(\word{u})
+		\rightarrow^?
+		\kw{Returnstate}(v, k, m)$}
+	\UnaryInfC{$\llbracket M \rrbracket \ni
+		\word{u} \cdot \kw{ret}(v, m)$}
+	\DisplayProof
+\]
+
+$\kw{replay}(\word{u})$ is the state obtained
+by replaying the position $\word{u}$. \\
+$\rightarrow^{?}$ is $\rightarrow$ iterated
+up to the first $\kw{Callstate}$ or a $\kw{Returnstate}$.
+\end{frame}
+%}}}
+
+\begin{frame}{Fixpoint} %{{{
+Note that $\llbracket M \rrbracket$
+does not even service its own internal calls,
+instead relying on the environment to do that.
+
+We can introduce a fixpoint operator $\Y$:
+\[
+	\AxiomC{$\sigma : \ECEC$}
+	\UnaryInfC{$\Y \sigma : \EC$}
+	\DisplayProof
+\]
+The strategy $\Y \sigma$ is the composition
+of an infinite sequence of copies of $\sigma$,
+each using the next one to handle its function calls:
+\[ \text{[figure]} \]
+This way we can link strategies with $\cup$
+and don't need to worry about the domain of each module:
+the behavior whole program semantics is $\Y ( \llbracket M_1 \rrbracket \cup \llbracket M_2 \rrbracket \cup \cdots )$.
+\end{frame}
+%}}}
+
+\begin{frame}{Game simulations} %{{{
+[My generalization of Compcert simulations to games]
+\end{frame}
+%}}}
+
+\begin{frame}{Connecting with the CompcertX theorem} %{{{
+Using $\Y/\cup$ to define recursion and composition in one swoop would be nice,%
+\footnote{Note the connexion with $\oplus$ as both horizontal and vertical composition}
+but does it work for our purposes?
+
+We should be able ``translate'' CompcertX's theorem to:
+\[
+	\forall \E : \EC,
+		\Y (\llbracket M \rrbracket^\kw{Clight} \cup i_2(\E)) \le_R
+		\Y (\llbracket C(M) \rrbracket^\kw{Asm} \cup i_2(\E))
+\]
+To transform it a into a per-module theorem,
+we would need a simulation reflection theorem of the form:
+\[
+	\AxiomC{$\forall \E : \EC, \Y (\sigma_1 \cup i_2(\E)) \le_R \Y (\sigma_2 \cup i_2(\E))$}
+	\UnaryInfC{$\sigma_1 \le_{R \Rightarrow R} \sigma_2$}
+	\DisplayProof
+\]
+where $\sigma_1, \sigma_2 : \ECEC$.
+\end{frame}
+%}}}
+
+\begin{frame}{Can it be done?} %{{{
+It is non-trivial but I believe it can be worked out.
+It may be necessary to introduce:
+\begin{itemize}
+\item the domain of modules in the types,
+	so that we can sort out the moves of $M$ vs. $\E$, and/or
+\item explicit composition,
+	so that we can get $\Y$ into $\llbracket - \rrbracket$ and
+	out of the simulation reflection theorem.
+\end{itemize}
+\end{frame}
+%}}}
+
+\end{document}
+
