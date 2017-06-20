@@ -1,9 +1,21 @@
-\documentclass{article} %{{{
+\documentclass{article}
+
+% Packages %{{{
+\usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{tikz}
 \usetikzlibrary{calc}
+\usepackage{bussproofs}
+% }}}
 
-\newcommand{\kw}[1]{\texttt{#1}}
+% Environments {{{
+\newtheorem{definition}{Definition}
+% }}}
+
+% Macros {{{
+
+\newcommand{\kw}[1]{\ensuremath{\mathsf{#1} }}
+\newcommand{\ifr}[1]{\ [#1]\ }
 
 % Pointers for justified sequences %{{{
 
@@ -30,7 +42,7 @@
 
 %}}}
 
-%}}}
+% }}}
 
 \begin{document}
 
@@ -130,20 +142,192 @@ Oracle construction.
 
 %}}}
 
-\subsection{Properties}
+\subsection{Properties} %{{{
 
 Clight: Determined, innocent, well-bracketed. \\
 Asm: Innocent, well-bracketed?
 
 %}}}
 
-\section{Kripke logical relations for Compcert games} %{{{
+%}}}
 
-XXX: how does this relate to
-the intrinsic preorder in 3.5 of [Abramsky \emph{Game Semantics}]?
-Sound/complete reasoning principle?
+\section{Kripke logical relations for Compcert} %{{{
 
-\subsection{Kripke logical relations} %{{{
+%XXX: how does this relate to
+%the intrinsic preorder in 3.5 of [Abramsky \emph{Game Semantics}]?
+%Sound/complete reasoning principle?
+
+The simulation relations used by Compcert can be understood
+as Kripke logical relations over
+Compcert's operational semantics.
+The relations between
+the states and transition relations of \kw{Clight} or \kw{Asm}
+are built up in a systematic way from elementary relations
+at basic types like \kw{mem} and \kw{val}.
+
+For example,
+we can understand memory injections in Compcert
+as defining a Kripke logical relation \kw{inj}.
+The elementary relations \kw{Mem.inject} and \kw{Val.inject}
+are indexed over the set of worlds \kw{meminj},
+which specify how memory blocks in the source and target states
+correspond to each other.
+The accessibility relation \kw{inject\_incr}
+specifies for a given injection
+what are its possible ``futures'' are:
+they should map existing blocks in the same way
+but may additionally map blocks newly allocated in the source.
+From \kw{Mem.inject}, \kw{Val.inject} and similary elementary relations,
+more complex relations are defined,
+culminating in a number of simulation diagrams.
+Similarly,
+\kw{Mem.extends}, \kw{Val.lessdef}, and related constructions
+can be understood as the components of a KLR \kw{ext},
+though one with a trivial set of worlds $\{*\}$.
+Fig. X illustrates [much of Compcert's memory model spec
+just expresses the compatibility of basic operations
+with these KLRs and more].
+
+In the following,
+we generalize from \kw{inj} and \kw{ext} and
+introduce a family of Kripke logical relations for Compcert,
+which define logical relations at all the types
+involved in Compcert's semantics.
+These relations are compatible with
+all appropriate elementary operations
+(in particular, operations of the Compcert memory model).
+They satisfy enough properties that
+the \kw{Clight} and \kw{Asm} transition relations
+are stable under any of them
+(a relational parametricity theorem),
+yet are flexible enough that encode many interesting properties,
+giving us many theorems about Compcert's operational semantics
+``for free''.
+
+This reading of Compcert's foundations
+in terms of logical relations
+can provide us with new insight
+[way to understand Compcert's complicated
+statements about injections etc. in a uniform way]
+[we will see also a guide for formulating our definitions
+when moving into the realm of games].
+
+\subsection{Definition} %{{{
+
+\begin{definition}[\kw{simrel}]
+A Compcert \emph{simulation relation toolkit} $R$
+is a tuple $(W_R, \leadsto_R, U^\kw{v}_R, U^\kw{b}_R, f_R, R^\kw{mem})$
+such that:
+\begin{itemize}
+\item $(W_R, \leadsto_R)$
+  is a preorder of $R$'s \emph{possible worlds};
+\item $U^\kw{v}_R : \mathbb{B}$
+  indicates whether $R$ matches undefined values on the left
+  to arbitrary non-pointer values on the right;
+\item $U^\kw{b}_R : W_R \rightarrow \mathcal{P}(\kw{block})$
+  indicates for each possible world $w$
+  whether $R$ matches undefined values on the left
+  to pointers into a given block $b$ on the right;
+\item $f : W_R \rightarrow \kw{meminj}$
+  gives for each possible world $w$
+  a memory injection which specifies how pointers should be related;
+\item $R^\kw{mem} : W_R \rightarrow \mathcal{R}(\kw{mem})$
+  indicates for each possible world $w$
+  how memory states should be related.
+\end{itemize}
+The components of $R$ must additionally satisfy
+a number of properties which are shown in Fig~\ref{fig:simrelprop}
+and discussed below.
+\end{definition}
+
+\begin{figure}
+  \small
+  \[ R = (W, \leadsto, U^\kw{v}, U^\kw{b}, f, R^\kw{mem}) \]
+  \noindent \fbox{$R_w^\kw{ptr}$}
+  \[
+    \AxiomC{$f_w(b) = (b', \delta)$}
+    \UnaryInfC{$(b, o) \ifr{R_w^\kw{ptr}} (b', o + \delta)$}
+    \DisplayProof
+  \]
+  \noindent \fbox{$R^\kw{ptrbits}_w$}
+  \[
+    \AxiomC{$f_w(b) = (b', \delta)$}
+    \UnaryInfC{$(b, o) \ifr{R_w^\kw{ptrbits}} (b', \kw{Ptrofs.add}(o, \kw{Ptrofs.repr}(\delta)))$}
+    \DisplayProof
+  \]
+  \noindent \fbox{$R_w^\kw{val}$}
+  \[
+      \begin{array}{c@{\hspace{3em}}r@{\,}l}
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vundef} & &
+        \\
+        \kw{Vint} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vint} &
+        U^\kw{v} = \kw{t} \Rightarrow &
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vint}(n)
+        \\
+        \kw{Vlong} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vlong} &
+        U^\kw{v} = \kw{t} \Rightarrow &
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vlong}(n)
+        \\
+        \kw{Vfloat} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vfloat} &
+        U^\kw{v} = \kw{t} \Rightarrow &
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vfloat}(x)
+        \\
+        \kw{Vsingle} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vsingle} &
+        U^\kw{v} = \kw{t} \Rightarrow &
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vsingle}(x)
+        \\
+        \kw{Vptr} \ifr{R^\kw{ptrbits}_w \rightarrow R^\kw{val}_w} \kw{Vptr} &
+        U^\kw{b}_w(b_2) \Rightarrow &
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vptr}(b_2, o_2)
+      \end{array}
+  \]
+  \label{fig:simrel}
+  \caption{Elementary relations associated with $R$}
+\end{figure}
+
+\begin{figure}
+  \begin{gather*}
+    U^\kw{b} \ifr{(\leadsto) \rightarrow (=) \rightarrow (\Rightarrow)} U^\kw{b} \\
+    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f \\
+    U^\kw{v} = \kw{t} \ \wedge\  p_1 \ifr{R^\kw{ptr}_w} (b_2, o_2) \ \Rightarrow\  U^\kw{b}_w(b_2) \\
+    U^\kw{p}_w(b_2) \ \Rightarrow\  U^\kw{v} = \kw{t} \\
+    [\ldots] \\
+    \kw{Mem.alloc}
+    \ifr{R^\kw{mem}_w \rightarrow (=) \rightarrow (=) \rightarrow
+      \exists w \leadsto w' \,.\, R^\kw{mem}_{w'} \times R^\kw{block}_{w'}}
+    \kw{Mem.alloc}
+    \\
+    \kw{Mem.free}
+    \ifr{R^\kw{mem}_w \rightarrow R^\kw{ptrrange}_w \rightarrow
+      \kw{option}^+ (\exists w \leadsto w' \,.\, R^\kw{mem}_{w'})}
+    \kw{Mem.free}
+    \\
+    \ldots
+  \end{gather*}
+  \label{fig:simrelprop}
+  \caption{Required properties for simulation relation toolkits}
+\end{figure}
+
+Simulation relation toolkits (\kw{simrel} for short)
+are named this way because we will ultimately
+use them to build simulation relations between
+Compcert transition systems.
+
+Values are related in a way that largely mirrors $\kw{Val.inject}\,f_w$,
+however the additional parameters $U^\kw{v}$ and $U^\kw{b}$
+specify whether $\kw{Vundef}$ should be allowed to refine defined values.
+The ability to switch off this behavior of \kw{Val.inject} and \kw{Val.lessdef}
+allows us to define the simulation relation toolkit \kw{id},
+for which $R^\kw{mem}$ and $R^\kw{val}$ both reduce to equality,
+as well as coreflexive \kw{simrel}s,
+which can be used to encode a number of invariants.
+The separate treatment of pointers with $U^\kw{b}$
+is necessary when defining the composite \kw{simrel} $R_1 \circ R_2$.
+
+
+
+[Define inj, ext, id, $\circ$.]
+
 
 Kripke logical relations of arenas, games, strategies.
 
