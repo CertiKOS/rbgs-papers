@@ -22,6 +22,13 @@
 
 \setlength{\parskip}{1ex}
 
+\AtBeginSection[]
+{
+   \begin{frame}
+        \tableofcontents[currentsection]
+   \end{frame}
+}
+
 \begin{document}
 
 \begin{frame}
@@ -39,20 +46,58 @@ in the context of separate compilation:
 \end{frame}
 %}}}
 
+\section{Game semantics for Compcert}
+
 \begin{frame}{Games} %{{{
-For this application, only 2 games: $\EC$ and $\ECEC$,
-with moves
-$e ::= \kw{call}(f, \vec{v}, m) \ \vert\ \kw{ret}(v, m')$.
+We build up from the HO arena and game $\EC$ defined by:
+\begin{gather*}
+M_\EC = \{ \kw{call}[f, \vec{v}, m] \} \cup
+        \{ \kw{ret}[f, \vec{v}, m, v, m'] \} \\
+\lambda_\EC(\kw{call}[\ldots]) = \kw{OQ} \hspace{3em}
+\lambda_\EC(\kw{ret}[\ldots]) = \kw{PA} \\
+* \vdash_\EC \kw{call}[\ldots] \hspace{2em}
+\kw{call}[f, \vec{v}, m] \vdash_\EC \kw{ret}[f, \vec{v}, m, v, m']
+\end{gather*}
+Schematically:
+\begin{center}
+[figure]
+\end{center}
+Example play:
+\begin{center}
+[figure]
+\end{center}
+\end{frame}
+%}}}
 
-In $\EC$, the players $\sys$ and $\env$ alternate:
-\begin{itemize}
-\item $\env$ plays $\kw{call}(f, \vec{v}, m)$;
-\item $\sys$ plays $\kw{ret}(v, m)$.
-\end{itemize}
+\begin{frame}{Type of modules} %{{{
+We will interpret the semantics of modules in the game $\ECEC$:
+\begin{center}
+[figure]
+\end{center}
+Example play:
+\begin{center}
+[figure]
+\end{center}
+\end{frame}
+%}}}
 
-In $\ECEC$ aka. $\nEC \vee \EC$,
-$\env$ starts with $\kw{call}$ but
-$\sys$ can call back in a well-bracketed way.
+\begin{frame}{Linking operator} %{{{
+For $\sigma_1, \sigma_2 : \ECEC$,
+we want to define:
+\[ \sigma_1 \bowtie \sigma_2 \]
+It should be a straighforward combination
+of $\circ$, $\cup$, and \kw{lfp},
+though stronger typing may be required
+in order to hide the implemented calls.
+
+Linking theorem:
+\[
+        \AxiomC{$\sigma_1 \le_R \sigma_1'$}
+        \AxiomC{$\sigma_2 \le_R \sigma_2'$}
+        \BinaryInfC{$\sigma_1 \bowtie \sigma_2 \le_R \sigma_1' \bowtie \sigma_2'$}
+        \DisplayProof
+\]
+($\le_R$ to be defined later)
 \end{frame}
 %}}}
 
@@ -60,7 +105,7 @@ $\sys$ can call back in a well-bracketed way.
 For a Clight module $M$ with operational semantics $\rightarrow$,
 the strategy $\llbracket M \rrbracket : \ECEC$ is defined by:
 \[
-	\AxiomC{$\kw{replay}(\word{u})
+	\AxiomC{$\kw{replay}(\kw{view}(\word{u}))
 		\rightarrow^?
 		\kw{Callstate}(f, \vec{v}, k, m)$}
 	\UnaryInfC{$\llbracket M \rrbracket \ni
@@ -68,79 +113,197 @@ the strategy $\llbracket M \rrbracket : \ECEC$ is defined by:
 	\DisplayProof
 \]
 \[
-	\AxiomC{$\kw{replay}(\word{u})
+	\AxiomC{$\kw{replay}(\kw{view}(\word{u}))
 		\rightarrow^?
-		\kw{Returnstate}(v, k, m)$}
+		\kw{Returnstate}(v, \kw{K0}, m)$}
 	\UnaryInfC{$\llbracket M \rrbracket \ni
 		\word{u} \cdot \kw{ret}(v, m)$}
 	\DisplayProof
 \]
 
-$\kw{replay}(\word{u})$ is the state obtained
+$\kw{replay}(\kw{view}(\word{u}))$ is the state obtained
 by replaying the position $\word{u}$. \\
 $\rightarrow^{?}$ is $\rightarrow$ iterated
-up to the first $\kw{Callstate}$ or a $\kw{Returnstate}$.
+until the first $\kw{Callstate}$ to an external function
+or $\kw{Returnstate}$ to the null continuation.
+
+The resulting strategies are innocent and well-bracketed.
 \end{frame}
 %}}}
 
-\begin{frame}{Fixpoint} %{{{
-Note that $\llbracket M \rrbracket$
-does not even service its own internal calls,
-instead relying on the environment to do that.
+%\begin{frame}{Fixpoint} %{{{
+%Note that $\llbracket M \rrbracket$
+%does not even service its own internal calls,
+%instead relying on the environment to do that.
+%
+%We can introduce a fixpoint operator $\Y$:
+%\[
+%	\AxiomC{$\sigma : \ECEC$}
+%	\UnaryInfC{$\Y \sigma : \EC$}
+%	\DisplayProof
+%\]
+%The strategy $\Y \sigma$ is the composition
+%of an infinite sequence of copies of $\sigma$,
+%each using the next one to handle its function calls:
+%\[ \text{[figure]} \]
+%This way we can link strategies with $\cup$
+%and don't need to worry about the domain of each module:
+%the behavior whole program semantics is $\Y ( \llbracket M_1 \rrbracket \cup \llbracket M_2 \rrbracket \cup \cdots )$.
+%\end{frame}
+%%}}}
 
-We can introduce a fixpoint operator $\Y$:
-\[
-	\AxiomC{$\sigma : \ECEC$}
-	\UnaryInfC{$\Y \sigma : \EC$}
-	\DisplayProof
-\]
-The strategy $\Y \sigma$ is the composition
-of an infinite sequence of copies of $\sigma$,
-each using the next one to handle its function calls:
-\[ \text{[figure]} \]
-This way we can link strategies with $\cup$
-and don't need to worry about the domain of each module:
-the behavior whole program semantics is $\Y ( \llbracket M_1 \rrbracket \cup \llbracket M_2 \rrbracket \cup \cdots )$.
+\section{Compcert KLRs}
+
+\begin{frame}{Kripke logical relations} %{{{
+\emph{Logical relations} are structure-preserving relations
+that can be combined and built up along the type structure,
+so that relations at all types can be obtained
+from relations at base types.
+
+\emph{Kripke} logical relations
+are indexed over a set of ``possible world'',
+so that a KLR is defined by:
+\begin{itemize}
+\item a set $W$ of \emph{worlds};
+\item an \emph{accessibility relation} $(\leadsto) : \mathcal{R}(W, W)$ (often a preorder);
+\item for each type $A$ and each world $w$
+  a logical relation $R \llbracket A \rrbracket_w : \mathcal{R}(A_1, A_2)$ between the interpretations
+  $A_1$, $A_2$ of $A$.
+\end{itemize}
+
+$w \leadsto w'$ can be read as: \emph{$w$ might evolve into $w'$}.
+\end{frame} %}}}
+
+\begin{frame}{Compcert KLRs} %{{{
+My $\kw{simrel}$'s are Kripke logical relations for Compcert. \\
+Roughly speaking, each one defines:
+\begin{itemize}
+\item a set of worlds (say, $\kw{meminj}$),
+\item an accessibility relation (say, $\kw{inject\_incr}$),
+\item world-indexed relations on values (say, $\kw{Val.inject}$)
+  and memory states (say, $\kw{Mem.inject}$),
+\end{itemize}
+so that we can build up the corresponding world-indexed relation
+for pretty much anything in Compcert
+(in particular, states).
 \end{frame}
 %}}}
 
-\begin{frame}{Game simulations} %{{{
-[My generalization of Compcert simulations to games]
+\begin{frame}{Compcert parametricity} %{{{
+Expressed in this framework,
+the monotonicity of Compcert semantics
+is a \emph{parametricity theorem},
+which gives us many interesting properties of the semantics
+``for free''
+(by plugging in an appropriately designed $\kw{simrel}$):
+\begin{itemize}
+\item stability under injection (\kw{inj});
+\item preservation of invariants (\kw{inv});
+\item \kw{Mem.nextblock} is increasing (``strong \kw{id}'');
+\item \ldots
+\end{itemize}
+
+In fact,
+the required properties of external calls
+can nearly all be put in this form,
+and can therefore be shown to be preserved by the semantics.
+\end{frame}
+%}}}
+
+\begin{frame}{KLRs for strategies} %{{{
+Let $(W, \leadsto, R)$ be a Compcert KLR.
+Extending $R_w$ to the moves of $\EC$,
+then of $\ECEC$ is straightforward.
+From there we can define the simulation diagrams
+for strategies.
+
+Two \emph{justified sequences} are related if:
+\begin{itemize}
+\item They have the same overall structure;
+\item For each corresponding pair of moves,
+  there is a world $w$ such that they are related by $R_w$;
+\item If a pair of moves with world $w$ justifies
+  a pair of moves with world $w'$,
+  then $w \leadsto w'$.
+\end{itemize}
+
+Two strategies are related if they take justified sequences
+to justified sequences when played.
+
+Linking theorem: preserved by
+$\cup$, $\circ$, $\kw{lfp}$, therefore $\bowtie$.
+\end{frame}
+%}}}
+
+\section{Separate compilation}
+
+\begin{frame}{A problem?} %{{{
+Compositional CompCert Princeton paper:
+\begin{quote}
+A deficiency of CompCert’s simulation proofs and of LSRs
+was that they assumed conditions (1) and (2) at external calls,
+but did not prove that these properties were preserved by compilation.
+Directly imposing constraints (1) and (2)
+onto the simulation clauses for internal steps does not work, however.
+A compiled function should be allowed to
+write to its own spill locations ---
+just not to those of its caller.
+\end{quote}
+The go on to define their complicated \emph{structured injections}.
+\end{frame}
+%}}}
+
+\begin{frame}{A solution!} %{{{
+But because of the way we lay out our KLR accessibility relation
+onto the justification structure of HO games,
+our simulations already allow a function
+to write to its own spill locations!
+
+[Explain]
+
+Not magical because we still have to prove the thing in question
+(but we have Yuting and Pierre for that).
+
+But at least our simulations express exactly the right constraints
+in a very natural way, which is encouraging.
 \end{frame}
 %}}}
 
 \begin{frame}{Connecting with the CompcertX theorem} %{{{
-Using $\Y/\cup$ to define recursion and composition in one swoop would be nice,%
-\footnote{Note the connexion with $\oplus$ as both horizontal and vertical composition}
-but does it work for our purposes?
+CompcertX's theorem should be expressible as:
+\[
+  \forall \E : \EC,
+    \text{nonreentrant}(\E) \wedge
+    \text{determined}(\E) \wedge
+    \E \le_R \E \Rightarrow
+    \llbracket M \rrbracket^\kw{Clight} \circ \E \le_R
+    \llbracket C(M) \rrbracket^\kw{Asm} \circ \E
+\]
+where $R$ is a specific relation
+(which includes the external call requirements).
 
-We should be able ``translate'' CompcertX's theorem to:
+We should be able to generalize it to:
 \[
-	\forall \E : \EC,
-		\Y (\llbracket M \rrbracket^\kw{Clight} \cup i_2(\E)) \le_R
-		\Y (\llbracket C(M) \rrbracket^\kw{Asm} \cup i_2(\E))
+    \llbracket M \rrbracket^\kw{Clight} \le_R
+    \llbracket C(M) \rrbracket^\kw{Asm}
 \]
-To transform it a into a per-module theorem,
-we would need a simulation reflection theorem of the form:
-\[
-	\AxiomC{$\forall \E : \EC, \Y (\sigma_1 \cup i_2(\E)) \le_R \Y (\sigma_2 \cup i_2(\E))$}
-	\UnaryInfC{$\sigma_1 \le_{R \Rightarrow R} \sigma_2$}
-	\DisplayProof
-\]
-where $\sigma_1, \sigma_2 : \ECEC$.
+using the properties of our strategies
+(in particular innocence).
 \end{frame}
 %}}}
 
-\begin{frame}{Can it be done?} %{{{
-It is non-trivial but I believe it can be worked out.
-It may be necessary to introduce:
-\begin{itemize}
-\item the domain of modules in the types,
-	so that we can sort out the moves of $M$ vs. $\E$, and/or
-\item explicit composition,
-	so that we can get $\Y$ into $\llbracket - \rrbracket$ and
-	out of the simulation reflection theorem.
-\end{itemize}
+\begin{frame}{Linking with fancy contexts} %{{{
+Note that the generalized theorem allows us to link with
+all kinds of contexts:
+the only criterion is stability under $\le_R$.
+This allows us to call things like \kw{longjmp} and \kw{cswitch},
+implemented in assembly,
+directly from C code.
+
+A way to express the semantics of those is already
+an improvement on the current Compcert,
+and we could demonstrate by verifying a small program
+which uses them.
 \end{frame}
 %}}}
 
