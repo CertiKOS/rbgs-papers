@@ -5,6 +5,7 @@
 \usepackage{amssymb}
 \usepackage{tikz}
 \usetikzlibrary{calc}
+\usetikzlibrary{graphs}
 \usepackage{bussproofs}
 % }}}
 
@@ -13,11 +14,23 @@
 \newcommand{\kw}[1]{\ensuremath{ \textsf{#1} }}
 \newcommand{\ifr}[1]{\ [#1]\ }
 
+\newcommand{\EC}{\kw{C}}
+
+% Moves
+\newcommand{\mcall}[3]{\kw{#1}({#2})@{#3}}
+\newcommand{\pcall}[3]{%
+  \underline{\mcall{#1}{#2}{#3}}%
+}
+\newcommand{\mret}[2]{{#1}@{#2}}
+\newcommand{\pret}[2]{%
+  \underline{\mret{#1}{#2}}%
+}
+
 % Pointers for justified sequences %{{{
 
 % Parameters
 \newcommand{\pshift}{1.6ex}
-\newcommand{\pcdist}{1}
+\newcommand{\pcdist}{2.5}
 \newcommand{\pcangle}{60}
 
 % Pointer hook
@@ -29,7 +42,7 @@
   \tikz[remember picture, overlay]{
     \draw[->]
       let \p{dest} = (#1),
-          \n1 = {ln(\x{dest} * \x{dest} + \y{dest} * \y{dest} + 1)},
+          \n1 = {ln(veclen(\x{dest}, \y{dest}) + 1)},
           \p1 = ($(0,0)+(0,\pshift)$),
           \p4 = ($(#1)+(0,\pshift)$),
           \p2 = ($(\p1)!\n1*\pcdist!-\pcangle:(\p4)$),
@@ -113,17 +126,31 @@ A new approach for building compositional certified compilers:
 
 %}}}
 
-\section{Game semantics for Compcert} %{{{
+\section{Background} %{{{
 
-\subsection{Games} %{{{
+[Idea:
+Explain here briefly Compcert, HO games, KLR,
+to fix notation and fill in the unfamiliar reader,
+but keep it standard
+so that experts can skip this part.]
+
+\subsection{Hyland-Ong games} %{{{
 
 Games, arenas, etc.
 
 %}}}
 
-\subsection{Compcert} %{{{
+\subsection{Kripke logical relations} %{{{
 
-External call interface.
+%}}}
+
+\subsection{The Compcert certified compiler} %{{{
+
+Basics.
+
+Memory model \citep{compcertmmv2}.
+
+External call interface, CertiKOS, CompCertX \citep{popl15}.
 
 Events.
 
@@ -143,23 +170,239 @@ or use $\textsf{EC} = \varnothing, \textsf{RA = Vundef}$/parametric?]
 
 %}}}
 
-\subsection{External functions} %{{{
+\subsection{CompCertX and environment oracles}
 
-By which I mean the semantics of external functions
+%}}}
+
+\newpage
+\section{Games} %{{{
+
+\subsection{Compcert games} %{{{
+
+Whenever an external function is called,
+Compcert semantics use the \kw{external\_call} predicate
+to compute its behavior.
+\kw{external\_call} relates an initial memory state,
+a list of actual parameters,
+a final memory state, and
+a return value.
+Based on this protocol,
+we define our basic Compcert game.
+
+\begin{definition}[Elementary Compcert game]
+The arena $\EC = (M_\EC, \lambda_\EC, \vdash_\EC)$
+uses the following set of moves.
+Moves of the form
+$\mcall{f}{\vec{v}}{m} \in M_\EC^\kw{call}$
+represent function calls requested by \kw{O},
+while moves of the form
+$[\mcall{f}{\vec{v}}{m}]\mret{v}{m'} \in M_\EC^\kw{ret}$
+correspond to \kw{P}'s possible responses.
+\begin{align*}
+  M_\EC^\kw{call} &:=
+    \big\{ \mcall{f}{\vec{v}}{m} :
+      (f, \vec{v}, m) \in \kw{ident} \times \kw{val}^* \times \kw{mem} \big\} \\
+  M_\EC^\kw{ret} &:=
+    \big\{ [e]\mret{v}{m'} :
+      (e, v, m') \in M_\EC^\kw{call} \times \kw{val} \times \kw{mem} \big\} \\
+  M_\EC &:= M_\EC^\kw{call} \cup M_\EC^\kw{ret}
+\end{align*}
+Accordingly, the labelling function for $\EC$ is defined as:
+\[
+  \lambda_\EC(e) :=
+     \begin{cases}
+        \kw{OQ} & \mbox{if } e \in M_\EC^\kw{call} \\
+        \kw{PA} & \mbox{if } e \in M_\EC^\kw{ret} \,,
+     \end{cases}
+\]
+and the enabling relation is defined by:
+\[
+  * \ \vdash_\EC\ 
+  \mcall{f}{\vec{v}}{m} \ \vdash_\EC\ 
+  [\mcall{f}{\vec{v}}{m}]\mret{v}{m'} \,.
+\]
+\end{definition}
+
+The game consists in a series of queries by \kw{O}
+which specify a function identifier $f$,
+a list of actual parameters $\vec{v}$, and
+an initial memory state $m$.
+\kw{P} answers each query by specifying
+a return value $v$ and
+a final memory state $m'$.
+One possible play could be:
+\[
+  \mcall{\kw{f}}{\kw{Vint}(5)}{m_1}\ph{f}\ \cdot\ 
+  \pt{f}\underline{[\mcall{\kw{f}}{\kw{Vint}(5)}{m_1}]\mret{\kw{Vundef}}{m_2}}\ \cdot\ 
+  \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
+  \pt{g}\underline{[\mcall{\kw{g}}{}{m_3}]\mret{\kw{Vint}(42)}{m_4}}
+\]
+
+Formally,
+we need to include in the return move $[e]\mret{v}{m'}$
+the corresponding question $e$.
+This is because the standard definition of arenas
+requires $\vdash_\EC$ to be a forest.
+However,
+when writing out justified sequences,
+the enabling move can be obtained by following the justification pointer,
+so that the above sequence can be written unambiguously as:
+\[
+  \mcall{\kw{f}}{\kw{Vint}(5)}{m_1}\ph{f}\ \cdot\ 
+  \pt{f}\pret{\kw{Vundef}}{m_2}\ \cdot\ 
+  \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
+  \pt{g}\pret{\kw{Vint}(42)}{m_4}
+\]
+We will also omit value constructors when their type is clear from context:
+\[
+  \mcall{\kw{f}}{5}{m_1}\ph{f}\ \cdot\ 
+  \pt{f}\pret{\kw{Vundef}}{m_2}\ \cdot\ 
+  \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
+  \pt{g}\pret{42}{m_4}
+\]
+
+The strategies for $\EC$ that we will consider
+will usually be well-bracketed and innocent.
+The set of such strategies corresponds exactly to
+the possible Compcert external call transition relations.
+Nevertheless,
+as illustrated in Sec~\ref{sec:longjmp},
+the ability to specify and invoke external functions
+whose behavior violates these requirements
+is an important feature of our work.
+
+%}}}
+
+\subsection{Open modules} %{{{
+
+Closed modules can be interpreted in the game $\EC$,
+however
+we wish to consider modules which have the ability
+to call back into the environment.
+The possible behaviors of such modules
+can be modelled by $\EC \Rightarrow \EC$.
+The corresponding arena has 4 kinds of moves.
+Schematically:
+\begin{center}
+  \begin{tikzpicture}
+    \graph [no placement]
+    {
+      "*" [at={(0,1)}] ->
+      "$\mcall{f}{\vec{v}_1}{m_1}$" -> {
+        "$\textcolor{black}{[\mcall{f}{\vec{v}_1}{m_1}]}
+          \mret{v_1}{m_1'}$" [at={(-2,-1)}],
+        "$\textcolor{black}{[\mcall{f}{\vec{v}_1}{m_1}]}
+          \mcall{x}{\vec{v}_2}{m_2}$" [at={(+2,-1)}] ->
+        "$\textcolor{black}{[\mcall{f}{\vec{v}_1}{m_1}]}
+          \textcolor{black}{[\mcall{x}{\vec{v}_2}{m_2}]}
+          \mret{v_2}{m_2'}$" [at={(+2,-2)}]
+      }
+    };
+  \end{tikzpicture}
+\end{center}
+%[Note the correspondance with Princeton core semantics.]
+As before,
+we can omit the justifying moves
+when writing out positions and plays.
+By convention,
+in examples we name $f, g, h$
+the functions exported by the module being considered,
+and we name $x, y, z$
+any external functions.
+Moreover,
+the polarity of moves makes it easy to distiguish
+between the two versions of $\mcall{f}{\vec{v}}{m}$
+and $\mret{v}{m'}$.
+A possible interaction is:
+\[
+  \rule{0pt}{1.5em}
+  \mcall{f}{}{m_1}\ph{f} \ \cdot\ 
+  \pt{f}
+    \pcall{x}{1}{m_2}\ph{x} \ \cdot\ 
+    \pt{x}
+      \mret{7}{m_3} \ \cdot \ 
+  \pt{f}
+    \pcall{y}{22}{m_4}\ph{y} \ \cdot\ 
+      \mcall{g}{}{m_5}\ph{g} \ \cdot\ 
+      \pt{g}\pret{1}{m_6} \ \cdot\ 
+    \pt{y}
+      \mret{5}{m_7} \ \cdot\ 
+  \pt{f}\pret{0}{m_8}
+\]
+
+\paragraph{Views}
+
+The \kw{P}-view
+gives a trace of all external calls executed so far
+\emph{in the context of the current activation frame}.
+Consider the prefix of the example above
+obtained by dropping the last move.
+The \kw{P}-view is:
+\[
+  \rule{0pt}{1.5em}
+  \mcall{f}{}{m_1}\ph{f} \ \cdot\ 
+  \pt{f}
+    \pcall{x}{1}{m_2}\ph{x} \ \cdot\ 
+    \pt{x}
+      \mret{7}{m_3} \ \cdot \ 
+  \pt{f}
+    \pcall{y}{22}{m_4}\ph{y} \ \cdot\ 
+    \pt{y}
+      \mret{5}{m_7}
+\]
+Intuitively,
+a given activation of $f$
+only sees its \emph{immediate} interaction with the environment
+(namely, the calls to $x$ and $y$ as well as their ultimate outcomes),
+but the call back to $g$ performed by $y$,
+as well as any further interaction that could have occured
+during the execution of $g$,
+are removed from its view.
+An innocent strategy will not be permitted to
+depend on these intermediate events
+to determine what will come next in the execution of $f$.
+While this may seem restrictive,
+especially for a stateful language such as C,
+remember that our move carry the global memory state,
+so that any changes made by $g$ in $m_6$
+will presumably be reflected in the memory state $m_7$
+passed back to $f$ along with $x$'s return value.
+Innocence therefore simply states that
+any state kept by the module is explicit and passed back
+through the environment.
+
+%he \kw{O}-view is:
+%[
+% \rule{0pt}{1.5em}
+% \mcall{f}{}{m_1}\ph{f} \ \cdot\ 
+% \pt{f}
+%   \pcall{y}{22}{m_4}\ph{y} \ \cdot\ 
+%     \mcall{g}{}{m_5}\ph{g} \ \cdot\ 
+%     \pt{g}\pret{1}{m_6} \ \cdot\ 
+%   \pt{y}
+%     \mret{5}{m_7} \ \cdot\ 
+%]
+
+%}}}
+
+\subsection{Linking}
+
+
+\subsection{External functions [?]} %{{{
+
+[By which I mean the semantics of external functions
 including memcpy, malloc, free \ldots
 The semantics of those can be defined as strategies
-and linked back.
+and linked back.]
 
-
-
-One issue is:
+[One issue is:
 Compcert's correctness theorem is
 assuming that external functions behave in a certain way.
 So if we remove them completely into an oracle
 it won't be valid any more.
 But,
 we'd like to get rid of events completely,
-so it'd 
+so it'd ...]
 
 %}}}
 
@@ -429,6 +672,7 @@ Show that we can link soundly with thread library, longjmp, cswitch, etc.
 Verify some mixed C/asm program that uses this kind of assembly primitives.
 
 \subsection{Long jumps}
+\label{sec:longjmp}
 
 The C standard library provides the following primitives
 which implement ``non-local jumps'':
