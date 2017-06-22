@@ -1,4 +1,4 @@
-\documentclass[acmsmall,anonymous,review]{acmart}
+\documentclass[acmsmall,anonymous]{acmart}
 
 % Packages {{{
 \usepackage{amsmath}
@@ -12,7 +12,8 @@
 % Macros {{{
 
 \newcommand{\kw}[1]{\ensuremath{ \textsf{#1} }}
-\newcommand{\ifr}[1]{\ [#1]\ }
+\newcommand{\ifr}[1]{\ [{#1}]\ }
+\newcommand{\ifrw}[2]{\ [{#1}]_{#2}\ }
 
 \newcommand{\EC}{\kw{C}}
 
@@ -70,7 +71,7 @@
 \email{jeremie.koenig@yale.edu}
 
 \begin{abstract}
-A simple game semantics based on standard Hyland-Ong 
+A simple game semantics based on standard Hyland-Ong games
 is defined for the Compcert Clight and Asm languages,
 along with appropriate notions of simulation and linking,
 and the correctness theorem of CompCertX \citep{popl15}
@@ -119,13 +120,16 @@ shed new light on the construction of Compcert.
 A new approach for building compositional certified compilers:
 \begin{itemize}
 \item (first applied?) mechanized formalisation of HO games
-\item KLR for arenas and strategies game-theoretic simulations using KLR + simulation reflection theorem
+\item Compcert KLRs
+\item extend KLR to strategies, game-theoretic simulations
+\item simulation reflection theorem
 \item game-theoretic characterization of CompCertX's correctness theorem, from which we derive
-\item a \emph{semantic} contextual refinement correctness theorem property
+\item a \emph{semantic} contextual refinement property
 \end{itemize}
 
 %}}}
 
+\newpage
 \section{Background} %{{{
 
 [Idea:
@@ -385,8 +389,74 @@ through the environment.
 
 %}}}
 
-\subsection{Linking}
+\subsection{Linking} %{{{
 
+Consider a number of strategies
+$\sigma_1, \ldots, \sigma_n : \EC \Rightarrow \EC$,
+and assume they provide behaviors
+for the respective sets of function names $F_1, \ldots, F_n$.
+We want to define
+a combined strategy $\mathcal{L}_F(\sigma_1, \ldots \sigma_n)$
+which will provide behaviors for
+all of the function in $F = F_1 \cup \cdots \cup F_n$,
+where any call back to $f \in F$ by any of linked strategies
+is handled by an interaction among them.
+Note that this interaction
+can potentially be mutually recursive.
+
+The first step is to construct the union
+$\sigma = \sigma_1 \cup \cdots \cup \sigma_n$.
+The strategy $\sigma$
+contains all of the ``flat'' behaviors of the $\sigma_i$'s,
+however at this point
+external calls performed by any of the individual strategies
+are still directed to the environment
+whether or not the target function is in $F$.
+
+To discriminate between external and mutual calls,
+we introduce the primitive $\lhd_F : \EC \times \EC \Rightarrow \EC$.
+The idea is that the strategy $\lhd_F(\mathcal{E}_1, \mathcal{E}_2) : \EC$
+will use $\mathcal{E}_1$ to handle calls to any $f \in F$,
+and use $\mathcal{E}_2$ to handle calls to any $g \notin F$.
+Formally,
+\begin{definition}[$\lhd_F$]
+For a given set of identifiers $F : \mathcal{P}(\kw{ident})$,
+$\lhd_F : \EC \times \EC \Rightarrow \EC$ is the strategy defined by:
+\begin{align*}
+  \lhd_F &\ni
+    \mathbf{u} \cdot
+    \mcall{f}{\vec{v}}{m} \cdot
+    \underline{i_1(\mcall{f}{\vec{v}}{m})}
+    \quad (f \in F) \\
+  \lhd_F &\ni
+    \mathbf{u} \cdot
+    \mcall{g}{\vec{v}}{m} \cdot
+    \underline{i_2(\mcall{g}{\vec{v}}{m})}
+    \quad (g \notin F) \\
+  \lhd_F &\ni
+    \mathbf{u} \cdot
+    i_1(\mret{v}{m'}) \cdot
+    \pret{v}{m'} \\
+  \lhd_F &\ni
+    \mathbf{u} \cdot
+    i_2(\mret{v}{m'}) \cdot
+    \pret{v}{m'}
+\end{align*}
+\end{definition}
+
+[Now the recursion:]
+\[
+  \mathcal{L}_F(\sigma_1, \ldots, \sigma_n) \ =\ 
+    \bigcup_{k=0}^\infty\ 
+    \Lambda ( \sigma \circ \lhd_F \circ \langle \pi_1 \circ \pi_2, \, \pi_2 \rangle ) \,^k
+\]
+
+[Can be visualized in the following way:]
+\begin{center}
+  [fancy picture]
+\end{center}
+
+%}}}
 
 \subsection{External functions [?]} %{{{
 
@@ -421,6 +491,7 @@ Asm: Innocent, well-bracketed?
 
 %}}}
 
+\newpage
 \section{Kripke logical relations for Compcert} %{{{
 
 %XXX: how does this relate to
@@ -569,13 +640,13 @@ and discussed below.
     U^\kw{p}_w(b_2) \ \Rightarrow\  U^\kw{v} = \kw{t} \\
     [\ldots] \\
     \kw{Mem.alloc}
-    \ifr{R^\kw{mem}_w \rightarrow (=) \rightarrow (=) \rightarrow
-      \exists w \leadsto w' \,.\, R^\kw{mem}_{w'} \times R^\kw{block}_{w'}}
+    \ifrw{R^\kw{mem} \rightarrow (=) \rightarrow (=) \rightarrow
+      \Diamond (R^\kw{mem} \times R^\kw{block})}{w}
     \kw{Mem.alloc}
     \\
     \kw{Mem.free}
-    \ifr{R^\kw{mem}_w \rightarrow R^\kw{ptrrange}_w \rightarrow
-      \kw{option}^+ (\exists w \leadsto w' \,.\, R^\kw{mem}_{w'})}
+    \ifrw{R^\kw{mem} \rightarrow R^\kw{ptrrange} \rightarrow
+      \kw{option}^+(\Diamond R^\kw{mem}))}{w}
     \kw{Mem.free}
     \\
     \ldots
@@ -661,10 +732,12 @@ Oracles and the simulation reflection property.
 
 %}}}
 
+\newpage
 \section{Compositional correctness of CompCertX} %{{{
 
 %}}}
 
+\newpage
 \section{Linking with fancy contexts} %{{{
 
 Show that we can link soundly with thread library, longjmp, cswitch, etc.
@@ -705,6 +778,7 @@ defined by the prefix closure of the following language:
 
 %}}}
 
+\newpage
 \section{Related Work} %{{{
 
 Interaction semantics is an automaton formulation of $EC \Rightarrow EC$
