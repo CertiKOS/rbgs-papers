@@ -183,15 +183,33 @@ or use $\textsf{EC} = \varnothing, \textsf{RA = Vundef}$/parametric?]
 \newpage
 \section{Games} %{{{
 
+\subsection{Arenas and games} %{{{
+
+[Probably follow \citep{gamesem99},
+because we care about the distinction between $\EC$ and $!\EC$
+(so \citep{gref98} not an option -- is that really true?)
+but we don't care about full abstraction
+(so 
+
+%}}}
+
 \subsection{Compcert games} %{{{
 
-Whenever an external function is called,
-Compcert semantics use the \kw{external\_call} predicate
-to compute its behavior.
-\kw{external\_call} relates an initial memory state,
-a list of actual parameters,
-a final memory state, and
-a return value.
+The operational semantics defined in Compcert
+use the following transition relation as a parameter,
+which represents the behavior of external functions.
+Ignoring the global environment and event traces for now:
+\[
+  \kw{external\_call} :
+    \kw{ident} \rightarrow
+    \kw{val}^* \times \kw{mem} \rightarrow
+    \mathcal{P}(\kw{val} \times \kw{mem})
+\]
+Given a function name,
+an initial memory state,
+and a list of actual parameters,
+$\kw{external\_call}$ gives a set of possible final states,
+each comprised of a memory state and return value.
 Based on this protocol,
 we define our basic Compcert game.
 
@@ -202,15 +220,15 @@ Moves of the form
 $\mcall{f}{\vec{v}}{m} \in M_\EC^\kw{call}$
 represent function calls requested by \kw{O},
 while moves of the form
-$[\mcall{f}{\vec{v}}{m}]\mret{v}{m'} \in M_\EC^\kw{ret}$
+$\mret{v}{m'} \in M_\EC^\kw{ret}$
 correspond to \kw{P}'s possible responses.
 \begin{align*}
   M_\EC^\kw{call} &:=
-    \big\{ \mcall{f}{\vec{v}}{m} :
-      (f, \vec{v}, m) \in \kw{ident} \times \kw{val}^* \times \kw{mem} \big\} \\
+    \{ \mcall{f}{\vec{v}}{m} :
+      (f, \vec{v}, m) \in \kw{ident} \times \kw{val}^* \times \kw{mem} \} \\
   M_\EC^\kw{ret} &:=
-    \big\{ [e]\mret{v}{m'} :
-      (e, v, m') \in M_\EC^\kw{call} \times \kw{val} \times \kw{mem} \big\} \\
+    \{ \mret{v}{m'} :
+      (v, m') \in \kw{val} \times \kw{mem} \} \\
   M_\EC &:= M_\EC^\kw{call} \cup M_\EC^\kw{ret}
 \end{align*}
 Accordingly, the labelling function for $\EC$ is defined as:
@@ -225,7 +243,7 @@ and the enabling relation is defined by:
 \[
   \star \ \vdash_\EC\ 
   \mcall{f}{\vec{v}}{m} \ \vdash_\EC\ 
-  [\mcall{f}{\vec{v}}{m}]\mret{v}{m'} \,.
+  \mret{v}{m'} \,.
 \]
 \end{definition}
 
@@ -239,27 +257,11 @@ a final memory state $m'$.
 One possible play could be:
 \[
   \mcall{\kw{f}}{\kw{Vint}(5)}{m_1}\ph{f}\ \cdot\ 
-  \pt{f}\underline{[\mcall{\kw{f}}{\kw{Vint}(5)}{m_1}]\mret{\kw{Vundef}}{m_2}}\ \cdot\ 
-  \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
-  \pt{g}\underline{[\mcall{\kw{g}}{}{m_3}]\mret{\kw{Vint}(42)}{m_4}}
-\]
-
-Formally,
-we need to include in the return move $[e]\mret{v}{m'}$
-the corresponding question $e$.
-This is because the standard definition of arenas
-requires $\vdash_\EC$ to be a forest.
-However,
-when writing out justified sequences,
-the enabling move can be obtained by following the justification pointer,
-so that the above sequence can be written unambiguously as:
-\[
-  \mcall{\kw{f}}{\kw{Vint}(5)}{m_1}\ph{f}\ \cdot\ 
   \pt{f}\pret{\kw{Vundef}}{m_2}\ \cdot\ 
   \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
   \pt{g}\pret{\kw{Vint}(42)}{m_4}
 \]
-We will also omit value constructors when their type is clear from context:
+We will omit \kw{val} constructors when the type of values is clear from context:
 \[
   \mcall{\kw{f}}{5}{m_1}\ph{f}\ \cdot\ 
   \pt{f}\pret{\kw{Vundef}}{m_2}\ \cdot\ 
@@ -276,40 +278,70 @@ as illustrated in Sec~\ref{sec:longjmp},
 the ability to specify and invoke external functions
 whose behavior violates these requirements
 is an important feature of our work.
+[Or: we don't allow repeats in $\EC$, only in $!\EC$,
+so that any possible strategy for $\EC$ is innocent and well-bracketed.
+Note that innocent and well-bracketed strategies for $!\EC$
+are of the form $\sigma^\dagger$ where $\sigma : \EC$.
+One reason to distinguish $\EC$ from $!\EC$
+is that then our semantics with oracle can be expressed as
+$!\EC \multimap \EC$.]
 
 %}}}
 
 \subsection{Open modules} %{{{
 
-Closed modules can be interpreted in the game $\EC$,
-however
-we wish to consider modules which have the ability
-to call back into the environment.
-The possible behaviors of such modules
-can be modelled by $\EC \Rightarrow \EC$.
-The corresponding arena has 4 kinds of moves.
+[Recast previous work in those terms:]
+For a fixed behavior of external functions,
+the semantics of closed modules can be
+formulated as a strategy for $\EC$.
+This is essentially what is done in \citep{popl15}.
+Getting rid of the $\kw{external\_call}$ parameter,
+a somewhat more satisfying approach is
+to interpret the semantics of closed modules
+as strategies for
+$!\EC \multimap \EC$.
+Here,
+the initial move is a function call into the module,
+which can then perform
+an arbitrary number of external calls,
+which will immediately return.
+Finally,
+the module answers the initial function call
+with its own return move.
+This is the view informally taken in \citep{osdi16},
+where the memory states are instrumented with a \kw{log}
+of the current interaction,
+which can then be used by
+a fixed $\kw{external\_call}$ predicate
+to query an oracle representing the environment.
+[Do more of that, explain layers etc.
+Or maybe in the Related Work section?]
+The work presented here goes one step further
+and interprets modules as strategies for $!\EC \multimap !\EC$.
+This means that
+when a module calls back into the environment,
+instead of returning immediately
+the environment itself
+can perform a nested call into the module,
+and so on recursively.
+
+The arena corresponding to these games
+has 4 kinds of moves.
 Schematically:
 \begin{center}
   \begin{tikzpicture}
     \graph [no placement]
     {
-      "*" [at={(0,1)}] ->
+      "$\star$" [at={(0,1)}] ->
       "$\mcall{f}{\vec{v}_1}{m_1}$" -> {
-        "$\textcolor{black}{[\mcall{f}{\vec{v}_1}{m_1}]}
-          \mret{v_1}{m_1'}$" [at={(-2,-1)}],
-        "$\textcolor{black}{[\mcall{f}{\vec{v}_1}{m_1}]}
-          \mcall{x}{\vec{v}_2}{m_2}$" [at={(+2,-1)}] ->
-        "$\textcolor{black}{[\mcall{f}{\vec{v}_1}{m_1}]}
-          \textcolor{black}{[\mcall{x}{\vec{v}_2}{m_2}]}
-          \mret{v_2}{m_2'}$" [at={(+2,-2)}]
+        "$\mret{v_1}{m_1'}$" [at={(-2,-1)}],
+        "$\mcall{x}{\vec{v}_2}{m_2}$" [at={(+2,-1)}] ->
+        "$\mret{v_2}{m_2'}$" [at={(+2,-2)}]
       }
     };
   \end{tikzpicture}
 \end{center}
-%[Note the correspondance with Princeton core semantics.]
-As before,
-we can omit the justifying moves
-when writing out positions and plays.
+[Note the correspondance with Princeton core semantics.]
 By convention,
 in examples we name $f, g, h$
 the functions exported by the module being considered,
@@ -335,6 +367,20 @@ A possible interaction is:
       \mret{5}{m_7} \ \cdot\ 
   \pt{f}\pret{0}{m_8}
 \]
+First,
+the function $f$ implemented by the module
+is called with no arguments
+and with an initial memory $m_1$.
+$f$ performs two external calls:
+first to $x$, which returns immediately,
+then to $y$.
+In its turn,
+the external function $y$ calls
+the function $g$, which is also implemented by the module.
+after $g$ returns $1$ to $y$,
+then $y$ returns $5$ to $f$,
+which finally returns $0$ to the environment
+as the answer to the initial question.
 
 \paragraph{Views}
 
@@ -455,7 +501,7 @@ $\lhd_F : \EC \times \EC \Rightarrow \EC$ is the strategy defined by:
 
 [Can be visualized in the following way:]
 \begin{center}
-  [fancy picture]
+  \includegraphics[scale=0.5]{linking-operator}
 \end{center}
 
 %}}}
