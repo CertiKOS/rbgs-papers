@@ -6,6 +6,7 @@
 \usepackage{tikz}
 \usetikzlibrary{calc}
 \usetikzlibrary{graphs}
+\usetikzlibrary{cd}
 \usepackage{bussproofs}
 % }}}
 
@@ -14,6 +15,7 @@
 \newcommand{\kw}[1]{\ensuremath{ \textsf{#1} }}
 \newcommand{\ifr}[1]{\ [{#1}]\ }
 \newcommand{\ifrw}[2]{\ [{#1}]_{#2}\ }
+\newcommand{\alt}{\ |\ }
 
 \newcommand{\EC}{\kw{C}}
 
@@ -504,10 +506,39 @@ Asm: Innocent, well-bracketed?
 
 \subsection{Overview} %{{{
 
-In the broadest sense,
+In the broadest sense [/ ``In one interpretation''?],
 \emph{logical relations} are structure-preserving relations,
 in the same way that homomorphisms are structure-preserving maps
 \citep{lrp}.
+Given a set $W$ of \emph{possible worlds}
+and an \emph{accessibility relation} $\leadsto$ on $W$,
+a \emph{Kripke logical relation} is
+a $W$-indexed family of logical relations $(R_w)_{w \in W}$.
+These are not precise definitions;
+for our purposes it will be sufficient
+to define a notion of ``logical relation of $\mathcal{A}$s''
+on a case-by-case basis,
+for each structure $\mathcal{A}$ we consider.
+The corresponding definition of a
+``Kripke logical relation of $\mathcal{A}$s''
+will follow.
+
+\begin{example}[Kripke logical relaton of monoids]
+A \emph{monoid} is a set $A$ equipped with
+an associative binary operation $\cdot$ and
+an identity element $\epsilon$.
+A \emph{logical relation of monoids} between
+a monoid $(A, \cdot_A, \epsilon_A)$ and
+a monoid $(B, \cdot_B, \epsilon_B)$
+is a relation $R \subseteq A \times B$
+such that:
+\begin{gather*}
+u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B v' \\
+\epsilon_A \ifr{R} \epsilon_B
+\end{gather*}
+[Find good examples of monoids and a KLR between them.]
+\end{example}
+
 [Explain use in PL theory and role of KLR].
 
 The simulation relations used by Compcert can be understood
@@ -519,8 +550,8 @@ are built up in a systematic way out of elementary relations
 at basic types like \kw{mem} and \kw{val}.
 
 For example,
-we can understand memory injections in Compcert
-as defining a Kripke logical relation \kw{inj}.
+Compcert's memory injections
+define a Kripke logical relation \kw{inj} as follows.
 The elementary relations \kw{Mem.inject} and \kw{Val.inject}
 are indexed over the set of worlds \kw{meminj},
 which specify how memory blocks in the source and target states
@@ -567,6 +598,119 @@ when moving into the realm of games].
 
 %}}}
 
+\subsection{Logical relations}
+
+\subsection{Kripke relators}
+
+Note that for a given Kripke frame $\langle W, \leadsto \rangle$,
+a logical relation $R : \mathcal{R}(A, B)$
+can be promoted to a $W$-indexed Kripke logical relation $\lceil R \rceil$
+by simply ignoring the index so that $\lceil R \rceil_w = R$.
+Likewise,
+a relator
+  $F : \mathcal{R}(A_1, B_1) \times \cdots \times \mathcal{R}(A_n, B_n) \rightarrow \mathcal{R}(A, B)$
+can be promoted to its Kripke version
+by pointwise extension over the set of possible worlds:
+\begin{gather*}
+  \lceil F \rceil : \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n) \rightarrow \mathcal{R}_W(A, B) \\
+  \lceil F \rceil (R_1, \ldots, R_n)_w = F(R_{1,w}, \ldots, R_{n,w})
+\end{gather*}
+In addition,
+$\Box, \Diamond : \mathcal{R}_W(A,B) \rightarrow \mathcal{R}_W(A,B)$
+are the Kripke relators defined by:
+\begin{align*}
+  x \ifr{(\Box R)_w} y &\Leftrightarrow
+    \forall w' \,.\, w \leadsto w' \rightarrow x \ifr{R_w} y \\
+  x \ifr{(\Diamond R)_w} y &\Leftrightarrow
+    \exists w' \,.\, w \leadsto w' \wedge x \ifr{R_w} y
+\end{align*}
+
+\begin{example}[Simulation diagram]
+Consider a Kripke logical relation of sets $R : \mathcal{R}_W(A, B)$,
+and two transition relations $\alpha : A \rightarrow \mathcal{P}(A)$
+and $\beta : B \rightarrow \mathcal{P}(B)$.
+The simulation diagram:
+\[
+  \begin{tikzcd}
+    s_1 \arrow[r, "\alpha"]
+        \arrow[d, dash, "R_w"'] &
+    s_1' \arrow[d, dotted, dash, "R_{w'} \quad (w \leadsto w')"] \\
+    s_2 \arrow[r, dotted, "\beta"] &
+    s_2'
+  \end{tikzcd}
+\]
+can be written as:
+\[
+  \alpha \ifr{R \rightarrow \mathcal{P}^+(\Diamond R)} \beta \,.
+\]
+\end{example}
+
+\subsection{Basic types}
+
+\paragraph{Pointers}
+
+The Compcert memory model \cite{compcertmmv2}
+represents the memory as a finite number of blocks,
+each equipped with its own address space.
+Block identifiers $b : \kw{block}$
+are represented by positive integers,
+and pointers specify an arbitrary offset within a given block:
+\[
+    \kw{ptr} = \kw{block} \times \mathbb{Z} \,.
+\]
+To keep our exposition concise and clear,
+we will gloss over the technical details
+associated with the encoding of offsets
+as concrete binary integers,
+and the associated modular arithmetic and overflow constraints.
+In this setting,
+a logical relation of Compcert pointers
+is a relation $R \subseteq (\kw{block} \times \mathbb{Z}) \times (\kw{block} \times \mathbb{Z})$.
+which satisfies the following \emph{shift-invariance} property:
+\[
+  \AxiomC{$(b_1, o_1) \ifr{R} (b_2, o_2)$}
+  \UnaryInfC{$(b_1, o_1 + \delta) \ifr{R} (b_2, o_2 + \delta)$}
+  \DisplayProof
+\]
+We write $R : \mathcal{R}(\kw{ptr})$.
+Note that there is a one-to-one correspondance between
+functional logical relations of pointers and
+Compcert memory injections.
+
+\paragraph{Values}
+
+Next,
+fix a logical relation of pointers $R^\kw{ptr} : \mathcal{R}(\kw{ptr})$
+[XXX or set things up so that $R$ determines a unique pointer relation],
+and consider Compcert's type \kw{val} of run-time values:
+\[
+  v : \kw{val} ::= \kw{Vundef}
+          \alt \kw{Vint}(n)
+          \alt \kw{Vlong}(n)
+          \alt \kw{Vfloat}(x)
+          \alt \kw{Vsingle}(x)
+          \alt \kw{Vptr}(p)
+\]
+A logical relation of Compcert values
+is a relation $R \subseteq \kw{val} \times \kw{val}$
+which satisfies the following properties:
+\begin{gather*}
+  \kw{Vundef} \ifr{R} \kw{Vundef} \\
+  \kw{Vint} \ifr{(=) \rightarrow R} \kw{Vint} \\
+  \kw{Vlong} \ifr{(=) \rightarrow R} \kw{Vlong} \\
+  \kw{Vfloat} \ifr{(=) \rightarrow R} \kw{Vfloat} \\
+  \kw{Vsingle} \ifr{(=) \rightarrow R} \kw{Vsingle} \\
+  \kw{Vptr} \ifr{R^\kw{ptr} \rightarrow R} \kw{Vptr}
+\end{gather*}
+[Add the other ones, note that it is determined by $(f, U^\kw{val}, U^\kw{ptr})$,
+comment on the difficulties for composition.]
+
+\paragraph{Memory states}
+
+
+
+A Kripke logical relation of Compcert values 
+
 \subsection{Simulation relation toolkits} %{{{
 
 \begin{definition}[\kw{simrel}]
@@ -607,31 +751,22 @@ and discussed below.
     \DisplayProof
   \]
   \noindent \fbox{$R_w^\kw{val}$} \hfill \ 
-  \[
-      \begin{array}{c@{\hspace{3em}}r@{\,}l}
-        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vundef} & &
-        \\
-        \kw{Vint} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vint} &
-        U^\kw{v} = \kw{t} \Rightarrow &
+  \begin{align*}
+    U^\kw{v} = \kw{t} &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vint}(n)
         \\
-        \kw{Vlong} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vlong} &
-        U^\kw{v} = \kw{t} \Rightarrow &
+    U^\kw{v} = \kw{t} &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vlong}(n)
         \\
-        \kw{Vfloat} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vfloat} &
-        U^\kw{v} = \kw{t} \Rightarrow &
+    U^\kw{v} = \kw{t} &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vfloat}(x)
         \\
-        \kw{Vsingle} \ifr{(=) \rightarrow R^\kw{val}_w} \kw{Vsingle} &
-        U^\kw{v} = \kw{t} \Rightarrow &
+    U^\kw{v} = \kw{t} &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vsingle}(x)
         \\
-        \kw{Vptr} \ifr{R^\kw{ptrbits}_w \rightarrow R^\kw{val}_w} \kw{Vptr} &
-        U^\kw{b}_w(b_2) \Rightarrow &
+    U^\kw{b}_w(b_2) &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vptr}(b_2, o_2)
-      \end{array}
-  \]
+  \end{align*}
   \label{fig:simrel}
   \caption{Elementary relations associated with $R$}
 \end{figure}
@@ -796,6 +931,14 @@ that allows us to define our magical KLRs
 and they have to put it back in,
 in a much more contrived and ad-hoc way.
 (Also by mixing internal steps and interaction steps per Ghica 2012.)
+
+%}}}
+
+\newpage
+\section{Future work} %{{{
+
+Simulation among different games,
+also $\sigma^+ \le \tau^+$.
 
 %}}}
 
