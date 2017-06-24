@@ -656,47 +656,135 @@ and the enabling relation is defined by:
   \mcall{f}{\vec{v}}{m} \ \vdash_\EC\ 
   \mret{v}{m'} \,.
 \]
+We limit the set of legal position $P_\EC$
+to plays which contain at most one initial move.
 \end{definition}
 
-The game consists in a series of queries by \kw{O}
-which specify a function identifier $f$,
+The game therefore consists a single query by \kw{O}
+which specifies a function identifier $f$,
 a list of actual parameters $\vec{v}$, and
 an initial memory state $m$.
-\kw{P} answers each query by specifying
+\kw{P} then answers with
 a return value $v$ and
 a final memory state $m'$.
-One possible play could be:
+Possible plays could be:
 \[
-  \mcall{\kw{f}}{\kw{Vint}(5)}{m_1}\ph{f}\ \cdot\ 
-  \pt{f}\pret{\kw{Vundef}}{m_2}\ \cdot\ 
-  \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
-  \pt{g}\pret{\kw{Vint}(42)}{m_4}
+  \mcall{\kw{f}}{\kw{Vint}(5), \kw{Vfloat}(3.142)}{m}\ph{f}\ \cdot\ 
+  \pt{f}\pret{\kw{Vundef}}{m'} \hspace{3em}
+  \mcall{\kw{g}}{}{m}\ph{g}\ \cdot\ 
+  \pt{g}\pret{\kw{Vint}(42)}{m'}
 \]
 We will omit \kw{val} constructors when the type of values is clear from context:
 \[
-  \mcall{\kw{f}}{5}{m_1}\ph{f}\ \cdot\ 
-  \pt{f}\pret{\kw{Vundef}}{m_2}\ \cdot\ 
-  \mcall{\kw{g}}{}{m_3}\ph{g}\ \cdot\ 
-  \pt{g}\pret{42}{m_4}
+  \mcall{\kw{f}}{5, 3.142}{m}\ph{f}\ \cdot\ 
+  \pt{f}\pret{\kw{Vundef}}{m'} \hspace{3em}
+  \mcall{\kw{g}}{}{m}\ph{g}\ \cdot\ 
+  \pt{g}\pret{42}{m'}
 \]
 
-The strategies for $\EC$ that we will consider
-will usually be well-bracketed and innocent.
-The set of such strategies corresponds exactly to
+The set of possible strategies for $\EC$ corresponds exactly to
 the possible Compcert external call transition relations.
-Nevertheless,
-as illustrated in Sec~\ref{sec:longjmp},
-the ability to specify and invoke external functions
-whose behavior violates these requirements
-is an important feature of our work.
-[Or: we don't allow repeats in $\EC$, only in $!\EC$,
-so that any possible strategy for $\EC$ is innocent and well-bracketed.
-Note that innocent and well-bracketed strategies for $!\EC$
-are of the form $\sigma^\dagger$ where $\sigma : \EC$.
-One reason to distinguish $\EC$ from $!\EC$
-is that then our semantics with oracle can be expressed as
-$!\EC \multimap \EC$.]
+In addition,
+the semantics of $\kw{ClightX}$ or $\kw{AsmX}$ modules
+can also be mapped into strategies for $\EC$.
+Given a semantics of external functions $\mathcal{E}$
+and a \kw{Clight} module $p$,
+we can define the strategy:
+\[ \kw{ClightX}_\mathcal{E}(p) : \EC := \{ \varepsilon \} \cup
+    \{ \mcall{f}{\vec{v}}{m} \cdot \pret{v}{m'} \ :\ 
+         (f, \vec{v}, m) \Downarrow_p^{\varepsilon} (v, m') \} \]
+The same construction can be carried out for \kw{AsmX}.
+Note that we loose the ability to distinguish between
+unsafe behaviors, non-terminating behaviors,
+and behaviors that have non-empty event traces,
+since all of them simply fail to produce an answer
+as strategies for $\EC$.
+[We could remedy by adding more types of return moves.]
 
+%}}}
+
+\subsection{Game semantics of Compcert languages} %{{{
+
+Although we have recast some transition relations
+by seeing them as strategies for $\EC$,
+so far we have not exhibited
+a true game semantics for \kw{ClightX} or \kw{AsmX}.
+Rather that handling external calls
+by parametrization over their possible behaviors,
+a game-oriented interpretation of $\kw{ClightX}$
+would record the module's interaction with external functions
+as additionnal moves.
+In this section,
+we show how ideas from \citep{osdi16}
+can be adapted to construct such a semantics.
+
+Since our goal is to ``internalize'' the parameter $\mathcal{E}$
+into our semantic domain,
+the game $!\EC \multimap \EC$ is an appropriate setting.
+The corresponding arena
+has 4 kinds of moves.
+Schematically:
+\begin{center}
+  \begin{tikzpicture}
+    \graph [no placement]
+    {
+      "$\star$" [at={(0,1)}] ->
+      "$\mcall{f}{\vec{v}_1}{m_1}$" -> {
+        "$\mret{v_1}{m_1'}$" [at={(-2,-1)}],
+        "$\mcall{x}{\vec{v}_2}{m_2}$" [at={(+2,-1)}] ->
+        "$\mret{v_2}{m_2'}$" [at={(+2,-2)}]
+      }
+    };
+  \end{tikzpicture}
+\end{center}
+The initial move is a function call into the module,
+which can then perform
+an arbitrary number of external calls
+(which will presumable return immediately),
+then answers the initial function call
+with its own return move.
+For example, a possible interaction is:
+\[
+  \rule{0pt}{1.5em}
+  \mcall{f}{}{m_1}\ph{f} \ \cdot\ 
+  \pt{f}
+    \pcall{x}{1}{m_2}\ph{x} \ \cdot\ 
+    \pt{x}\mret{7}{m_3} \ \cdot \ 
+  \pt{f}
+    \pcall{y}{22}{m_4}\ph{y} \ \cdot\ 
+    \pt{y}\mret{5}{m_5} \ \cdot\ 
+  \pt{f}\pret{0}{m_6}
+\]
+By convention,
+in examples we name $f, g, h$
+the functions exported by the module being considered,
+and we name $x, y, z$
+any external functions.
+Moreover,
+the polarity of moves makes it easy to distiguish
+between the two versions of $\mcall{f}{\vec{v}}{m}$
+and $\mret{v}{m'}$.
+
+[Note the correspondance with Princeton core semantics.]
+
+Note that once [an external function has been called
+it might return more than once].
+
+[Our strategy:
+given any prefix $\mathbf{u}$,
+use the $\kw{P}$-view to construct an oracle
+and see where we get stuck.
+At a call site -> emit a call move.
+At a final state -> emit a ret move.
+Somewhere else -> don't emit anything / emit a ``stuck'' move.
+Nowhere -> don't emit anything / emit a ``I'm looping'' move.
+This gives us $\kw{ClightX}(p) : !\EC\multimap\EC$]
+
+Note that the more limited semantics of the previous section
+may be obtained by:
+\[ \kw{ClightX}_\mathcal{E}(p) \equiv_\kw{id} \kw{ClightX}(p) \circ \mathcal{E}^\dagger \]
+[This is what allows us to transfer the correctness theorem
+from the first one to the second one through an extensionality lemma]
 %}}}
 
 \subsection{Open modules} %{{{
@@ -711,14 +799,7 @@ a somewhat more satisfying approach is
 to interpret the semantics of closed modules
 as strategies for
 $!\EC \multimap \EC$.
-Here,
-the initial move is a function call into the module,
-which can then perform
-an arbitrary number of external calls,
-which will immediately return.
-Finally,
-the module answers the initial function call
-with its own return move.
+
 This is the view informally taken in \citep{osdi16},
 where the memory states are instrumented with a \kw{log}
 of the current interaction,
@@ -736,32 +817,6 @@ the environment itself
 can perform a nested call into the module,
 and so on recursively.
 
-The arena corresponding to these games
-has 4 kinds of moves.
-Schematically:
-\begin{center}
-  \begin{tikzpicture}
-    \graph [no placement]
-    {
-      "$\star$" [at={(0,1)}] ->
-      "$\mcall{f}{\vec{v}_1}{m_1}$" -> {
-        "$\mret{v_1}{m_1'}$" [at={(-2,-1)}],
-        "$\mcall{x}{\vec{v}_2}{m_2}$" [at={(+2,-1)}] ->
-        "$\mret{v_2}{m_2'}$" [at={(+2,-2)}]
-      }
-    };
-  \end{tikzpicture}
-\end{center}
-[Note the correspondance with Princeton core semantics.]
-By convention,
-in examples we name $f, g, h$
-the functions exported by the module being considered,
-and we name $x, y, z$
-any external functions.
-Moreover,
-the polarity of moves makes it easy to distiguish
-between the two versions of $\mcall{f}{\vec{v}}{m}$
-and $\mret{v}{m'}$.
 A possible interaction is:
 \[
   \rule{0pt}{1.5em}
@@ -914,17 +969,6 @@ $\lhd_F : \EC \times \EC \Rightarrow \EC$ is the strategy defined by:
 \begin{center}
   \includegraphics[scale=0.5]{linking-operator}
 \end{center}
-
-%}}}
-
-\subsection{Semantics of Compcert languages} %{{{
-
-
-
-[Basically we can do oracle construction and semantics of modules
-in one go, use $\dagger$ to go from the first to the second.]
-
-
 
 %}}}
 
