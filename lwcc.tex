@@ -508,36 +508,168 @@ Oracles and the simulation reflection property.
 \newpage
 \section{Games} %{{{
 
-\subsection{Arenas and games} %{{{
+\subsection{Games and strategies} %{{{
 
-[Probably follow \citep{gamesem99},
-because we care about the distinction between $\EC$ and $!\EC$
-(so \citep{gref98} not an option)
-but we don't care about full abstraction
-(so we don't need the built-in quotienting stuff of AJM00).
+The game model we use follows most closely \citep{gamesem99}.
+However our definitions
+do not place \emph{a priori}
+any visibility, [well-bracketing], or determinacy
+constraints on positions and strategies.
 
-Only change is don't restrict strategies
-with determinacy (b/c Compcert semantics isn't defined this way?)
-or innocence/visibility (b/c longjmp and thread library break it).
-Our semantics will still yield innocent strategies,
-by construction as $\sigma^\dagger$.
+\begin{definition}[Arena]
+An \emph{arena} is a tuple $\langle M, \lambda, \vdash \rangle$
+where $M$ is a set of \emph{possible moves},
+$\lambda : M_A \rightarrow \{\kw{O},\kw{P}\} \times \{\kw{Q},\kw{A}\}$
+labels moves as \emph{opponent moves} or \emph{proponent moves}
+and as \emph{questions} or \emph{answers}, and
+$\vdash$ is a relation between $M + \{\star\}$ and $M$,
+called the arena's \emph{enabling relation}.
+%We write $\lambda^\kw{OP} = \pi_1 \circ \lambda$ and $\lambda^\kw{QA} = \pi_2 \circ \lambda$.
+A possible move $m$ such that $\star \vdash m$ is called an \emph{initial move}.
+Initial moves must be opponent questions.
+\end{definition}
 
-[Also, when we give an account of the basic notions here,
-we will also add relational aspects:
-KLRs of arenas, games,
-associated relators for product, exponentional, linear implication;
-monotonicity theorems for composition, promotion, dereliction;
-extension to simulation of strategies.]
+[If necessary, add some more constraints on $\vdash$ vs $\lambda$:
+answers don't justify anything and players alternate.
+Let's see how the proofs go.]
 
-Logical relation of arenas:
+\begin{definition}[Justified sequence]
+A \emph{justified sequence} on an arena $\langle M, \lambda, \vdash \rangle$
+is a finite sequence
+$s = (m_1, p_1) (m_2, p_2) \cdots (m_n, p_n) : (M \times \mathbb{N})^*$.
+With the convention $m_0 = \star$, we require that
+$m_{p_i} \vdash m_i$ for all $1 \le i \le n$.
+The $m_i$'s must alternate between opponent moves and proponent moves.
+\end{definition}
+
+Each $(m_i, p_i)$ is called a \emph{move in $s$}.
+The component $p_i$ is called the move's \emph{pointer}
+and is the index of
+an earlier move called its \emph{target}.
+When writing out particular sequences
+we will represent the pointers pictorially,
+with null pointers ignored;
+for instance the sequence
+$(a, 0) (b, 1) (c, 0) (d, 1) (e, 2)$
+will be typeset as:
+\[
+    a\ph{i1} \cdot
+    \pt{i1}\underline{b}\ph{i2} \cdot
+    c \cdot
+    \pt{i1}\underline{d} \cdot
+    \pt{i2}e
+\]
+Note that for the above to be a justified sequence,
+it must be the case that $a, c, e$ be opponent moves,
+$b, d$ proponent moves (as indicated by underlining),
+and that:
+\[
+\star \vdash a, \quad
+a \vdash b, \quad
+\star \vdash c, \quad
+a \vdash d, \quad
+b \vdash e \,.
+\]
+
+\begin{definition}[Game]
+A game is a tuple $A = \langle M_A, \lambda_A, \vdash_A, P_A \rangle$
+where $\langle M_A, \lambda_A, \vdash_A \rangle$ is an arena
+and $P_A$ is a prefix-closed set of justified sequences over that arena.
+[Possible extra constraint says each ``thread''
+in a valid position should be a valid position on its own.]
+\end{definition}
+
+To sum up,
+an arena defines which kinds of moves are possible
+and places structural constraints
+on the dialogues between \kw{P} and \kw{O},
+represented by justified sequences.
+Games further refine the rules
+to specify which dialogues are acceptable
+and constrain the player's behaviors.
+Next,
+we define our notion of strategy.
+For a given game,
+a strategy the behavior of $\kw{P}$
+in all possible scenarios.
+
+\begin{definition}[Strategy]
+A \emph{strategy} for a game $A$
+is a subset of $P_A$ such that if $s a b \in \sigma$,
+then $|s|$ is even and $s \in \sigma$.
+We will write $\sigma : A$.
+\end{definition}
+
+Note that a strategy can be regarded as
+a non-deterministic function
+$\sigma : P_A \rightarrow \mathcal{P}(M_A \times \mathbb{N})$,
+so that we will write $sa \in \sigma$ or $\sigma(s) \ni a$
+interchangeably.
+[Actually this is true for all of our set of positions
+and is the form more amenable to logical relations,
+so we need to broaden this statement or
+tweak our definitions.]
+
+%}}}
+
+\subsection{Relations} %{{{
+
+[On doit definir une relation logique de Kripke sur les positions
+qui calque la relation d'accessibilite sur les pointeurs de justif.
+C'est possible de le faire directement.
+Mais comment relier la position suivante?
+Une solution elegante est de
+construire une nouvelle Kripke frame,
+ou les mondes sont des suite justifi\'ees de mondes originaux,
+(qui verifie l'invariant que lorsqu'un monde pointe sur un autre
+il doit etre un de ses successeurs,
+comme avec $\vdash$ -> definition commune?
+et aussi il est compris que $w_0 = w^*$,
+CAD $\star$ correspond au monde initial original).
+La relation d'accessibilit\'e ajoute un nouveau monde et pointeur,
+(avec la restriction que le monde est un successeur
+de la cible du pointeur).
+Le monde initial est la suite justifi\'ee vide.
+
+D\`es lors,
+deux positions sont reli\'ees \`a $\vec{w}$
+si elles ont la meme longueur,
+si $p^1_i = p^w_i = p^2_i$,
+et si $m^1_i \ifr{R_{w_i}} m^2_i$
+pour tout $i$.
+Deux mouvements avec pointeurs $(m_1, p_1)$, $(m_2, p_2)$
+sont reli\'es par $w$ si
+$0 \le p_1 = p_2 \le |w|$ et
+$m_1 [R_{w_{p_1}}] m_2$.
+L'operation d'ajout de mouvement
+est maintenant de signature $\Box (R^\kw{jsq} \rightarrow R^\kw{jmv} \rightarrow \Diamond R^\kw{jsq}$.
+
+``justified move''
+
+Consider a Kripke frame $\langle W, \leadsto, w^* \rangle$.
+A \emph{Kripke logical relation between games} $A$ and $B$
+is a Kripke logical relation $R : \mathcal{R}_W(M_A, M_B)$
+between the possible moves of $A$ and $B$
+such that:
 \begin{gather*}
-    R \subseteq M_A \times M_B \\
-    \lambda_A \ifr{R \rightarrow (=)} \lambda_B \\
-    (\vdash_A) \ifr{R + \top_\star \rightarrow \mathcal{P}^+(R)} (\vdash_B)
+  \lambda_A \ifr{\Box (R \rightarrow (=))} \lambda_B \\
+  \vdash_A
+      \left\{
+      \begin{array}{r@{\,}l}
+        \Box(R &\rightarrow \Diamond R \rightarrow (\Rightarrow)) \\
+          \top &\rightarrow \Diamond R \rightarrow (\Rightarrow)
+      \end{array}
+      \right\}
+    \vdash_B \\
+  P_A \ifr{\Box (R^\kw{jsq} \rightarrow \Diamond R^\kw{jmv} \rightarrow (\Rightarrow))} P_B
 \end{gather*}
-For games, additional condition on $P_A$.
+We write $R : \mathcal{R}_W(A, B)$
+
 [XXX polarity for $\vdash$: you want to relate environment moves
 in the other direction]
+[XXX we need te environment half of the simulation
+in the game relation, not just even the guarantee that it would yield
+legal moves]
 [XXX note for KLR section: picking between
 the different relations at some type is arbitrary choice,
 in effect those are different structures
