@@ -1067,21 +1067,58 @@ and $\mret{v}{m'}$.
 Note that once [an external function has been called
 it might return more than once].
 
-[Our strategy:
-given any prefix $\mathbf{u}$,
-use the $\kw{P}$-view to construct an oracle
-and see where we get stuck.
-At a call site -> emit a call move.
-At a final state -> emit a ret move.
-Somewhere else -> don't emit anything / emit a ``stuck'' move.
-Nowhere -> don't emit anything / emit a ``I'm looping'' move.
-This gives us $\kw{ClightX}(p) : !\EC\multimap\EC$]
+Next, we describe how to compute
+the semantics of a Clight module
+$\kw{ClightX}(p) : \: !\EC \multimap \EC$.
+Given any interaction prefix $\mathbf{u}$,
+we use the $\kw{P}$-view to construct an oracle $\mathcal{E}_\mathbf{u}$,
+and instrument the memory states with a log $\mathbf{l}$
+of the interaction that has been replayed so far.
+Every time the \kw{ClightX} program
+makes an external call,
+$\mathcal{E}_\mathbf{u}$
+will first append that call to the log.
+Then if there exists a pair $(v, m')$
+such that $\mathbf{l} \cdot \mret{v}{m'} \sqsubseteq \mathbf{u}$,
+$\mathcal{E}_\mathbf{u}$ makes the corresponding transition.
+Otherwise,
+it transitions to a memory state
+modified only to include the new log entry,
+with return value $\kw{Vundef}$.
 
+Using this oracle construction,
+the semantics can be computer by taking the current position,
+building a corresponding $\mathcal{E}_\mathbf{u}$,
+then querying the original $\kw{ClightX}$ semantics.
+If a state is reachable which has one additional move in the log,
+this will be the next move of our strategy:
+\[
+  \kw{ClightX}(p) \ni \mathbf{u} \cdot e \ \Leftrightarrow\ 
+  \kw{ClightX}_{\mathcal{E}_\mathbf{u}}(p) :
+    \mcall{f}{\vec{v}}{(m, \varepsilon)} \rightarrow^* s[(m', \mathbf{u} \cdot e)]
+\]
 Note that the more limited semantics of the previous section
 may be obtained by:
 \[ \kw{ClightX}_\mathcal{E}(p) \equiv_\kw{id} \kw{ClightX}(p) \circ \mathcal{E}^\dagger \]
-[This is what allows us to transfer the correctness theorem
-from the first one to the second one through an extensionality lemma]
+
+A similar construction can be carried out for $\kw{AsmX}$.
+By defining the right injection relation
+for the abstract data component of instrumented states,
+we can reuse the small-step simulation proved by CompCertX
+to establish the simulation of strategies:
+\[
+  \AxiomC{$\kw{ClightX}(p) \ni \mathbf{u}_1 \cdot e_1$}
+  \UnaryInfC{$\kw{ClightX}_{\mathcal{E}_\mathbf{u}}(p) :
+    \mcall{f}{\vec{v}}{(m, \varepsilon)} \rightarrow^* s[(m_1', \mathbf{u}_1 \cdot e_1)]$}
+  \AxiomC{$\mathbf{u}_1 \ifr{R} \mathbf{u}_2$}
+  \BinaryInfC{$\exists e_2 \,.\, e_1 \ifr{R} e_2 \wedge
+    \kw{AsmX}_{\mathcal{E}_\mathbf{u}}(p) :
+      \mcall{f}{\vec{v}}{(m, \varepsilon)} \rightarrow^*
+      s[(m_2', \mathbf{u}_2 \cdot e_2)]$}
+  \UnaryInfC{$\exists e_2 \,.\, e_1 \ifr{R} e_2 \wedge
+    \kw{AsmX}(p) \ni \mathbf{u}_2 \cdot e_2$}
+  \DisplayProof
+\]
 %}}}
 
 \subsection{Open modules} %{{{
@@ -1202,7 +1239,7 @@ through the environment.
 
 \subsection{Linking} %{{{
 
-Consider a number of strategies
+Consider the strategies
 $\sigma_1, \ldots, \sigma_n : \EC \Rightarrow \EC$,
 and assume they provide behaviors
 for the respective sets of function names $F_1, \ldots, F_n$.
