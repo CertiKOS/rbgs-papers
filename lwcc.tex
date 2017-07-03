@@ -8,6 +8,7 @@
 \usetikzlibrary{graphs}
 \usetikzlibrary{cd}
 \usepackage{bussproofs}
+\usepackage{stmaryrd}
 % }}}
 
 % Macros {{{
@@ -116,6 +117,13 @@ KLR/parametricity understanding of Compcert languages provides
 uniform easy natural definition of refinement
 that works well with the existing code,
 shed new light on the construction of Compcert.
+
+Some context we can bring up:
+separate compilation,
+compositional compilation (definition, see ZS whiteboard; compositional compcert),
+compositional verification,
+models of and linking with non-software components
+(devices, network systems, physical world, etc.)
 
 \subsection{Contributions}
 
@@ -1159,6 +1167,106 @@ to establish the simulation of strategies:
   \DisplayProof
 \]
 %}}}
+
+\subsection{A difficulty}
+
+Semantics as described above
+don't work with compilation
+because the constructed oracle is not stable under inj.
+Even if,
+no guarantee that action on extended states consistent
+with the execution of Asm involved in the simulation.
+Root of the problem:
+we want the C and Asm environment
+to be consistent in a stronger way than
+guaranteed by the simulation.
+Namely,
+we want them to be the result of a common process,
+which is stable under injection.
+
+For \kw{P} we can deal with this kind of thing
+by formulating constraints on the strategies we want to consider,
+for example $\sigma \le_R \sigma$.
+However for \kw{O} we only have the rules of the game.
+Problem here is that the rules of the game
+can only talk about one specific history.
+not what would have happened if \kw{P} had made different choices.
+
+Once we're talking about simulations,
+we have the option to specify constraints
+on one history relative to the other.
+Indeed,
+in our case we end up with a limited version
+of the extcall properties
+which says that in the particular case
+of these two executions,
+one query was extending the other
+and the environment in the first case
+behaved as en extention compared to the other.
+But this is not enough for Compcert and for good reason:
+there are actually many steps between the two states
+that are related,
+corresponding to the different compilation phases.
+It may be possible,
+given two related execution prefixes,
+to ``interpolate'' in order to construct an oracle
+with the right properties,
+but that would be pretty involved and artificial,
+when we know that in fact any context that we care about
+is uniform wrt injections etc.
+(wrt all CKLRs?)
+
+A more straightforward approach
+is to define the game in a way that reflects
+the Compcert philosophy better:
+a given concrete state represents not just itself
+but the whole set of sets states contains and/or refine it.
+Likewise,
+a transition does not simply specify the successor of one state,
+but should be understood as an action on this whole set,
+which behaves in an appropriate way
+wrt injections etc.
+
+We can translate this in terms of games
+by requiring that moves carry this additional information.
+For a game $A = \langle M_A, \vdash_A, \lambda_A, P_A \rangle$
+and a move $m \in M_A$,
+we write:
+\[
+  {\uparrow^R_w}(m) = \{ m' \in M_A \ |\ m \ifr{R_w} m' \} \hspace{2em}
+  {\uparrow^R}(m) = \bigcup_w {\uparrow^R_w}(m) \,.
+\]
+A tuple $(m_\kw{p}, m, f)$ is a \emph{filter move} of $A$
+if $m_\kw{p} \vdash_A m$,
+% are moves of $A$ such that $m_\kw{p} \vdash m$, <<< need * too
+and $f : {\uparrow^R}(m_\kw{p}) \rightarrow {\uparrow^{\Diamond R}}(m)$
+is a function that associates
+to each move $m_\kw{p}'$ such that $m_\kw{p} \ifr{R_w} m_\kw{p}'$
+a move $m'$ such that $m \ifr{\Diamond R_w} m'$.
+By abuse of notation we write $M_A \uparrow R$
+for the set of filter moves of $A$
+(although this set depends on $\vdash_A$ as well).
+
+\begin{definition}[Filter game]
+Given a game $A$ and a KLR $R : \mathcal{R}_W(A, A)$,
+the \emph{filter game} $A \uparrow R = \langle M, \vdash, \lambda, P \rangle$
+is defined as follows:
+\begin{gather*}
+  M = M_A \uparrow R \\
+  (m_\kw{p}, m, f) \vdash (m_\kw{p}', m', f') \Leftrightarrow m = m_\kw{p}' \\
+  \lambda(m_\kw{p}, m, f) = \lambda_A(m) \\
+  P = \{ s \in M^\oast \ |\ \pi_2^\oast(s) \in P_A \}
+\end{gather*}
+\end{definition}
+
+[Ici,
+expliquer comment \'etendre la semantique definie plus haut
+pour qu'elle puisse marcher en terme de $\EC \uparrow R$.
+En r\`egle g\'en\'erale, pour
+une strat\'egie $\sigma : A$,
+si $\sigma \le_R \sigma$
+alors il existe $\sigma' : A \uparrow R$
+telle que $\kw{spine}(\sigma') = \sigma$.]
 
 \subsection{Open modules} %{{{
 
