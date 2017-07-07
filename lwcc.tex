@@ -43,6 +43,7 @@
 
 % Pointer to
 \newcommand{\pt}[1]{%
+  \rule{0pt}{1.4em}%
   \tikz[remember picture, overlay]{
     \draw[->]
       let \p{dest} = (#1),
@@ -728,14 +729,15 @@ can be expressed as a Compcert KLR.
 \newpage
 \section{Games} %{{{
 
-\subsection{Games and strategies} %{{{
-
 The game model we use is a variation on
 the pointer games presented in \citep{gamesem99}.
 Our definitions
 do not place \emph{a priori}
 any visibility, well-bracketing, or determinacy
 constraints on positions and strategies.
+
+\subsection{Pointer sequences} %{{{
+
 As noted by [CBPV thesis],
 pointers are sometimes presented in the game semantics literature
 as an auxiliary device,
@@ -748,36 +750,135 @@ application of Kripke logical relations
 to the setting of games
 that will be presented in Sec.~\ref{sec:klrg}.
 How to formalize pointers and associated reasoning principles
-is also one of the difficulaties associated with
+is also one of the difficulties associated with
 [making work in a proof assistant like Coq].
 For this reason,
 [define on its own and more formal than usual]
 
-\begin{definition}[Justified sequence]
-Given a set of \emph{possible moves} $M$,
-a \emph{justified move}
-is a pair $(m, p) : M \times \mathbb{N}$.
-Given an \emph{enabling relation} $\vdash$ between $M + \{\star\}$ and $M$,
-a \emph{justified sequence}
-is a finite sequence of justified moves
-$(m_1, p_1) (m_2, p_2) \cdots (m_n, p_n) : (M \times \mathbb{N})^*$
-which satifies the following conditions:
-with the convention $m_0 = \star$, we require that
-$p_i < i$ and $m_{p_i} \vdash m_i$ for all $1 \le i \le n$.
-%The $m_i$'s must alternate between opponent moves and proponent moves.
+\begin{definition}[Pointer sequences]
+For a given set $A$,
+a \emph{pointer sequence} of elements of $A$
+is a finite sequence
+$(a_1, p_1) (a_2, p_2) \cdots (a_n, p_n) \in (A \times \mathbb{N})^*$
+such that $p_i < i$ for all $1 \le i \le n$.
+The components $p_i$ are called \emph{pointers}
+and are intended as references to earlier entries.
+The set of such pointer sequences is denoted $A^\oast$.
 \end{definition}
 
-A possible move $m$ such that $\star \vdash m$ is called an \emph{initial move}.
-The component $p$ is called the move's \emph{pointer},
-and is intended as a reference to an earlier move.
-The condition $p_i < i$ ensures that any prefix of a justified sequence
-is itself a justified sequence.
-When writing out justified sequences
+When writing out pointer sequences
 we will represent the pointers pictorially,
 with null pointers ignored;
 for instance the sequence
 $(a, 0) (b, 1) (c, 0) (d, 1) (e, 2)$
 will be typeset as:
+\[
+  \rule{0pt}{1.5em}
+  a\ph{i1} \cdot
+  \pt{i1}b\ph{i2} \cdot
+  c \cdot
+  \pt{i1}d \cdot
+  \pt{i2}e
+\]
+Note that any prefix of a pointer sequence
+is itself a pointer sequence.
+
+Pointers provide a way for Kripke logical relations
+on the underlying set to be extended to pointer sequences:
+the related sequences will have the same pointer structure,
+and we will assign a world to each position
+in such a way that the world $w_i$ at a position $i$
+is accessible from the world $w_{p_i}$ it points to.
+
+\begin{definition}[Pointer sequence relator]
+Let $R : \mathcal{R}_W(A, B)$
+be a $W$-indexed Kripke logical relation.
+The relation $R^\oast : \mathcal{R}(A^\oast, B^\oast)$
+is defined as follows.
+Two pointer sequences
+$(a_i, p_i)_{1 \le i \le n}$ and
+$(b_i, q_i)_{1 \le i \le m}$
+are related if they have the same length ($n = m$),
+the same pointers ($\forall i \,.\, p_i = q_i$),
+and if there exists a sequence of worlds $(w_i)_{1 \le i \le n}$
+such that for all $1 \le i \le n$:
+\begin{itemize}
+\item $a_i \ifr{R_{w_i}} b_i$,
+\item $w_{p_i} \leadsto w_i$ (with the convention that $w_0 = \star$).
+\end{itemize}
+\end{definition}
+
+The notion of \emph{justified sequence}
+often used in game semantics
+can be recovered from these definitions,
+with Kripke frames playing the role of arenas.
+If the Kripke logical relation $I$
+is defined so that $I_w = \{(w, w)\}$, then
+for a frame $\langle M, \vdash \rangle$,
+a justified sequence is a pointer sequence $s \in M^\oast$
+such that $s \ifr{I^\oast} s$.
+This means that any element $(a_i, p_i)$ of $s$
+must be accessible from the element it points to,
+so that $a_{p_i} \vdash a_i$.
+
+%}}}
+
+\subsection{Games and strategies} %{{{
+
+Our definition of games is fairly standard.
+There are two players,
+namely Opponent (\kw{O}) and Proponent (\kw{P}).
+\kw{P} represents the system under consideration,
+while \kw{O} represents its environment.
+We start from a set of possible moves $M$,
+each identified as either an \kw{O}-move or \kw{P}-move.
+An enabling relation $\vdash$ restricts which moves
+can be played at a given point:
+a move $n$ must reference an ealier move $m$
+such that $m \vdash n$.
+The positions are pointer sequences $s \in M^\oast$
+which satisfy this and other constraints.
+Opponent plays first, then the players alternate.
+The semantics of the system will be interpreted as a strategy
+specifying the next move of \kw{P}
+given a current position.
+
+\begin{definition}[Game]
+An \emph{arena} is a tuple $A = \langle M_A, \vdash_A, \lambda_A \rangle$
+where $\langle M_A, \vdash_A \rangle$ is a Kripke frame, and
+$\lambda_A : M_A \rightarrow \{\kw{O},\kw{P}\} \times \{\kw{Q},\kw{A}\}$
+labels elements of $M_A$ as \emph{opponent moves} or \emph{proponent moves},
+and as \emph{questions} or \emph{answers}.
+We say that \emph{$m$ enables $n$} when $m \vdash_A n$,
+in which case $m$ must be a question,
+and $m, n$ must be moves of opposite players.
+Possible moves $m \in M_A$ such that $\star \vdash m$
+are called \emph{initial moves},
+and must be opponent questions.
+We call \emph{legal positions of $A$}
+and denote by $L_A \subseteq M_A^\oast$ the set of
+justified sequences for $\langle M_A, \vdash_A \rangle$
+where odd-numbered entries contain opponent moves and
+even-numbered entries contain proponent moves.
+
+A \emph{game} is a tuple $A = \langle M_A, \vdash_A, \lambda_A, P_A \rangle$
+where $\langle M_A, \vdash_A, \lambda_A \rangle$ is an arena,
+and $P_A \subseteq L_A$ is a set of \emph{valid positions} of the game.
+\end{definition}
+
+[Possible extra constraint says each ``thread''
+in a valid position should be a valid position on its own.
+If necessary, constraints on $\vdash$ vs $\lambda$:
+answers don't justify anything and players alternate.
+Let's see how the proofs go.]
+
+%We write $\lambda^\kw{OP} = \pi_1 \circ \lambda$ and $\lambda^\kw{QA} = \pi_2 \circ \lambda$.
+
+When writing out positions,
+we will underline proponent moves.
+If the pointer sequence given previously
+was a position in some game,
+we could typeset it as:
 \[
   \rule{0pt}{1.5em}
   a\ph{i1} \cdot
@@ -787,7 +888,7 @@ will be typeset as:
   \pt{i2}e
 \]
 Note that for the above to be a justified sequence,
-it must be the case that:
+it would have to be the case be the case that:
 \[
   \star \vdash a, \quad
   a \vdash b, \quad
@@ -797,36 +898,30 @@ it must be the case that:
 \]
 % $a, c, e$ be opponent moves, $b, d$ proponent moves (as indicated by underlining)
 
-\begin{definition}[Game]
-An \emph{game} $A$ is a tuple $\langle M_A, \vdash_A, \lambda_A, P_A \rangle$.
-\begin{itemize}
-\item $M_A$ is the game's set of possible moves;
-\item $\vdash_A$ is an enabling relation between $M_A + \{\star\}$ and $M_A$;
-\item $\lambda_A : M_A \rightarrow \{\kw{O},\kw{P}\} \times \{\kw{Q},\kw{A}\}$
-labels possible moves as \emph{opponent moves} or \emph{proponent moves}
-and as \emph{questions} or \emph{answers};
-\item
-$P_A$ is a prefix-closed set of
-justified sequences for $\langle M_A, \vdash_A \rangle$
-called the game's \emph{valid positions}.
-\end{itemize}
-%We write $\lambda^\kw{OP} = \pi_1 \circ \lambda$ and $\lambda^\kw{QA} = \pi_2 \circ \lambda$.
-Initial moves must be opponent questions.
-The odd-numbered moves of valid positions
-must be opponent moves,
-while the even-numbered ones
-must be proponent moves.
-\end{definition}
-
-[NB: could still define arenas and legal positions separately,
-then games and valid positions.
-Might make the following less dense.]
-
-[Possible extra constraint says each ``thread''
-in a valid position should be a valid position on its own.
-If necessary, constraints on $\vdash$ vs $\lambda$:
-answers don't justify anything and players alternate.
-Let's see how the proofs go.]
+\begin{example}[Simple games]
+Base types are often interpreted as simple games
+consisting of a single opponent question $q$,
+which enables a single proponent answer for
+each possible value.
+For any set $A$, the game $[A]$ is defined by:
+\[
+  \begin{array}{rcl}
+    M_{[A]} & = & \{\kw{q}\} + A \\
+    \lambda_{[A]}(m) & = &
+      \begin{cases}
+        \kw{OQ} & \mbox{if} \:\: m = \kw{q} \\
+        \kw{PA} & \mbox{otherwise}
+      \end{cases} \\
+    \star \vdash_{[A]} m & \Leftrightarrow & m = \kw{q} \\
+    m \vdash_{[A]} n & \Leftrightarrow & m = \kw{q} \wedge n \in A \\
+    P_{[A]} & = &
+      \{ \epsilon, \kw{q}, \kw{q}\ph{q} \cdot \pt{q}\underline{a} \:|\:
+         a \in A \}
+  \end{array}
+\]
+For instance a possible interaction in the game $[\mathbb{N}]$ is:
+\[ \kw{q}\ph{q} \cdot \pt{q}\underline{7} \]
+\end{example}
 
 %To sum up,
 %an arena defines which kinds of moves are possible
@@ -836,89 +931,51 @@ Let's see how the proofs go.]
 %Games further refine the rules
 %to specify which dialogues are acceptable
 %and constrain the player's behaviors.
-Next,
-we define our notion of strategy.
+Games specify the form of the interaction
+between the system and its environment.
+In game semantics they are used to interpret types.
+\emph{Strategies} specify the behavior of the system,
+and are used to interpret terms.
 For a given game,
-a strategy the behavior of $\kw{P}$
-in all possible scenarios.
+a strategy specifies the next move of $\kw{P}$
+for a given, odd-length current position.
 
 \begin{definition}[Strategy]
 A \emph{strategy} for a game $A$
-is a subset of $P_A$ such that if $s a b \in \sigma$,
-then $|s|$ is even and $s \in \sigma$.
-We will write $\sigma : A$.
+is a partial function $\sigma : P_A^\kw{odd} \rightharpoonup M_A \times \mathbb{N}$.
 \end{definition}
 
-Note that a strategy can be regarded as
-a non-deterministic function
-$\sigma : P_A \rightarrow \mathcal{P}(M_A \times \mathbb{N})$,
-so that we will write $sa \in \sigma$ or $\sigma(s) \ni a$
-interchangeably.
-[Actually this is true for all of our set of positions
-and is the form more amenable to logical relations,
-so we need to broaden this statement or
-tweak our definitions.
-Isomorphism $\mathcal{P}(A^+) \cong A^* \rightarrow \mathcal{P}(A)$]
+We will write $\sigma : A$.
+Traditionally, strategies are defined as prefix-closed sets of positions.
+The above definition makes them deterministic by construction,
+and its form makes it easier to use
+in conjunction with Kripke logical relations.
+[Isomorphism $\mathcal{P}(A^+) \cong A^* \rightarrow \mathcal{P}(A)$.
+We don't care about full abstraction so no need to specify prefix closure]
+
+As an example,
+for any $a \in A$ we can define the simple strategy $[a] : [A]$
+as $[a](\kw{q}\ph{q}) = \pt{q}a$.
+The operators defined in Sec.~\ref{sec:gameop}
+will be used to construct more interesting examples
+of games and strategies.
 
 %}}}
 
 \subsection{Relations} %{{{
 
-[On doit definir une relation logique de Kripke sur les positions
-qui calque la relation d'accessibilite sur les pointeurs de justif.
-C'est possible de le faire directement.
-Mais comment relier la position suivante?
-Une solution elegante est de
-construire une nouvelle Kripke frame,
-ou les mondes sont des suite justifi\'ees de mondes originaux,
-(qui verifie l'invariant que lorsqu'un monde pointe sur un autre
-il doit etre un de ses successeurs,
-comme avec $\vdash$ -> definition commune?
-et aussi il est compris que $w_0 = w^*$,
-CAD $\star$ correspond au monde initial original).
-La relation d'accessibilit\'e ajoute un nouveau monde et pointeur,
-(avec la restriction que le monde est un successeur
-de la cible du pointeur).
-Le monde initial est la suite justifi\'ee vide.
-
-D\`es lors,
-deux positions sont reli\'ees \`a $\vec{w}$
-si elles ont la meme longueur,
-si $p^1_i = p^w_i = p^2_i$,
-et si $m^1_i \ifr{R_{w_i}} m^2_i$
-pour tout $i$.
-Deux mouvements avec pointeurs $(m_1, p_1)$, $(m_2, p_2)$
-sont reli\'es par $w$ si
-$0 \le p_1 = p_2 \le |w|$ et
-$m_1 [R_{w_{p_1}}] m_2$.
-L'operation d'ajout de mouvement
-est maintenant de signature $\Box (R^\kw{jsq} \rightarrow R^\kw{jmv} \rightarrow \Diamond R^\kw{jsq}$.
-
-``justified move''
-
-Consider a Kripke frame $\langle W, \leadsto, w^* \rangle$.
 A \emph{Kripke logical relation between games} $A$ and $B$
 is a Kripke logical relation $R : \mathcal{R}_W(M_A, M_B)$
 between the possible moves of $A$ and $B$
 such that:
 \begin{gather*}
+  (\star \vdash_A) \ifr{\Diamond R \rightarrow (\Rightarrow)} (\star \vdash_B) \\
+  (\vdash_A) \ifr{\Box(R \rightarrow \Diamond R \rightarrow (\Rightarrow))} (\vdash_B) \\
   \lambda_A \ifr{\Box (R \rightarrow (=))} \lambda_B \\
-  \vdash_A
-      \left\{
-      \begin{array}{r@{\,}l}
-        \Box(R &\rightarrow \Diamond R \rightarrow (\Rightarrow)) \\
-          \top &\rightarrow \Diamond R \rightarrow (\Rightarrow)
-      \end{array}
-      \right\}
-    \vdash_B \\
-  P_A^\kw{even}
-    \ifr{\Box (R^\kw{jsq} \rightarrow \mathcal{P}^+(\Diamond R^\kw{jmv}))}
-      P_B^\kw{even} \\
-  P_A^\kw{odd}
-    \ifr{\Box (R^\kw{jsq} \rightarrow \Diamond R^\kw{jmv} \rightarrow (\Rightarrow))}
-      P_B^\kw{odd}
+  R^\oast(P_A) \subseteq P_B
 \end{gather*}
-We write $R : \mathcal{R}_W(A, B)$
+We write $R : \mathcal{R}_W(A, B)$.
+
 
 [XXX polarity for $\vdash$: you want to relate environment moves
 in the other direction]
@@ -940,6 +997,100 @@ as a transition system.]
 
 From logical relation of arenas, relation on positions.
 Explain KLR aspect also.
+
+%}}}
+
+\subsection{Game operations} %{{{
+\label{sec:gameop}
+
+In this section we define the game operations
+$A \otimes B$, $A \multimap B$, and $!A$.
+The definitions of these games given here
+are identical to those in \citep{gamesem99}.
+
+The game $A \otimes B$ consists of one copy of $A$ and one copy of $B$,
+played side by side.
+\kw{O} chooses which game to open in first,
+and in the context of a well-bracketed \kw{P}-strategy,
+remains in control of which game is being played at any given point.
+The game $A \multimap B$ is similar,
+but in the copy of $A$ the roles of $\kw{O}$ and $\kw{P}$ are reversed.
+Here, the interaction starts in $B$,
+but at some point \kw{P} may choose to play in $A$,
+postponing the answer to \kw{O}'s latest question in $B$.
+Formally,
+\[
+  \begin{array}{rcl}
+    M_{A \otimes B} & = & M_A + M_B \\
+    \star \vdash_{A \otimes B} m & \Leftrightarrow &
+        \star \vdash_A m \vee
+        \star \vdash_B m \\
+    m \vdash_{A \otimes B} n & \Leftrightarrow &
+        m \vdash_A n \vee
+        m \vdash_B n \\
+    \lambda_{A \otimes B} & = & [\lambda_A, \lambda_B] \\
+    P_{A \otimes B} & = &
+        \{ s \in L_{A \otimes B} \:|\:
+           s \upharpoonright A \in P_A \wedge s \upharpoonright B \in P_B \} \,.
+  \end{array}
+\]
+\[
+  \begin{array}{rcl}
+    M_{A \multimap B} & = & M_A + M_B \\
+    \star \vdash_{A \multimap B} m & \Leftrightarrow & \star \vdash_B m \\
+    m \vdash_{A \multimap B} n & \Leftrightarrow &
+        m \vdash_A n \vee m \vdash_B n \vee
+        (\star \vdash_B m \wedge \star \vdash_A n) \\
+    \lambda_{A \multimap B} & = & [\bar{\lambda}_A, \lambda_B] \\
+    P_{A \multimap B} & = &
+        \{ s \in L_{A \multimap B} \:|\:
+           s \upharpoonright A \in P_A \wedge s \upharpoonright B \in P_B \} \,.
+  \end{array}
+\]
+
+\begin{example}[Strategy for addition]
+Addition of natural numbers can be modeled as the strategy
+$\sigma_+ : [\mathbb{N}] \otimes [\mathbb{N}] \multimap [\mathbb{N}]$
+defined by the prefix closure of:
+\[
+  \{
+    \kw{q}_3\ph{q} \cdot
+    \pt{q}\underline{\kw{q}_1}\ph{q1} \cdot
+    \pt{q1}n_1 \cdot
+    \pt{q}\underline{\kw{q}_2}\ph{q2} \cdot
+    \pt{q2}m_2 \cdot
+    \pt{q}\underline{(n+m)_3}
+  \:|\:
+    n, m \in \mathbb{N}
+  \}
+\]
+Subscripts denote which component games the moves belong to.
+When \kw{O} asks for the value in the third copy of the game $[\mathbb{N}]$,
+\kw{P} does not answer immediately but instead
+chooses to open in the first game.
+Once \kw{O} replies with the value of the first integer,
+\kw{P} opens in the second game.
+Once \kw{O} replies with the value of the second integer,
+\kw{P} answers the original question with the sum.
+\end{example}
+
+Two strategies $\sigma_1 : A$ and $\sigma_2 : B$
+can be combined to yield a strategy $\sigma_1 \otimes \sigma_2 : A \otimes B$
+defined by:
+\[
+    (\sigma_1 \otimes \sigma_2)(sm) =
+      \begin{cases}
+        \sigma_1(sm \upharpoonright A) & \mbox{if } m \in M_A \\
+        \sigma_2(sm \upharpoonright B) & \mbox{if } m \in M_B
+\]
+
+Finally, the game $!A$ consists in any number of copies of $A$.
+In the semantics of PCF presented in \citep{gamesem99},
+the type $A \rightarrow B$
+is interpreted as the game
+$!\llbracket A \rrbracket \multimap \llbracket B \rrbracket$;
+a strategy for that game must be able to
+implement the protocol for $B$,
 
 %}}}
 
@@ -1082,7 +1233,6 @@ before answering the initial function call
 with its own return move.
 For example, a possible interaction is:
 \[
-  \rule{0pt}{1.5em}
   \mcall{f}{}{m_1}\ph{f} \ \cdot\ 
   \pt{f}
     \pcall{x}{1}{m_2}\ph{x} \ \cdot\ 
