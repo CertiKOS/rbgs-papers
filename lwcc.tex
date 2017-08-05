@@ -19,6 +19,7 @@
 \newcommand{\alt}{\ |\ }
 
 \newcommand{\EC}{\kw{C}}
+\newcommand{\simrel}{\kw{simrel}}
 
 % Moves
 \newcommand{\mcall}[3]{\kw{#1}({#2})@{#3}}
@@ -28,6 +29,10 @@
 \newcommand{\mret}[2]{{#1}@{#2}}
 \newcommand{\pret}[2]{%
   \underline{\mret{#1}{#2}}%
+}
+\newcommand{\mretx}[3]{{#1}@{#2}/{#3}}
+\newcommand{\pretx}[3]{%
+  \underline{\mretx{#1}{#2}{#3}}%
 }
 
 % Pointers for justified sequences %{{{
@@ -198,15 +203,15 @@ We write $R : \mathcal{R}(S_1, S_2)$.
 \begin{example}[Logical relation of monoids]
 A \emph{monoid} is a set $A$ equipped with
 an associative binary operation $\cdot$ and
-an identity element $\varepsilon$.
+an identity element $\epsilon$.
 A \emph{logical relation of monoids} between
-a monoid $\langle A, \cdot_A, \varepsilon_A \rangle$ and
-a monoid $\langle B, \cdot_B, \varepsilon_B \rangle$
+a monoid $\langle A, \cdot_A, \epsilon_A \rangle$ and
+a monoid $\langle B, \cdot_B, \epsilon_B \rangle$
 is a relation $R \subseteq A \times B$
 such that:
 \begin{gather*}
 u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B v' \\
-\varepsilon_A \ifr{R} \varepsilon_B
+\epsilon_A \ifr{R} \epsilon_B
 \end{gather*}
 [Possible example: some ``coded message'' relation,
 where sequences on the left correspond to sequences on the right,
@@ -1082,6 +1087,7 @@ defined by:
       \begin{cases}
         \sigma_1(sm \upharpoonright A) & \mbox{if } m \in M_A \\
         \sigma_2(sm \upharpoonright B) & \mbox{if } m \in M_B
+      \end{cases}
 \]
 
 Finally, the game $!A$ consists in any number of copies of $A$.
@@ -1110,28 +1116,76 @@ an initial memory state,
 and a list of actual parameters,
 $\kw{external\_call}$ gives a set of possible final states,
 each comprised of a memory state and return value.
-Based on this protocol,
-we define our basic Compcert game.
+Further constraints placed on the behavior of
+\kw{external\_call} include determinism
+and preservation by memory injections and extensions.
+
+Our basic Compcert game
+captures the same information.
+There are two kinds of move:
+moves of the form
+$\mcall{f}{\vec{v}}{m} \in M_\EC^\kw{call}$
+represent function calls requested by \kw{O}.
+while moves of the form
+$\mretx{v}{m'}{e} \in M_\EC^\kw{ret}$
+correspond to \kw{P}'s possible responses.
+In a valid play,
+\kw{O} emits one request from $M_\EC^\kw{call}$,
+which is answered by \kw{P} with a $\mretx{v}{m'}{e}$ move.
+
+The extra parameter $e$
+is used to ensure the uniformity of \kw{P}'s answer.
+In Compcert,
+any state transformation process should behave uniformly
+under memory injections and similar simulation relations.
+In a sense,
+a Compcert state represents not just itself,
+but more generally the set of states that refine it,
+or within which it is a component.
+Likewise,
+a transformation of a given state
+should not simply specify an outcome for this individual state,
+but rather specify an action on the whole set of states that contain or refine it.
+This action should be monotonic
+in the sense that a more precise input will yield a more precise output,
+and local in the sense that the tranformation of a larger state
+should not depend on or modify any of the extra information.
+This is enforced in our Compcert game by requiring \kw{P}
+to provide:
+\[ e : \kw{val}^* \times \kw{mem} \rightarrow \mathcal{P}^1(\kw{val} \times \kw{mem}) \,, \]
+subject to the constraints that for any \simrel{} $R$:
+\begin{gather*}
+  e(\vec{v}, m) \ni (v, m') \\
+  e \ifr{\Box (R_\kw{val}^* \times R_\kw{mem} \rightarrow
+         \mathcal{P}^+(\Diamond (R_\kw{val} \times R_\kw{mem})))} e
+\end{gather*}
+We write $\kw{action}(\vec{v}, m, v, m')$
+for the set of such relations $e$.
+
+The component $e$ is crucial from a technical standpoint,
+and we will see in Sec.~\ref{sec:compcompcertx}
+that it allow us to extend the correctness theorem of CompCertX
+to our compositional setting
+through an oracle construction.
+However, for the sake of clarity
+we will omit it from our presentation
+in examples where it is not relevant.
 
 \begin{definition}[Elementary Compcert game]
-The arena $\langle M_\EC, \lambda_\EC, \vdash_\EC \rangle$
-uses the following set of moves.
-Moves of the form
-$\mcall{f}{\vec{v}}{m} \in M_\EC^\kw{call}$
-represent function calls requested by \kw{O},
-while moves of the form
-$\mret{v}{m'} \in M_\EC^\kw{ret}$
-correspond to \kw{P}'s possible responses.
+The game $\EC = \langle M_\EC, \lambda_\EC, \vdash_\EC, P_\EC \rangle$
+is defined using the set of moves:
 \begin{align*}
   M_\EC^\kw{call} &:=
     \{ \mcall{f}{\vec{v}}{m} :
       (f, \vec{v}, m) \in \kw{ident} \times \kw{val}^* \times \kw{mem} \} \\
   M_\EC^\kw{ret} &:=
-    \{ \mret{v}{m'} :
-      (v, m') \in \kw{val} \times \kw{mem} \} \\
+    \{ \mretx{v}{m'}{e} :
+      (v, m', e) \in \kw{val} \times \kw{mem} \times 
+          (\kw{val}^* \times \kw{mem} \rightarrow
+           \mathcal{P}^1(\kw{val} \times \kw{mem})) \} \\
   M_\EC &:= M_\EC^\kw{call} \cup M_\EC^\kw{ret}
 \end{align*}
-Accordingly, the labelling function for $\EC$ is defined as:
+The labelling function for $\EC$ is defined as:
 \[
   \lambda_\EC(e) :=
      \begin{cases}
@@ -1141,11 +1195,15 @@ Accordingly, the labelling function for $\EC$ is defined as:
 \]
 and the enabling relation is defined by:
 \[
-  \star \ \vdash_\EC\ 
-  \mcall{f}{\vec{v}}{m} \ \vdash_\EC\ 
-  \mret{v}{m'} \,.
+    \AxiomC{$\rule{0pt}{1em}$}
+    \UnaryInfC{$\star \: \vdash_\EC \: \mcall{f}{\vec{v}}{m}$}
+    \DisplayProof
+    \qquad
+    \AxiomC{$e \in \kw{action}(\vec{v}, m, v, m') \rule{0pt}{1em}$}
+    \UnaryInfC{$\mcall{f}{\vec{v}}{m} \ \vdash_\EC\ \mretx{v}{m'}{e}$}
+    \DisplayProof
 \]
-We limit the set of legal position $P_\EC$
+We limit the set of legal positions $P_\EC$
 to plays which contain at most one initial move.
 \end{definition}
 
@@ -1171,7 +1229,7 @@ We will omit \kw{val} constructors when the type of values is clear from context
   \pt{g}\pret{42}{m'}
 \]
 
-The set of possible strategies for $\EC$ corresponds exactly to
+The set of possible strategies for $\EC$ corresponds to
 the possible Compcert external call transition relations.
 In addition,
 the semantics of $\kw{ClightX}$ or $\kw{AsmX}$ modules
@@ -1179,9 +1237,9 @@ can also be mapped into strategies for $\EC$.
 Given a semantics of external functions $\mathcal{E}$
 and a \kw{Clight} module $p$,
 we can define the strategy:
-\[ \kw{ClightX}_\mathcal{E}(p) : \EC := \{ \varepsilon \} \cup
+\[ \kw{ClightX}_\mathcal{E}(p) : \EC := \{ \epsilon \} \cup
     \{ \mcall{f}{\vec{v}}{m} \cdot \pret{v}{m'} \ :\ 
-         (f, \vec{v}, m) \Downarrow_p^{\varepsilon} (v, m') \} \]
+         (f, \vec{v}, m) \Downarrow_p^{\mathcal{E}} (v, m') \} \]
 The same construction can be carried out for \kw{AsmX}.
 Note that we loose the ability to distinguish between
 unsafe behaviors, non-terminating behaviors,
@@ -1338,11 +1396,11 @@ to establish the simulation of strategies:
 \[
   \AxiomC{$\kw{ClightX}(p) \ni \mathbf{u}_1 \cdot e_1$}
   \UnaryInfC{$\kw{ClightX}_{\mathcal{E}_\mathbf{u}}(p) :
-    \mcall{f}{\vec{v}}{(m, \varepsilon)} \rightarrow^* s[(m_1', \mathbf{u}_1 \cdot e_1)]$}
+    \mcall{f}{\vec{v}}{(m, \epsilon)} \rightarrow^* s[(m_1', \mathbf{u}_1 \cdot e_1)]$}
   \AxiomC{$\mathbf{u}_1 \ifr{R} \mathbf{u}_2$}
   \BinaryInfC{$\exists e_2 \,.\, e_1 \ifr{R} e_2 \wedge
     \kw{AsmX}_{\mathcal{E}_\mathbf{u}}(p) :
-      \mcall{f}{\vec{v}}{(m, \varepsilon)} \rightarrow^*
+      \mcall{f}{\vec{v}}{(m, \epsilon)} \rightarrow^*
       s[(m_2', \mathbf{u}_2 \cdot e_2)]$}
   \UnaryInfC{$\exists e_2 \,.\, e_1 \ifr{R} e_2 \wedge
     \kw{AsmX}(p) \ni \mathbf{u}_2 \cdot e_2$}
