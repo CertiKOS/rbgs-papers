@@ -774,19 +774,33 @@ can be expressed as a Compcert KLR.
 \newpage
 \section{Games} %{{{
 
-The game model we use is a variation on
-the pointer games presented in \citep{gamesem99}.
-Our definitions
-do not place \emph{a priori}
-any visibility, well-bracketing, or determinacy
-constraints on positions and strategies.
+The starting point for our game model
+is the pointer game framework used in \citep{gamesem99}
+to construct a semantics for several variants of PCF.
+This section gives a short summary of the relevant definitions,
+with an emphasis on the formalization of \emph{pointer sequences},
+and shows how our relational approach can be deployed in this context.
+Then we use these structures
+to build an appropriate semantic domain
+from an elementary game of Compcert function call.
 
 \subsection{Pointer sequences} %{{{
 
+Game semantics of programming languages
+often make use of \emph{pointers},
+whereby the moves of the players
+may reference an earlier move in the game.
+(This is a distinct meaning from
+our earlier use of the word \emph{pointer}
+to denote references to memory locations).
+For example,
+moves which produce a requested value
+will reference the corresponding request
+in addition to providing the value itself.
+
 As noted by [CBPV thesis],
-pointers are sometimes presented in the game semantics literature
-as an auxiliary device,
-added as an afterthought to solve some obscure technical problem,
+pointers are sometimes presented as an auxiliary device,
+added as an afterthought to solve some technical problem,
 but in fact they play a fundamental role
 in encoding the structure of the computation.
 Indeed,
@@ -800,11 +814,11 @@ is also one of the difficulties associated with
 For this reason,
 [define on its own and more formal than usual]
 
-\begin{definition}[Pointer sequences]
+\begin{definition}[Pointer sequence]
 For a given set $A$,
 a \emph{pointer sequence} of elements of $A$
 is a finite sequence
-$(a_1, p_1) (a_2, p_2) \cdots (a_n, p_n) \in (A \times \mathbb{N})^*$
+$(p_1, a_1) (p_2, a_2) \cdots (p_n, a_n) \in (\mathbb{N} \times A)^*$
 such that $p_i < i$ for all $1 \le i \le n$.
 The components $p_i$ are called \emph{pointers}
 and are intended as references to earlier entries.
@@ -815,7 +829,7 @@ When writing out pointer sequences
 we will represent the pointers pictorially,
 with null pointers ignored;
 for instance the sequence
-$(a, 0) (b, 1) (c, 0) (d, 1) (e, 2)$
+$(0, a) (1, b) (0, c) (1, d) (2, e)$
 will be typeset as:
 \[
   \rule{0pt}{1.5em}
@@ -825,11 +839,12 @@ will be typeset as:
   \pt{i1}d \cdot
   \pt{i2}e
 \]
-Note that any prefix of a pointer sequence
+Note that the condition $p_i < i$ ensures that
+any prefix of a pointer sequence
 is itself a pointer sequence.
 
 Pointers provide a way for Kripke logical relations
-on the underlying set to be extended to pointer sequences:
+on the underlying set $A$ to be extended to pointer sequences:
 the related sequences will have the same pointers,
 and we will assign a world $w_i$ to each position $i$,
 such that the values carried by the elements of the sequences
@@ -839,6 +854,7 @@ is accessible from the world $w_{p_i}$
 which the elements point to.
 
 \begin{definition}[Pointer sequence relator]
+\label{def:psrel}
 Let $R : \mathcal{R}_W(A, B)$
 be a $W$-indexed Kripke logical relation.
 The relation $R^\oast : \mathcal{R}(A^\oast, B^\oast)$
@@ -856,25 +872,46 @@ such that for all $1 \le i \le n$:
 \end{itemize}
 \end{definition}
 
-[Too clever $\rightarrow$ remove?]
-The notion of \emph{justified sequence}
-often used in game semantics
-can be recovered from these definitions,
-with Kripke frames playing the role of arenas.
-If the Kripke logical relation $I$
-is defined so that $I_w = \{(w, w)\}$, then
-for a frame $\langle M, \vdash \rangle$,
+Pointers can also be used to constrain the sequences under consideration
+to follow a certain structure,
+expressed using a so-called \emph{enabling relation} $\vdash$
+over the elements of $A$,
+the idea being that each move must either be
+one of the designated \emph{initial moves},
+or be \emph{enabled} by the earlier move its pointer references.
+
+\begin{definition}[Justified sequence]
+Given an \emph{enabling relation} $\vdash$ between the sets
+$A + {\star}$ and $A$,
+a \emph{justified sequence} is
+a pointer sequence $(p_1, a_1) (p_2, a_2) \cdots (p_n, a_n)$
+such that for all $1 \le i \le n$,
+$a_{p_i} \vdash a_i$
+(with the convention $a_0 = \star$).
+The set of all such justified sequences
+is denoted $\langle A, \vdash \rangle^\oast$.
+\end{definition}
+
+Note the similarity between Kripke frames and enabling relations.
+In fact, looking back at Def.~\ref{def:psrel},
+for a Kripke logical relation $R$ indexed by
+a Kripke frame $\langle W, \leadsto \rangle$,
+whenever two pointer sequences are related by $R^\oast$,
+the corresponding sequence of worlds
+can be regarded as a justified sequence of
+$\langle W, \leadsto \rangle^\oast$.
+Conversely,
+if we see $\langle M, \vdash \rangle$ as a Kripke frame
+and define the Kripke logical relation $I$
+with $I_w = \{(w, w)\}$, then
 a justified sequence is a pointer sequence $s \in M^\oast$
 such that $s \ifr{I^\oast} s$.
-This means that any element $(a_i, p_i)$ of $s$
-must be accessible from the element it points to,
-so that $a_{p_i} \vdash a_i$.
 
 %}}}
 
 \subsection{Games and strategies} %{{{
 
-Our definition of games is fairly standard.
+The games we use proceed as follows.
 There are two players,
 namely Opponent (\kw{O}) and Proponent (\kw{P}).
 \kw{P} represents the system under consideration,
@@ -882,10 +919,8 @@ while \kw{O} represents its environment.
 We start from a set of possible moves $M$,
 each identified as either an \kw{O}-move or \kw{P}-move.
 An enabling relation $\vdash$ restricts which moves
-can be played at a given point:
-a move $n$ must reference an ealier move $m$
-such that $m \vdash n$.
-The positions are pointer sequences $s \in M^\oast$
+can be played at a given point.
+The positions are justified sequences $s \in \langle M, \vdash \rangle^\oast$
 which satisfy this and other constraints.
 Opponent plays first, then the players alternate.
 The semantics of the system will be interpreted as a strategy
@@ -894,19 +929,19 @@ given a current position.
 
 \begin{definition}[Game]
 An \emph{arena} is a tuple $A = \langle M_A, \vdash_A, \lambda_A \rangle$
-where $\langle M_A, \vdash_A \rangle$ is a Kripke frame, and
+where $\vdash_A$ is an enabling relation over the set $M_A$, and
 $\lambda_A : M_A \rightarrow \{\kw{O},\kw{P}\} \times \{\kw{Q},\kw{A}\}$
 labels elements of $M_A$ as \emph{opponent moves} or \emph{proponent moves},
 and as \emph{questions} or \emph{answers}.
 We say that \emph{$m$ enables $n$} when $m \vdash_A n$,
-in which case $m$ must be a question,
+in which case $m$ must be a question
 and $m, n$ must be moves of opposite players.
 Possible moves $m \in M_A$ such that $\star \vdash m$
 are called \emph{initial moves},
 and must be opponent questions.
 We call \emph{legal positions of $A$}
-and denote by $L_A \subseteq M_A^\oast$ the set of
-justified sequences for $\langle M_A, \vdash_A \rangle$
+and denote by $L_A \subseteq \langle M_A, \vdash_A \rangle^\oast$
+the set of justified sequences of moves
 where odd-numbered entries contain opponent moves and
 even-numbered entries contain proponent moves.
 
@@ -949,7 +984,7 @@ it would have to be the case be the case that:
 
 \begin{example}[Simple games]
 Base types are often interpreted as simple games
-consisting of a single opponent question $q$,
+consisting of a single opponent question \kw{q},
 which enables a single proponent answer for
 each possible value.
 For any set $A$, the game $[A]$ is defined by:
@@ -969,7 +1004,7 @@ For any set $A$, the game $[A]$ is defined by:
   \end{array}
 \]
 For instance a possible interaction in the game $[\mathbb{N}]$ is:
-\[ \kw{q}\ph{q} \cdot \pt{q}\underline{7} \]
+\[ \kw{q}\ph{q} \cdot \pt{q}\underline{7} \,. \]
 \end{example}
 
 %To sum up,
@@ -996,7 +1031,7 @@ is a partial function $\sigma : P_A^\kw{odd} \rightharpoonup M_A \times \mathbb{
 
 We will write $\sigma : A$.
 Traditionally, strategies are defined as prefix-closed sets of positions.
-The above definition makes them deterministic by construction,
+The above definition makes them deterministic by construction [should they be?],
 and its form makes it easier to use
 in conjunction with Kripke logical relations.
 [Isomorphism $\mathcal{P}(A^+) \cong A^* \rightarrow \mathcal{P}(A)$.
