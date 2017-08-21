@@ -80,7 +80,7 @@
 \email{jeremie.koenig@yale.edu}
 
 \begin{abstract} %{{{
-A simple game semantics based on a standard form of pointer games
+A simple game semantics based on a form of standard pointer games
 is defined for the Clight and Asm languages of Compcert,
 along with appropriate notions of simulation and linking.
 The correctness theorem of CompCertX \citep{popl15}
@@ -89,7 +89,7 @@ turning it into a compositional compiler
 similar to Compositional Compcert \citep{compcomp}.
 
 As a technical device,
-we introduce a family of Compcert Kripke logical relations
+we introduce a family of Kripke logical relations for Compcert
 which generalize the notions of memory extension and injection
 around which Compcert's simulation relations are constructed,
 and can also encode some invariants used in Compcert.
@@ -101,20 +101,22 @@ find a natural expression as a form of relational parametricity.
 Our game semantics is constructed from the original
 small-step semantics of Compcert,
 which is probed to reconstitute the interaction of the program:
-calls to external functions and returns from internal functions
+calls from the program into the environment and
+the program's eventual outcome
 are recorded as moves of the program,
-whereas calls into the program and returns from external functions
+whereas the initial call into the program and
+results from external functions
 are recorded as moves of the environment.
 Each move is equipped with a pointer to an earlier move,
-which for return moves designates the function call being answered,
-and for function call moves designates the parent activation.
+which for function calls designates the parent activation,
+and for return moves designates the function call being answered.
 
 Compcert Kripke logical relations are deployed in this context
 to define a notion of simulation between strategies.
-The Kripke modality used in these simulations
+Rather than a simple temporal succession of moves,
+the Kripke modality used in these simulations
 follows the activation tree structure
-encoded by the moves' pointers
-rather than a simple temporal succession of moves.
+encoded by the moves' pointers.
 By leveraging this structure in our simulations
 we can avoid some of the complications
 that arise in existing work on compositional compilation.
@@ -216,7 +218,7 @@ Logical relations can be of any arity,
 but in the present work
 we restrict our attention to
 binary logical relations.
-Given a type of structure $\mathcal{S}$
+Given a structure $\mathcal{S}$
 involving a number of operations over a carrier set,
 a \emph{logical relation}
 between two instances $S_1, S_2$ of $\mathcal{S}$
@@ -227,6 +229,7 @@ take related arguments to related results.
 We write $R : \mathcal{R}(S_1, S_2)$.
 
 \begin{example}[Logical relation of monoids]
+\label{ex:monoid}
 A \emph{monoid} is a set $A$ equipped with
 an associative binary operation $\cdot$ and
 an identity element $\epsilon$.
@@ -256,7 +259,13 @@ which given relations $R_1, \ldots, R_n$ over
 the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$
 will construct a relation $T(R_1, \ldots, R_n)$
 over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
-Relators for some common constructions are given in Fig.~\ref{fig:relators}
+
+Relators for some common constructions are shown in Fig.~\ref{fig:relators}.
+Note that the requirement for $\cdot$ given in Ex.~\ref{ex:monoid}
+can be expressed as:
+\[
+  \cdot_A \ifr{R \rightarrow R} \cdot_B \,.
+\]
 
 \begin{figure}
   \begin{align*}
@@ -317,7 +326,7 @@ include a set of \emph{initial worlds}
 $W* = \{ w \in W \ |\  \star \leadsto w \}$.
 This will be useful when interpreting Kripke logical relations
 as regular logical relations
-by interpreting $\star$ as the ``actual world''.
+by interpreting $\star$ as the ``current'' or ``actual'' world.
 In the context of our game semantics,
 the peculiar form of the definition
 also facilitates the correspondance with
@@ -404,9 +413,9 @@ a broader range of properties.
 
 %}}}
 
-\subsection{Compcert KLRs}
+\subsection{Compcert KLRs} %{{{
 
-\begin{figure}
+\begin{figure} % fig:cklr (Compcert KLRs) {{{
   Values ($R^\kw{val}$)
   \vspace{1em}
   \[
@@ -533,6 +542,7 @@ a broader range of properties.
   \caption{Some relational properties of Compcert KLRs}
   \label{fig:cklr}
 \end{figure}
+%}}}
 
 The Compcert memory model \citep{compcertmmv2}
 is the core algebraic structure
@@ -622,24 +632,36 @@ to be refined into a more concrete value.
 %when moving into the realm of games].
 %
 
-\paragraph{Simulation relation toolkits} %{{{
+%}}}
 
-\begin{definition}[\kw{simrel}]
+\subsection{Compcert KSRs} %{{{
+
+The remainder of this section describes
+a family of Kripke logical relations over this structure,
+which can be used as a basic components
+when building simulation relations for Compcert.
+This family is closed under composition,
+subsumes the memory extensions, injections, and equalities
+used in Compcert,
+and can encode the requirements placed by Compcert
+on the behavior of external functions.
+
+\begin{definition}[Compcert Kripke simulation relation toolkit]
 A Compcert \emph{simulation relation toolkit} $R$
 is a tuple $(W_R, \leadsto_R, U^\kw{v}_R, U^\kw{b}_R, f_R, R^\kw{mem})$
 such that:
 \begin{itemize}
-\item $(W_R, \leadsto_R)$
-  is a preorder of $R$'s \emph{possible worlds};
+\item $\langle W_R, \leadsto_R \rangle$
+  is the Kripke frame associated with $R$;
 \item $U^\kw{v}_R : \mathbb{B}$
   is a boolean value which specifies whether undefined values on the left
   can be refined into non-pointer values on the right;
 \item $U^\kw{b}_R : W_R \rightarrow \mathcal{P}(\kw{block})$
-  specifies whether undefined values can be refined into pointers to a given block;
+  specifies whether they can be refined into pointers to a given block;
 \item $f_R : W_R \rightarrow \kw{meminj}$
-  specifies for each world how pointers should be related;
+  specifies how pointers should be related;
 \item $R^\kw{mem} : W_R \rightarrow \mathcal{R}(\kw{mem})$
-  specifies for each world how memory states should be related.
+  specifies how memory states should be related.
 \end{itemize}
 The components of $R$ must satisfy
 a number of properties which are shown in Fig~\ref{fig:simrelprop}
@@ -647,19 +669,39 @@ and discussed below.
 We will omit the $R$ subscripts when discussing a single relation.
 \end{definition}
 
-\begin{figure}
+Compcert Kripke simulation relation toolkits (CKSR for short)
+are named this way because we will ultimately
+use them to build simulation relations between
+Compcert transition systems.
+From the components of $R$,
+we define the Compcert Kripke logical relation
+whose constituent relations are shown in Fig.~\ref{fig:simrel},
+as the smallest relations satisfying both
+the properties shown in Fig.~\ref{fig:cklr} and Fig.~\ref{fig:simrelprop}.
+
+\begin{figure} % fig:simrelprop (Required properties of CKSRs) {{{
+  \begin{gather*}
+    w \leadsto w \\
+    \star \leadsto w \wedge w \leadsto w' \Rightarrow \star \leadsto w' \\
+    w \leadsto w' \wedge w' \leadsto w'' \Rightarrow w \leadsto w'' \\
+    U^\kw{b} \ifr{(\leadsto) \rightarrow (=) \rightarrow (\Rightarrow)} U^\kw{b} \\
+    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f \\
+    U^\kw{v} = \kw{t} \ \wedge\  p_1 \ifr{R^\kw{ptr}_w} (b_2, o_2) \ \Rightarrow\  b_2 \in U^\kw{b}_w \\
+    U^\kw{p}_w \neq \varnothing \ \Rightarrow\  U^\kw{v} = \kw{t} \\
+    [\ldots]
+  \end{gather*}
+  \caption{Required properties for simulation relation toolkits}
+  \label{fig:simrelprop}
+\end{figure}
+%}}}
+
+\begin{figure} % fig:simrel (Elementary relations for CKSRs) {{{
   \small
   \[ R = (W, \leadsto, U^\kw{v}, U^\kw{b}, f, R^\kw{mem}) \]
   \noindent \fbox{$R_w^\kw{ptr}$} \hfill \ 
   \[
     \AxiomC{$f_w(b) = (b', \delta)$}
     \UnaryInfC{$(b, o) \ifr{R_w^\kw{ptr}} (b', o + \delta)$}
-    \DisplayProof
-  \]
-  \noindent \fbox{$R^\kw{ptrbits}_w$} \hfill \ 
-  \[
-    \AxiomC{$f_w(b) = (b', \delta)$}
-    \UnaryInfC{$(b, o) \ifr{R_w^\kw{ptrbits}} (b', \kw{Ptrofs.add}(o, \kw{Ptrofs.repr}(\delta)))$}
     \DisplayProof
   \]
   \noindent \fbox{$R_w^\kw{val}$} \hfill \ 
@@ -676,62 +718,41 @@ We will omit the $R$ subscripts when discussing a single relation.
     U^\kw{v} = \kw{t} &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vsingle}(x)
         \\
-    U^\kw{b}_w(b_2) &\Rightarrow
+    b_2 \in U^\kw{b}_w &\Rightarrow
         \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vptr}(b_2, o_2)
   \end{align*}
   \caption{Elementary relations associated with $R$}
   \label{fig:simrel}
 \end{figure}
-
-\begin{figure}
-  \begin{gather*}
-    U^\kw{b} \ifr{(\leadsto) \rightarrow (=) \rightarrow (\Rightarrow)} U^\kw{b} \\
-    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f \\
-    U^\kw{v} = \kw{t} \ \wedge\  p_1 \ifr{R^\kw{ptr}_w} (b_2, o_2) \ \Rightarrow\  U^\kw{b}_w(b_2) \\
-    U^\kw{p}_w(b_2) \ \Rightarrow\  U^\kw{v} = \kw{t} \\
-    [\ldots] \\
-    \ldots
-  \end{gather*}
-  \caption{Required properties for simulation relation toolkits}
-  \label{fig:simrelprop}
-\end{figure}
-
-Simulation relation toolkits (\kw{simrel} for short)
-are named this way because we will ultimately
-use them to build simulation relations between
-Compcert transition systems.
+%}}}
 
 Values are related in a way that largely mirrors $\kw{Val.inject}\,f_w$,
 however the additional parameters $U^\kw{v}$ and $U^\kw{b}$
-specify whether $\kw{Vundef}$ should be allowed to refine defined values.
+specify whether $\kw{Vundef}$ should be allowed to be refined
+into some defined value.
 The ability to switch off this behavior of \kw{Val.inject} and \kw{Val.lessdef}
-allows us to define the simulation relation toolkit \kw{id},
+allows us to define the CKSR \kw{id},
 for which $R^\kw{mem}$ and $R^\kw{val}$ both reduce to equality,
-as well as coreflexive \kw{simrel}s,
+as well as coreflexive CKSRs
 which can be used to encode a number of invariants.
+
 The separate treatment of pointers with $U^\kw{b}$
-is necessary when defining the composite \kw{simrel} $R_1 \circ R_2$.
+is necessary when defining the composite relation $R_2 \circ R_1$:
+if $R_1$ allows \kw{Vundef} to be refined by any value
+but $R_2$ does not,
+then for the composite relation
+a pointer $(b_2, o_2)$ can only refine \kw{Vundef} at a world $w$
+if there exists an intermediate pointer $(b_1, o_1)$
+such that $(b_1, o_1) \ifr{R_{2,w}^\kw{ptr}} (b_2, o_2)$.
 
 Note that the relational property associated to $f$,
 together with the definitions of
-derived relations such as $R^\kw{ptr}$, $R^\kw{ptrbits}$, or $R^\kw{val}$,
+derived relations such as $R^\kw{ptr}$ and $R^\kw{val}$,
 ensure that these relations are monotonic in $w$,
 in the sense that given $w \leadsto w'$,
 it is possible to show that $R^x_w \subseteq R^x_{w'}$.
 However,
 this is not necessarily the case for $R^\kw{mem}$.
-
-
-
-[Define inj, ext, id, $\circ$.]
-
-
-Kripke logical relations of arenas, games, strategies.
-
-It is in fact possible to define a
-category of Compcert memory models and Compcert-compatible KLRs,
-but for the work presented here we restrict our attention
-to finite compositions of strong \textsf{ext} and \textsf{inj}.
 
 %}}}
 
@@ -749,28 +770,35 @@ respect the requirements for external calls (see below).
 
 \subsection{Categorical structure} %{{{
 
-Define the Compcert KLRs \kw{id}, $\circ$.
+[Define the Compcert KSRs \kw{id}, $\circ$.]
+
+%}}}
+
+\subsection{Memory extensions} %{{{
+
+[Extensions as Compcert KSRs.]
 
 %}}}
 
 \subsection{Memory injections} %{{{
 
-Injections as Compcert KLRs.
+[Injections as Compcert KSRs.]
 
 %}}}
 
 \subsection{External calls} %{{{
 
-Extending Tahina's tricks,
+[Extending Tahina's tricks,
 the requirements on
 external calls
-can be expressed as a Compcert KLR.
+can be expressed as a Compcert KSR.]
 
 %}}}
 
 %}}}
 
 \section{Games} %{{{
+\label{sec:games}
 
 The starting point for our game model
 is the pointer game framework used in \citep{gamesem99}
@@ -788,7 +816,7 @@ Game semantics of programming languages
 often make use of \emph{pointers},
 whereby the moves of the players
 may reference an earlier move in the game.
-(This is a distinct meaning from
+(This is distinct from
 our earlier use of the word \emph{pointer}
 to denote references to memory locations).
 For example,
@@ -911,7 +939,7 @@ such that $s \ifr{I^\oast} s$.
 
 The games we use proceed as follows.
 There are two players,
-namely Opponent (\kw{O}) and Proponent (\kw{P}).
+Opponent (\kw{O}) and Proponent (\kw{P}).
 \kw{P} represents the system under consideration,
 while \kw{O} represents its environment.
 We start from a set of possible moves $M$,
@@ -970,7 +998,7 @@ we could typeset it as:
   \pt{i2}e
 \]
 Note that for the above to be a justified sequence,
-it would have to be the case be the case that:
+it would have to be the case that:
 \[
   \star \vdash a, \quad
   a \vdash b, \quad
@@ -1024,7 +1052,7 @@ for a given, odd-length current position.
 
 \begin{definition}[Strategy]
 A \emph{strategy} for a game $A$
-is a partial function $\sigma : P_A^\kw{odd} \rightharpoonup M_A \times \mathbb{N}$.
+is a partial function $\sigma : P_A^\kw{odd} \rightharpoonup \mathbb{N} \times M_A$.
 \end{definition}
 
 We will write $\sigma : A$.
