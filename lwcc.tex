@@ -1202,6 +1202,12 @@ whose types reduce to:
   \UnaryInfC{$\Lambda(f) : \: !A \multimap \: !B \multimap C$}
   \DisplayProof
 \]
+In addition,
+the diagonal morphism associated with the products of $\mathcal{C}$
+can be used in $\mathcal{G}$ as:
+\[
+  \Delta^\dagger : \: !A \multimap \: !A \: \otimes \: !A \,.
+\]
 
 %}}}
 
@@ -1336,18 +1342,25 @@ We will omit \kw{val} constructors when the type of values is clear from context
 
 Given a strategy for $\EC$,
 we can instantiate Compcert's \kw{external\_call} parameter.
-The requirements on $e$ guarantees that the result
+The requirements on $e$ guarantee that the result
 satisfies the corresponding constraints.
 Moreover,
-the semantics of $\kw{ClightX}$ or $\kw{AsmX}$ modules
-can be mapped into strategies for $\EC$.
+the CompCertX semantics of $\kw{ClightX}$ or $\kw{AsmX}$ modules
+can themselves be mapped into strategies for $\EC$.
 Given a semantics of external functions $\mathcal{E}$
 and a \kw{Clight} module $p$,
 we can define the strategy:
-\[ \kw{ClightX}_\mathcal{E}(p) : \EC := \{ \epsilon \} \cup
+\[
+  \kw{ClightX}_\mathcal{E}(p) : \EC := \{ \epsilon \} \cup
     \{ \mcall{f}{\vec{v}}{m} \cdot \pret{v}{m'} \ :\ 
-         (f, \vec{v}, m) \Downarrow_p^{\mathcal{E}} (v, m') \} \]
-The same construction can be carried out for \kw{AsmX}.
+         (f, \vec{v}, m) \Downarrow_p^{\mathcal{E}} (v, m') \}
+\]
+This is essentially what is done in \citep{popl15},
+where a known behavior for external functions (therein a \emph{layer interface})
+is used to specialize the semantics of Clight,
+which in turn are used to interpret the semantics of a module
+as a new layer interface.
+
 Note that we loose the ability to distinguish between
 unsafe behaviors, non-terminating behaviors,
 and behaviors that have non-empty event traces,
@@ -1359,7 +1372,7 @@ as strategies for $\EC$.
 
 \subsection{Game semantics of Compcert languages} %{{{
 
-Although we have expressed existing aspects of Compcert
+Although we have recast existing aspects of Compcert
 as strategies for the simple game $\EC$,
 so far we have not exhibited
 a true game semantics for \kw{ClightX} or \kw{AsmX}.
@@ -1367,14 +1380,20 @@ Rather than handling external calls
 by parametrization over their possible behaviors,
 a game-oriented interpretation of $\kw{ClightX}$
 would record the module's interaction with external functions
-as additionnal moves.
+as additional moves.
 In this section,
 we show how ideas from \citep{osdi16}
 can be adapted to construct such a semantics.
 
-Since our goal is to ``internalize'' the parameter $\mathcal{E}$
-into our semantic domain,
-the game $!\EC \multimap \EC$ is an appropriate setting.
+\paragraph{Semantic domain} %{{{
+
+Since our goal is to ``internalize'' the parameter $\mathcal{E}$,
+the game $!\EC \multimap \EC$ is an appropriate setting:
+as before,
+the resulting strategy will respond to a single
+function call request from the enviroment,
+but in the process will be able to perform
+any number of external calls back into the environment.
 The corresponding arena
 has 4 kinds of moves.
 Schematically:
@@ -1423,106 +1442,170 @@ Note that once [an external function has been called
 it might return more than once,
 and more generally context can be non-innocent].
 
-\paragraph{Semantics of Clight}
+%}}}
+
+\paragraph{General pattern} %{{{
+
+Next we must the determine how to associate a strategy for $!\EC \multimap \EC$
+to a given program $p$.
+%for an interaction prefix $\mathbf{u} \in P_{!\EC \multimap \EC}$,
+%we need to determine the next move of the program.
+The construction follows a general pattern.
+For a given language we define:
+\begin{itemize}
+  \item a set of states $s \in S$;
+  \item a transition relation $[s \Rightarrow s']$;
+  \item a predicate $I[s, f(\vec{v})@m]$,
+    asserting that the state $s$ is an initial state
+    corresponding to a call to the function $f$
+    with arguments $\vec{v}$
+    in an initial memory state $m$;
+  \item a predicate $E[s, \pcall{x}{\vec{v}}{m}]$,
+    asserting that state $s$,
+    corresponds to an external call to function $x$,
+    with arguments $\vec{v}$
+    in a memory state $m$;
+  \item a predicate $R[s, \mret{v}{m}, s']$,
+    which asserts that updating the state $s$
+    to take into account the outcome $v@m$
+    of an external call it performs
+    will yield the new state $s'$;
+  \item a predicate $F[s, \pret{v}{m}]$,
+    which asserts that $s$
+    is a final state
+    returning the value $v$
+    with a final memory state $m$.
+\end{itemize}
+This set of data
+essentially constitute a big-step version of
+the \emph{interaction semantics} used in \citep{compcompcert}.
+They are used to build a new transition system
+over $S \times P_{!\EC \multimap \EC}$
+where states are instrumented with a log of the interaction:
+\begin{gather*}
+  \AxiomC{$[s \Rightarrow s']$}
+  \UnaryInfC{$(s, \mathbf{u}) \rightarrow (s', \mathbf{u})$}
+  \DisplayProof
+  \\
+  \AxiomC{\rule{0pt}{1.5em}$E[s, \pcall{x}{\vec{v}}{m}]$}
+  \UnaryInfC{$
+    (s, \mcall{f}{\vec{v}_0}{m_0}       \cdot \mathbf{u})
+    \rightarrow
+    (s, \mcall{f}{\vec{v}_0}{m_0}\ph{f} \cdot \mathbf{u} \cdot
+        \pt{f} \pcall{x}{\vec{v}}{m})$}
+  \DisplayProof
+  \\
+  \AxiomC{\rule{0pt}{1.5em}$R[s, \mret{v}{m}, s']$}
+  \UnaryInfC{$
+    (s,  \mcall{f}{\vec{v}_0}{m_0}\ph{f} \cdot \mathbf{u} \cdot
+         \pt{f}\pcall{x}{\vec{v}}{m})
+    \rightarrow
+    (s', \mcall{f}{\vec{v}_0}{m_0}\ph{f} \cdot \mathbf{u} \cdot
+         \pt{f}\pcall{x}{\vec{v}}{m}\ph{x} \cdot
+         \pt{x}\mret{v}{m'})$}
+  \DisplayProof
+  \\
+  \AxiomC{\rule{0pt}{1.5em}$F[s, \pret{v}{m}]$}
+  \UnaryInfC{$
+    (s,  \mcall{f}{\vec{v}_0}{m_0} \cdot \mathbf{u})
+    \rightarrow
+    (*, \mcall{f}{\vec{v}_0}{m_0}\ph{f} \cdot \mathbf{u} \cdot
+        \pt{f}\pret{v}{m})$}
+  \DisplayProof
+\end{gather*}
+Then the corresponding strategy $\sigma : {!\EC} \multimap \EC$
+can be defined as:
+\[
+  \sigma =
+    \{ \mathbf{u} \: | \:
+       \exists \, s \, s' \,. \, I[s, \mcall{f}{\vec{v}}{m}] \wedge
+       (s, \mcall{f}{\vec{v}}{m}) \rightarrow^* (s', \mathbf{u}) \}
+\]
+[Expliquer comment construire $e$ et quelles sont
+les conditions sur nos pr\'edicats.]
+[Omit pointers and polarities for clarity and mention that
+since we're working over $P_{!\EC \multimap \EC}$ it will be fine?]
+
+This is similar to the approach taken in \citep{osdi16},
+where the memory states are instrumented
+with a log of the current interaction,
+which is used by a fixed $\kw{external\_call}$ predicate
+to query an oracle representing the environment.
+In the context of our strategies,
+we do not need an oracle
+but instead non-deterministically explore
+all possible behaviors for the environment.
+The log is also maintained,
+and external calls are performed
+outside of the original small-step semantics,
+so that we use it with an empty $\kw{external\_call}$ predicate
+and do not need to instrument Compcert memory states.
+
+%}}}
+
+\paragraph{Semantics of Clight} %{{{
 
 To compute the semantics $\kw{ClightX}(p) : \: !\EC \multimap \EC$
-of a Clight module $p$, we proceed as follows.
-Given any interaction prefix $\mathbf{u}$,
-we use the $\kw{P}$-view to construct an oracle $\mathcal{E}_\mathbf{u}$.
-We also instrument the Compcert memory states
-with a component $\kw{log}(m)$
-keeping track of the interaction that has been replayed so far.
+we define $S$ to be the set of Clight states.
+The definition of the predicates is:
+\begin{align*}
+  [s \Rightarrow s'] &\Leftrightarrow
+    \kw{Clight}_\varnothing(p) : s \rightarrow^* s' \\
+  I[s, \mcall{f}{\vec{v}}{m}] &\Leftrightarrow
+    s = \kw{CallState}(f, \vec{v}, m, \kw{Kstop}) \\
+  E[s, \pcall{x}{\vec{v}}{m}] &\Leftrightarrow
+    s = \kw{CallState}(x, \vec{v}, m, k) \\
+  R[s, \mret{v}{m'}, s'] &\Leftrightarrow
+    s = \kw{CallState}(x, \vec{v}, m, k) \wedge
+    s' = \kw{ReturnState}(v, m', k) \\
+  F[s, \pret{v}{m'}] &\Leftrightarrow
+    s = \kw{ReturnState}(v, m', \kw{Kstop})
+\end{align*}
 
-Every time the \kw{ClightX} program
-makes an external call,
-$\mathcal{E}_\mathbf{u}$
-will first append that call to the log.
-Then if there exists a pair $(v, m')$
-such that $\mathbf{l} \cdot \mret{v}{m'} \sqsubseteq \mathbf{u}$,
-$\mathcal{E}_\mathbf{u}$ makes the corresponding transition.
-Otherwise,
-it transitions to a memory state
-modified only to include the new log entry,
-with return value $\kw{Vundef}$.
+%}}}
 
-Using this oracle construction,
-the semantics can be computed by taking the current position $\mathbf{u}$,
-building a corresponding $\mathcal{E}_\mathbf{u}$,
-then querying the original $\kw{ClightX}$ semantics.
-If a state is reachable which has one additional move in the log,
-this will be the next move of our strategy.
+\paragraph{Semantics of Asm} %{{{
 
-{
-\color{gray}
-[XXX: need to observe the final state as well
-when we generate the last move]
-[NB: similar to extcall events from CPP'15]
-[Say more about what $\mathcal{E}$ is supposed to do,
-and how we define injections for $\kw{log}(m)$.]
-For a given $\mathcal{E}$ we can define:
-\[
-  \kw{traces}(\mathcal{E}) = \{
-    \mcall{f}{\vec{v}}{m} \cdot \kw{log}(s) \ \vert\ 
-    \kw{ClightX}_\mathcal{E}(p) :
-      \mcall{f}{\vec{v}}{m} \rightarrow^* s
-  \}
-\]
-}
+The semantics of Asm is less straightforward to define,
+because we have to take into account the C calling convention
+when considering the memory states and argument values
+that constitute the interaction with the environment.
+
+[TBD, we can try to define a C-style semantics of Asm,
+or introduce a new game for Asm interaction.]
+
+%}}}
 
 Note that the more limited semantics of the previous section
 may be obtained by:
 \[ \kw{ClightX}_\mathcal{E}(p) \equiv_\kw{id} \kw{ClightX}(p) \circ \mathcal{E}^\dagger \]
 
-A similar construction can be carried out for $\kw{AsmX}$.
-By defining the right injection relation
-for the abstract data component of instrumented states,
-we can reuse the small-step simulation proved by CompCertX
-to establish the simulation of strategies:
-\[
-  \AxiomC{$\kw{ClightX}(p) \ni \mathbf{u}_1 \cdot e_1$}
-  \UnaryInfC{$\kw{ClightX}_{\mathcal{E}_\mathbf{u}}(p) :
-    \mcall{f}{\vec{v}}{(m, \epsilon)} \rightarrow^* s[(m_1', \mathbf{u}_1 \cdot e_1)]$}
-  \AxiomC{$\mathbf{u}_1 \ifr{R} \mathbf{u}_2$}
-  \BinaryInfC{$\exists e_2 \,.\, e_1 \ifr{R} e_2 \wedge
-    \kw{AsmX}_{\mathcal{E}_\mathbf{u}}(p) :
-      \mcall{f}{\vec{v}}{(m, \epsilon)} \rightarrow^*
-      s[(m_2', \mathbf{u}_2 \cdot e_2)]$}
-  \UnaryInfC{$\exists e_2 \,.\, e_1 \ifr{R} e_2 \wedge
-    \kw{AsmX}(p) \ni \mathbf{u}_2 \cdot e_2$}
-  \DisplayProof
-\]
 %}}}
 
 \subsection{Open modules} %{{{
 
-For a fixed behavior of external functions,
-the semantics of closed modules can be
-formulated as a strategy for $\EC$.
-This is essentially what is done in \citep{popl15}.
-Getting rid of the $\kw{external\_call}$ parameter,
-a somewhat more satisfying approach is
-to interpret the semantics of closed modules
-as strategies for
-$!\EC \multimap \EC$.
-
-This is the view informally taken in \citep{osdi16},
-where the memory states are instrumented with a \kw{log}
-of the current interaction,
-which can then be used by
-a fixed $\kw{external\_call}$ predicate
-to query an oracle representing the environment.
-[Do more of that, explain layers etc.
-Or maybe in the Related Work section?]
-The work presented here goes one step further
-and interprets modules as strategies for $!\EC \multimap !\EC$.
-This means that
+While ${!\EC} \multimap \EC$ is sufficient
+to interpret the semantics of Compcert programs,
+the work presented here goes one step further
+and uses strategies for ${!\EC} \multimap {!\EC}$
+as its semantics domain.
+In that game,
 when a module calls back into the environment,
 instead of returning immediately
 the environment itself
 can perform a nested call into the module,
 and so on recursively.
+In the case of a Compcert program,
+the nested function calls behave uniformly,
+and we can simply run a second copy of
+the corresponding strategy,
+through the use of the $-^\dagger$ operator.
+However,
+our semantics domain is richer
+and allows strategies with hidden states
+and complex control behavior.
 
-A possible interaction is:
+A possible interaction in ${!\EC} \multimap {!\EC}$ is:
 \[
   \rule{0pt}{1.5em}
   \mcall{f}{}{m_1}\ph{f} \ \cdot\ 
@@ -1555,6 +1638,7 @@ as the answer to the initial question.
 
 \paragraph{Views}
 
+{ \color{gray}
 The \kw{P}-view
 gives a trace of all external calls executed so far
 \emph{in the context of the current activation frame}.
@@ -1593,6 +1677,7 @@ passed back to $f$ along with $x$'s return value.
 Innocence therefore simply states that
 any state kept by the module is explicit and passed back
 through the environment.
+}
 
 %he \kw{O}-view is:
 %[
@@ -1611,13 +1696,13 @@ through the environment.
 \subsection{Linking} %{{{
 
 Consider the strategies
-$\sigma_1, \ldots, \sigma_n : \EC \Rightarrow \EC$,
+$\sigma_1, \ldots, \sigma_n : {!\EC} \Rightarrow {!\EC}$,
 and assume they provide behaviors
 for the respective sets of function names $F_1, \ldots, F_n$.
 We want to define
 a combined strategy $\mathcal{L}_F(\sigma_1, \ldots \sigma_n)$
 which will provide behaviors for
-all of the function in $F = F_1 \cup \cdots \cup F_n$,
+all of the functions in $F = F_1 \cup \cdots \cup F_n$,
 where any call back to $f \in F$ by any of linked strategies
 is handled by an interaction among them.
 Note that this interaction
@@ -1633,47 +1718,95 @@ are still directed to the environment
 whether or not the target function is in $F$.
 
 To discriminate between external and mutual calls,
-we introduce the primitive $\lhd_F : \EC \times \EC \Rightarrow \EC$.
-The idea is that the strategy $\lhd_F(\mathcal{E}_1, \mathcal{E}_2) : \EC$
+we introduce the primitive $\lhd_F : {!\EC} \otimes {!\EC} \multimap \EC$.
+The idea is that $\lhd_F(\mathcal{E}_1, \mathcal{E}_2) : \EC$
 will use $\mathcal{E}_1$ to handle calls to any $f \in F$,
 and use $\mathcal{E}_2$ to handle calls to any $g \notin F$.
-Formally,
+Formally:
 \begin{definition}[$\lhd_F$]
 For a given set of identifiers $F : \mathcal{P}(\kw{ident})$,
-$\lhd_F : \EC \times \EC \Rightarrow \EC$ is the strategy defined by:
+$\lhd_F : {!\EC} \multimap {!\EC} \multimap \EC$ is the strategy defined by
+the prefix closure of:
 \begin{align*}
   \lhd_F &\ni
-    \mathbf{u} \cdot
-    \mcall{f}{\vec{v}}{m} \cdot
-    \underline{i_1(\mcall{f}{\vec{v}}{m})}
+    \mcall{f}{\vec{v}}{m}\ph{f} \cdot
+    \pt{f}\underline{i_1(\mcall{f}{\vec{v}}{m})}\ph{f1} \cdot
+    \pt{f1}i_1(\mret{v}{m'}) \cdot
+    \pt{f}\pret{v}{m'}
     \quad (f \in F) \\
   \lhd_F &\ni
-    \mathbf{u} \cdot
-    \mcall{g}{\vec{v}}{m} \cdot
-    \underline{i_2(\mcall{g}{\vec{v}}{m})}
-    \quad (g \notin F) \\
-  \lhd_F &\ni
-    \mathbf{u} \cdot
-    i_1(\mret{v}{m'}) \cdot
-    \pret{v}{m'} \\
-  \lhd_F &\ni
-    \mathbf{u} \cdot
-    i_2(\mret{v}{m'}) \cdot
-    \pret{v}{m'}
+    \mcall{x}{\vec{v}}{m}\ph{x} \cdot
+    \pt{x}\underline{i_2(\mcall{x}{\vec{v}}{m})}\ph{x2} \cdot
+    \pt{x2}i_2(\mret{v}{m'}) \cdot
+    \pt{x}\pret{v}{m'}
+    \quad (x \notin F)
 \end{align*}
 \end{definition}
 
-[Now the recursion:]
-\[
-  \mathcal{L}_F(\sigma_1, \ldots, \sigma_n) \ =\ 
-    \bigcup_{k=0}^\infty\ 
-    \Lambda ( \sigma \circ \lhd_F \circ \langle \pi_1 \circ \pi_2, \, \pi_2 \rangle ) \,^k
-\]
-
-[Can be visualized in the following way:]
+The linked strategy will be obtain by taking a fixed point,
+so that whenever $\sigma$ calls back into one of the linked modules,
+this call is directed to another copy of $\sigma$,
+and so on to an arbitrary depth.
+Schematically:
 \begin{center}
   \includegraphics[scale=0.5]{linking-operator}
 \end{center}
+This can be described informally as:
+\[
+  \mathcal{L}_F(\sigma) \approx
+  \mu \rho . \lambda x . \sigma (\lhd_F (\rho x, x))
+  : {!\EC} \multimap {!\EC}
+\]
+In the above,
+$x : {!\EC}$ represents the domain of $\mathcal{L}_F(\sigma)$,
+towards which we can direct $\sigma$'s truly external calls,
+whereas $\rho : {!\EC} \multimap {!\EC}$ is a ``recursive copy'' of $\mathcal{L}_F(\sigma)$,
+which we can use to handle the internal calls emitted by $\sigma$
+so long as we provide a copy of $x$
+for $\rho$ to use for its own external calls.
+
+Similarly to the interpretation of recursion
+in the game semantics of PCF,
+we can construct the least fixed point $Y(f) : A$
+of a strategy $f : A \multimap A$
+as the upper bound:
+\[
+  Y(f) = \bigcup_{k=0}^\infty f_k\,,
+\]
+where $f_0 = \bot_{A}$ is the empty strategy
+and $f_{k+1} = f(f_k)$.
+The sequence is increasing:
+$\bot \subseteq f(\bot)$,
+and by monotony of application,
+if $f_k \subseteq f_{k+1}$,
+then $f_{k+1} = f(f_k) \subseteq f(f_{k+1}) = f_{k+2}$.
+
+It remains to describe a strategy
+$\tilde{\sigma} : ({!\EC} \multimap {!\EC}) \multimap ({!\EC} \multimap {!\EC})$
+whose fixed point is the strategy we want.
+We can formalize the description above
+in the context of the symmetric monoidal close category $\mathcal{G}$
+as follows:
+\[
+  \tilde{\sigma} =
+    \Lambda
+      \left(
+      \sigma \circ
+      \lhd_F^\dagger \circ
+      (\kw{eval}_{{!\EC} \otimes {!\EC}, {!\EC}} \otimes \kw{id}_{!\EC}) \circ
+      (\kw{id}_{{!\EC} \multimap {!\EC}} \otimes \Delta_\EC^\dagger)
+      \right)
+\]
+The inner term,
+of type $({!\EC} \multimap {!\EC}) \otimes {!\EC} \multimap {!\EC}$,
+can be visualized as:
+\begin{center}
+  \includegraphics[scale=0.5]{linking-element}
+\end{center}
+We can finally define:
+\[
+  \mathcal{L}_F(\sigma_1, \ldots, \sigma_n) = \kw{Y}(\tilde{\sigma})
+\]
 
 %}}}
 
