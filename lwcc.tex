@@ -70,7 +70,7 @@
 
 \begin{document}
 
-\title{A Certified Compiler for End-to-End Verification of Computer Systems}
+\title{A Certified Compiler Suitable for End-to-End Verification of Computer Systems}
 
 \author{J\'er\'emie Koenig}
 \affiliation{
@@ -105,7 +105,7 @@ on refinement, abstraction and resources as central concepts.
 Conversely,
 work in the latter areas
 often remains very specific (lacking expressivity),
-and fails to account for open systems.
+and typically fails to account for open systems.
 
 We conjecture that
 a successful synthesis of these disparate strands of research
@@ -187,6 +187,7 @@ traditional game semantics -> expressivity, compositionality, open systems;
 interface automata -> compositionality, $\approx$ open systems, refinement;
 certikos -> abstraction, refinement;
 lax modality -> compositionality, resources;
+logical relations -> abstraction and refinement (sometimes), compositionality;
 ...]
 
 Research program:
@@ -202,7 +203,13 @@ Illustrate how these ideas play out in the context of compilers,
 and apply them to solve the open problem of
 compositional certified compilation.
 
-\subsection{Systemics of compilation} %{{{
+\subsection{Compilers} %{{{
+
+Compilers play an essential role in the construction
+of present-day computer systems.
+
+
+
 
 [Explain what a compiler is.
 Central to the task of building computer systems.]
@@ -267,7 +274,163 @@ CompCompCert, separate compcert, CompCertX, Qompcert
 
 \subsection{Certified Compilation} %{{{
 
-[Bring on the maths at last]
+Formally,
+a programming language $L$ is understood as
+a set of programs $p$
+which are assigned a meaning $\llbracket p \rrbracket$
+in a semantic domain $\mathbb{D}$.
+We call \emph{programs} or \emph{modules} the elements of $L$,
+preferring the latter when the language supports
+a notion of composition where modules are expected to
+interact and be linked with other modules of the same kind.
+We call \emph{behaviors} or \emph{specifications}
+the elements of $\mathbb{D}$,
+preferring the latter whan the semantic domain supports
+a notion of refinement and the specification under consideration
+may be refined by more specific behaviors.
+
+In this context,
+a compiler can be understood as a function
+$C : L_s \rightarrow L_t$
+which transforms a source program $p \in L_s$
+into a target program $C(p) \in L_t$.
+When the two languages are interpreted into
+a common semantic domain,
+the correctness of the compiler can simply be stated as:
+\[ \llbracket C(p) \rrbracket_t =
+    \llbracket p \rrbracket_s \]
+That is,
+the source and target programs have the same behavior.
+However,
+to take into account the complexity of real-world languages and compilers,
+we must generalize this approach.
+
+\paragraph{Abstraction}
+
+The assumption that the source and target programs
+can be naturally assigned meanings in the same semantic domain
+is reasonable for some individual compiler passes and optimizations
+where the source and target languages are fairly similar.
+It can also hold when observable behaviors are simple:
+if we are only interested in whether the program terminates
+and produces a given result,
+then the corresponding notion of behavior
+can be fairly language-independent.
+However,
+in most practical cases we are interested in
+the program's interaction with its environment
+as well as its ultimate outcome,
+and this interaction is often understood very differently
+in the context of the source and target languages.
+
+For instance,
+in the C programming language
+the memory is understood in terms of independent objects.
+Each object corresponds to a variable declared in the program,
+or to a chunck of heap-allocated memory.
+A function call is performed by allocating new objects
+corresponding to the callee's arguments and local variables,
+then initializing the callee's arguments
+using the values provided by the caller.
+By contrast,
+an assembly program
+operates in a single address space,
+and the memory is essentially seen as a single array of bytes.
+Likewise,
+the very notion of a function call in assembly
+is largely conventional as opposed to a primitive notion,
+and their mechanics are understood in very different terms.
+
+Consequently,
+semantic domains that naturally reflect and accurately account
+for module interaction in C and assembly will necessarily be distinct.
+This underscore importance of \emph{abstraction}:
+C compilers operate in the context of a given \emph{calling convention},
+which establishes a relationship between the behaviors of C modules
+and that of assembly modules.
+This calling convention can be modelled as a function
+$\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$,
+which is in some sense the semantic counterpart to the compiler $C$.
+Our correctness criterion becomes:
+\[ \llbracket C(p) \rrbracket_t =
+    \mathbb{C}(\llbracket p \rrbracket_s) \]
+
+[Compcert goes to great length to ensuire $\mathbb{D}_s = \mathbb{D}_t$,
+defining unified memory model etc.
+Much compositional Compcert works keeps with this approach
+but this creates problems.
+In fact, even when $\mathbb{D}_s = \mathbb{D}_t$ formally,
+the source and target behaviors may be distinct
+and it can be useful to define
+$\mathbb{C} : \mathbb{D} \rightarrow \mathbb{D}$.
+In Sec.~N we show how taking abstraction seriously
+solves the extcall\_args problem.]
+
+\paragraph{Refinement}
+
+In and of itself,
+abstraction is insufficient to reflect
+the relationship between the behaviors of C and assembly modules.
+This is because there is more than one way to realize
+a given C call at the level of assembly.
+For instance,
+a typical calling convention specifies a classification of machine registers
+into \emph{callee-save} registers,
+which are guaranteed to be left unchanged by the function being invoked,
+and \emph{caller-save} registers,
+which the function being invoked may modify at will.
+Therefore,
+two assembly functions may realize the same C behavior
+but be observationally distinct at the level of assembly
+if they return with different values in the callee-save registers.
+
+To account for this situation,
+the target semantic domain $\mathbb{D}_t$
+should contain specifications
+allowing a range of possible behaviors,
+and be equipped with a notion of refinement
+in the form of a preorder $\sqsubseteq$.
+The target behavior $\mathbb{C}(\sigma_s)$
+corresponding to the source behavior $\sigma_s$
+can then be broad enough to state,
+for instance,
+that the callee-save registers
+may contain any value after a function
+specified in $\sigma_s$ returns.
+The behaviors of target programs
+which leave specific values in these registers
+but otherwise agree with $\mathbb{C}(\sigma_s)$
+will be considered valid implementations.
+Taking this into account,
+the correctness statement becomes:
+\[ \llbracket C(p) \rrbracket_t \sqsubseteq
+    \mathbb{C}(\llbracket p \rrbracket_s) \]
+
+Note that while abstraction and refinement are distinct concepts,
+it can sometimes be advantageous to unify them
+in the form of a single, heterogenous relation
+$\sqsubseteq_\mathbb{C} = \sqsubseteq \circ \mathbb{C}$.
+[Reference popl15's abstraction relations]
+[Forward reference to where we do that in this work].
+
+[Comment on induced equivalence relation?]
+
+\paragraph{Open systems}
+
+subsets of behaviors is not good enough,
+we need to take distinction between system and environment seriously.
+
+Discuss contextual refinement,
+which is not enough \emph{a priori}, and \emph{practically},
+because we don't want to limit ourselves to a set of systems we're gonna connect with.
+In this way logical relations are more fundamental,
+and then the derived contextual refinement is useful
+in the special case where the system we embed our program in
+is itself a program written in the same language.
+But also contextual refinement might be enough
+if the interaction of all the environments we would ever want to connect with
+can be "coobservationally equivalent" to a context in our set
+from the point of view of the program (aka oracle).
 
 %}}}
 
@@ -319,6 +482,16 @@ plus an understanding of refinement and abstraction in that context.]
 \section{Per-Function Semantics with External Calls} %{{{
 
 \subsection{Semantic Domain}
+
+In order to make Compcert truly ...
+
+\begin{align*}
+  e \in \mathbb{E}_\kw{C} &::=
+    \cdots | \kw{extcall}[f, \vec{v}, m, \mathbb{b}] \\
+  \sigma \in \mathbb{D}_\kw{C} &=
+    \kw{ident} \rightarrow \mathbb{E}_\kw{C}
+\end{align*}
+
 \subsection{Transition Systems}
 \subsection{Compiler Correctness}
 
