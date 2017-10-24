@@ -333,6 +333,11 @@ As a running example,
 we present two simple languages
 whose programs define single-argument integer functions.
 
+[I was hoping this could provide a way to illustrate
+the concepts below,
+but now I'm not sure if it's worth the space
+and reader's mental energy]
+
 \begin{example}[$\kw{AlgExp}$] %{{{
 We consider algebraic expressions
 built out of integer constants, $+$, $\times$,
@@ -369,8 +374,8 @@ The grammar of programs is:
   e \in \kw{RegExpr} &::= c \:|\: r \:|\: r + r \:|\: r \times r \\
   p \in \kw{RegProg} &::= r \leftarrow e; \, p \:|\: \bullet \,,
 \end{align*}
-where $\bullet$ denotes the empty string.
-An example program is:
+where $\bullet$ denotes the empty program.
+An example is:
 \[
   p_1 :=
   \kw{r2} \leftarrow 1; \,
@@ -412,16 +417,17 @@ into a program $C(p) \in L_t$.
 When the two languages are interpreted into
 a common semantic domain,
 the correctness of the compiler can be stated as:
-\[ \llbracket C(p) \rrbracket_t =
-    \llbracket p \rrbracket_s \,. \]
+\[
+  \llbracket p \rrbracket_s = \llbracket C(p) \rrbracket_t \,.
+\]
 
 \begin{example}[\kw{AlgExp} to \kw{RegOps}] %{{{
 To illustrate this definition,
 we define a simple compiler $C_1 : \kw{AlgExp} \rightarrow \kw{RegOps}$.
 Compiling simple expressions is straightforward:
 \[
-  C_1(x) = \bullet \qquad
-  C_1(c) = \kw{r1} := c;
+  C_1(c) := \kw{r1} \leftarrow c; \qquad
+  C_1(x) := \bullet
 \]
 Compiling binary operations is more involved,
 because we need to evaluate each operand,
@@ -434,19 +440,19 @@ we define a \emph{shift} operator ${\uparrow} p$,
 which replaces every register name in $p$ by its successor,
 so that for example:
 \[
-  {\uparrow} p_1 = \quad
-  \kw{r3} := \kw{r2} + 1; \,
-  \kw{r4} := \kw{r3} \times \kw{r3}; \,
-  \kw{r2} := \kw{r3} + \kw{r4};
+  {\uparrow} p_1 =
+  \kw{r3} \leftarrow \kw{r2} + 1; \,
+  \kw{r4} \leftarrow \kw{r3} \times \kw{r3}; \,
+  \kw{r2} \leftarrow \kw{r3} + \kw{r4};
 \]
 We can now define for each binary operation $* \in \{+, \times\}$:
 \begin{align*}
   C(e_1 * e_2) = \quad  % XXX overloading e_1
-    &\kw{r2} := \kw{r1}; \, % XXX copy not allowed
+    &\kw{r2} \leftarrow \kw{r1}; \, % XXX copy not allowed
     {\uparrow} C(e_1); \\
-    &\kw{r3} := \kw{r1}; \,
+    &\kw{r3} \leftarrow \kw{r1}; \,
     {\uparrow\uparrow} C(e_2); \\
-    &\kw{r1} := \kw{r2} * \kw{r3};
+    &\kw{r1} \leftarrow \kw{r2} * \kw{r3};
 \end{align*}
 The subprogram ${\uparrow} C(e_1)$
 will use $\kw{r2}$ for its input and output,
@@ -477,7 +483,7 @@ are less obvious to handle.
 To articulate why,
 it is useful [to be overly pedantic:]
 
-When compiling $e_1 * e_2$,
+When compiling $(e_1 * e_2)$,
 $C_1$ constructs a $\kw{RegProg}$ system
 in terms of the simpler components $C_1(e_1)$ and $C_1(e_2)$.
 As we try to understand the behavior of the resulting artefact,
@@ -493,7 +499,7 @@ from our induction hypotheses
 $\llbracket C_1(e_1) \rrbracket = \llbracket e_1 \rrbracket$ and
 $\llbracket C_1(e_2) \rrbracket = \llbracket e_2 \rrbracket$.
 However,
-our theory is not reach enough to support this process:
+our theory is not rich enough to support this process:
 $\mathbb{Z} \rightarrow \mathbb{Z}$
 is not the right semantic domain
 to describe $\kw{RegProg}$ modules.
@@ -528,7 +534,7 @@ from the point of view of the outside.]
 
 The first problem we encounter when we try to understand $C_1(e_1 * e_2)$
 is the lack of expressivity of our semantic domain.
-Namely,
+For instance,
 $\mathbb{Z} \rightarrow \mathbb{Z}$
 fails to even explain the effect of the shift operator $\uparrow$:
 in fact, for any $\kw{RegProg}$ program $p$,
@@ -566,18 +572,11 @@ or the control system of an airplane.
 but maximal expressivity in how system communicates with its environment
 + open system = everything you want]
 
-
-
-
 [Likewise, C programs are used to do all kind of things,
 but we don't need to know what:
 only the basic interaction principles
 between the C program and its environment that are involved
-in those things.
-
-
-
-
+in those things.]
 
 Although communication model between program
 and the underlying system is simple and uniform
@@ -620,16 +619,15 @@ then initializing the callee's arguments
 using the values provided by the caller.
 By contrast,
 an assembly program
-operates in a single address space,
-and the memory is essentially seen as a single array of bytes.
-Likewise,
+operates in a single address space:
+the memory is essentially seen as a large array of bytes;
 the very notion of a function call in assembly
 is largely conventional as opposed to a primitive notion,
 and their mechanics are understood in very different terms.
-
 Consequently,
 semantic domains that naturally reflect and accurately account
-for module interaction in C and assembly will necessarily be distinct.
+for module interaction will necessarily be distinct in C and assembly.
+
 This underscore importance of \emph{abstraction}:
 C compilers operate in the context of a given \emph{calling convention},
 which establishes a relationship between the behaviors of C modules
@@ -638,8 +636,10 @@ This calling convention can be modelled as a function
 $\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$,
 which is in some sense the semantic counterpart to the compiler $C$.
 Our correctness criterion becomes:
-\[ \llbracket C(p) \rrbracket_t =
-    \mathbb{C}(\llbracket p \rrbracket_s) \]
+\[
+  \mathbb{C}(\llbracket p \rrbracket_s) =
+  \llbracket C(p) \rrbracket_t
+\]
 
 [Compcert goes to great length to ensure $\mathbb{D}_s = \mathbb{D}_t$,
 defining unified memory model etc.
@@ -649,7 +649,7 @@ In fact, even when $\mathbb{D}_s = \mathbb{D}_t$ formally,
 the source and target behaviors may be distinct
 and it can be important/useful to define
 $\mathbb{C} : \mathbb{D} \rightarrow \mathbb{D}$.
-In Sec.~N we show how taking abstraction seriously
+In Sec.~\ref{sec:callconv} we show how taking abstraction seriously
 solves the extcall\_args problem.]
 
 %}}}
@@ -667,17 +667,17 @@ into \emph{callee-save} registers,
 which are guaranteed to be left unchanged by the function being invoked,
 and \emph{caller-save} registers,
 which the function being invoked may modify at will.
-Therefore,
-two assembly functions may realize the same C behavior
-but be observationally distinct at the level of assembly
-if they return with different values in the callee-save registers.
+Two assembly functions
+which modify the caller-save registers differently
+may implement the same C behavior
+but they will be observationally distinct at the level of assembly.
 
 To account for this situation,
 the target semantic domain $\mathbb{D}_t$
 should contain specifications
 allowing a range of possible behaviors,
 and be equipped with a notion of refinement
-in the form of a preorder $\sqsubseteq$.
+in the form of a transitive relation $\sqsupseteq$.
 The target behavior $\mathbb{C}(\sigma_s)$
 corresponding to the source behavior $\sigma_s$
 can then be broad enough to state,
@@ -685,22 +685,25 @@ for instance,
 that the callee-save registers
 may contain any value after a function
 specified in $\sigma_s$ returns.
-The behaviors of target programs
+Target programs
 which leave specific values in these registers
 but otherwise agree with $\mathbb{C}(\sigma_s)$
-will be considered valid implementations.
+will be considered valid implementations
+because their behavior will refine that specification.
 Taking this into account,
 the correctness statement becomes:
-\[ \llbracket C(p) \rrbracket_t \sqsubseteq
-    \mathbb{C}(\llbracket p \rrbracket_s) \]
+\[
+  \mathbb{C}(\llbracket p \rrbracket_s) \sqsubseteq
+  \llbracket C(p) \rrbracket_t \sqsubseteq
+\]
 
 Note that while abstraction and refinement are distinct concepts,
 it can sometimes be advantageous to unify them
 in the form of a single, heterogenous relation
-${\sqsubseteq_\mathbb{C}} = {\sqsubseteq} \circ {\mathbb{C}}$.
+${\sqsupseteq_\mathbb{C}} = {\sqsupseteq} \circ {\mathbb{C}}$.
 [Reference popl15's abstraction relations]
 [Forward reference to where we do that in this work].
-[Explain that confusing the two root of some limitation
+[Explain that confusing the two is the root of some limitation
 in existing work].
 
 [Comment on induced equivalence relation?]
@@ -719,10 +722,6 @@ that solves some of the issues
 Discuss contextual refinement,
 which is not enough \emph{a priori}, and \emph{practically},
 because we don't want to limit ourselves to a set of systems we're gonna connect with.
-In this way logical relations are more fundamental,
-and then the derived contextual refinement is useful
-in the special case where the system we embed our program in
-is itself a program written in the same language.
 But also contextual refinement might be enough
 if the interaction of all the environments we would ever want to connect with
 can be "coobservationally equivalent" to a context in our set
@@ -783,20 +782,18 @@ able to support compositional compilation.
 Labeled transition systems (LTS)
 are the main kind of semantic objects used by Compcert.
 A Compcert LTS specifies a set of states $S$,
-a labeled transition relation ${\rightarrow}$ between states,
-a set of initial states,
-and a set of final states associated with the result they produce.
+a labeled transition relation ${\rightarrow}$,
+and distinguished subsets of initial and final states,
+the latter of which are associated with a final integer result.
 Compcert LTS support a notion of interaction with the environment
 in the form of event traces:
-a transition $(s, \vec{e}, s') \in {\rightarrow}$,
-denoted $s \stackrel{\vec{e}}{\rightarrow} s'$,
+a transition $s \stackrel{t}{\rightarrow} s'$,
 indicates that the state $s$ may transition to state $s'$
-through an interaction recorded as sequence of events $\vec{e}$.
+through an interaction recorded as the event trace $t$.
 
-\subsection{Language interfaces} %{{{
+\subsection{Language Interfaces} %{{{
 
-[Use the terminology of \emph{types} rather than interfaces,
-which may be taken as closer to our notions of specifications?]
+[Not sure about the terminology]
 
 This model is insufficient to express
 the semantics of C and assembly modules.
@@ -805,42 +802,45 @@ which terminate by producing a single numerical result.
 By contrast,
 control can enter and exit open modules
 in a variety of language-dependent configurations.
-This is captured by the notion of language interface.
-[XXX: \emph{module} interface?]
+These language-dependent aspects are captured
+by the following notion.
 
-\begin{definition}{Language interface}
-%XXX: we shouldn't overload $L$ in this way
-A \emph{language interface} consists in a pair $(L_I, L_F)$
+\begin{definition}[Language interface]
+A \emph{language interface} $\tau$ consists in a pair $(V, R)$
 which specifies
-a set $L_I$ of \emph{initial configurations} and
-a set $L_F$ of \emph{final configurations}.
-Initial configurations
+a set $V$ of \emph{invocation configurations} and
+a set $R$ of \emph{return configurations}.
+Invocation configurations
 correspond to the states in which
 a module can be entered, whereas
-final confgurations
+return confgurations
 correspond to the states in which
 the module can return control
 to its caller.
 \end{definition}
 
 For C,
-initial configurations
+invocation configurations
 will consist of the name of the function being invoked,
 the values of its arguments,
 and the state of the memory at the point of entry.
-Final configurations
+Return configurations
 will consist of the function's return value
 and the state of the memory at the point of exit.
 For assembly,
-initial and final configurations may both consist of
 the values of registers and the state of the memory
-[but...].
-The C calling convention used by Compcert
-connects the two models.
+may specify both invocation and return configurations.
+
+In practice,
+the language interfaces used in Compcert
+happen to be formally identical,
+however it is important to understand them
+as distinct interfaces
+connected by the C calling convention.
 
 %}}}
 
-\subsection{Calling conventions} %{{{
+\subsection{Calling conventions} \label{sec:callconv} %{{{
 
 The simulation relations used by Compcert
 such as memory extensions and memory injections
@@ -853,23 +853,24 @@ for pairs of initial and final configurations
 within a single language interface.
 
 \begin{definition}[Calling convention]
-Given source language interfaces $L$ and
-a target language interface $L'$,
-a \emph{calling convention} is a pair $(\mathbb{C}_I, \mathbb{C}_F)$.
+Given a source language interface $\tau_1 = (V_1, R_1)$ and
+a target language interface $\tau_2 = (V_2, R_2)$,
+a \emph{calling convention} is a pair
+$\mathbb{C} = (\mathbb{C}_V, \mathbb{C}_R)$.
 The component
-$\mathbb{C}_I \subseteq L_I \times L'_I$
-relates initial configurations of the source language to
-corresponding initial configurations of the target language.
-Given a source and a target initial configuration,
+$\mathbb{C}_V \subseteq V_1 \times V_2$
+relates invocation configurations of the source language to
+corresponding invocation configurations of the target language.
+Given related source and target invocation configuration,
 the component
-$\mathbb{C}_F \subseteq (L_I \times L_F) \times (L'_I \times L'_F)$
-relates final configurations of the source language to
-corresponding final configurations of the target language.
+$\mathbb{C}_R(v_1, v_2) \subseteq R_1 \times R_2$
+relates return configurations of the source language to
+corresponding return configurations of the target language.
 
 A \emph{refinement convention} $\sqsupseteq$
 is a calling convention for which
-the source and target language interfaces are identical ($L = L'$),
-and $\sqsupseteq_I$, $\sqsupseteq_F$ are transitive.
+the source and target language interfaces are identical ($\tau_1 = \tau_2$)
+and $\sqsupseteq_V$, $\sqsupseteq_R$ are transitive.
 \end{definition}
 
 Compcert does not use explicit notions of
@@ -886,15 +887,21 @@ compatible notions of refinement and calling conventions
 across Compcert languages.
 
 For simplicity,
-Compcert uses a common language interface $L$
+Compcert uses a common language interface $\tau$
 for all of its languages.
-Initial configurations are of the form:
-\[ f(\vec{v})@m \in L_I = \kw{ident} \times \kw{val}^* \times \kw{mem} \,, \]
+Invocation configurations are of the form:
+\[
+  V = \{ f(\vec{v})@m : (f, v, m) \in
+    \kw{ident} \times \kw{val}^* \times \kw{mem} \} \,,
+\]
 where $f$ identifies the function being called,
 $\vec{v}$ provides values for the function's arguments, and
 $m$ specifies the global memory's initial state for the call.
-Final configurations are of the form:
-\[ v'@m' \in L_F = \kw{val} \times \kw{mem} \,, \]
+Return configurations are of the form:
+\[
+  R = \{ v'@m' : (v', m') \in
+    \kw{val} \times \kw{mem} \} \,,
+\]
 where $v'$ gives the function's return value and
 $m'$ specifies the global memory's new state.
 
@@ -973,16 +980,17 @@ Extending Compcert LTS to account for
 this extra structure yields the following definition.
 
 \begin{definition}[Labeled transition system]
-A \emph{labeled transition system for a language interface $L$}
+Given a language interface $\tau = (V, R)$,
+a \emph{labeled transition system} for $\tau$
 is a tuple $\sigma = (S, \rightarrow, I, F)$ where
 $S$ is a set of states,
-$\rightarrow \subseteq S \times L_E^* \times S$
+${\rightarrow} \subseteq S \times L_E^* \times S$
 is a ternary \emph{transition relation},
-$I \subseteq L_I \times S$
-assigns a set of \emph{initial states} to each initial configuration, and
-$F \subseteq S \times L_F$
+$I \subseteq V \times S$
+assigns a set of \emph{initial states} to each invocation configuration, and
+$F \subseteq S \times R$
 is a relation designating \emph{final states}
-together with the final configurations they produce.
+together with the return configurations they produce.
 \end{definition}
 
 [Introduce determinacy?]
@@ -996,25 +1004,19 @@ augmented with a set of external call events.
 
 \subsection{External call events} %{{{
 
-The notion of language-specific initial and final configurations
+The use of language-specific invocation and return configurations
+in the definition of transition systems
 takes care of the variety of ways
 in which the environment may invoke an open module,
 but does not account for the ways in which
 the module may itself invoke the environment.
 We remedy this by introducing \emph{external call events}.
 
-As a first attempt,
-it seems natural to follow \cite{cpp2015}
-and give external call events as $\kw{extcall}[s, s']$,
+Following \cite{cpp2015},
+we use external call events of the form $\kw{extcall}[v, r]$,
 recording the fact that an extern call was performed
-with the initial configuration $s$
-and returned in the final configuration $s'$.
-However,
-by complicating the picture slightly,
-we will be able to 
-this makes it difficult to use Compcert's existing facilities
-for modeling external calls
-and proving compiler correctness in their presence.
+with the invocation configuration $v$,
+and produced the return configuration $r$.
 
 Compcert does account for the fact that the program
 may call the outside world in the form of a global parameter
@@ -1034,51 +1036,29 @@ The correctness proof of Compcert is contingent
 on the fact that for every external function $f$,
 the assertion $\kw{extcall\_properties}(\kw{extcall\_sem}(f))$ holds.
 
-To make use of this facility,
-we choose a slightly more involved form of external call events.
-Our external call events will take the form:
+We can instantiate $\kw{external\_call}$ for the C language as:
 \[
-  \kw{extcall}(s, \mathbb{b})\,,
-\]
-where $\mathbb{b} \subseteq L_I \times L_F$
-will specify the behavior of the external call
-independently of the initial configuration $s$
-given by the module.
-The possible final configurations $s'$ for the call will be
-those which satisfy $(s, s') \in \mathbb{b}$.
-
-Under this definition,
-we can instantiate $\kw{external\_call}$ for the C language as:
-\[
-  \AxiomC{$\kw{extcall\_properties}(\mathbb{b})$}
-  \AxiomC{$e = \kw{extcall}[f(\vec{v})@m, \mathbb{b}$}
-  \AxiomC{$\mathbb{b} : (\vec{v}, m) \rightarrow (v', m')$}
-  \TrinaryInfC{$\kw{external\_call}(f) :
+  \AxiomC{$e = \kw{extcall}[f(\vec{v})@m, v'@m']$}
+  \UnaryInfC{$\kw{external\_call}(f) :
     (\vec{v}, m) \stackrel{e}{\rightarrow} (v', m')$}
   \DisplayProof
 \]
-By placing the appropriate restrictions on $\mathbb{b}$,
-we ensure that $\kw{external\_call}$ statisfies Compcert's expectactions.
-
 This technique allows us to reuse Compcert's existing infrastructure
 for handling external calls,
 and ensures that our changes to the
 definition of semantics and the correctness proof are minimal.
-
-[Breaks receptivity, but we can restrict
-the set of acceptable extcall events to the good ones,
-or handle with polarized simulations.]
-
-[We can get rid of this ugly thing when we compute the trace semantics?]
+However,
+to make it work we need to update $\kw{extcall\_properties}$
+to account for trace refinement.
 
 %}}}
 
 \subsection{Refinement} %{{{
 
-Compcert uses \emph{simulations}
-as its notion of refinement between labeled transition systems.
+Compcert uses \emph{backward simulations}
+as its primary notion of refinement between labeled transition systems.
 Our version takes into account the notion of calling convention
-introduced in Sec.~\ref{sec:langint}:
+introduced in Sec.~\ref{sec:callconv}:
 because our events may expose language-specific details,
 we cannot assume events in the two LTS can be directly compared.
 Instead,
@@ -1093,12 +1073,17 @@ all possible final assembly configuration,
 but only those corresponding to the possible final C configurations
 handled by the source module.
 
+[NB what we're doing in the next paragraph
+is allowing our semantic objects
+to place constraints on the environment.
+This departs from receptivity requirement in Compcert,
+and we should be more explicit about that]
+
 To handle this,
 it is important to understand that Compcert events
 denote two actions:
 a query by the module,
-which may additionally specify any output value
-associated to the event,
+which may additionally some output information,
 followed by a response from the environment,
 which may simply acknowledge the query
 but may also carry any input associated with the event.
@@ -1113,11 +1098,10 @@ a response permitted of the target environment.
 This insight is used to define a notion of alternating simulation,
 similar for instance to the notion of refinement used in \cite{ia}.
 
-This leads to introduce two distinct relations on events,
+This leads us to introduce two distinct relations on events,
 separating the contribution of the module and that of the environment.
 The relation $\succeq_\mathbb{C}$
-relates events in the source language interface
-to events in the target language interface
+relates events
 which have a related query component,
 but may differ in their response component.
 For regular Compcert events,
@@ -1125,13 +1109,9 @@ this corresponds to the usual $\kw{match\_traces}$ relation.
 [exapand?]
 For external call events, we define:
 \[
-  \kw{extcall}[s_1, \mathbb{b}_1]
-  \succeq_\mathbb{C}
-  \kw{extcall}[s_2, \mathbb{b}_2]
-  %
+  \kw{extcall}[v_1, r_1] \succeq_\mathbb{C} \kw{extcall}[v_2, r_2]
   \stackrel{\text{def.}}{\Leftrightarrow}
-  %
-  s_1 \: [\mathbb{C}_I] \: s_2
+  (v_1, v_2) \in \mathbb{C}_V
 \]
 The second relation $\sqsupseteq_\mathbb{C}$
 relates events whose query and response components
@@ -1140,34 +1120,29 @@ For regular Compcert events,
 $\sqsupseteq_\mathbb{C}$ coincides with equality.
 For external call events, we define:
 \[
-  \kw{extcall}[s_1, \mathbb{b}_1
-  \sqsupseteq_\mathbb{C}
-  \kw{extcall}[s_2, \mathbb{b}_2]
-  %
+  \kw{extcall}[v_1, r_1] \sqsupseteq_\mathbb{C} \kw{extcall}[v_2, r_2]
   \stackrel{\text{def.}}{\Leftrightarrow}
-  %
-  \text{basically} \mathbb{C}_I \times (\mathbb{C}_I \rightarrow \mathbb{C}_F)
+  (v_1, v_2) \in \mathbb{C}_V \wedge
+  (r_1, r_2) \in \mathbb{C}_R(v_1, v_2)
 \]
 These relations are extended to traces in the natural way
-[nope: if environment breaks the deal at any point
+[maybe not: if environment breaks the deal at any point
 then the two traces should still be related by $\succeq$
-even though only a common prefix matches.
-That is, $\sqsupseteq^* \cdot (\succeq \cup (\succeq \cap \bar{\sqsupseteq} \cdot \top^*))$
-or something such]
+even though only a common prefix matches]
 and allow us to define
 our notion of refinement as follows.
 
-\begin{definition}{Alternating simulation}
+\begin{definition}[Alternating simulation]
 Given a calling convention $\mathbb{C}$ between
-a source language interface $L_1$ and
-a target language interface $L_2$,
-an \emph{environmental simulation} between
-an $L_1$-LTS $\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$ and
-an $L_2$-LTS $\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$
+a source language interface $\tau_1 = (V_1, R_1)$
+a target language interface $\tau_2 = (V_2, R_2)$,
+an \emph{alternating simulation} between
+an LTS $\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$ and
+an LTS $\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$
 is a relation $R \subseteq S_1 \times S_2$
 with the following properties:
 \begin{description}
-\item[Preservation of module half-steps]
+\item[Preservation of system half-steps]
   For any pair of related states $(s_1, s_2) \in R$,
   if the target behavior takes a step $s_1 \stackrel{t_1}{\rightarrow} s_1'$,
   then there exist $e_2$, $s_2'$ such that
@@ -1186,15 +1161,15 @@ with the following properties:
   $s_2 \stackrel{t_2'}{\rightarrow} s_2''$
   and $t_1 \sqsupseteq_\mathbb{C} t_2'$.
 \item[Compatibility of initial states]
-  Given two related initial configurations $(x_1, x_2) \in \mathbb{C}_I$
-  and a corresponding source state $s_1$ such that $(x_1, s_1) \in I_1$,
-  there exists a target state $s_2$ such that $(x_2, s_2) \in I_2$ and $(s_1, s_2) \in R$.
+  Given two related invocation configurations $(v_1, v_2) \in \mathbb{C}_V$
+  and a corresponding source state $s_1$ such that $(v_1, s_1) \in I_1$,
+  there exists a target state $s_2$ such that $(v_2, s_2) \in I_2$ and $(s_1, s_2) \in R$.
 \item[Compatibility of final states]
   Given two related states $(s_1, s_2) \in R$ and
-  a target final configuration $y_2$ such that $(s_2, y_2) \in F_2$,
+  a target return configuration $r_2$ such that $(s_2, r_2) \in F_2$,
   there exits
-  a source final configuration $y_1$ such that $(s_1, y_1) \in F_1$
-  such that $(y_1, y_2) \in \mathbb{C}_F$.
+  a source return configuration $r_1$ such that $(s_1, r_1) \in F_1$
+  such that $(r_1, r_2) \in \mathbb{C}_F$.
 \end{description}
 \end{definition}
 
@@ -1204,16 +1179,29 @@ so we still use determinacy but don't need receptivity.]
 
 %}}}
 
+\subsection{Composition of passes} %{{{
+
+[Define composition of calling conventions,
+show that alternating simulations compose accordingly,
+-> our refinement is transitive too]
+
+Also, show how to define $\mathbb{C}(-)$
+for transition systems
+and relationship to refinement by $\mathbb{C}$.
+
+%}}}
+
 \subsection{Relation to Compcert semantics} %{{{
 
 [If we forget extcall events,
-set $L = (\kw{unit}, \kw{int})$ and $\mathbb{C} = \kw{id}$,
-and consider only receptive semantics,
+set $\tau = (\kw{unit}, \kw{int})$ and $\mathbb{C} = \kw{id}$,
+and consider only receptive semantics
+(that have every possible environment half-steps),
 then everything boils down to the original Compcert framework.]
 
 %}}}
 
-\subsection{Compiler correctness} %{{{
+\subsection{Per-Module Compiler correctness} %{{{
 
 Changes to Compcert:
 \begin{itemize}
@@ -1221,18 +1209,9 @@ Changes to Compcert:
   in the way we have indicated
 \item Update \kw{extcall\_semantics} to take into account
   refinement of events.
-\item ...
+\item Connect invocation/return configurations
+  with the simulation relations in each pass
 \end{itemize}  
-
-Separate compilation:
-prove SepCompCert-style theorem from our lemmas.
-
-%}}}
-
-\subsection{Composition of passes} %{{{
-
-[Define composition of calling conventions,
-show that alternating simulations compose accordingly]
 
 %}}}
 
@@ -1243,8 +1222,11 @@ internal from external calls.
 Store in the module type / language interface?
 Provide as a parameter of composition?
 We can also simply check whether there's at least
-one state for the initial configuration,
+one state for the invocation configuration,
 though this may introduce some non-monotonicity.
+Or modify $I$ in transition systems
+to be a partial function $V \rightharpoonup \mathcal{P}(S)$
+identifying which invocation configurations are supported.
 Or just leave the extcall events there even when
 they are resolved,
 though the consequences of that are unclear.]
@@ -1268,9 +1250,10 @@ handle disjoint sets of initial configurations,
 then $+$ will nonetheless preserve determinacy.
 
 \begin{definition}[Flat composition]
-Given two labeled transition systems of the same [XXX: type]
+Given two labeled transition systems
 $\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$ and
-$\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$,
+$\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$
+for a common language interface $\tau = (V, R)$,
 their flat composition is defined as
 the labeled transition system
 $\sigma_1 + \sigma_2 = (S, \rightarrow, I, F)$
@@ -1278,10 +1261,10 @@ where:
 \begin{align*}
   S &:= S_1 + S_2 \\
   {\rightarrow} &:= {\rightarrow_1} + {\rightarrow_2} \\
-  I &:= \{ (x, \iota_1(s_1)) : (x, s_1) \in I_1 \}
-   \cup \{ (x, \iota_2(s_2)) : (x, s_2) \in I_2 \} \\
-  F &:= \{ (\iota_1(s_1'), y) : (s_1, y) \in F_1 \}
-   \cup \{ (\iota_2(s_2'), y) : (s_2, y) \in F_2 \}
+  I &:= \{ (v, \iota_1(s_1)) : (v, s_1) \in I_1 \}
+   \cup \{ (v, \iota_2(s_2)) : (v, s_2) \in I_2 \} \\
+  F &:= \{ (\iota_1(s_1'), r) : (s_1, r) \in F_1 \}
+   \cup \{ (\iota_2(s_2'), r) : (s_2, r) \in F_2 \}
 \end{align*}
 \end{definition}
 
@@ -1295,6 +1278,12 @@ we first introduce vertical composition.
 
 \paragraph{Vertical composition} %{{{
 
+[It seemed like a good idea to take things one step at a time,
+but $\mathcal{R}$ is simple enough (actually more simple than $\circ$)
+that we probably don't need to do that and could skip to it directly.
+Maybe a section with more explanations about continuations would
+be a better fit here.]
+
 In the vertical composition of transition systems,
 external calls performed by a transition system
 $\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$
@@ -1306,51 +1295,49 @@ will have two execution modes:
 In the first,
 it will execute $\sigma_1$ normally and
 operate on states of type $S_1$.
-When $\sigma_1$ performs an external call,
+When $\sigma_1$ would perform an external call,
 $\sigma_1 \circ \sigma_2$ will switch to a second mode,
 performing a nested execution of $\sigma_2$ instead.
 In addition to the state of $\sigma_2$,
-in this mode the machine will store a \emph{continuation} of $\sigma_1$,
+in this mode the machine will store a \emph{continuation}
+$\kappa \subseteq R \times S_1$
+of $\sigma_1$,
 associating to each possible final configuration of $\sigma_2$
 a set of resumption states for $\sigma_1$.
 
 Accordingly,
 the states of the composite LTS are:
 \[
-  S := S_1 + S_2 \times \mathcal{P}(L_F \times S_1)
+  S := S_1 + \mathcal{P}(R \times S_1) \times S_2
 \]
-[XXX switch $S_2$ and $\mathcal{P}(\cdots)$ so that
-$\iota_1, \iota_2$ correspond to the right component
-and so that parallel with $\kw{cons}$ is obvious]
-%
-Initial and final configurations
+Invocation and return configurations
 correspond to the top-level interaction of $\sigma_1$ with the environment:
 \begin{align*}
-  I &:= \{ (x, \iota_1(s_1)) : (x, s_1) \in I_1 \} \\
-  F &:= \{ (\iota_1(s_1), y) : (s_1, y) \in I_1 \}
+  I &:= \{ (v, \iota_1(s_1)) : (v, s_1) \in I_1 \} \\
+  F &:= \{ (\iota_1(s_1), r) : (s_1, r) \in I_1 \}
 \end{align*}
 During normal execution,
 steps of $\sigma_1$ are used as-is:
 \[
   \AxiomC{$s_1 \stackrel{e}{\rightarrow_1} s_1'$}
-  \AxiomC{$e \ne \kw{extcall}$}
+  \AxiomC{$e \notin \kw{extcall}$}
   \BinaryInfC{$\iota_1(s_1) \stackrel{e}{\rightarrow} \iota_1(s_1')$}
   \DisplayProof
 \]
 To express the switch to nested execution of $\sigma_2$,
-we first give the set of continuations associated with a state of $\sigma_1$
-about to perform an external call with initial configuration $x_2$:
+we first give the set of continuations associated with a state $s$ of $\sigma_1$
+about to perform an external call with initial configuration $v$:
 \[
-  K(s_1, x_2) =
-    \{ (y_2, s_1') : s_1 \stackrel{e}{\rightarrow_1} s_1',
-                     e = \kw{extcall}(x_2, y_2) \}
+  K(s, v) =
+    \{ (r, s') : s \stackrel{e}{\rightarrow_1} s',
+                     e = \kw{extcall}(v, r) \}
 \]
-Then the switch is triggered when \emph{at least one} external call event
+The switch is triggered when \emph{at least one} external call event
 can occur at the current point in the execution:
 \[
-  \AxiomC{$K(s_1, x_2) \ne \varnothing$}
-  \AxiomC{$I_2(x_2) \ni s_2$}
-  \BinaryInfC{$\iota_1(s_1) \rightarrow \iota_2(s_2, K(s_1, x_2))$}
+  \AxiomC{$K(s_1, v_2) \ne \varnothing$}
+  \AxiomC{$(v_2, s_2) \in I_2$}
+  \BinaryInfC{$\iota_1(s_1) \rightarrow \iota_2(K(s_1, v_2), s_2)$}
   \DisplayProof
 \]
 Once the machine is in the second mode,
@@ -1359,18 +1346,18 @@ leaving the continuation unchanged:
 \[
   \AxiomC{$s_2 \stackrel{t}{\rightarrow_2} s_2'$}
   \UnaryInfC{$
-    \iota_2(s_2, \kappa)
+    \iota_2(\kappa, s_2)
     \stackrel{t}{\rightarrow}
-    \iota_2(s_2', \kappa)$}
+    \iota_2(\kappa, s_2')$}
   \DisplayProof
 \]
 When a final state of $\sigma_2$ is reached,
 the machine uses the continuation to switch back
 to normal execution:
 \[
-  \AxiomC{$F_2(s_2) \ni y_2$}
-  \AxiomC{$\kappa(y_2) \ni s_1'$}
-  \BinaryInfC{$\iota_2(s_2, \kappa) \rightarrow \iota_1(s_1')$}
+  \AxiomC{$(s_2, r_2) \in F_2$}
+  \AxiomC{$(r_2, s_1') \in \kappa$}
+  \BinaryInfC{$\iota_2(\kappa, s_2) \rightarrow \iota_1(s_1')$}
   \DisplayProof
 \]
 
@@ -1403,8 +1390,8 @@ $\mathcal{R}(\sigma) :=
 where:
 \begin{align*}
   S_\mathcal{R} &:= S \times \mathcal{P}(L_F \times S)^* \\
-  I_\mathcal{R} &:= \{ (x, s, \kw{nil}) : (x, s) \in I \} \\
-  F_\mathcal{R} &:= \{ (s', \kw{nil}, y) : (s', y) \in F \} \,,
+  I_\mathcal{R} &:= \{ (v, s, \kw{nil}) : (v, s) \in I \} \\
+  F_\mathcal{R} &:= \{ (s', \kw{nil}, r) : (s', r) \in F \} \,,
 \end{align*}
 and where $\rightarrow_\mathcal{R}$ is defined
 by the following rules.
@@ -1418,18 +1405,19 @@ Normal execution operates on the top-level state:
 Function calls are handled by pushing the current continuation
 and starting a new top-level execution:
 \[
-  \AxiomC{$K(s, x) \ne \varnothing$}
-  \AxiomC{$(x, s') \in I$}
-  \UnaryInfC{$(s, \vec{\kappa}) \rightarrow (s', K(s, x) :: \vec{\kappa})$}
+  \AxiomC{$K(s, v) \ne \varnothing$}
+  \AxiomC{$(v, s') \in I$}
+  \BinaryInfC{$(s, \vec{\kappa}) \rightarrow (s', K(s, v) :: \vec{\kappa})$}
+  \DisplayProof
 \]
 Conversely,
 whenever we reach a final state
 and the stack is non-empty,
 we resume the topmost continuation:
 \[
-  \AxiomC{$(s, y) \in F$}
-  \AxiomC{$(y, s') \in \kappa_0$}
-  \BinaryInfC{$(s, \kappa_0 :: \vec{\kappa}) \rightarrow (s', \vec{\kappa})$}
+  \AxiomC{$(s, r) \in F$}
+  \AxiomC{$(r, s') \in \kappa$}
+  \BinaryInfC{$(s, \kappa :: \vec{\kappa}) \rightarrow (s', \vec{\kappa})$}
   \DisplayProof
 \]
 \end{definition}
@@ -1453,11 +1441,30 @@ we can define horizontal composition as:
 
 %}}}
 
+\subsection{Separate Compilation} %{{{
 
-\subsection{Projected behavior}
+[Show the SepCompCert theorem
+from lemmas that will have been introduced earlier]
+\[
+  \mathbb{C}(\llbracket M_1 + M_2 + \cdots \rrbracket) \sqsupseteq
+  \llbracket C(M_1) + C(M_2) + \cdots \rrbracket
+\]
+We will need:
+\begin{itemize}
+\item compositionality of C and assembly:
+  $\llbracket M_1 + M_2 \rrbracket \equiv
+   \llbracket M_1 \rrbracket \bullet \llbracket M_2 \rrbracket$
+\item monotonicity of $\mathbb{C} : \sqsupseteq \rightarrow \sqsupseteq$
+  (not if $\mathbb{C}$ is bundled into $\subseteq$)
+\item monotonicity of $\bullet : \sqsupseteq \times \sqsupseteq \rightarrow \sqsupseteq$
+\item per-module correctness theorem $\mathbb{C}(\llbracket M_i \rrbracket) \sqsupseteq \llbracket C(M_i) \rrbracket$.
+\end{itemize}
 
+%}}}
 
-\subsection{[Stuff to remove]}
+\subsection{[Stuff to remove/redistribute]}
+
+{ \color{gray}
 
 Our analytical framework
 yields a small number of changes
@@ -1498,17 +1505,7 @@ in the context of end-to-end verification:
   appropriate notion of simulation)
 \end{enumerate}
 
-For C:
-\begin{align*}
-  \mathbb{b} &\in \kw{val}^* \times \kw{mem} \rightarrow \kw{val} \times mem
-  e &\in \mathbb{E}_\kw{C} &::=
-    \cdots | \kw{extcall}[f, \vec{v}, m, \mathbb{b}] \\
-  \sigma \in \mathbb{D}_\kw{C} &=
-    \kw{ident} \rightarrow \mathbb{E}_\kw{C}
-\end{align*}
-
-\subsection{Transition Systems}
-\subsection{Compiler Correctness}
+}
 
 %}}}
 
