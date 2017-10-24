@@ -785,14 +785,734 @@ Example: infinite stack vs. finite address space.]
 
 %}}}
 
-\section{Per-Function Semantics with External Calls} %{{{
+\section{Open Modules for Compcert} %{{{
 
-\subsection{Semantic Domain}
+Applying our principles to the labeled transition systems
+used in Compcert yields a natural extension
+able to support compositional compilation.
 
-In order to make Compcert truly ...
+Labeled transition systems (LTS)
+are the main kind of semantic objects used by Compcert.
+A Compcert LTS specifies a set of states $S$,
+a labeled transition relation ${\rightarrow}$ between states,
+a set of initial states,
+and a set of final states associated with the result they produce.
+Compcert LTS support a notion of interaction with the environment
+in the form of event traces:
+a transition $(s, \vec{e}, s') \in {\rightarrow}$,
+denoted $s \stackrel{\vec{e}}{\rightarrow} s'$,
+indicates that the state $s$ may transition to state $s'$
+through an interaction recorded as sequence of events $\vec{e}$.
 
+\subsection{Language interfaces} %{{{
+
+[Use the terminology of \emph{types} rather than interfaces,
+which may be taken as closer to our notions of specifications?]
+
+This model is insufficient to express
+the semantics of C and assembly modules.
+Compcert models whole programs with a single entry point,
+which terminate by producing a single numerical result.
+By contrast,
+control can enter and exit open modules
+in a variety of language-dependent configurations.
+This is captured by the notion of language interface.
+[XXX: \emph{module} interface?]
+
+\begin{definition}{Language interface}
+%XXX: we shouldn't overload $L$ in this way
+A \emph{language interface} consists in a pair $(L_I, L_F)$
+which specifies
+a set $L_I$ of \emph{initial configurations} and
+a set $L_F$ of \emph{final configurations}.
+Initial configurations
+correspond to the states in which
+a module can be entered, whereas
+final confgurations
+correspond to the states in which
+the module can return control
+to its caller.
+\end{definition}
+
+For C,
+initial configurations
+will consist of the name of the function being invoked,
+the values of its arguments,
+and the state of the memory at the point of entry.
+Final configurations
+will consist of the function's return value
+and the state of the memory at the point of exit.
+For assembly,
+initial and final configurations may both consist of
+the values of registers and the state of the memory
+[but...].
+The C calling convention used by Compcert
+connects the two models.
+
+%}}}
+
+\subsection{Calling conventions} %{{{
+
+The simulation relations used by Compcert
+such as memory extensions and memory injections
+unify abstraction and refinement.
+In accordance with this approach,
+we use a single notion
+to connect two distinct language interfaces,
+but also to specify the notion of refinement to use
+for pairs of initial and final configurations
+within a single language interface.
+
+\begin{definition}[Calling convention]
+Given source language interfaces $L$ and
+a target language interface $L'$,
+a \emph{calling convention} is a pair $(\mathbb{C}_I, \mathbb{C}_F)$.
+The component
+$\mathbb{C}_I \subseteq L_I \times L'_I$
+relates initial configurations of the source language to
+corresponding initial configurations of the target language.
+Given a source and a target initial configuration,
+the component
+$\mathbb{C}_F \subseteq (L_I \times L_F) \times (L'_I \times L'_F)$
+relates final configurations of the source language to
+corresponding final configurations of the target language.
+
+A \emph{refinement convention} $\sqsupseteq$
+is a calling convention for which
+the source and target language interfaces are identical ($L = L'$),
+and $\sqsupseteq_I$, $\sqsupseteq_F$ are transitive.
+\end{definition}
+
+Compcert does not use explicit notions of
+language intefaces and calling convenentions.
+However,
+its model of external calls
+(\kw{extcall\_sem}),
+the requirements it imposes on their semantics
+(\kw{extcall\_properties}),
+and the internal invariants used by its simulation proofs
+can be read in this light
+and used to define
+compatible notions of refinement and calling conventions
+across Compcert languages.
+
+For simplicity,
+Compcert uses a common language interface $L$
+for all of its languages.
+Initial configurations are of the form:
+\[ f(\vec{v})@m \in L_I = \kw{ident} \times \kw{val}^* \times \kw{mem} \,, \]
+where $f$ identifies the function being called,
+$\vec{v}$ provides values for the function's arguments, and
+$m$ specifies the global memory's initial state for the call.
+Final configurations are of the form:
+\[ v'@m' \in L_F = \kw{val} \times \kw{mem} \,, \]
+where $v'$ gives the function's return value and
+$m'$ specifies the global memory's new state.
+
+The refinement convention associated with this language interface
+specifies that
+related initial configurations should carry the same function identifier,
+and that the values of arguments and the states of the memories
+can be related in one of three ways:
+\begin{itemize}
+\item they can be equal;
+\item the source initial configuration may be
+  \emph{less defined} than the target configuration,
+  meaning that the special value $\kw{Vundef}$
+  in the components of the source configuration
+  can be refined into concrete values in the target configuration,
+  and that the target memory,
+  in addition to having more defined contents,
+  may carry more liberal permissions
+  (a relation known as \emph{memory extension});
+\item they can related by a \emph{memory injection} $\iota$,
+  allowing memory addresses to be remapped
+  between the source and target configurations.
+\end{itemize}
+Memory injections only constrain the contents of memories
+at addresses which are related by $\iota$.
+At these addresses,
+the contents of the target memory is furthermore
+allowed to be more defined than the contents of the source
+memory at the corresponding address.
+
+Given two initial configurations related by
+the Compcert refinement convention,
+matching final states
+must be related in a compatible way:
+\begin{itemize}
+\item if the initial configurations were equal,
+  the final configurations must be equal as well;
+\item if the source initial configuration was
+  \emph{less defined} than the target initial configuration,
+  then this must be true of the corresponding
+  final configurations as well;
+\item if the source and target initial configurations
+  were related through a memory injection $\iota$,
+  then the corresponding final configurations
+  must be relation through a potentially \emph{larger}
+  injection $\iota' \ge \iota$.
+\end{itemize}
+In addition,
+previously allocated regions of the target memory
+must remain unchanged
+at any addresses that were not mapped to valid locations
+of the initial source memory.
+This allows the target language to allocate additional,
+private memory locations (such as stack frames),
+which are not visible at the level of the source language.
+Compcert's refinement convention
+expresses the expectation that such locations
+will be left unchanged by the environment.
+
+Although the Compcert refinement convention is used as
+the calling convention for most compiler passes,
+a more specific calling convention is used
+at the point where function call arguments
+are marshalled onto the stack.
+There,
+in addition to the criteria defined above,
+[arguments must be encoded into the target memory,
+but \emph{only} the target memory,
+and only contain pointers to addresses visible in the source].
+
+%}}}
+
+\subsection{Semantic objects} %{{{
+
+Extending Compcert LTS to account for
+this extra structure yields the following definition.
+
+\begin{definition}[Labeled transition system]
+A \emph{labeled transition system for a language interface $L$}
+is a tuple $\sigma = (S, \rightarrow, I, F)$ where
+$S$ is a set of states,
+$\rightarrow \subseteq S \times L_E^* \times S$
+is a ternary \emph{transition relation},
+$I \subseteq L_I \times S$
+assigns a set of \emph{initial states} to each initial configuration, and
+$F \subseteq S \times L_F$
+is a relation designating \emph{final states}
+together with the final configurations they produce.
+\end{definition}
+
+[Introduce determinacy?]
+
+We have not yet specified the set $L_E$ of events
+used by a language interface $L$.
+They will consist of the same events already present in Compcert,
+augmented with a set of external call events.
+
+%}}}
+
+\subsection{External call events} %{{{
+
+The notion of language-specific initial and final configurations
+takes care of the variety of ways
+in which the environment may invoke an open module,
+but does not account for the ways in which
+the module may itself invoke the environment.
+We remedy this by introducing \emph{external call events}.
+
+As a first attempt,
+it seems natural to follow \cite{cpp2015}
+and give external call events as $\kw{extcall}[s, s']$,
+recording the fact that an extern call was performed
+with the initial configuration $s$
+and returned in the final configuration $s'$.
+However,
+by complicating the picture slightly,
+we will be able to 
+this makes it difficult to use Compcert's existing facilities
+for modeling external calls
+and proving compiler correctness in their presence.
+
+Compcert does account for the fact that the program
+may call the outside world in the form of a global parameter
+specifying the semantics of external calls:
+\[
+  \kw{external\_call} :
+    \kw{ident} \rightarrow
+    \kw{val}* \times \kw{mem} \rightarrow
+    \mathbb{E}^* \rightarrow
+    \mathcal{P}(\kw{val} \times \kw{mem})
+\]
+In addition,
+the predicate $\kw{extcall\_properties}$ defines
+requirements which must be satisfied by the semantics
+of every external function.
+The correctness proof of Compcert is contingent
+on the fact that for every external function $f$,
+the assertion $\kw{extcall\_properties}(\kw{extcall\_sem}(f))$ holds.
+
+To make use of this facility,
+we choose a slightly more involved form of external call events.
+Our external call events will take the form:
+\[
+  \kw{extcall}(s, \mathbb{b})\,,
+\]
+where $\mathbb{b} \subseteq L_I \times L_F$
+will specify the behavior of the external call
+independently of the initial configuration $s$
+given by the module.
+The possible final configurations $s'$ for the call will be
+those which satisfy $(s, s') \in \mathbb{b}$.
+
+Under this definition,
+we can instantiate $\kw{external\_call}$ for the C language as:
+\[
+  \AxiomC{$\kw{extcall\_properties}(\mathbb{b})$}
+  \AxiomC{$e = \kw{extcall}[f(\vec{v})@m, \mathbb{b}$}
+  \AxiomC{$\mathbb{b} : (\vec{v}, m) \rightarrow (v', m')$}
+  \TrinaryInfC{$\kw{external\_call}(f) :
+    (\vec{v}, m) \stackrel{e}{\rightarrow} (v', m')$}
+  \DisplayProof
+\]
+By placing the appropriate restrictions on $\mathbb{b}$,
+we ensure that $\kw{external\_call}$ statisfies Compcert's expectactions.
+
+This technique allows us to reuse Compcert's existing infrastructure
+for handling external calls,
+and ensures that our changes to the
+definition of semantics and the correctness proof are minimal.
+
+[Breaks receptivity, but we can restrict
+the set of acceptable extcall events to the good ones,
+or handle with polarized simulations.]
+
+[We can get rid of this ugly thing when we compute the trace semantics?]
+
+%}}}
+
+\subsection{Refinement} %{{{
+
+Compcert uses \emph{simulations}
+as its notion of refinement between labeled transition systems.
+Our version takes into account the notion of calling convention
+introduced in Sec.~\ref{sec:langint}:
+because our events may expose language-specific details,
+we cannot assume events in the two LTS can be directly compared.
+Instead,
+we use the calling convention to compute an appropriate relation.
+Furthermore,
+the calling convention may introduce
+constraints on the environment in the target specification:
+for instance,
+when compiling a C module performing external calls,
+the target assembly module is not required to handle
+all possible final assembly configuration,
+but only those corresponding to the possible final C configurations
+handled by the source module.
+
+To handle this,
+it is important to understand that Compcert events
+denote two actions:
+a query by the module,
+which may additionally specify any output value
+associated to the event,
+followed by a response from the environment,
+which may simply acknowledge the query
+but may also carry any input associated with the event.
+To show that
+a given target source behavior is refined by
+a given target behavior,
+we need to show that any query performed by the target behavior
+is already present in the source behavior,
+and that any response permitted of the source environment
+is properly reflected by
+a response permitted of the target environment.
+This insight is used to define a notion of alternating simulation,
+similar for instance to the notion of refinement used in \cite{ia}.
+
+This leads to introduce two distinct relations on events,
+separating the contribution of the module and that of the environment.
+The relation $\succeq_\mathbb{C}$
+relates events in the source language interface
+to events in the target language interface
+which have a related query component,
+but may differ in their response component.
+For regular Compcert events,
+this corresponds to the usual $\kw{match\_traces}$ relation.
+[exapand?]
+For external call events, we define:
+\[
+  \kw{extcall}[s_1, \mathbb{b}_1]
+  \succeq_\mathbb{C}
+  \kw{extcall}[s_2, \mathbb{b}_2]
+  %
+  \stackrel{\text{def.}}{\Leftrightarrow}
+  %
+  s_1 \: [\mathbb{C}_I] \: s_2
+\]
+The second relation $\sqsupseteq_\mathbb{C}$
+relates events whose query and response components
+both correspond to one another.
+For regular Compcert events,
+$\sqsupseteq_\mathbb{C}$ coincides with equality.
+For external call events, we define:
+\[
+  \kw{extcall}[s_1, \mathbb{b}_1
+  \sqsupseteq_\mathbb{C}
+  \kw{extcall}[s_2, \mathbb{b}_2]
+  %
+  \stackrel{\text{def.}}{\Leftrightarrow}
+  %
+  \text{basically} \mathbb{C}_I \times (\mathbb{C}_I \rightarrow \mathbb{C}_F)
+\]
+These relations are extended to traces in the natural way
+[nope: if environment breaks the deal at any point
+then the two traces should still be related by $\succeq$
+even though only a common prefix matches.
+That is, $\sqsupseteq^* \cdot (\succeq \cup (\succeq \cap \bar{\sqsupseteq} \cdot \top^*))$
+or something such]
+and allow us to define
+our notion of refinement as follows.
+
+\begin{definition}{Alternating simulation}
+Given a calling convention $\mathbb{C}$ between
+a source language interface $L_1$ and
+a target language interface $L_2$,
+an \emph{environmental simulation} between
+an $L_1$-LTS $\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$ and
+an $L_2$-LTS $\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$
+is a relation $R \subseteq S_1 \times S_2$
+with the following properties:
+\begin{description}
+\item[Preservation of module half-steps]
+  For any pair of related states $(s_1, s_2) \in R$,
+  if the target behavior takes a step $s_1 \stackrel{t_1}{\rightarrow} s_1'$,
+  then there exist $e_2$, $s_2'$ such that
+  $s_2 \stackrel{t_2}{\rightarrow^*} s_2'$,
+  $t_1 \succeq_\mathbb{C} t_2$, and
+  $(s_1', s_2') \in R$.
+\item[Preservation of environment half-steps]
+  For any pair of related states $(s_1, s_2) \in R$ such that
+  the source behavor takes a step
+  $s_1 \stackrel{t_1}{\rightarrow} s_1'$,
+  the target behavior takes a step
+  $s_2 \stackrel{t_2}{\rightarrow} s_2'$, and
+  the event traces
+  $t_1 \succeq_\mathbb{C} t_2$ have related module behaviors,
+  there exist $t_2', s_2''$ such that
+  $s_2 \stackrel{t_2'}{\rightarrow} s_2''$
+  and $t_1 \sqsupseteq_\mathbb{C} t_2'$.
+\item[Compatibility of initial states]
+  Given two related initial configurations $(x_1, x_2) \in \mathbb{C}_I$
+  and a corresponding source state $s_1$ such that $(x_1, s_1) \in I_1$,
+  there exists a target state $s_2$ such that $(x_2, s_2) \in I_2$ and $(s_1, s_2) \in R$.
+\item[Compatibility of final states]
+  Given two related states $(s_1, s_2) \in R$ and
+  a target final configuration $y_2$ such that $(s_2, y_2) \in F_2$,
+  there exits
+  a source final configuration $y_1$ such that $(s_1, y_1) \in F_1$
+  such that $(y_1, y_2) \in \mathbb{C}_F$.
+\end{description}
+\end{definition}
+
+[Forward simulations.
+Now we only need to flip module steps,
+so we still use determinacy but don't need receptivity.]
+
+%}}}
+
+\subsection{Relation to Compcert semantics} %{{{
+
+[If we forget extcall events,
+set $L = (\kw{unit}, \kw{int})$ and $\mathbb{C} = \kw{id}$,
+and consider only receptive semantics,
+then everything boils down to the original Compcert framework.]
+
+%}}}
+
+\subsection{Compiler correctness} %{{{
+
+Changes to Compcert:
+\begin{itemize}
+\item Update the LTS framework (\kw{Smallstep.v})
+  in the way we have indicated
+\item Update \kw{extcall\_semantics} to take into account
+  refinement of events.
+\item ...
+\end{itemize}  
+
+Separate compilation:
+prove SepCompCert-style theorem from our lemmas.
+
+%}}}
+
+\subsection{Composition of passes} %{{{
+
+[Define composition of calling conventions,
+show that alternating simulations compose accordingly]
+
+%}}}
+
+\subsection{Composition of transition systems} %{{{
+
+[Need to express domain of modules and discriminate
+internal from external calls.
+Store in the module type / language interface?
+Provide as a parameter of composition?
+We can also simply check whether there's at least
+one state for the initial configuration,
+though this may introduce some non-monotonicity.
+Or just leave the extcall events there even when
+they are resolved,
+though the consequences of that are unclear.]
+
+[NB: our transition systems could be indexed by two language interfaces,
+one for the top-level interaction, and one for nested external calls]
+
+\paragraph{Flat composition} %{{{
+
+Flat composition
+is a first-order approximation of horizontal composition
+where two transition system $\sigma_1$ and $\sigma_2$
+are laid out side by side,
+but cannot interact with one another.
+An execution of the resulting machine $\sigma_1 + \sigma_2$
+will nondeterministically proceed,
+either as an execution of $\sigma_1$,
+or as an execution of $\sigma_2$.
+If the two transition systems
+handle disjoint sets of initial configurations,
+then $+$ will nonetheless preserve determinacy.
+
+\begin{definition}[Flat composition]
+Given two labeled transition systems of the same [XXX: type]
+$\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$ and
+$\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$,
+their flat composition is defined as
+the labeled transition system
+$\sigma_1 + \sigma_2 = (S, \rightarrow, I, F)$
+where:
 \begin{align*}
-  e \in \mathbb{E}_\kw{C} &::=
+  S &:= S_1 + S_2 \\
+  {\rightarrow} &:= {\rightarrow_1} + {\rightarrow_2} \\
+  I &:= \{ (x, \iota_1(s_1)) : (x, s_1) \in I_1 \}
+   \cup \{ (x, \iota_2(s_2)) : (x, s_2) \in I_2 \} \\
+  F &:= \{ (\iota_1(s_1'), y) : (s_1, y) \in F_1 \}
+   \cup \{ (\iota_2(s_2'), y) : (s_2, y) \in F_2 \}
+\end{align*}
+\end{definition}
+
+To go from flat composition to vertical composition,
+we will need to introduce a resolution operator $\mathcal{R}(\sigma)$
+which allows $\sigma$ to call back into itself.
+To illustrate the concepts involve,
+we first introduce vertical composition.
+
+%}}}
+
+\paragraph{Vertical composition} %{{{
+
+In the vertical composition of transition systems,
+external calls performed by a transition system
+$\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$
+are replaced by executions of a second transition system
+$\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$.
+The transition system
+$\sigma_1 \circ \sigma_2 = (S, \rightarrow, I, F)$
+will have two execution modes:
+In the first,
+it will execute $\sigma_1$ normally and
+operate on states of type $S_1$.
+When $\sigma_1$ performs an external call,
+$\sigma_1 \circ \sigma_2$ will switch to a second mode,
+performing a nested execution of $\sigma_2$ instead.
+In addition to the state of $\sigma_2$,
+in this mode the machine will store a \emph{continuation} of $\sigma_1$,
+associating to each possible final configuration of $\sigma_2$
+a set of resumption states for $\sigma_1$.
+
+Accordingly,
+the states of the composite LTS are:
+\[
+  S := S_1 + S_2 \times \mathcal{P}(L_F \times S_1)
+\]
+[XXX switch $S_2$ and $\mathcal{P}(\cdots)$ so that
+$\iota_1, \iota_2$ correspond to the right component
+and so that parallel with $\kw{cons}$ is obvious]
+%
+Initial and final configurations
+correspond to the top-level interaction of $\sigma_1$ with the environment:
+\begin{align*}
+  I &:= \{ (x, \iota_1(s_1)) : (x, s_1) \in I_1 \} \\
+  F &:= \{ (\iota_1(s_1), y) : (s_1, y) \in I_1 \}
+\end{align*}
+During normal execution,
+steps of $\sigma_1$ are used as-is:
+\[
+  \AxiomC{$s_1 \stackrel{e}{\rightarrow_1} s_1'$}
+  \AxiomC{$e \ne \kw{extcall}$}
+  \BinaryInfC{$\iota_1(s_1) \stackrel{e}{\rightarrow} \iota_1(s_1')$}
+  \DisplayProof
+\]
+To express the switch to nested execution of $\sigma_2$,
+we first give the set of continuations associated with a state of $\sigma_1$
+about to perform an external call with initial configuration $x_2$:
+\[
+  K(s_1, x_2) =
+    \{ (y_2, s_1') : s_1 \stackrel{e}{\rightarrow_1} s_1',
+                     e = \kw{extcall}(x_2, y_2) \}
+\]
+Then the switch is triggered when \emph{at least one} external call event
+can occur at the current point in the execution:
+\[
+  \AxiomC{$K(s_1, x_2) \ne \varnothing$}
+  \AxiomC{$I_2(x_2) \ni s_2$}
+  \BinaryInfC{$\iota_1(s_1) \rightarrow \iota_2(s_2, K(s_1, x_2))$}
+  \DisplayProof
+\]
+Once the machine is in the second mode,
+execution proceeds according to $\sigma_2$,
+leaving the continuation unchanged:
+\[
+  \AxiomC{$s_2 \stackrel{t}{\rightarrow_2} s_2'$}
+  \UnaryInfC{$
+    \iota_2(s_2, \kappa)
+    \stackrel{t}{\rightarrow}
+    \iota_2(s_2', \kappa)$}
+  \DisplayProof
+\]
+When a final state of $\sigma_2$ is reached,
+the machine uses the continuation to switch back
+to normal execution:
+\[
+  \AxiomC{$F_2(s_2) \ni y_2$}
+  \AxiomC{$\kappa(y_2) \ni s_1'$}
+  \BinaryInfC{$\iota_2(s_2, \kappa) \rightarrow \iota_1(s_1')$}
+  \DisplayProof
+\]
+
+%}}}
+
+\paragraph{Resolution} %{{{
+
+Horizontal composition may be understood as the infinite composition:
+\[
+  \mathcal{R}(\sigma_1 + \sigma_2) =
+    (\sigma_1 + \sigma_2) \circ (\sigma_1 + \sigma_2) \circ \cdots
+\]
+In the following
+we define the resolution operator $\mathcal{R}$ explicitely,
+and show that it computes a fixpoint of $\sigma \circ -$.
+
+The transition system $\mathcal{R}(\sigma)$
+works similarly to vertical composition,
+however instead of just two modes,
+the machine will contain a stack of continuations,
+allowing an arbitrary depth of calls.
+We use the same definition of continuation $K(s, x)$
+as for vertical composition.
+
+\begin{definition}[Resolution operator]
+Given a transition system $\sigma = (S, \rightarrow, I, F)$,
+the closure [or whatever] of $\sigma$ is the transition system
+$\mathcal{R}(\sigma) :=
+  (S_\mathcal{R}, \rightarrow_\mathcal{R}, I_\mathcal{R}, F_\mathcal{R})$,
+where:
+\begin{align*}
+  S_\mathcal{R} &:= S \times \mathcal{P}(L_F \times S)^* \\
+  I_\mathcal{R} &:= \{ (x, s, \kw{nil}) : (x, s) \in I \} \\
+  F_\mathcal{R} &:= \{ (s', \kw{nil}, y) : (s', y) \in F \} \,,
+\end{align*}
+and where $\rightarrow_\mathcal{R}$ is defined
+by the following rules.
+Normal execution operates on the top-level state:
+\[
+  \AxiomC{$s \stackrel{e}{\rightarrow} s'$}
+  \AxiomC{$e \notin \kw{extcall}$}
+  \BinaryInfC{$(s, \vec{\kappa}) \rightarrow (s', \vec{\kappa})$}
+  \DisplayProof
+\]
+Function calls are handled by pushing the current continuation
+and starting a new top-level execution:
+\[
+  \AxiomC{$K(s, x) \ne \varnothing$}
+  \AxiomC{$(x, s') \in I$}
+  \UnaryInfC{$(s, \vec{\kappa}) \rightarrow (s', K(s, x) :: \vec{\kappa})$}
+\]
+Conversely,
+whenever we reach a final state
+and the stack is non-empty,
+we resume the topmost continuation:
+\[
+  \AxiomC{$(s, y) \in F$}
+  \AxiomC{$(y, s') \in \kappa_0$}
+  \BinaryInfC{$(s, \kappa_0 :: \vec{\kappa}) \rightarrow (s', \vec{\kappa})$}
+  \DisplayProof
+\]
+\end{definition}
+
+\begin{theorem}[$\mathcal{R}(\sigma)$ is a fixed point]
+$\sigma \circ R(\sigma) \equiv R(\sigma)$.
+It is true and reassuring but do we need this in any way?
+\end{theorem}
+
+%}}}
+
+\paragraph{Horizontal composition} %{{{
+
+Now that we have defined $\mathcal{R}$,
+we can define horizontal composition as:
+\[
+  \sigma_1 \bullet \sigma_2 := \mathcal{R}(\sigma_1 + \sigma_2)
+\]
+
+%}}}
+
+%}}}
+
+
+\subsection{Projected behavior}
+
+
+\subsection{[Stuff to remove]}
+
+Our analytical framework
+yields a small number of changes
+which can be applied to Compcert for
+turning it into a compiler suitable for use
+in the context of end-to-end verification:
+\begin{enumerate}
+\item Compcert models the interaction of programs
+  with their environment in terms of event traces.
+  However,
+  these event traces are not expressive enough
+  to model the interaction between modules in a satisfactory manner.
+  Following \cite{cpp2015},
+  the addition of \emph{external call events} to traces
+  and the generalization of our program semantics
+  to operate on a function-by-function basis
+  bridges this gap in expressivity.
+\item Because external calls are realized differently
+  at the level of C and assembly modules,
+  the source and target semantics
+  will use different kinds of external call events.
+  To account for this discrepancy,
+  the formulation of compiler correctness
+  will involve an explicit \emph{calling convention},
+  relating external calls in the source and target languages.
+\item 
+  Open-system refinement: understand Compcert events
+  as two actions: one by the system, one by then environment in reaction.
+  Then correponding mixed-variance refinement of events.
+  Follows the work on Interface Automata \cite{ia},
+  avoiding many of the complications.
+\item
+  Then composition
+\item
+  Work out what is necessary to support this
+  at the level of transition systems / give an operational account
+  (generalized initial and final states,
+  appropriate notion of simulation)
+\end{enumerate}
+
+For C:
+\begin{align*}
+  \mathbb{b} &\in \kw{val}^* \times \kw{mem} \rightarrow \kw{val} \times mem
+  e &\in \mathbb{E}_\kw{C} &::=
     \cdots | \kw{extcall}[f, \vec{v}, m, \mathbb{b}] \\
   \sigma \in \mathbb{D}_\kw{C} &=
     \kw{ident} \rightarrow \mathbb{E}_\kw{C}
@@ -846,7 +1566,7 @@ In order to make Compcert truly ...
       & $\circ$   &           & $\bullet$ & $\bullet$ & $\bullet$ & \\
     QompCert \cite{qompcert}
       &           &           & $\bullet$ &           &           & $\bullet$ \\
-    Separate Compcert \cite{lwsc}
+    SepCompCert \cite{lwsc}
       &           &           & $\bullet$ & $\circ$   &           & \\
     This work
       & $\circ$   & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & \\
