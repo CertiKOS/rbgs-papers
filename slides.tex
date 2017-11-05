@@ -2,10 +2,11 @@
 \usepackage{bussproofs}
 \usepackage{stmaryrd}
 
-\title{Lightweight Compositional Compcert}
-\subtitle{a POPL paper pitch}
+\title{Composable Compcert}
+\subtitle{a PLDI paper pitch}
 \author{J\'er\'emie Koenig}
 
+% Macros {{{
 \newcommand{\EC}{\text{EC}}
 \newcommand{\nEC}{\overline{\EC}}
 \newcommand{\ECEC}{\EC \Rightarrow \EC}
@@ -19,6 +20,7 @@
 \newcommand{\mem}{\kw{mem}}
 \newcommand{\Y}{\mathbf{Y}}
 \newcommand{\E}{\mathcal{E}}
+%}}}
 
 \setlength{\parskip}{1ex}
 
@@ -36,276 +38,328 @@
 \end{frame}
 
 \begin{frame}{Bottom line} %{{{
-Deploy the same ideas we use for thread linking
-in the context of separate compilation:
+We can build a compositional Compcert
+relatively easily if we:
 \begin{itemize}
-\item Define a game semantics for Clight and Asm
-\item Game semantics + extcall oracle = original semantics
-\item CompcertX just turned into a compositional complier
+\item give Compcert transition systems a module interface,
+  and introduce \emph{external call events},
+\item
+  consider \emph{abstraction} in the definition of refinement, and
+\item
+  adapt the notion of \emph{alternating simulation}
+  to Compcert.
 \end{itemize}
+Because it models open systems,
+the result can be connected to
+other certified components
+in a straightforward way.
 \end{frame}
 %}}}
 
-\section{Game semantics for Compcert}
+\section{Semantics in Compcert}
 
-\begin{frame}{Games} %{{{
-We build up from the HO arena and game $\EC$ defined by:
-\begin{gather*}
-M_\EC = \{ \kw{call}[f, \vec{v}, m] \} \cup
-        \{ \kw{ret}[f, \vec{v}, m, v, m'] \} \\
-\lambda_\EC(\kw{call}[\ldots]) = \kw{OQ} \hspace{3em}
-\lambda_\EC(\kw{ret}[\ldots]) = \kw{PA} \\
-* \vdash_\EC \kw{call}[\ldots] \hspace{2em}
-\kw{call}[f, \vec{v}, m] \vdash_\EC \kw{ret}[f, \vec{v}, m, v, m']
-\end{gather*}
-Schematically:
+\begin{frame}{Transition Systems} %{{{
+The main semantic objects used in Compcert
+are labeled transition systems:
 \begin{center}
-[figure]
+  \includegraphics[scale=.65]{figs/trsys}
 \end{center}
-Example play:
+A labeled transition system is defined by:
+\begin{itemize}
+  \item a set of states $S$;
+  \item a set of initial states $I \subseteq S$;
+  \item a transition relation ${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$;
+  \item a set of final states $F \subseteq S \times \kw{int}$.
+\end{itemize}
+\end{frame}
+%}}}
+
+\begin{frame}{Behavior} %{{{
+The behavior of a transition system is understood as
+the set of traces it generates
+(together with any associated final result).
+
+Event traces record the program's interaction with the environment.
+Compcert events can represent:
+\begin{itemize}
+  \item system calls with no side-effects;
+  \item accesses to volatile variables (cannot read/write non-global pointers).
+\end{itemize}
+\end{frame}
+%}}}
+
+\begin{frame}{Backward Simulations} %{{{
+The semantic preservation theorem of Compcert
+is expressed in terms of \emph{backward simulations}:
 \begin{center}
-[figure]
+  \includegraphics[scale=.65]{figs/bwsim}
 \end{center}
+This is enough to show that every behavior of the target program
+has a corresponding behavior of the source program.
+
+We can compose simulations vertically,
+so that Compcert's compilation passes
+can be verified one by one.
 \end{frame}
 %}}}
 
-\begin{frame}{Type of modules} %{{{
-We will interpret the semantics of modules in the game $\ECEC$:
+\section{Expressivity}
+
+\begin{frame}{Interface of Modules} %{{{
+Compcert models a whole program with no parameters,
+that returns a single integer result.
+
+Instead, we want to expose the various ways in which
+the environment can invoke the module
+(different functions, argument values, initial memory states),
+and the various ways in which the module can return
+control to the environment
+(return value, new memory state):
 \begin{center}
-[figure]
+  \includegraphics[scale=.65]{figs/comptrsys}
 \end{center}
-Example play:
+\end{frame}
+%}}}
+
+\begin{frame}{External Calls Events} %{{{
+Dually, we want the module to be able to
+invoke external functions.
+We record external calls
+as events of the form:
+\[
+  \kw{extcall}[f(\vec{v})@m, v'@m']
+\]
+
+Then we can instantiate
+$\kw{external\_functions\_sem}$:
+for a given invocation configuration $f(\vec{v})@m$,
+we non-deterministically choose
+all possible return configurations $v'@m'$
+which are valid
+(per the behavioral aspects of $\kw{extcall\_properties}$).
+\end{frame}
+%}}}
+
+\begin{frame}{A problem} %{{{
+But wait!
+
+Now we have exposed language-specific values and memories
+in our event traces and
+in the interface of our transition systems.
+
+We can no longer assume the traces of the source and target
+will be exactly the same!
+And we need to take into account the language-specific information
+used for initial states,
+and for the eventual outcome
+if the machine ever reaches a final state.
+\end{frame}
+%}}}
+
+\section{Abstraction}
+
+\begin{frame} %{{{
+We need to specify the way in which source values and memory states
+relate to target ones:
+in essence,
+this is the calling convention $\mathbb{R}$
+which applies to the pair
+of the languages we're trying to relate.
+
+Since Compcert bundles together the notions of
+refinement (fewer behaviors) and
+abstraction (the behaviors are expressed differently)
+into its notion of simulation,
+let's call our corresponding construction a
+\emph{simulation convention}.
+\end{frame}
+%}}}
+
+\begin{frame}{Simulation Convention} %{{{
+A simulation convention $\mathbb{R}$ specifies:
+\begin{itemize}
+  \item a set of worlds $W$;
+  \item a $W$-indexed relation on call states
+    $\mathbb{R}^\kw{q}_w \subseteq (\kw{val}^* \times \kw{mem})^2$
+  \item a $W$-indexed relation on return states
+    $\mathbb{R}^\kw{r}_w \subseteq (\kw{val} \times \kw{mem})^2$
+\end{itemize}
+There are three simulation conventions in Compcert:
+equality, extensions, injections.
+Everything composes into the injection convention in the end.
+
+The simulation convention can encode the relational aspects
+of $\kw{extcall\_properties}$.
+\end{frame}
+%}}}
+
+\begin{frame}{Backward simulations} %{{{
+Our events are related if they are equal non-extcall events,
+or if they respect the simulation convention:
+\[
+  \AxiomC{$
+    \exists w,
+      (\vec{v}_1, m_1) \:[\mathbb{R}^\kw{q}_w]\: (\vec{v}_2, m_2) \wedge
+      (v_1', m_1') \:[\mathbb{R}^\kw{r}_w]\: (v_2', m_2')$}
+  \UnaryInfC{$
+    \kw{extcall}[f(\vec{v}_1)@m_1, v_1'@m_1']
+    \sqsupseteq_\mathbb{R}
+    \kw{extcall}[f(\vec{v}_2)@m_2, v_2'@m_2']$}
+  \DisplayProof
+\]
+Now we can update our notion of backward simulation:
 \begin{center}
-[figure]
+  \includegraphics[scale=.65]{figs/bwsimr}
+\end{center}
+Yay! Our work here is done.
+\end{frame}
+%}}}
+
+\begin{frame}{Another problem} %{{{
+But wait!
+
+Now we have too many target behaviors!
+
+For instance,
+assembly can express external calls
+which don't respect the C calling convention.
+
+Or, given an external call in the target,
+there's no way to know we will have a corresponding
+external call in the source.
+(Same with final states)
+\end{frame}
+%}}}
+
+\section{Open Systems}
+
+\begin{frame}{Alternating Simulations} %{{{
+This is because for open systems,
+we need to use \emph{alternating simulations}:
+\begin{center}
+  \includegraphics[scale=.65]{figs/altsim}
+\end{center}
+This is already reflected in Compcert
+by the direction of the simulation for initial states
+(an environment action).
+
+But otherwise not an issue in vanilla Compcert
+because languages are receptive:
+they must handle \emph{all} possible environment
+behaviors,
+and behaviors of the source and target are identical.
+\end{frame}
+%}}}
+
+\begin{frame}{Half-Steps} %{{{
+We want to adapt alternating simulations to Compcert.
+
+Unfortunately,
+Compcert does not have distinct \emph{system} and \emph{environment} events.
+Instead,
+each event denotes both a system action
+(request input, call external function),
+then an environment action
+(function returned $x$, user input was $y$).
+
+So we use an updated $\kw{match\_traces}$ relation
+which only compares the system action component and
+ignores the environment action component:
+\[
+  \AxiomC{$
+      (\vec{v}_1, m_1) \:[\mathbb{R}^\kw{q}_w]\: (\vec{v}_2, m_2)$}
+  \UnaryInfC{$
+    \kw{extcall}[f(\vec{v}_1)@m_1, v_1'@m_1']
+    \succeq_\mathbb{R}^w
+    \kw{extcall}[f(\vec{v}_2)@m_2, v_2'@m_2']$}
+  \DisplayProof
+\]
+\end{frame}
+%}}}
+
+\begin{frame}{Alternating simulations for Compcert} %{{{
+Now we can replace backward simulation
+with Compcert-style alternating relations:
+\begin{center}
+  \includegraphics[scale=.65]{figs/altsimc}
 \end{center}
 \end{frame}
 %}}}
 
-\begin{frame}{Linking operator} %{{{
-For $\sigma_1, \sigma_2 : \ECEC$,
-we want to define:
-\[ \sigma_1 \bowtie \sigma_2 \]
-It should be a straighforward combination
-of $\circ$, $\cup$, and \kw{lfp},
-though stronger typing may be required
-in order to hide the implemented calls.
-
-Linking theorem:
-\[
-        \AxiomC{$\sigma_1 \le_R \sigma_1'$}
-        \AxiomC{$\sigma_2 \le_R \sigma_2'$}
-        \BinaryInfC{$\sigma_1 \bowtie \sigma_2 \le_R \sigma_1' \bowtie \sigma_2'$}
-        \DisplayProof
-\]
-($\le_R$ to be defined later)
-\end{frame}
-%}}}
-
-\begin{frame}{Semantics} %{{{
-For a Clight module $M$ with operational semantics $\rightarrow$,
-the strategy $\llbracket M \rrbracket : \ECEC$ is defined by:
-\[
-	\AxiomC{$\kw{replay}(\kw{view}(\word{u}))
-		\rightarrow^?
-		\kw{Callstate}(f, \vec{v}, k, m)$}
-	\UnaryInfC{$\llbracket M \rrbracket \ni
-		\word{u} \cdot \kw{call}(f, \vec{v}, m)$}
-	\DisplayProof
-\]
-\[
-	\AxiomC{$\kw{replay}(\kw{view}(\word{u}))
-		\rightarrow^?
-		\kw{Returnstate}(v, \kw{K0}, m)$}
-	\UnaryInfC{$\llbracket M \rrbracket \ni
-		\word{u} \cdot \kw{ret}(v, m)$}
-	\DisplayProof
-\]
-
-$\kw{replay}(\kw{view}(\word{u}))$ is the state obtained
-by replaying the position $\word{u}$. \\
-$\rightarrow^{?}$ is $\rightarrow$ iterated
-until the first $\kw{Callstate}$ to an external function
-or $\kw{Returnstate}$ to the null continuation.
-
-The resulting strategies are innocent and well-bracketed.
-\end{frame}
-%}}}
-
-%\begin{frame}{Fixpoint} %{{{
-%Note that $\llbracket M \rrbracket$
-%does not even service its own internal calls,
-%instead relying on the environment to do that.
-%
-%We can introduce a fixpoint operator $\Y$:
-%\[
-%	\AxiomC{$\sigma : \ECEC$}
-%	\UnaryInfC{$\Y \sigma : \EC$}
-%	\DisplayProof
-%\]
-%The strategy $\Y \sigma$ is the composition
-%of an infinite sequence of copies of $\sigma$,
-%each using the next one to handle its function calls:
-%\[ \text{[figure]} \]
-%This way we can link strategies with $\cup$
-%and don't need to worry about the domain of each module:
-%the behavior whole program semantics is $\Y ( \llbracket M_1 \rrbracket \cup \llbracket M_2 \rrbracket \cup \cdots )$.
-%\end{frame}
-%%}}}
-
-\section{Compcert KLRs}
-
-\begin{frame}{Kripke logical relations} %{{{
-\emph{Logical relations} are structure-preserving relations
-that can be combined and built up along the type structure,
-so that relations at all types can be obtained
-from relations at base types.
-
-\emph{Kripke} logical relations
-are indexed over a set of ``possible world'',
-so that a KLR is defined by:
+\begin{frame}{To make it work\ldots} %{{{
+To implement, we need to:
 \begin{itemize}
-\item a set $W$ of \emph{worlds};
-\item an \emph{accessibility relation} $(\leadsto) : \mathcal{R}(W, W)$ (often a preorder);
-\item for each type $A$ and each world $w$
-  a logical relation $R \llbracket A \rrbracket_w : \mathcal{R}(A_1, A_2)$ between the interpretations
-  $A_1$, $A_2$ of $A$.
+  \item update the meta-theory in Compcert; (medium)
+  \item define our simulation conventions,
+    show injection absorbs everything; (not that hard)
+  \item show compatibility in each pass between
+    the simulation relation and
+    the simulation convention. (easy but many)
 \end{itemize}
-
-$w \leadsto w'$ can be read as: \emph{$w$ might evolve into $w'$}.
-\end{frame} %}}}
-
-\begin{frame}{Compcert KLRs} %{{{
-My $\kw{simrel}$'s are Kripke logical relations for Compcert. \\
-Roughly speaking, each one defines:
-\begin{itemize}
-\item a set of worlds (say, $\kw{meminj}$),
-\item an accessibility relation (say, $\kw{inject\_incr}$),
-\item world-indexed relations on values (say, $\kw{Val.inject}$)
-  and memory states (say, $\kw{Mem.inject}$),
-\end{itemize}
-so that we can build up the corresponding world-indexed relation
-for pretty much anything in Compcert
-(in particular, states).
 \end{frame}
 %}}}
 
-\begin{frame}{Compcert parametricity} %{{{
-Expressed in this framework,
-the monotonicity of Compcert semantics
-is a \emph{parametricity theorem},
-which gives us many interesting properties of the semantics
-``for free''
-(by plugging in an appropriately designed $\kw{simrel}$):
-\begin{itemize}
-\item stability under injection (\kw{inj});
-\item preservation of invariants (\kw{inv});
-\item \kw{Mem.nextblock} is increasing (``strong \kw{id}'');
-\item \ldots
-\end{itemize}
+\section{Compositionality}
 
-In fact,
-the required properties of external calls
-can nearly all be put in this form,
-and can therefore be shown to be preserved by the semantics.
-\end{frame}
-%}}}
-
-\begin{frame}{KLRs for strategies} %{{{
-Let $(W, \leadsto, R)$ be a Compcert KLR.
-Extending $R_w$ to the moves of $\EC$,
-then of $\ECEC$ is straightforward.
-From there we can define the simulation diagrams
-for strategies.
-
-Two \emph{justified sequences} are related if:
-\begin{itemize}
-\item They have the same overall structure;
-\item For each corresponding pair of moves,
-  there is a world $w$ such that they are related by $R_w$;
-\item If a pair of moves with world $w$ justifies
-  a pair of moves with world $w'$,
-  then $w \leadsto w'$.
-\end{itemize}
-
-Two strategies are related if they take justified sequences
-to justified sequences when played.
-
-Linking theorem: preserved by
-$\cup$, $\circ$, $\kw{lfp}$, therefore $\bowtie$.
-\end{frame}
-%}}}
-
-\section{Separate compilation}
-
-\begin{frame}{A problem?} %{{{
-Compositional CompCert Princeton paper:
-\begin{quote}
-A deficiency of CompCert’s simulation proofs and of LSRs
-was that they assumed conditions (1) and (2) at external calls,
-but did not prove that these properties were preserved by compilation.
-Directly imposing constraints (1) and (2)
-onto the simulation clauses for internal steps does not work, however.
-A compiled function should be allowed to
-write to its own spill locations ---
-just not to those of its caller.
-\end{quote}
-The go on to define their complicated \emph{structured injections}.
-\end{frame}
-%}}}
-
-\begin{frame}{A solution!} %{{{
-But because of the way we lay out our KLR accessibility relation
-onto the justification structure of HO games,
-our simulations already allow a function
-to write to its own spill locations!
-
-[Explain]
-
-Not magical because we still have to prove the thing in question
-(but we have Yuting and Pierre for that).
-
-But at least our simulations express exactly the right constraints
-in a very natural way, which is encouraging.
-\end{frame}
-%}}}
-
-\begin{frame}{Connecting with the CompcertX theorem} %{{{
-CompcertX's theorem should be expressible as:
+\begin{frame}{Horizontal Composition} %{{{
+We want to define semantic horizontal composition and show:
 \[
-  \forall \E : \EC,
-    \text{nonreentrant}(\E) \wedge
-    \text{determined}(\E) \wedge
-    \E \le_R \E \Rightarrow
-    \llbracket M \rrbracket^\kw{Clight} \circ \E \le_R
-    \llbracket C(M) \rrbracket^\kw{Asm} \circ \E
+  \llbracket M_1 + M_2 \rrbracket \equiv
+  \llbracket M_1 \rrbracket \bullet
+  \llbracket M_2 \rrbracket
 \]
-where $R$ is a specific relation
-(which includes the external call requirements).
+Basically,
+substitute some extcall events by executions of the other module.
+Keep a stack of continuations
+as part of the state,
+so that we can resume when that execution is done.
+\end{frame}
+%}}}
 
-We should be able to generalize it to:
+\begin{frame}{Separate Compilation} %{{{
+As one application, we can show the Separate Compcert theorem:
+\[ \llbracket M_1 + M_2 + \cdots \rrbracket \sqsupseteq_\kw{inj}
+   \llbracket C(M_1) + C(M_2) + \cdots \rrbracket \,, \]
+from the per-module semantic preservation theorem,
+the horizontal composition theorem, and
+the monotonicity properties of $\sqsupseteq_\kw{inj}$ and $\bullet$.
+\end{frame}
+%}}}
+
+\begin{frame}{Semantic Contextual Refinement} %{{{
+We can also show the Compositional Compcert ``semantic contextual refinement''
+theorem.
+For any context $\sigma \sqsupseteq_\kw{inj} \sigma$,
 \[
-    \llbracket M \rrbracket^\kw{Clight} \le_R
-    \llbracket C(M) \rrbracket^\kw{Asm}
+  \sigma \bullet \llbracket M_1 \rrbracket \sqsupseteq_\kw{inj}
+  \sigma \bullet \llbracket C(M_1) \rrbracket \,,
 \]
-using the properties of our strategies
-(in particular innocence).
+from the per-module semantic preservation theorem
+and the monotonicity of $\bullet$.
 \end{frame}
 %}}}
 
-\begin{frame}{Linking with fancy contexts} %{{{
-Note that the generalized theorem allows us to link with
-all kinds of contexts:
-the only criterion is stability under $\le_R$.
-This allows us to call things like \kw{longjmp} and \kw{cswitch},
-implemented in assembly,
-directly from C code.
+\begin{frame}{CertiKOS layers!} %{{{
+If the memory states are instrumented with abstract state,
+we can encode CertiKOS layers as a semantic object
+and compose them horizontally with the client.
+We can do our code and refinement proofs
+in that framework too.
+We can instantiate \kw{liblayers} to use it.
 
-A way to express the semantics of those is already
-an improvement on the current Compcert,
-and we could demonstrate by verifying a small program
-which uses them.
+However memory state is the only way to keep state across calls.
+Our transition systems have no memory from one call to the next otherwise.
 \end{frame}
 %}}}
+
+\begin{frame}{Other things!} %{{{
+By constructing ad-hoc machines we can model
+fork, IPC, longjmp, etc.
+
+In a richer semantics we could express the behavior
+of longjmp as another semantic object to compose with
+(instead of an ad-hoc machine operator).
+\end{frame}
 
 \end{document}
 
