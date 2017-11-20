@@ -785,6 +785,24 @@ through an interaction recorded as the event trace $t$.
 
 \subsection{Language Interfaces} %{{{
 
+\begin{table*}
+  \begin{tabular}{llll}
+    \hline
+    Name & Query & Reply & Description \\
+    \hline
+    \kw{li\_c} & $(\kw{id}, \kw{sg}, \vec{v}, m)$ & $(v', m')$ &
+      C-style function calls \\
+    \kw{li\_locset} & $(\kw{id}, \kw{sg}, \kw{ls}, m)$ & $(\kw{ls}', m')$ &
+      Arguments are passed in abstract locations (LTL, Linear) \\
+    \kw{li\_mach} & $(\kw{id}, \kw{sp},\kw{ra},\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Arguments are passed through the in-memory stack (Mach) \\
+    \kw{li\_asm} & $(\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Assembly-style control transfers (Asm) \\
+    \hline
+  \end{tabular}
+  \caption{Language interfaces for the various Compcert intermediate languages.}
+\end{table*}
+
 [Not sure about the terminology]
 
 This model is insufficient to express
@@ -834,6 +852,124 @@ connected by the C calling convention.
 %}}}
 
 \subsection{Calling conventions} \label{sec:callconv} %{{{
+
+\begin{table*}
+  \begin{tabular}{lccp{.6\textwidth}}
+    \hline
+    Name & Source & Target & Description \\
+    \hline
+    \kw{cc\_id} & $\tau$ & $\tau$ &
+      Identity calling convention;
+      used in equality passes. \\
+    \kw{cc\_inj} & \kw{li\_c} & \kw{li\_c} &
+      Rectangular injection diagram;
+      C-style external calls in injection passes. \\
+    \kw{cc\_ext} & \kw{li\_c} & \kw{li\_c} &
+      Rectangular extension diagram;
+      C-style external calls in extension passes. \\
+    \kw{cc\_inj\_triangle} & \kw{li\_c} & \kw{li\_c} &
+      Triangular injection diagram;
+      outer interface in injection passes. \\
+    \kw{cc\_ext\_triangle} & \kw{li\_c} & \kw{li\_c} &
+      Triangular extension diagram;
+      outer interface in extension passes. \\
+    \kw{cc\_alloc} & \kw{li\_c} & \kw{li\_locset} &
+      Outer interface for the \kw{Allocation} pass.
+      Arguments are now in abstract locations;
+      uses a memory extension. \\
+    \kw{cc\_stacking} & \kw{li\_locset} & \kw{li\_mach} &
+      Outer interface for the \kw{Stacking} pass;
+      Abstract locations are mapped to registers and the in-memory stack;
+      uses a memory injection. \\
+    \kw{cc\_asmgen} & \kw{li\_mach} & \kw{li\_asm} &
+      Outer interface for \kw{Asmgen};
+      registers are mapped to their architecture-specific versions;
+      function being called is specified by the program counter. \\
+    \kw{cc\_compcert} & \kw{li\_c} & \kw{li\_asm} &
+      End-to-end calling convention;
+      essentially a composition of
+      \kw{cc\_alloc}, \kw{cc\_stacking}, and \kw{cc\_asmgen}. \\
+    \hline
+  \end{tabular}
+  \caption{Calling conventions.}
+\end{table*}
+
+\begin{table*}
+  \begin{tabular}{lll@{\hspace{2em}}p{.5\textwidth}}
+    \hline
+    Language/pass & External calls & Outer interface & Description \\
+    \hline
+    \bf
+    \textbf{Clight} & \kw{\bf li\_c} & \kw{\bf li\_c} &
+      A simpler version of CompCert C
+      where expressions contain no side-effects. \\
+    \kw{SimplLocals} & \kw{cc\_inj} & \kw{cc\_inj\_triangle} &
+      Pulling non-adressable scalar local variables out of memory. \\
+    \kw{Cshmgen} & \kw{cc\_id} & \kw{cc\_id} &
+      Simplification of control structures;
+      explication of type-dependent computations. \\
+    \textbf{Csharpminor} & \kw{\bf li\_c} & \kw{\bf li\_c} &
+      Low-level structured language. \\
+    \kw{Cminorgen} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Stack allocation of local variables whose address is taken;
+      simplification of switch statements. \\
+    \textbf{Cminor} & \kw{\bf li\_c} & \kw{\bf li\_c} &
+      Low-level structured language,
+      with explicit stack allocation of certain local variables. \\
+    \kw{Selection} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Recognition of operators and addressing modes. \\
+    \textbf{Cminorsel} & \kw{\bf li\_c} & \kw{\bf li\_c} &
+      Like Cminor, with machine-specific operators and addressing modes. \\
+    \kw{RTLgen} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Construction of the CFG, 3-address code generation. \\
+    \textbf{RTL} & \kw{\bf li\_c} & \kw{\bf li\_c} &
+      Register transfer language
+      (3-address code, control-flow graph, infinitely many pseudo-registers). \\
+    \kw{Tailcall} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Recognition of tail calls. \\
+    \kw{Inlining} & \kw{cc\_inj} & \kw{cc\_inj\_triangle} &
+      Function inlining. \\
+    \kw{Renumber} & \kw{cc\_id} & \kw{cc\_id} &
+      Postorder renumbering of the CFG. \\
+    \kw{Constprop} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Constant propagation. \\
+    \kw{CSE} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Common subexpression elimination \\
+    \kw{Deadcode} & \kw{cc\_ext} & \kw{cc\_ext\_triangle} &
+      Redundancy elimination \\
+    \kw{Unusedglob} & \kw{cc\_inj} & \kw{cc\_inj\_triangle} &
+      Removal of unused static globals \\
+    \kw{Allocation} & \kw{cc\_ext} & \kw{cc\_alloc} &
+      Register allocation \\
+    \textbf{LTL} & \kw{\bf li\_c} & \kw{\bf li\_locset} &
+      Location transfer language
+      (3-address code, control-flow graph of basic blocks,
+      finitely many physical registers, infinitely many stack slots). \\
+    \kw{Tunneling} & \kw{cc\_ext} & \kw{cc\_ext\_ltl} &
+      Branch tunneling \\
+    \kw{Linearize} & \kw{cc\_id} & \kw{cc\_id} &
+      Linearization of the CFG \\
+    \textbf{Linear} & \kw{\bf li\_c} & \kw{\bf li\_locset} &
+      Like LTL, but the CFG is replaced by
+      a linear list of instructions with explicit branches and labels \\
+    \kw{Cleanuplabels} & \kw{cc\_id} & \kw{cc\_id} &
+      Removal of unreferenced labels \\
+    \kw{Debugvar} & \kw{cc\_id} & \kw{cc\_id} &
+      Synthesis of debugging information \\
+    \kw{Stacking} & \kw{cc\_inj} & \kw{cc\_stacking} &
+      Laying out the activation records \\
+    \textbf{Mach} & \kw{\bf li\_c} & \kw{\bf li\_mach} &
+      Like Linear, with a more concrete view of the activation record \\
+    \kw{Asmgen} & \kw{cc\_compcert\_ext} & \kw{cc\_asmgen} &
+      Emission of assembly code \\
+    \textbf{Asm} & \kw{\bf li\_asm} & \kw{\bf li\_asm} &
+      Assembly language for x86 machines \\
+    \hline
+  \end{tabular}
+  \caption{%
+    Intermediate languages and compiler passes
+    (descriptions from Compcert's documentation).}
+\end{table*}
 
 The simulation relations used by Compcert
 such as memory extensions and memory injections
