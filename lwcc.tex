@@ -829,9 +829,8 @@ through an interaction recorded as the event trace $t$.
     \hline
   \end{tabular}
   \caption{Language interfaces for the various Compcert intermediate languages.}
+  \label{tbl:li}
 \end{table*}
-
-[Not sure about the terminology]
 
 This model is insufficient to express
 the semantics of C and assembly modules.
@@ -845,37 +844,32 @@ These language-dependent aspects are captured
 by the following notion.
 
 \begin{definition}[Language interface]
-A \emph{language interface} $\tau$ consists in a pair $(V, R)$
+A \emph{language interface} $\tau$ consists in a pair $(Q, R)$
 which specifies
-a set $V$ of \emph{invocation configurations} and
-a set $R$ of \emph{return configurations}.
-Invocation configurations
+a set $Q$ of \emph{queries} and
+a set $R$ of \emph{replies}.
+Queries
 correspond to the states in which
 a module can be entered, whereas
-return confgurations
+replies
 correspond to the states in which
 the module can return control
-to its caller.
+to its environment.
 \end{definition}
 
-For C,
-invocation configurations
-will consist of the name of the function being invoked,
+Table~\ref{tbl:li}
+shows the language interfaces used by Composable Compcert.
+At the level of C,
+queries consist of
+the name and signature of the function being invoked,
 the values of its arguments,
 and the state of the memory at the point of entry.
-Return configurations
+Replies
 will consist of the function's return value
 and the state of the memory at the point of exit.
-For assembly,
-the values of registers and the state of the memory
-may specify both invocation and return configurations.
-
-In practice,
-the language interfaces used in Compcert
-happen to be technically identical,
-however it is important to understand them
-as distinct interfaces
-connected by the C calling convention.
+At the assembly level,
+both queries and replies are defined as
+the values of registers and the state of the memory.
 
 %}}}
 
@@ -999,15 +993,12 @@ connected by the C calling convention.
     (descriptions from Compcert's documentation).}
 \end{table*}
 
-The simulation relations used by Compcert
-such as memory extensions and memory injections
-unify abstraction and refinement.
-In accordance with this approach,
-we use a single notion
-to connect two distinct language interfaces,
-but also to specify the notion of refinement to use
-for pairs of initial and final configurations
-within a single language interface.
+In order to compare behaviors formulated in terms of
+different language interfaces,
+we need to specify a correspondance
+between the queries and between the replies
+of the source and target languages.
+We formalize this correspondance in the following way.
 
 \begin{definition}[Calling convention]
 Given a source language interface $\tau_1 = (V_1, R_1)$ and
@@ -1023,14 +1014,12 @@ the component
 $\mathbb{C}_R(v_1, v_2) \subseteq R_1 \times R_2$
 relates return configurations of the source language to
 corresponding return configurations of the target language.
-
-A \emph{refinement convention} $\sqsupseteq$
-is a calling convention for which
-the source and target language interfaces are identical ($\tau_1 = \tau_2$)
-and $\sqsupseteq_V$, $\sqsupseteq_R$ are transitive.
 \end{definition}
 
-Compcert does not use explicit notions of
+Table~\ref{tbl:cc} describes the various calling conventions
+use in Composable Compert.
+
+[Reframe] Compcert does not use explicit notions of
 language intefaces and calling convenentions.
 However,
 its model of external calls
@@ -1044,17 +1033,17 @@ compatible notions of refinement and calling conventions
 across Compcert languages.
 
 For simplicity,
-Compcert uses a common language interface $\tau$
+Compcert uses a common language interface
 for all of its languages.
-Invocation configurations are of the form:
+Queries are of the form:
 \[
-  V = \{ f(\vec{v})@m : (f, v, m) \in
+  Q = \{ f(\vec{v})@m : (f, v, m) \in
     \kw{ident} \times \kw{val}^* \times \kw{mem} \} \,,
 \]
 where $f$ identifies the function being called,
 $\vec{v}$ provides values for the function's arguments, and
 $m$ specifies the global memory's initial state for the call.
-Return configurations are of the form:
+Replies are of the form:
 \[
   R = \{ v'@m' : (v', m') \in
     \kw{val} \times \kw{mem} \} \,,
@@ -1064,23 +1053,23 @@ $m'$ specifies the global memory's new state.
 
 The refinement convention associated with this language interface
 specifies that
-related initial configurations should carry the same function identifier,
+related queries should carry the same function identifier,
 and that the values of arguments and the states of the memories
 can be related in one of three ways:
 \begin{itemize}
 \item they can be equal;
-\item the source initial configuration may be
-  \emph{less defined} than the target configuration,
+\item the source query may be
+  \emph{less defined} than the target query,
   meaning that the special value $\kw{Vundef}$
-  in the components of the source configuration
-  can be refined into concrete values in the target configuration,
+  in the components of the source query
+  can be refined into concrete values in the target query,
   and that the target memory,
   in addition to having more defined contents,
   may carry more liberal permissions
   (a relation known as \emph{memory extension});
 \item they can related by a \emph{memory injection} $\iota$,
   allowing memory addresses to be remapped
-  between the source and target configurations.
+  between the source and target queries.
 \end{itemize}
 Memory injections only constrain the contents of memories
 at addresses which are related by $\iota$.
@@ -1094,16 +1083,16 @@ the Compcert refinement convention,
 matching final states
 must be related in a compatible way:
 \begin{itemize}
-\item if the initial configurations were equal,
-  the final configurations must be equal as well;
-\item if the source initial configuration was
-  \emph{less defined} than the target initial configuration,
+\item if the queries were equal,
+  the replies must be equal as well;
+\item if the source query was
+  \emph{less defined} than the target query,
   then this must be true of the corresponding
-  final configurations as well;
-\item if the source and target initial configurations
+  replies as well;
+\item if the source and target queries
   were related through a memory injection $\iota$,
-  then the corresponding final configurations
-  must be relation through a potentially \emph{larger}
+  then the corresponding replies
+  must be related through a potentially \emph{larger}
   injection $\iota' \ge \iota$.
 \end{itemize}
 In addition,
@@ -1126,8 +1115,7 @@ are marshalled onto the stack.
 There,
 in addition to the criteria defined above,
 [arguments must be encoded into the target memory,
-but \emph{only} the target memory,
-and only contain pointers to addresses visible in the source].
+but \emph{only} the target memory.]
 
 %}}}
 
@@ -1137,17 +1125,17 @@ Extending Compcert LTS to account for
 this extra structure yields the following definition.
 
 \begin{definition}[Labeled transition system]
-Given a language interface $\tau = (V, R)$,
+Given a language interface $\tau = (Q, R)$,
 a \emph{labeled transition system} for $\tau$
 is a tuple $\sigma = (S, \rightarrow, I, F)$ where
 $S$ is a set of states,
 ${\rightarrow} \subseteq S \times \mathbb{E}_\tau^* \times S$
 is a ternary \emph{transition relation},
-$I \subseteq V \times S$
-assigns a set of \emph{initial states} to each invocation configuration, and
+$I \subseteq Q \times S$
+assigns a set of \emph{initial states} to each query, and
 $F \subseteq S \times R$
 is a relation designating \emph{final states}
-together with the return configurations they produce.
+together with the reply they produce.
 \end{definition}
 
 [Introduce determinacy?]
@@ -1161,7 +1149,7 @@ augmented with a set of external call events.
 
 \subsection{External call events} %{{{
 
-The use of language-specific invocation and return configurations
+The use of language-specific queries and replies
 in the definition of transition systems
 takes care of the variety of ways
 in which the environment may invoke an open module,
@@ -1169,11 +1157,11 @@ but does not account for the ways in which
 the module may itself invoke the environment.
 We remedy this by introducing \emph{external call events}.
 
-Following \cite{cpp2015},
-we use external call events of the form $\kw{extcall}[v, r]$,
-recording the fact that an extern call was performed
-with the invocation configuration $v$,
-and produced the return configuration $r$.
+Following \cite{cpp15},
+we use external call events of the form $\kw{extcall}[q, r]$,
+recording the fact that an external call was performed
+with the query $q$,
+and produced the reply $r$.
 
 Compcert does account for the fact that the program
 may call the outside world in the form of a global parameter
@@ -1196,7 +1184,8 @@ the assertion $\kw{extcall\_properties}(\kw{external\_call}(f))$ holds.
 We can instantiate $\kw{external\_call}$ for the C language as:
 \[
   \AxiomC{$e = \kw{extcall}[f(\vec{v})@m, v'@m']$}
-  \UnaryInfC{$\kw{external\_call}(f) :
+  \AxiomC{$\kw{valid}(e)$}
+  \BinaryInfC{$\kw{external\_call}(f) :
     (\vec{v}, m) \stackrel{e}{\rightarrow} (v', m')$}
   \DisplayProof
 \]
@@ -1224,11 +1213,15 @@ Furthermore,
 the calling convention may introduce
 constraints on the environment in the target specification:
 for instance,
-when compiling a C module performing external calls,
+when compiling a C module performing an external call,
 the target assembly module is not required to handle
-all possible final assembly configuration,
-but only those corresponding to the possible final C configurations
+all possible assembly-style replies from the environment,
+but only those corresponding to the possible C-style replies
 handled by the source module.
+To handle this,
+Composable Compcert uses a notion of alternating simulation,
+similar for instance to the notion of refinement
+described in \cite{gmos}.
 
 [what we're doing
 is allow our semantic objects
@@ -1236,24 +1229,22 @@ to place constraints on the environment.
 This departs from receptivity requirement in Compcert,
 and we should be more explicit about that]
 
-To handle this,
+To adapt alternating simulations to the context of Compcert,
 it is important to understand that Compcert events
 denote two actions:
-a query by the module,
-which may additionally some output information,
+a request by the module,
+which may additionally include some output information,
 followed by a response from the environment,
-which may simply acknowledge the query
+which may simply acknowledge the request
 but may also carry any input associated with the event.
 To show that
-a given target source behavior is refined by
+a given source behavior is refined by
 a given target behavior,
-we need to show that any query performed by the target behavior
+we need to show that any request performed by the target behavior
 is already present in the source behavior,
 and that any response permitted of the source environment
 is properly reflected by
 a response permitted of the target environment.
-This insight is used to define a notion of alternating simulation,
-similar for instance to the notion of refinement used in \cite{ia}.
 
 This leads us to introduce two distinct relations on events,
 separating the contribution of the module and that of the environment.
@@ -1266,9 +1257,9 @@ this corresponds to the usual $\kw{match\_traces}$ relation.
 [exapand?]
 For external call events, we define:
 \[
-  \kw{extcall}[v_1, r_1] \succeq_\mathbb{C} \kw{extcall}[v_2, r_2]
+  \kw{extcall}[q_1, r_1] \succeq_\mathbb{C} \kw{extcall}[q_2, r_2]
   \stackrel{\text{def.}}{\Leftrightarrow}
-  (v_1, v_2) \in \mathbb{C}_V
+  (q_1, q_2) \in \mathbb{C}_V
 \]
 The second relation $\sqsupseteq_\mathbb{C}$
 relates events whose query and response components
@@ -1277,10 +1268,10 @@ For regular Compcert events,
 $\sqsupseteq_\mathbb{C}$ coincides with equality.
 For external call events, we define:
 \begin{align*}
-  \kw{extcall}[v_1, r_1] \sqsupseteq_\mathbb{C} \kw{extcall}[v_2, r_2]
+  \kw{extcall}[q_1, r_1] \sqsupseteq_\mathbb{C} \kw{extcall}[q_2, r_2]
   &\stackrel{\text{def.}}{\Leftrightarrow}
-  (v_1, v_2) \in \mathbb{C}_V \\ &\wedge \ 
-  (r_1, r_2) \in \mathbb{C}_R(v_1, v_2)
+  (q_1, q_2) \in \mathbb{C}_Q \\ &\wedge \ 
+  (r_1, r_2) \in \mathbb{C}_R(q_1, q_2)
 \end{align*}
 These relations are extended to traces in the natural way
 [maybe not: if environment breaks the deal at any point
@@ -1291,8 +1282,8 @@ our notion of refinement as follows.
 
 \begin{definition}[Alternating simulation]
 Given a calling convention $\mathbb{C}$ between
-a source language interface $\tau_1 = (V_1, R_1)$
-a target language interface $\tau_2 = (V_2, R_2)$,
+a source language interface $\tau_1 = (Q_1, R_1)$
+a target language interface $\tau_2 = (Q_2, R_2)$,
 an \emph{alternating simulation} between
 an LTS $\sigma_1 = (S_1, \rightarrow_1, I_1, F_1)$ and
 an LTS $\sigma_2 = (S_2, \rightarrow_2, I_2, F_2)$
@@ -1322,9 +1313,9 @@ with the following properties:
   [That is, all environment behaviors specified in the source
   must be accounted for in the target]
 \item[Compatibility of initial states]
-  Given two related invocation configurations $(v_1, v_2) \in \mathbb{C}_V$
-  and a corresponding source state $s_1$ such that $(v_1, s_1) \in I_1$,
-  there exists a target state $s_2$ such that $(v_2, s_2) \in I_2$ and $(s_1, s_2) \in R$.
+  Given two related invocation configurations $(q_1, q_2) \in \mathbb{C}_Q$
+  and a corresponding source state $s_1$ such that $(q_1, s_1) \in I_1$,
+  there exists a target state $s_2$ such that $(q_2, s_2) \in I_2$ and $(s_1, s_2) \in R$.
 \item[Compatibility of final states]
   Given two related states $(s_1, s_2) \in R$ and
   a target return configuration $r_2$ such that $(s_2, r_2) \in F_2$,
@@ -1370,7 +1361,7 @@ Changes to Compcert:
   in the way we have indicated
 \item Update \kw{extcall\_properties} to take into account
   refinement of events.
-\item Connect invocation/return configurations
+\item Connect queries/replies
   with the simulation relations in each pass
   (for initial/final states, and for external call boundaries
   following the new \kw{extcall\_properties})
