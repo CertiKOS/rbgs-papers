@@ -1,0 +1,569 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tikz-cd}
+\usepackage{stmaryrd}
+\usepackage{bussproofs}
+
+\bibliographystyle{plain}
+
+\newcommand{\kw}[1]{{\mathsf{#1}}}
+
+\title{Game Semantics for Compcert}
+
+\begin{document}
+
+\maketitle
+
+\section{Overview}
+
+The distinguishing feature of game semantics
+compared to usual trace models of process calculi (say)
+is the assignment of a polarity to events \cite{cspgs},
+classifying them into moves of the system
+and moves of the environement.
+Traditionally,
+this distinction is reflected in the definition of a strategy,
+which can determine the moves of the system
+but has no control over the moves of the environment.
+Strategies are main object of interest.
+A notion of refinement can be derived
+to carry out domain-theoretic constructions,
+but refinement in traditional game semantics
+is usually defined in very extensional way.
+
+By contrast,
+I am pursuing a \emph{refinement-based approach} to game semantics,
+where refinement plays a fundamental role,
+and the main game-theoretic ingredient is the use of
+\emph{alternating refinement} \cite{altref}.
+Then
+the distinction between game trees, specifications, and strategies
+becomes less crucial,
+in a way that is reminiscent of pure subtype systems \cite{pts}:
+a specification is just a refinement of a game,
+which restricts the possible moves of the players further.
+A stragegy can be defined as
+a specification where the behavior of the system is deterministic,
+however strategies no longer play a central role in theory.
+
+\subsection{Trees}
+
+A game tree over a set of moves $M$
+is a possibly infinite, rooted tree
+with edges labelled by the moves of $M$.
+Nodes denote positions in the game, and
+paths from the root correspond to
+prefixes of execution traces.
+In this way, trees over a given set of moves
+correspond to prefix-closed sets of sequences of moves.
+
+Trees can be defined
+independently of the moves' polarity,
+but to assign a game-theoretic meaning to them
+and define refinement
+we will need to distinguish between
+the moves of different players.
+
+\subsection{Players}
+
+We need to remain flexible in how
+moves are assigned to the system or the environment,
+because it may be useful to use different assignments
+depending on the context.
+Two examples illustrate this.
+
+First, there are situations where
+we want to split a system into a number of components,
+and focus on the behavior of an \emph{active set} $A$ of components.
+However, instead of limiting out attention to
+the boundary between $A$ and $\bar{A}$
+and hiding the internal behavior of the two subsystems,
+we want to consider ``global logs'' that include internal events.
+In that case,
+the types of traces and trees we manipulate will not depend on $A$,
+however the refinement order $\sqsubseteq_A$
+will interpret events as system moves or environment moves
+depending on whether the originating component belongs to $A$ or $\bar{A}$.
+
+Another situation where
+we will want to interpret an event as a system or environment move
+depending on the context
+is our treatment of divergence.
+Encoding divergence as a system move
+leads to a notion of refinement that expresses \emph{total correctness},
+whereas
+encoding divergence as an environment move
+leads to a notion of refinement that expresses \emph{partial correctness}.
+For program verification,
+we want to show total correctness:
+a diverging program should not be regarded as
+a correct implementation of arbitrary specifications.
+However,
+domain-theoretic fixed points used to interpret recursion
+rely on an ordering which expresses partial correctness,
+with divergence as the bottom ``default''
+to which more and more behaviors are added
+as we construct the fixpoint.
+
+\subsection{Refinement}
+
+With this in mind,
+for each possible polarity assignment
+$\kw{op} : M \rightarrow \{\kw{O}, \kw{P}\}$,
+we will define a bounded refinement lattice $\sqsubseteq_\kw{op}$ on trees.
+For two tree $T_1, T_2$ on $M$,
+we will have $T_1 \sqsubseteq_\kw{op} T_2$ if
+for every move $m$ in $T_1$ such that $\kw{op}(m) = \kw{P}$,
+there is a correponding move in $T_2$, and conversely
+for every move $m$ in $T_2$ such that $\kw{op}(m) = \kw{O}$,
+there is a correponding move in $T_1$.
+
+Note that reversing the polarity of moves
+sends $\sqsubseteq$ to $\sqsupseteq$,
+$\sqcup$ to $\sqcap$, $\bot$ to $\top$, etc.
+For $\kw{op} = - \mapsto P$ (all events are considered $\kw{P}$ moves),
+we get the inclusion order $\subseteq$,
+with $\bot$ the empty tree and $\top$ the full tree,
+$\sqcup$ the union and $\sqcap$ the intersection.
+
+\subsection{Compcert semantics}
+
+The labelled transition systems
+used to define the small-step semantics of Compcert languages
+are extended in the following way.
+First,
+we define a notion of \emph{language interface}
+which specify a type of \emph{queries} $Q$ and a type of \emph{replies} $R$
+used by a given language.
+Then, we add a query to the parameters of the ``initial state'' predicate,
+and a reply to the parameters of the ``final state'' predicate.
+In addition,
+final states also give a \emph{continuation},
+which given a further query specifies how to continue the execution.
+Continuations have the same type as the ``initial state'' predicate.
+
+The language interface $\kw{C}$
+has queries $Q_\kw{C} = \{ f(\vec{v})@m \}$
+where $f : \kw{ident}$ is a function identifier,
+$\vec{v} : \kw{list}\ \kw{val}$ is a list of actual parameters, and
+$m : \kw{mem}$ is the memory state at function entry;
+the replies are $R_\kw{C} = \{ v'@m' \}$,
+where $v' : \kw{val}$ is the value returned by $f$ and
+$m' : \kw{mem}$ is the memory state at function exit.
+
+To account for external calls,
+given two languages interfaces
+$\mathcal{L}_E = (Q_E, R_E)$ and
+$\mathcal{L}_I = (Q_I, R_I)$,
+we can define the composite interface
+\[ \mathcal{L}_E \multimap \mathcal{L}_I = (R_E + Q_I, \: Q_E + R_I)\,. \]
+The language interface $\mathcal{L}_I$
+gives the types of incoming calls and corresponding returns.
+But instead of immediately replying to an incoming call of $Q_I$
+with a return in $R_I$,
+the module may perform an external call
+according to the interface $\mathcal{L}_E$:
+it will ``reply'' with a query of $Q_E$,
+and expect a subsequent ``query'' from the replies of $R_E$
+to resume its execution.
+
+\subsection{Compcert games}
+
+The game associated with a language interface $\mathcal{L} = (Q, R)$
+has the moves $q \in Q$, $r \in R$, $e$, $\Uparrow$ and $\lightning$.
+In addition to queries $q$ and replies $r$,
+the moves $e$ denote Compcert events,
+$\Uparrow$ denotes divergence,
+and $\lightning$ is used to distinguish unsafe behaviors.
+The $q$ moves are inputs,
+while the $r$, $e$ and $\lightning$ move are outputs.
+The status of the $\Uparrow$ moves depends on the context:
+it can be considered
+an output if we wish to express total correctness ($\kw{tc}$), or
+an input if we wish to express partial correctness ($\kw{pc}$).
+
+The framework of
+Compcert small-step semantics and backward simulations
+can be embedded into
+the setting of game trees and (total-correctness) alternating refinements:
+\begin{equation}
+  \AxiomC{$L_1 \ge L_2$}
+  \UnaryInfC{$\llbracket L_2 \rrbracket \sqsubseteq_\kw{tc} \llbracket L_1 \rrbracket$}
+  \DisplayProof
+  \label{eqn:hcompm}
+\end{equation}
+
+\subsection{Horizontal composition}
+
+We want to define a composition operator $\bullet$
+with two important properties.
+First, like all of our operators,
+we expect it to be monotonic, so that:
+\begin{equation}
+  \AxiomC{$\sigma_1 \sqsubseteq_\kw{tc} \sigma_1'$}
+  \AxiomC{$\sigma_2 \sqsubseteq_\kw{tc} \sigma_2'$}
+  \BinaryInfC{$\sigma_1 \bullet \sigma_2 \sqsubseteq_\kw{tc}
+                \sigma_1' \bullet \sigma_2'$}
+  \DisplayProof
+  \label{eqn:embed}
+\end{equation}
+Second,
+for a given Compcert language $L$,
+we will want to prove a \emph{syntactic linking} theorem,
+namely:
+\begin{equation}
+  \llbracket L(M_1 + M_2) \rrbracket =
+  \llbracket L(M_1) \rrbracket \bullet
+  \llbracket L(M_2) \rrbracket
+  \label{eqn:slink}
+\end{equation}
+This is particularly useful for $L = \kw{Asm}$,
+but if we prove it for $L = \kw{Clight}$ as well
+we could derive a separate compilation theorem
+in the style of SepCompCert.
+We will also need to show that the projection operators
+associated with our calling conventions
+also commute with horizontal composition.
+
+\section{Formalizing game trees}
+
+The trees for a game $G$
+are potentially infinite trees with
+edges labelled by the move of $G$.
+They contain at least a root,
+then at each node,
+for each possible move $m \in M_G$
+we can attach zero or one subtree.
+
+\subsection{Characterization}
+
+This can be characterized as the coinductive type for the functor:
+\[ F X = M_G \rightarrow \mathcal{P}^1(X)\, \]
+where $\mathcal{P}^1(X)$ denotes the type of sets of at most one $X$.
+An $F$-coalgebra is a type $A$
+together with a destructor of type $\delta : A \rightarrow F A$.
+In this case, a coalgebra is a deterministic transition system
+labeled by the moves of $G$,
+with states in $A$ and a transition relation:
+\[ \delta : A \rightarrow M_G \rightarrow \mathcal{P}^1(A) \, , \]
+
+The type of trees $T$ is characterized as a final $F$-colagebra.
+There is a destructor:
+\[ d : T \rightarrow M_G \rightarrow \mathcal{P}^1(T) \]
+which tells us for each possible move $m \in M_G$
+to which subtree we ``transition'' (if any).
+This coalgebra is final in that for any other coalgebra $\delta$,
+there is a unique mapping $c_{\delta} : A \rightarrow T$
+such that the following diagram commutes:
+\[
+  \begin{tikzcd}
+    A \arrow[r, "\delta"]
+      \arrow[d, "c_{\delta}"] &
+    F A \arrow[d, "F \, c_\delta"] \\
+    T \arrow[r, "d"] &
+    F T
+  \end{tikzcd}
+\]
+
+This anamorphism $c_\delta$ is
+the fundamental constructor for trees:
+we give a transition system $\delta$ and an initial state $a \in A$
+and obtain a tree.
+The diagram above explains how the tree is generated:
+iff there is a transition $\delta : a \stackrel{m}{\longrightarrow} a'$,
+then there is a subtree $c_{\delta}(a')$ for move $m$.
+Expanding the commutation property,
+\[
+  \forall a \, m \,.\,
+    d(c_{\delta}(a), m) = \{ c_{\delta}(a') : a' \in \delta(a, m) \}
+\]
+The unicity of $c_\delta$ is
+the fundamental way to prove two trees are equal
+and in particular gives us extensionality from bisimulations.
+
+In addition,
+we can characterize the alternating refinement of trees
+in the following way.
+Given a relation $R \subseteq A \times B$,
+we can build a relation $F R$ that will relate
+two transition systems $\alpha, \beta$ iff
+$R$ is an alternating simulation relation between them.
+Then we can characterize the alternating refinement of trees $\subseteq$
+with the following properties:
+\begin{gather*}
+  c \, [F R \rightarrow R \rightarrow {\sqsubseteq}] \, c \\
+  d \, [{\sqsubseteq} \rightarrow F {\sqsubseteq}] \, d
+\end{gather*}
+
+\subsection{Interface}
+
+For convenience,
+in the interface I separate the determinism condition
+for labelled transition systems, and define:
+\begin{gather*}
+  \kw{lts}_G(A) :=
+    A \rightarrow M_G \rightarrow A \rightarrow \kw{Prop} \\
+  \kw{lts\_determ}(\alpha) :=
+    \forall a \, m \, a_1' \, a_2' \,.\,
+      \{ a_1', a_2' \} \subseteq \alpha(a, m) \Rightarrow
+      a_1' = a_2'
+\end{gather*}
+
+(...)
+
+\subsection{Implementation}
+
+To avoid having to deal with Coq coinductive types,
+I follow the usual technique of representing trees as
+prefix-closed sets of traces:
+\[
+  T = \{ P : M_G^* \rightarrow \kw{Prop} \ \vert\ 
+    P(\varepsilon) \wedge
+    \forall u v \,.\, P(u v) \Rightarrow P(u) \}
+\]
+However this is insubstantial.
+The important thing is that I can define the primitives $c, d$
+introduced in the previous section and prove that they
+satisfy the required properties.
+
+(...)
+
+
+\section{Embedding Compcert semantics}
+
+Take a Compcert semantics $L = (S, I, F, \rightarrow)$,
+with $S$ the set of states,
+$I \subseteq Q \times S$
+the initial-state predicate,
+$F \subseteq S \times R \times \mathcal{P}(Q \times S)$
+the final-state predicate, and
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$
+the transition relation (labelled by lists of Compcert events).
+To generate the corresponding game tree $\llbracket L \rrbracket$,
+we are going to use a LTS
+with the following states:
+\begin{description}
+\item[$\kw{waiting}(k)$]
+  We are expecting a query for the environment,
+  after which we will continue execution according to the continuation
+  $k \subseteq Q \times S$.
+\item[$\kw{running}(t, s)$]
+  Running with pending events $t : \mathbb{E}^*$ and current state $s : S$.
+  We will first output the pending events,
+  then big-step the transition relation from $s$
+  to see what comes next.
+\item[$\kw{silent}$]
+  We hit a silently diverging state.
+  At the time we output a $\Uparrow$ move,
+  and now nothing will happen ever again.
+\item[$\kw{wrong}$]
+  We hit a stuck state,
+  we will generate all possible outputs forever,
+  so that $c_\delta(\kw{wrong}) = \top_\kw{tc}$.
+  This is the only way to generate a $\lightning$ output.
+\end{description}
+We start from the initial state $\kw{waiting}(I)$,
+and the generating LTS is defined inductively by:
+\[
+  \AxiomC{$(q, s) \in k$}
+  \UnaryInfC{$\kw{waiting}(k) \stackrel{q}{\Longrightarrow} \kw{running(\varepsilon, s)}$}
+  \DisplayProof
+  \quad
+  \AxiomC{$(s, r, k) \in F$}
+  \UnaryInfC{$\kw{running}(s) \stackrel{r}{\Longrightarrow} \kw{waiting}(k)$}
+  \DisplayProof
+\]
+\vspace{.5em}
+\[
+  \AxiomC{\rule[-.3\baselineskip]{0pt}{\baselineskip}}
+  \UnaryInfC{$\kw{running}(e::t, s) \stackrel{e}{\Longrightarrow} \kw{running}(t, s)$}
+  \DisplayProof
+  \quad
+  \AxiomC{$s \stackrel{t}{\longrightarrow} s'$}
+  \AxiomC{$\kw{running}(t, s') \stackrel{m}{\Longrightarrow} S$}
+  \BinaryInfC{$\kw{running}(\varepsilon, s) \stackrel{m}{\Longrightarrow} S$}
+  \DisplayProof
+\]
+\vspace{.5em}
+\[
+  \AxiomC{$\kw{Forever\_silent}(s)$}
+  \UnaryInfC{$\kw{running}(\varepsilon, s) \stackrel{\Uparrow}{\Longrightarrow} \kw{silent}$}
+  \DisplayProof
+  \quad
+  \AxiomC{$m \mbox{ is an output move}$}
+  \UnaryInfC{$\kw{wrong} \stackrel{m}{\Longrightarrow} \kw{wrong}$}
+  \DisplayProof
+\]
+\vspace{.5em}
+\[
+  \AxiomC{$\kw{Nostep}(s)$}
+  \AxiomC{$\forall r k . (s, r, k) \notin F$}
+  \AxiomC{$\kw{wrong} \stackrel{m}{\Longrightarrow} S$}
+  \TrinaryInfC{$\kw{running}(\varepsilon, s) \stackrel{m}{\Longrightarrow} S$}
+  \DisplayProof
+\]
+\vspace{.5em}
+
+Using this definition,
+I have proved (\ref{eqn:embed}): if we have a backward simulation between
+Compcert small-step semantics,
+then we have an alternating refinement between
+the corresponding game trees.
+
+
+\section{Horizontal composition}
+
+\subsection{Basic approach}
+
+Following \cite{cpp15},
+we define horizontal composition in two steps.
+The \emph{flat composition} of two behaviors $\sigma_1 \uplus \sigma_2$
+takes both the behaviors of $\sigma_1$ and $\sigma_2$ side-by-side,
+but calls of $\sigma_1$ into $\sigma_2$ and conversely remain
+external calls of the composite behavior.
+We then introduce a \emph{resolution} operator $\mathcal{R}(\sigma)$,
+which uses copies of $\sigma$ to handle any ``internal external'' calls
+that $\sigma$ makes into itself.
+Horizontal composition is
+$\sigma_1 \bullet \sigma_2 = \mathcal{R}(\sigma_1 \uplus \sigma_2)$.
+
+In our setting
+we can simply define flat composition as
+$\sigma_1 \sqcap_\kw{tc} \sigma_2$,
+which gives monotonicity for free
+(this is one of several possible definitions which coincide when
+$\sigma_1 \cap \sigma_2 = \varnothing$).
+The resolution operator can be defined as the limit of an increasing sequence
+$\bigsqcup^\kw{pc}_{n \in \mathbb{N}} \mathcal{R}_n(\sigma)$
+of relatively simple depth-limited operators $\mathcal{R}_n$
+described below.
+
+In order to prove syntactic linking theorems (\ref{eqn:slink})
+we will want to use a version of horizontal composition
+defined at the level of small-step semantics.
+To this end, we will define a small-step flat composition $\uplus$
+and resolution operator $\kw{R}$,
+and show that they commute with our embedding:
+\[
+  \llbracket L_1 \uplus L_2 \rrbracket =
+    \llbracket L_1 \rrbracket \sqcap_\kw{tc}
+    \llbracket L_2 \rrbracket
+  \qquad
+  \llbracket \kw{R}(L) \rrbracket =
+    \mathcal{R}(\llbracket L \rrbracket)
+\]
+Then we can prove syntactic linking using a pair of forward simulations:
+\[
+  L(M_1 + M_2) \ \le\  \kw{R}(L(M_1) \uplus L(M_2)) \ \le\  L(M_1 + M_2)
+\]
+The we can prove (\ref{eqn:slink}) by
+turning the forward into backward simulations,
+embedding the backward simulations into refinements using (\ref{eqn:embed}),
+applying our commutation properties, and
+finally using antisymmetry of refinement.
+
+\subsection{Small-step flat composition}
+
+Given a family $(L_i)_{i:I}$ of Compcert small-step semantics,
+with $L_i = (S_i, I_i, F_i, {\rightarrow_i})$,
+we can define their flat composition $(S, I, F, {\rightarrow})$
+by using the disjoint union of their sets of states:
+\begin{align*}
+  S &:= \sum_{i:I} S_i \\
+  I &:= \{ (q, (i, s)) \: \vert \: (q, s) \in I_i \} \\
+  F &:= \{ ((i, s), r, \hat{k}) \: \vert \: (s, r, k) \in F_i \} \\
+  {\rightarrow} &:= \{ ((i, s), t, (i, s')) \: \vert \: s
+\stackrel{t}{\rightarrow}_i s' \}
+\end{align*}
+where $\hat{k} = \{ (q, (i, s)) \: \vert (q, s) \in k \}$
+lifts the continuations of $L_i$ to the level of $L$,
+similarly to the definition of $I$.
+
+Showing the correspondance with $\sqcap_\kw{tc}$
+should be straightforward.
+
+\subsection{Small-step resolution}
+
+%The small-step resolution operator $\kw{R}(L)$
+%uses a stack of states of $L$ as its own states.
+%Given $L = (S_L, I_L, F_L, {\rightarrow_L}$,
+%we can define $R(L) = (S, I, L, {\rightarrow})$ in the following way:
+%\begin{align*}
+%  S &:= S_L^* \\
+%  I &:= \{ (q, s::\varepsilon) \: \vert \: (q, s) \in I_L \} \\
+%  F &:= \{ (s, r, \hat{k}) :: \: \vert
+%It can be defined as 
+%
+
+\subsection{Gametree resolution operator}
+
+Take $\sigma$ a behavior on the Compcert game for
+$\mathcal{L} \multimap \mathcal{L}$.
+The moves for this game are $q, r, \bar{q}, \bar{r}, e, \Uparrow, \lightning$.
+The moves $\bar{q}, \bar{r}$ represent external calls and their returns,
+by contrast with the original $q$ and $r$ which represent
+incoming calls and the module returning to the environment.
+
+The trees for $\mathcal{R}_n(\sigma)$ are generated
+using the family of LTS $\Rightarrow_n$ defined inductively
+by the rules below.
+The states are lists of gametrees arranged in a control stack,
+with $\sigma :: \varepsilon$ used as the initial state.
+We write $\tau \stackrel{m}{\Longrightarrow} \tau'$
+to denote that $\tau$ has a child for move $m$,
+with $\tau'$ the corresponding subtree.
+\[
+  \AxiomC{$m \mbox{ observable at } S$}
+  \AxiomC{$\tau \stackrel{m}{\Longrightarrow} \tau'$}
+  \BinaryInfC{$\tau :: S \stackrel{m}{\Longrightarrow}_n \tau' :: S$}
+  \DisplayProof
+\]
+\[
+  \AxiomC{$\tau \stackrel{\bar{q}}{\Longrightarrow} \kappa$}
+  \AxiomC{$\sigma \stackrel{q}{\Longrightarrow} \nu$}
+  \AxiomC{$\nu :: \kappa :: S \stackrel{m}{\Longrightarrow}_n S'$}
+  \TrinaryInfC{$\tau :: S \stackrel{m}{\Longrightarrow}_{n+1} S'$}
+  \DisplayProof
+  \quad
+  \AxiomC{$\tau \stackrel{\bar{q}}{\Longrightarrow} \kappa$}
+  \UnaryInfC{$\tau :: S \stackrel{\Uparrow}{\Longrightarrow}_0 \varepsilon$}
+  \DisplayProof
+\]
+\vspace{.5em}
+\[
+  \AxiomC{$\nu \stackrel{r}{\Longrightarrow} {-}$}
+  \AxiomC{$\kappa \stackrel{\bar{r}}{\Longrightarrow} \tau$}
+  \AxiomC{$\tau :: S \stackrel{m}{\Longrightarrow}_n S'$}
+  \TrinaryInfC{$\nu :: \kappa \stackrel{m}{\Longrightarrow}_n S'$}
+  \DisplayProof
+\]
+\vspace{.3em}
+
+During normal execution we will follow the topmost behavior in the stack;
+the observable moves are any moves the do not trigger a recursive call
+or return from one.
+Whenever we encounter a recursive call,
+we will use a copy of $\sigma$
+to initialize a new behavior $\nu$ and push it on the stack.
+The parameter $n$ will place a limit on
+the of consecutive recursive calls that can happen
+before an observable event is recorded.
+When that limit is reached,
+we will trigger a divergence event instead.
+When the topmost behavior returns,
+we pop it and use the next one as a continuation.
+
+Given this transition system we can define
+$\mathcal{R}_n(\sigma) := c({\Rightarrow_n}, \sigma :: \varepsilon)$.
+%Since $\Uparrow$ counts as an input event for $\kw{pc}$,
+%it is easy to show that
+%$\mathcal{R}_n(\sigma) \sqsubseteq_\kw{pc} \mathcal{R}_{n+1}(\sigma)$,
+%which provides additional justification for taking
+%$\mathcal{R}(\sigma) := \sqcup_n^\kw{pc} \mathcal{R}_n(\sigma)$.
+
+
+
+\bibliography{lwcc}
+
+\end{document}
