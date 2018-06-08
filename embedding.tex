@@ -1,5 +1,5 @@
 \documentclass[11pt]{article}
-\usepackage[margin=1.25in]{geometry}
+\usepackage{geometry}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{tikz-cd}
@@ -639,8 +639,8 @@ back into the module,
 by contrast with the original $q$ and $r$ which represent
 incoming calls and the module returning to the environment.
 
-The trees for $\mathcal{R}_n(\sigma)$ are generated
-using the family of LTS $\Rightarrow_n$ defined inductively
+The tree for $\mathcal{R}(\sigma)$ is generated
+using the LTS $\Rightarrow$ defined inductively
 by the rules shown in Fig.~\ref{fig:res}.
 The states are lists of gametrees arranged in a control stack.
 The initial state is $\sigma :: \varepsilon$.
@@ -655,30 +655,33 @@ as a shorthand I write $d(\tau, m) = \tau'$.
 \[
   \AxiomC{$m \mbox{ observable at } S$}
   \AxiomC{$d(\tau, m) = \tau'$}
-  \BinaryInfC{$\tau :: S \stackrel{m}{\Longrightarrow}_n \tau' :: S$}
+  \BinaryInfC{$\tau :: S \stackrel{m}{\Longrightarrow} \tau' :: S$}
   \DisplayProof
 \]
+\vspace{.5em}
 \[
   \AxiomC{$d(\tau, \bar{q}) = \kappa$}
   \AxiomC{$d(\sigma, q) = \nu$}
-  \AxiomC{$\nu :: \kappa :: S \stackrel{m}{\Longrightarrow}_n S'$}
-  \TrinaryInfC{$\tau :: S \stackrel{m}{\Longrightarrow}_{n+1} S'$}
-  \DisplayProof
-  \quad
-  \AxiomC{$d(\tau, \bar{q}) = \kappa$}
-  \UnaryInfC{$\tau :: S \stackrel{\Uparrow}{\Longrightarrow}_0 \varepsilon$}
+  \AxiomC{$\nu :: \kappa :: S \stackrel{m}{\Longrightarrow} S'$}
+  \TrinaryInfC{$\tau :: S \stackrel{m}{\Longrightarrow} S'$}
   \DisplayProof
 \]
 \vspace{.5em}
 \[
   \AxiomC{$d(\nu, r) \ne \varnothing$}
   \AxiomC{$d(\kappa, \bar{r}) = \tau$}
-  \AxiomC{$\tau :: S \stackrel{m}{\Longrightarrow}_n S'$}
-  \TrinaryInfC{$\nu :: \kappa \stackrel{m}{\Longrightarrow}_n S'$}
+  \AxiomC{$\tau :: S \stackrel{m}{\Longrightarrow} S'$}
+  \TrinaryInfC{$\nu :: \kappa \stackrel{m}{\Longrightarrow} S'$}
+  \DisplayProof
+\]
+\vspace{.5em}
+\[
+  \AxiomC{$\kw{Forever\_unobservable}(S)$}
+  \UnaryInfC{$S \stackrel{\Uparrow}{\Longrightarrow} \varepsilon$}
   \DisplayProof
 \]
 \caption{LTS for the resolution operator
-  $\mathcal{R}_n(\sigma)$ on games trees.}
+  $\mathcal{R}(\sigma)$ on games trees.}
 \label{fig:res}
 \end{figure}
 
@@ -696,23 +699,44 @@ is observable when the control stack $S$ has no continuations.
 Whenever we encounter a recursive call,
 we will use a copy of $\sigma$
 to initialize a new behavior $\nu$ and push it on the stack.
-The parameter $n$ will place a limit on
-the number of consecutive recursive calls that can happen
-before an observable move is recorded.
-When that limit is reached,
-we will trigger a divergence event instead.
 When the current behavior returns,
 we drop it and use the next element on the stack as a continuation.
+In both cases,
+the moves that triggered to call and return are hidden,
+so we use the constructed state to perform a recursive query
+and obtain the next observable move.
 
-Given this transition system we define
-$\mathcal{R}_n(\sigma) := c_{\Rightarrow_n}(\sigma :: \varepsilon)$.
-%Since $\Uparrow$ counts as an input event for $\kw{pc}$,
-%it is easy to show that
-%$\mathcal{R}_n(\sigma) \sqsubseteq_\kw{pc} \mathcal{R}_{n+1}(\sigma)$,
-%which provides additional justification for taking
-%$\mathcal{R}(\sigma) := \sqcup_n^\kw{pc} \mathcal{R}_n(\sigma)$.
+It is possible that hiding recursive calls
+will result in divergence events not originally present in $\sigma$.
+For instance, consider:
+\begin{align*}
+  \sigma := \: &\llbracket \kw{Clight}(\mbox{\tt void n() \{ \}}) \rrbracket \: + \\
+ &\llbracket \kw{Clight}(\mbox{\tt void f() \{ for(;;) n(); \}}) \rrbracket
+\end{align*}
+In this case, $\sigma$ will contain the behaviors
+$n() \cdot \kw{r}$ and $f() \cdot (\bar{n}() \cdot \bar{\kw{r}})^\omega$.
+In $\mathcal{R}(\sigma)$,
+we substitute the behavior for $n$ within the behavior for $f$,
+which should yield the behavior $f() \cdot \Uparrow$.
+To identify such cases we introduce the coinductive predicate
+$\kw{Forever\_unobservable}(S)$,
+defined by the following rules:
+\[
+  \AxiomC{$d(\tau, \bar{q}) = \kappa$}
+  \AxiomC{$d(\sigma, q) = \tau'$}
+  \AxiomC{$\kw{Forever\_unobservable}(\tau' :: S)$}
+  \TrinaryInfC{$\kw{Forever\_unobservable}(\tau :: \kappa :: S)$}
+  \DisplayProof
+\]
+\[
+  \AxiomC{$d(\tau, r) \ne \varnothing$}
+  \AxiomC{$d(\kappa, \bar{r}) = \tau')$}
+  \AxiomC{$\kw{Forever\_unobservable}(\tau' :: S)$}
+  \TrinaryInfC{$\kw{Forever\_unobservable}(\tau :: \kappa :: S)$}
+  \DisplayProof
+\]
 
-
+\vfill
 
 \bibliography{lwcc}
 
