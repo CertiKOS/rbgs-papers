@@ -9,6 +9,9 @@
 \bibliographystyle{plain}
 
 \newcommand{\kw}[1]{{\mathsf{#1}}}
+\newtheorem{definition}{Definition}
+\newtheorem{example}{Example}
+\newtheorem{theorem}{Theorem}
 
 \title{Game Semantics for Compcert}
 
@@ -312,108 +315,459 @@ Finally, we will also need to show that the projection operators
 associated with our calling conventions
 commute with horizontal composition.
 
-\section{Formalizing game trees}
+
+\section{Game trees}
 
 Game trees over a set of moves $M$
 are potentially infinite trees with
 edges labelled by $M$.
 They contain at least a root,
 then at each node,
-for each possible move $m \in M$
-we can attach zero or one subtree.
-
-\subsection{Characterization}
-
-This can be characterized as the coinductive type for the functor:
-\[ F X = M \rightarrow \mathcal{P}^1(X)\, \]
-where $\mathcal{P}^1(X)$ denotes the type of sets of at most one $X$.
-An $F$-coalgebra is a type $A$
-together with a destructor of type $\delta : A \rightarrow F A$.
-In this case, a coalgebra is a deterministic transition system
-labeled by the moves in $M$,
-with states in $A$ and a transition relation:
-\[ \delta : A \rightarrow M \rightarrow \mathcal{P}^1(A) \, . \]
-
-The type of trees $T$ itself is characterized as a final $F$-colagebra.
-There is a destructor:
-\[ d : T \rightarrow M \rightarrow \mathcal{P}^1(T) \, , \]
-which tells us for each possible move $m \in M$
-to which subtree we ``transition'' (if any).
-This coalgebra is final in that for any other coalgebra $\delta$,
-there is a unique mapping $c_{\delta} : A \rightarrow T$
-such that the following diagram commutes:
+we can attach a subtree
+for each possible move $m \in M$.
+Accordingly,
+the type of trees over $M$ can be described by the following equation,
+where $A \rightharpoonup B$ denotes the type of
+partial functions from $A$ to $B$:
 \[
-  \begin{tikzcd}
-    A \arrow[r, "\delta"]
-      \arrow[d, "c_{\delta}"] &
-    F A \arrow[d, "F \, c_\delta"] \\
-    T \arrow[r, "d"] &
-    F T
-  \end{tikzcd}
+    \kw{tree}(M) \:\cong\: M \rightharpoonup \kw{tree}(M) \,.
 \]
 
-This anamorphism $c_\delta$ is
-the fundamental constructor for trees:
-we give a transition system $\delta$ and an initial state $a \in A$
-and obtain a tree.
-The diagram above explains how the tree is generated:
-there is a transition $\delta : a \stackrel{m}{\Longrightarrow} a'$ iff
-the subtree associated with $m$ is $c_{\delta}(a')$.
-Formally,
+\subsection{Basic approach}
+
+The fundamental way to describe a tree is to
+give a labelled transition system that generates it.
+Consider a set of states $A$ together with
+a partial transition function $\delta : A \rightarrow M \rightharpoonup A$.
+Then, the tree associated to a state $a$
+will have an $m$-labelled edge from the root
+whenever there is a state $a'$ such that $\delta(a, m) = a'$,
+and recursively the subtree attached to that edge
+will be the tree associated with the new state $a'$.
+We will write $c_\delta(a)$ to denote
+the tree constructed in this manner.
+
+Conversely,
+the fundamental observation on a tree $\tau$
+is to retreive the set of subtrees attached to its root.
+This defines the observation function
+$d : \kw{tree}(M) \rightarrow M \rightharpoonup \kw{tree}(M)$,
+which has $d(\tau, m) = \tau'$
+whenever there is a branch for $m$ with subtree $\tau'$
+attached at the root of $\tau$.
+The constructor $c$ and destructor $d$ are related in the following way:
 \[
-  \forall a \, m \,.\,
-    d(c_{\delta}(a), m) = \{ c_{\delta}(a') : a' \in \delta(a, m) \}
+  \delta(a, m) = a' \:\Leftrightarrow\: d(c_\delta(a), m) = c_\delta(a')
 \]
-The uniqueness of $c_\delta$ is
-the fundamental way to prove two trees are equal,
-and in particular gives us extensionality
-in terms of bisimulations.
+In other words,
+there is a branch for $m$ in the generated tree
+if and only there is a corresponding transition in $\delta$. 
+Note that $d$ itself can be regarded as a transition system on trees,
+and that $c_d(\tau) = \tau$ for any $\tau : \kw{tree}(M)$.
 
-We can characterize the alternating refinement of trees
-in the following way.
-Given a relation $R \subseteq A \times B$,
-we can build a relation $F R$ that will relate
-two transition systems $\alpha, \beta$ iff
-$R$ is an alternating simulation relation between them.
-Then we can characterize the alternating refinement of trees $\sqsubseteq$
-with the following properties:
-\begin{gather*}
-  c \, [\forall R \, . \, F R \rightarrow R \rightarrow {\sqsubseteq}] \, c \\
-  d \, [{\sqsubseteq} \rightarrow F {\sqsubseteq}] \, d
-\end{gather*}
+\begin{example}[Trivial trees]
+If $\varepsilon : \{*\} \rightarrow M \rightharpoonup \{*\}$
+is a nowhere defined partial function,
+then the tree $c_\varepsilon(*)$
+is the empty tree that only contains a root.
+Conversely,
+if $\phi : \{*\} \rightarrow M \rightharpoonup \{*\}$
+is defined by $\phi(*, m) = *$ for all $m \in M$,
+then $c_\phi(*)$ is the infinite tree
+where each node contains a branch for every possible move.
+\end{example}
 
-\subsection{Interface}
-
-For convenience,
-in the interface I separate the determinism condition
-for labelled transition systems, and define:
-\begin{gather*}
-  \kw{lts}_M(A) :=
-    A \rightarrow M \rightarrow A \rightarrow \kw{Prop} \\
-  \kw{lts\_determ}(\alpha) :=
-    \forall a \, m \, a_1' \, a_2' \,.\,
-      \{ a_1', a_2' \} \subseteq \alpha(a, m) \Rightarrow
-      a_1' = a_2'
-\end{gather*}
-
-(...)
-
-\subsection{Implementation}
-
-To avoid having to deal with Coq coinductive types,
-I follow the usual technique of representing trees as
-prefix-closed sets of traces:
+\begin{example}[Skeleton tree]
+Consider the alphabet $\Sigma = \{ a, b, c \}$
+and the partial function
+$t : \Sigma^* \rightarrow \Sigma \rightharpoonup \Sigma^*$ defined by:
 \[
-  T = \{ P : M^* \rightarrow \kw{Prop} \ \vert\ 
-    P(\varepsilon) \wedge
-    \forall u v \,.\, P(u v) \Rightarrow P(u) \}
+    t(x w) = w \quad \mbox{for all } x \in \Sigma, w \in \Sigma^* \,.
 \]
-However this is insubstantial.
-The important thing is that I can define the primitives $c, d$
-introduced in the previous section and prove that they
-satisfy the required properties.
+The tree $c_t(abcba) : \kw{tree}(\Sigma)$ is a single path from the root
+consisting of five edges labelled with the successive letters
+of the word $abcba$.
+\end{example}
 
-(...)
+\subsection{Transition systems}
+
+The transition systems that we have considered so far
+have all been deterministic,
+in the sense that for a state $a$ and move $m$,
+there was at most one successor state $a'$
+with a transition $a \stackrel{m}{\rightarrow} a'$.
+It is appropriate to use deterministic transition systems
+for building game trees,
+however for the intermediate results in some constructions
+it will be convenient to consider
+the slightly more general formulation below.
+
+\begin{definition}[Labelled transition system] \label{def:lts}
+For a type of moves $M$,
+a \emph{labelled transition system} on $M$
+is a type of states $A$
+together with a transition relation:
+\[ \delta : A \rightarrow M \rightarrow \mathcal{P}(A) \,. \]
+By abuse of language we will often refer to
+\emph{the transition system $\delta$}.
+
+The transition system $\delta$ is \emph{deterministic}
+if for all $a, a_1, a_2 \in A$ and $m \in M$
+such that $\delta(a, m) \ni a_1$ and $\delta(a, m) \ni a_2$,
+we have $a_1 = a_2$.
+We will write $\kw{lts}(M, A)$ for the type of
+labelled transition functions on moves $M$ and states $A$,
+and $\kw{determ}(\delta)$ for the predicate asserting that
+the transition function $\delta$ is deterministic.
+\end{definition}
+
+Using the notations introduced in Def.~\ref{def:lts},
+we can give precise types to the game tree constructor $c$
+and destructor $d$ described in the previous section:
+\begin{align*}
+  c &: \forall M A \, . \, \kw{lts}(M, A) \rightarrow A \rightarrow \kw{tree}(M) \\
+  d &: \forall M \, . \, \kw{lts}(M, \kw{tree}(M))
+\end{align*}
+Next we will introduce bisimulations,
+which can be used to define an equivalence relation
+between transition systems and states
+that generate identical trees.
+
+\begin{definition}[Bisimulation relation]
+A \emph{bisimulation relation} between the transition systems
+$\alpha : \kw{lts}(M, A)$ and
+$\beta : \kw{lts}(M, B)$
+is a relation $R \subseteq A \times B$
+between their types of states
+such that for all related pairs of states $(a, b) \in R$,
+if there is a transition
+$a \stackrel{m}{\rightarrow} a'$ in $\alpha$
+then there is a corresponding transition
+$b \stackrel{m}{\rightarrow} b'$ in $\beta$
+such that $(a', b') \in R$,
+and conversely if there is a transition
+$b \stackrel{m}{\rightarrow} b'$ in $\beta$
+then there is a corresponding transition
+$a \stackrel{m}{\rightarrow} a'$ in $\alpha$
+such that $(a', b') \in R$.
+Stated more concisely,
+\[
+  \alpha \: [R \rightarrow {=} \rightarrow \mathcal{P}(R)] \: \beta
+\]
+We will write $R : \alpha \simeq \beta$
+to denote that $R$ is a bisimulation relation
+between $\alpha$ and $\beta$.
+\end{definition}
+
+If $R : \alpha \simeq \beta$ is a bisimulation relation,
+then states related by $R$ will generate identical trees.
+In other words, $c_\alpha(a) = c_\beta(b)$ whenever $(a, b) \in R$.
+With this in mind,
+an alternative way to think about trees
+is to understand them as an equivalence classes
+of transitions systems under bisimulation.
+
+Because of this close connection between trees and transition systems,
+and the fact that tree are in a sense
+the \emph{most general} transition system,
+it will often be natural to first define operations on trees
+as operations on transition systems.
+
+\subsection{Refinement lattice}
+
+In addition to bisimulations of transition systems,
+which corresponds to equality on trees,
+we can define a more oriented notion of simulations,
+which will induce the alternating refinement lattice on trees
+that we are looking for.
+
+\begin{definition}[Alternating simulation]
+\label{def:altsim}
+For a set of moves $M$,
+a \emph{polarity assignment} is a function
+$p : M \rightarrow \{ +, - \}$
+which partitions $M$ into positive moves and negative moves.
+Given a polarity assignment $p$
+and two transition systems
+$\alpha : \kw{lts}(M, A)$ and
+$\beta : \kw{lts}(M, B)$,
+a relation $R \subseteq A \times B$ is
+an \emph{alternating simulation relation} between $\alpha$ and $\beta$
+if for all related pairs of states $(a, b) \in R$
+the following conditions hold:
+\begin{enumerate}
+\item For all moves $m \in M$ such that $p(m) = +$,
+  if there is a transition
+  $a \stackrel{m}{\rightarrow} a'$ in $\alpha$,
+  then there is a correponding transition
+  $b \stackrel{m}{\rightarrow} b'$ in $\beta$,
+  and furthermore $(a', b') \in R$.
+\item For all moves $m \in M$ such that $p(m) = -$,
+  if there is a transition
+  $b \stackrel{m}{\rightarrow} b'$ in $\beta$,
+  then there is a correponding transition
+  $a \stackrel{m}{\rightarrow} a'$ in $\alpha$,
+  and furthermore $(a', b') \in R$.
+\end{enumerate}
+We write $R : \alpha \lesssim_p \beta$ to indicate that
+$R$ is an alternating simulation relation
+between $\alpha$ and $\beta$
+when using the polarity assignment $p$.
+We will write $\bar{p}$ for the opposite polarity assignment
+which exchanges positive and negative moves relative to $p$.
+\end{definition}
+
+The symmetry between positive and negative moves
+in Def.~\ref{def:altsim} is evident.
+The following summarizes the basic properties
+of alternating simulations.
+
+\begin{theorem}[Properties of $\lesssim_p$]
+\label{thm:altsimprops}
+Consider a set of moves $M$, a polarity assignment $p$,
+transition systems
+$\alpha : \kw{lts}(M, A)$,
+$\beta : \kw{lts}(M, B)$ and
+$\gamma : \kw{lts}(M, C)$,
+and two relations $R \subseteq A \times B$ and $S \subseteq B \times C$.
+The following properties hold:
+\begin{enumerate}
+\item Identity
+  \[ {=} : \alpha \lesssim_p \alpha \]
+\item Composition
+  \[ \AxiomC{$R : \alpha \lesssim_p \beta$}
+     \AxiomC{$S : \beta \lesssim_p \gamma$}
+     \BinaryInfC{$R \cdot S : \alpha \lesssim_p \gamma$}
+     \DisplayProof \]
+\item Antisymmetry
+  \[ \AxiomC{$R : \alpha \lesssim_p \beta$}
+     \AxiomC{$R^{-1} : \beta \lesssim_p \alpha$}
+     \BinaryInfC{$R : \alpha \simeq \beta$}
+     \DisplayProof \]
+\item Duality
+  \[ \AxiomC{$R : \alpha \lesssim_p \beta$}
+     \UnaryInfC{$R^{-1} : \beta \lesssim_{\bar{p}} \alpha$}
+     \DisplayProof \]
+\end{enumerate}
+\end{theorem}
+
+The properties enumerated in Thm.~\ref{thm:altsimprops}
+will allow us to show that alternating refinement
+is a partial order.
+In order to exhibit its complete lattice structure,
+we will need the following polarity-sensitive operator
+on transition systems.
+
+\begin{definition}[Supremum transition system]
+Given a transition system $\delta : \kw{lts}(M, A)$
+and a polarity assignment $p$,
+we define the transition system
+$\sqcup_p \delta : \kw{lts}(M, \mathcal{P}(A))$
+as follows.
+There is a transition $X \stackrel{m}{\rightarrow} Y \in \sqcup_p \delta$
+iff the following conditions hold:
+\begin{enumerate}
+\item $Y = \{ a' : A \:|\: \exists a \in X \,.\,
+  a \stackrel{m}{\rightarrow} a' \in \delta \}$,
+\item if $p(m) = +$, then $\exists a \in X \,.\, \exists a' \in Y \,.\,
+  a \stackrel{m}{\rightarrow} a' \in \delta$;
+\item if $p(m) = -$, then $\forall a \in X \,.\, \exists a' \in Y \,.\,
+  a \stackrel{m}{\rightarrow} a' \in \delta$.
+\end{enumerate}
+We write $\sqcap_p \delta = \sqcup_{\bar{p}} \delta$ for the dual operator.
+\end{definition}
+
+The supremum transition system operator $\sqcup_p$
+takes a \emph{single} transition system $\delta$ as input,
+but carries out a powerset construction on $\delta$
+to build a new transition system $\sqcup_p \delta$
+operating with \emph{sets of states} of $\delta$
+as its own states.
+Because of this, $\sqcup_p$ can not only be used
+to define the supremum for alternating refinement on a trees,
+but also as a way to determinize an arbitrary transition system.
+We will first consider properties useful in the first case,
+where $\delta$ is already deterministic.
+
+\begin{theorem}[Properties of $\sqcup_p$]
+\label{thm:supprops}
+For a deterministic transition system $\delta : \kw{lts}(M, A)$
+and polarity assignment $p$,
+the transition system $\sqcup_p \delta : \kw{lts}(M, \mathcal{P}(A))$
+has the following properties:
+\begin{enumerate}
+\item Upper bound: the set membership relation
+  ${\in} \subseteq A \times \mathcal{P}(A)$ is
+  an alternating simulation relation between $\delta$ and $\sqcup_p \delta$.
+  \[ {\in} : \delta \lesssim_p {\sqcup_p \delta} \]
+\item Least upper bound:
+  for a transition system $\chi : \kw{lts}(M, X)$
+  and an alternating simulation relation $R : \delta \lesssim_p \chi$,
+  there is an alternating simulation relation:
+  \[ 
+     \hat{R} = \{ (S, x) \in \mathcal{P}(A) \times X \:|\:
+                  \forall a \in S \,.\, (a, x) \in R \}
+       : \sqcup_p \delta \lesssim_p \chi
+  \]
+\end{enumerate}
+\end{theorem}
+
+[XXX not quite]
+Note that by property 2 we get ${\hat{=}} : \sqcup_p \delta \lesssim \delta$.
+This means that for a deterministic $\delta$ we have a bisimulation :
+\[ ({\hat{=}} \cap {\in^{-1}}) = \{(\{a\}, a) \:|\: a : A \} : \sqcup_p \delta
+\simeq \delta \]
+
+With this we are finally ready to define the refinement lattice on game trees.
+
+\begin{definition}[Alternating refinement lattice]
+Given a set of moves $M$ and a polarity assignment $p$,
+the alternating refinement relation ${\sqsubseteq_p} \subseteq \kw{tree}(M)
+\times \kw{tree}(M)$ is defined inductively as:
+\[
+  \AxiomC{$R : \alpha \lesssim_p \beta$}
+  \AxiomC{$(a, b) \in R$}
+  \BinaryInfC{$c_\alpha(a) \sqsubseteq_p c_\beta(b)$}
+  \DisplayProof
+\]
+That is, trees generated from states in an alternating simulation relation
+are in a refinement relationship.
+The supremum of a set of trees $T \subseteq \kw{tree}(M)$
+is defined as $\sqcup_p T := c_{\sqcup_p d}(T)$.
+The least tree is defined as $\bot_p := \sqcup_p \varnothing$.
+The operators $\sqcap_p T$ and $\top_p$ are defined dually.
+
+[XXX is it possible to define refinement as the largest
+${\sqsubseteq} : d \lesssim_p d$ instead?]
+\end{definition}
+
+\subsection{Determinizing transition systems}
+
+[Introduce the simulation b/w nondet LTS that induces
+a simulation relation on the determinized $\sqcup$-LTS]
+
+Note that since $\sqcup \delta$ is always deterministic,
+by Thm.~\ref{thm:supprops} we have idempotence
+\[ {\in} : {\sqcup \delta} \lesssim {\sqcup}{\sqcup}\delta \]
+
+
+\subsection{Hiding silent transitions}
+
+In the labelled transition systems defined in Def.~\ref{def:lts},
+each transition must carry exactly one event $m \in M$;
+there is no possibility of introducing silent transitions.
+This makes the meta-theory much simpler,
+because silent transitions introduce the possibility of
+unobservable \emph{silent divergence} ---
+infinite sequences of silent transitions.
+This make reasoning about transition systems
+which admit silent steps (such as those in CompCert)
+much more challenging.
+
+However,
+we can still embed transition systems with silent transitions
+in our framework by introducing a special move $\epsilon$
+meant to identify silent transitions.
+Then, we use the techniques introduced in \cite{coindbs}
+to turn a transition system
+$\delta : \kw{lts}(M \uplus \{\epsilon\}, A)$
+with explicit silent transition into a transition system
+${\Downarrow} \delta : \kw{lts}(M, A \uplus \{ * \})$
+where silent transitions have been hidden.
+The transition system ${\Downarrow} \delta$
+will use a designated move ${\Uparrow} \in M$
+to denote silent divergence in $\delta$,
+and introduce a new state $*$ in ${\Downarrow}\delta$
+to account for this possibility.
+
+The following rules define ${\Downarrow} \delta$.
+The single arrows $\rightarrow$ denote
+the original transitions of $\delta$,
+whereas the double arrows $\Rightarrow$ denote
+the derived trantisions of ${\Downarrow} \delta$.
+\[
+    \AxiomC{$a \stackrel{m}{\longrightarrow} a'$}
+    \UnaryInfC{$a \stackrel{m}{\Longrightarrow} a'$}
+    \DisplayProof
+    \qquad
+    \AxiomC{$a \stackrel{\epsilon}{\longrightarrow} a'$}
+    \AxiomC{$a' \stackrel{m}{\Longrightarrow} a''$}
+    \BinaryInfC{$a \stackrel{m}{\Longrightarrow} a''$}
+    \DisplayProof
+    \qquad
+    \AxiomC{$a \stackrel{\infty}{\Longrightarrow}$}
+    \UnaryInfC{$a \stackrel{\Uparrow}{\Longrightarrow} *$}
+    \DisplayProof
+\]
+The predicate $\stackrel{\infty}{\Longrightarrow}$
+identifies silently divergent states,
+and is defined by the coinductive rule:
+\[
+    \AxiomC{$a \stackrel{\epsilon}{\longrightarrow} a'$}
+    \AxiomC{$a' \stackrel{\infty}{\Longrightarrow}$}
+    \doubleLine
+    \BinaryInfC{$a \stackrel{\infty}{\Longrightarrow}$}
+    \DisplayProof
+\]
+
+It will be convenient to use $\Downarrow$ to separate
+the ``big-stepping'' behavior out of more complex transition systems
+such as those involved in
+the CompCert semantics embedding $\llbracket - \rrbracket$
+defined in Sec.~\ref{sec:embed}, or
+the resolution operator $\mathcal{R}(-)$
+defined in Sec.~\ref{sec:res}.
+For one thing,
+it simplifies the formulation of these operators
+by allowing them to use silent transition
+in place of their own big-stepping constructions.
+More importantly,
+in proofs about them,
+it is sometimes possible to factor out
+the treatment of big-stepping and silent divergence
+into general properties of $\Downarrow$,
+rather than handle them bundled with other
+construction-specific details,
+the complixity of which would end up multiplied.
+In particular,
+when more that one operator using $\Downarrow$ are composed,
+it is sometimes possible to commute out the big-stepping completely,
+and use the following theorem to simplify them into
+a single use of $\Downarrow$.
+
+\begin{theorem}[Idempotence of $\Downarrow$]
+\label{thm:bsidemp}
+For any $\delta : \kw{lts}(M + \{\epsilon\} + \{\epsilon'\}, A)$,
+there is a non-trivial bisimulation
+$R : {\Downarrow}{\Downarrow} \delta \simeq {\Downarrow}\delta$.
+In particular, $(a, a) \in R$ for any $a : A$.
+
+[XXX types of moves incompatible ---
+need to forget $\epsilon'$ on the right]
+\end{theorem}
+
+Note that ${\Downarrow} \delta$ may introduce non-determinism
+not originally present in $\delta$,
+if a transition for a move $m$ is possible
+after different numbers of $\epsilon$ transitions.
+Because of this,
+$\Downarrow$ will often be used in conjunction with $\sqcup$
+to build the deterministic transition system ${\sqcup}{\Downarrow}\delta$.
+The following theorem can be used to push out
+nested instances of $\sqcup$ and
+combine them using Thm.~\ref{thm:joinidemp}.
+
+\begin{theorem}[Commutation of $\Downarrow$ with $\sqcup$]
+For any $\delta : \kw{lts}(M + \{\epsilon\}, A)$,
+there is a non-trivial bisimulation
+$R : {\Downarrow}{\sqcup}\delta \simeq {\sqcup}{\Downarrow}\delta$.
+In particular, $(\{a\}, \{a\}) \in R$ for any $a : A$.
+\end{theorem}
+
+
+
+
+
 
 
 \section{Embedding Compcert semantics}
@@ -741,5 +1095,107 @@ defined by the following rules:
 \vfill
 
 \bibliography{lwcc}
+
+
+\appendix
+
+\section{Coinductive characterization of trees}
+\label{sec:treecoind}
+
+\subsection{Characterization}
+
+This can be characterized as the coinductive type for the functor:
+\[ F X = M \rightarrow \mathcal{P}^1(X)\, \]
+where $\mathcal{P}^1(X)$ denotes the type of sets of at most one $X$.
+An $F$-coalgebra is a type $A$
+together with a destructor of type $\delta : A \rightarrow F A$.
+In this case, a coalgebra is a deterministic transition system
+labeled by the moves in $M$,
+with states in $A$ and a transition relation:
+\[ \delta : A \rightarrow M \rightarrow \mathcal{P}^1(A) \, . \]
+
+The type of trees $T$ itself is characterized as a final $F$-colagebra.
+There is a destructor:
+\[ d : T \rightarrow M \rightarrow \mathcal{P}^1(T) \, , \]
+which tells us for each possible move $m \in M$
+to which subtree we ``transition'' (if any).
+This coalgebra is final in that for any other coalgebra $\delta$,
+there is a unique mapping $c_{\delta} : A \rightarrow T$
+such that the following diagram commutes:
+\[
+  \begin{tikzcd}
+    A \arrow[r, "\delta"]
+      \arrow[d, "c_{\delta}"] &
+    F A \arrow[d, "F \, c_\delta"] \\
+    T \arrow[r, "d"] &
+    F T
+  \end{tikzcd}
+\]
+
+This anamorphism $c_\delta$ is
+the fundamental constructor for trees:
+we give a transition system $\delta$ and an initial state $a \in A$
+and obtain a tree.
+The diagram above explains how the tree is generated:
+there is a transition $\delta : a \stackrel{m}{\Longrightarrow} a'$ iff
+the subtree associated with $m$ is $c_{\delta}(a')$.
+Formally,
+\[
+  \forall a \, m \,.\,
+    d(c_{\delta}(a), m) = \{ c_{\delta}(a') : a' \in \delta(a, m) \}
+\]
+The uniqueness of $c_\delta$ is
+the fundamental way to prove two trees are equal,
+and in particular gives us extensionality
+in terms of bisimulations.
+
+We can characterize the alternating refinement of trees
+in the following way.
+Given a relation $R \subseteq A \times B$,
+we can build a relation $F R$ that will relate
+two transition systems $\alpha, \beta$ iff
+$R$ is an alternating simulation relation between them.
+Then we can characterize the alternating refinement of trees $\sqsubseteq$
+with the following properties:
+\begin{gather*}
+  c \, [\forall R \, . \, F R \rightarrow R \rightarrow {\sqsubseteq}] \, c \\
+  d \, [{\sqsubseteq} \rightarrow F {\sqsubseteq}] \, d
+\end{gather*}
+
+\subsection{Interface}
+
+For convenience,
+in the interface I separate the determinism condition
+for labelled transition systems, and define:
+\begin{gather*}
+  \kw{lts}_M(A) :=
+    A \rightarrow M \rightarrow A \rightarrow \kw{Prop} \\
+  \kw{lts\_determ}(\alpha) :=
+    \forall a \, m \, a_1' \, a_2' \,.\,
+      \{ a_1', a_2' \} \subseteq \alpha(a, m) \Rightarrow
+      a_1' = a_2'
+\end{gather*}
+
+(...)
+
+\subsection{Implementation}
+
+To avoid having to deal with Coq coinductive types,
+I follow the usual technique of representing trees as
+prefix-closed sets of traces:
+\[
+  T = \{ P : M^* \rightarrow \kw{Prop} \ \vert\ 
+    P(\varepsilon) \wedge
+    \forall u v \,.\, P(u v) \Rightarrow P(u) \}
+\]
+However this is insubstantial.
+The important thing is that I can define the primitives $c, d$
+introduced in the previous section and prove that they
+satisfy the required properties.
+
+(...)
+
+
+
 
 \end{document}
