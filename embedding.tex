@@ -9,6 +9,7 @@
 \bibliographystyle{plain}
 
 \newcommand{\kw}[1]{{\mathsf{#1}}}
+
 \newtheorem{definition}{Definition}
 \newtheorem{example}{Example}
 \newtheorem{theorem}{Theorem}
@@ -278,7 +279,7 @@ the setting of game trees and (total-correctness) alternating refinements:
   \AxiomC{$L_1 \ge L_2$}
   \UnaryInfC{$\llbracket L_2 \rrbracket \sqsubseteq_\kw{tc} \llbracket L_1 \rrbracket$}
   \DisplayProof
-  \label{eqn:hcompm}
+  \label{eqn:embed}
 \end{equation}
 
 \subsection{Horizontal composition}
@@ -790,10 +791,10 @@ $F \subseteq S \times R \times \mathcal{P}(Q \times S)$
 the final-state predicate, and
 ${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$
 the transition relation (labelled by lists of Compcert events).
-To generate the corresponding game tree $\llbracket L \rrbracket$,
-I use the LTS defined inductively
-from the rules given in Fig.~\ref{fig:embed},
-which uses the following states:
+The labelled transition system $E(L)$ shown in Fig.~\ref{fig:embed}
+can be used to define the game tree embedding of $L$ as:
+\[ \llbracket L \rrbracket := c_{\sqcup \Downarrow E(L)}(\{ \kw{waiting}(I) \}) \]
+The transition system $E(L)$ operates on the following states:
 \begin{description}
 \item[$\kw{waiting}(k)$]
   Read a query $q \in Q$,
@@ -801,18 +802,13 @@ which uses the following states:
   $k \subseteq Q \times S$.
   The initial state is $\kw{waiting}(I)$.
 \item[$\kw{running}(t, s)$]
-  Output the pending events in $t \in \mathbb{E}^*$,
-  then big-step the transition relation from the current state $s \in S$
-  to determine the next move.
-\item[$\kw{silent}$]
-  We have hit a silently diverging state.
-  At the time we output a $\Uparrow$ move;
-  now, never do anything again.
+  Output any pending events in $t \in \mathbb{E}^*$,
+  then continue execution from the current state $s \in S$.
 \item[$\kw{wrong}$]
   We have hit a stuck state;
   now, generate all possible outputs forever.
 \end{description}
-Note that that $c_\delta(\kw{wrong}) = \top_\kw{tc}$,
+Note that that $c_{\sqcup \Downarrow E(L)}(\kw{wrong}) = \top_\kw{tc}$,
 which is the property we want for programs that go wrong.
 Moreover, this is the only way to generate a $\lightning$ output,
 so that going wrong is distinguishable from
@@ -829,44 +825,31 @@ generate all possible safe outputs.
   \UnaryInfC{$\kw{running}(\varepsilon, s) \stackrel{r}{\Longrightarrow} \kw{waiting}(k)$}
   \DisplayProof
 \]
-\vspace{.5em}
+\vspace{.33em}
 \[
+  \AxiomC{$s \stackrel{t}{\longrightarrow} s'$}
+  \UnaryInfC{$\kw{running}(\varepsilon, s) \stackrel{\epsilon}{\Longrightarrow} \kw{running}(t, s')$}
+  \DisplayProof
+  \quad
   \AxiomC{\rule[-.3\baselineskip]{0pt}{\baselineskip}}
   \UnaryInfC{$\kw{running}(e::t, s) \stackrel{e}{\Longrightarrow} \kw{running}(t, s)$}
-  \DisplayProof
-  \quad
-  \AxiomC{$s \stackrel{t}{\longrightarrow} s'$}
-  \AxiomC{$\kw{running}(t, s') \stackrel{m}{\Longrightarrow} S$}
-  \BinaryInfC{$\kw{running}(\varepsilon, s) \stackrel{m}{\Longrightarrow} S$}
-  \DisplayProof
-\]
-\vspace{.5em}
-\[
-  \AxiomC{$\kw{Forever\_silent}(s)$}
-  \UnaryInfC{$\kw{running}(\varepsilon, s) \stackrel{\Uparrow}{\Longrightarrow} \kw{silent}$}
-  \DisplayProof
-  \quad
-  \AxiomC{$m \mbox{ is an output move}$}
-  \UnaryInfC{$\kw{wrong} \stackrel{m}{\Longrightarrow} \kw{wrong}$}
   \DisplayProof
 \]
 \vspace{.5em}
 \[
   \AxiomC{$\kw{Nostep}(s)$}
   \AxiomC{$\forall r k . (s, r, k) \notin F$}
-  \AxiomC{$\kw{wrong} \stackrel{m}{\Longrightarrow} S$}
-  \TrinaryInfC{$\kw{running}(\varepsilon, s) \stackrel{m}{\Longrightarrow} S$}
+  \BinaryInfC{$\kw{running}(\varepsilon, s) \stackrel{\epsilon}{\Longrightarrow} \kw{wrong}$}
+  \DisplayProof
+  \quad
+  \AxiomC{$m \mbox{ is an output move}$}
+  \UnaryInfC{$\kw{wrong} \stackrel{m}{\Longrightarrow} \kw{wrong}$}
   \DisplayProof
 \]
 \caption{Embedding Compcert small-step semantics into game trees}
 \label{fig:embed}
 \end{figure}
 
-Using this definition,
-I have proved (\ref{eqn:embed}): if we have a backward simulation between
-Compcert small-step semantics,
-then we have an alternating refinement between
-the corresponding game trees.
 
 \section{Horizontal composition}
 \label{sec:hcomp}
@@ -885,18 +868,7 @@ that $\sigma$ makes into itself.
 Horizontal composition is
 $\sigma_1 \bullet \sigma_2 = \mathcal{R}(\sigma_1 \uplus \sigma_2)$.
 
-In our setting
-we can define flat composition as
-$\sigma_1 \sqcap_\kw{tc} \sigma_2$,
-which gives monotonicity for free.\footnote{%
-This is one of several possible definitions which coincide when
-$\sigma_1 \cap \sigma_2 = \varnothing$.}
-The resolution operator is defined as the limit
-$\bigsqcup^\kw{pc}_{n \in \mathbb{N}} \mathcal{R}_n(\sigma)$
-of depth-limited operators $\mathcal{R}_n$ described below.
-
-Additionally,
-to prove the syntactic linking theorems (\ref{eqn:slink})
+To prove the syntactic linking theorems (\ref{eqn:slink})
 we will want to use a version of horizontal composition
 defined at the level of small-step semantics,
 so I define a small-step flat composition $\uplus$
@@ -937,11 +909,49 @@ where $k@i = \{ (q, (i, s)) \: \vert (q, s) \in k \}$
 lifts the continuations of $L_i$ to the level of $L$.
 Note that $I = \bigcup_i I_i@i$.
 
-Showing the correspondance
-$\llbracket \biguplus_i L_i \rrbracket =
- \bigsqcap_i^\kw{tc} \llbracket L_i \rrbracket$
-should be straightforward
-when the $L_i$'s have disjoint sets of accepted initial queries.
+\subsection{Gametree flat composition}
+
+To define the game tree version of flat composition $\mathcal{U}(T)$,
+we will use the following transition system operator $U(\delta)$.
+For $\delta : \kw{lts}(M, A)$,
+the transition system $U(\delta) : \kw{lts}(M, A + \mathcal{P}(A))$
+is defined by the rules:
+\[
+  \AxiomC{$a \in X$}
+  \AxiomC{$a \stackrel{m}{\longrightarrow} a' \in \delta$}
+  \BinaryInfC{$X \stackrel{m}{\longrightarrow} a' \in U(\delta)$}
+  \DisplayProof
+  \quad
+  \AxiomC{$a \stackrel{m}{\longrightarrow} a' \in \delta$}
+  \UnaryInfC{$a \stackrel{m}{\longrightarrow} a' \in U(\delta)$}
+  \DisplayProof
+\]
+Then for a set of game trees $T$,
+we can define:
+\[
+  \mathcal{U}(T) := c_{\sqcup_\kw{tc} U(d)}(\{ T \})
+\]
+
+In addition to the original states of $\delta$,
+the states of $U(\delta)$ also includes special ``union states''
+which specify a \emph{set} of states of $\delta$.
+Steps from a union state $X$ include all possible steps
+from individual state $a \in X$,
+in the same way that possible initial states for $\uplus$
+are the union of all possible initial states of the constituent $(L_i)$.
+
+Note that for disjoint trees which only negative possible first moves
+(as is the case when linking CompCert modules),
+$\mathcal{U}(T)$ coincides with $\bigsqcap_{\tau \in T} \tau$.
+While the ordering properties of the latter
+are more uniform,
+it is harder to express at the level of CompCert small-step semantics,
+hence our use of $\uplus$ and its counterpart $\mathcal{U}$
+makes the syntactic composition proofs easier.
+[However we may want to use $\sqcap$
+in our definition of horizontal composition,
+and keep $\mathcal{U}$ only as an intermediate step
+in syntactic linking proofs.]
 
 \subsection{Small-step resolution}
 
@@ -1005,49 +1015,37 @@ back into the module,
 by contrast with the original $q$ and $r$ which represent
 incoming calls and the module returning to the environment.
 
-The tree for $\mathcal{R}(\sigma)$ is generated
-using the LTS $\Rightarrow$ defined inductively
-by the rules shown in Fig.~\ref{fig:res}.
-The states are lists of gametrees arranged in a control stack.
-The initial state is $\sigma :: \varepsilon$.
-As a reminder,
-the notation $d(\tau, m) = \{\tau'\}$ means
-the tree $\tau$ has the next move $m$
-and the corresponding subtree is $\tau'$.
-Since $d(\tau, m)$ has at most one element,
-as a shorthand I write $d(\tau, m) = \tau'$.
+The resolution operator $\mathcal{R}(\sigma)$ on trees is built from
+the operator on transition systems $R(\delta, a_0)$
+defined inductively by the rules shown in Fig.~\ref{fig:res}.
+For a source transition system
+$\delta : \kw{lts}(M_{\mathcal{L} \multimap \mathcal{L}}, A)$
+and an initial state $a_0 : A$,
+the states of $R(\delta, a_0)$ are lists of states of $\delta$ arranged in a control stack,
+with the intended initial state being $a_0 :: \varepsilon$.
 
 \begin{figure}
 \[
   \AxiomC{$m \mbox{ observable at } \vec{\kappa}$}
-  \AxiomC{$d(\tau, m) = \tau'$}
-  \BinaryInfC{$\tau :: \vec{\kappa} \stackrel{m}{\Longrightarrow} \tau' :: \vec{\kappa}$}
+  \AxiomC{$a \stackrel{m}{\longrightarrow} a' \in \delta$}
+  \BinaryInfC{$a :: \vec{\kappa} \stackrel{m}{\longrightarrow} a' :: \vec{\kappa}$}
   \DisplayProof
 \]
 \vspace{.5em}
 \[
-  \AxiomC{$d(\tau, \bar{q}) = \kappa$}
-  \AxiomC{$d(\sigma, q) = \nu$}
-  \AxiomC{$\nu :: \kappa :: \vec{\kappa} \stackrel{m}{\Longrightarrow} \vec{\tau}$}
-  \TrinaryInfC{$\tau :: \vec{\kappa} \stackrel{m}{\Longrightarrow} \vec{\tau}$}
+  \AxiomC{$a \stackrel{\bar{q}}{\longrightarrow} k \in \delta$}
+  \AxiomC{$a_0 \stackrel{q}{\longrightarrow} a' \in \delta$}
+  \BinaryInfC{$a :: \vec{k} \stackrel{\epsilon}{\longrightarrow} a' :: k :: \vec{k}$}
   \DisplayProof
 \]
 \vspace{.5em}
 \[
-  \AxiomC{$d(\nu, r) \ne \varnothing$}
-  \AxiomC{$d(\kappa, \bar{r}) = \tau$}
-  \AxiomC{$\tau :: \vec{\kappa} \stackrel{m}{\Longrightarrow} \vec{\tau}$}
-  \TrinaryInfC{$\nu :: \kappa :: \vec{\kappa} \stackrel{m}{\Longrightarrow} \vec{\tau}$}
+  \AxiomC{$a \stackrel{r}{\longrightarrow} z \in \delta$}
+  \AxiomC{$k \stackrel{\bar{r}}{\longrightarrow} a' \in \delta$}
+  \BinaryInfC{$a :: k :: \vec{k} \stackrel{\epsilon}{\longrightarrow} a' :: \vec{k}$}
   \DisplayProof
 \]
-\vspace{.5em}
-\[
-  \AxiomC{$\kw{Forever\_unobservable}(\vec{\tau})$}
-  \UnaryInfC{$\vec{\tau} \stackrel{\Uparrow}{\Longrightarrow} \varepsilon$}
-  \DisplayProof
-\]
-\caption{LTS for the resolution operator
-  $\mathcal{R}(\sigma)$ on games trees.}
+\caption{The transition system $R(\delta, a_0)$ used to define $\mathcal{R}(\sigma)$.}
 \label{fig:res}
 \end{figure}
 
@@ -1063,8 +1061,8 @@ and a return $r$
 is observable when the control stack tail $\vec{\kappa}$ is empty.
 
 Whenever we encounter a recursive call,
-we will use a copy of $\sigma$
-to initialize a new behavior $\nu$ and push it on the stack.
+we will use a copy of $\delta$ at $a_0$
+to initialize a new behavior $a'$ and push it on the stack.
 When the current behavior returns,
 we drop it and use the next element on the stack as a continuation.
 In both cases,
@@ -1072,42 +1070,24 @@ the moves that triggered to call and return are hidden,
 so we use the constructed state to perform a recursive query
 and obtain the next observable move.
 
+Using $R$ we can define $\mathcal{R}$ as:
+\[ \mathcal{R}(\sigma) = c_{\sqcup \Downarrow R(d, \sigma)}(\{ \sigma :: \varepsilon \}) \]
+
 It is possible that hiding recursive calls
 will result in divergence events not originally present in $\sigma$.
 For instance, consider:
 \begin{align*}
-  \sigma := \: &\llbracket \kw{Clight}(\mbox{\tt void n() \{ \}}) \rrbracket \: + \\
- &\llbracket \kw{Clight}(\mbox{\tt void f() \{ for(;;) n(); \}}) \rrbracket
+  \sigma := \mathcal{U}(&\llbracket \kw{Clight}(\mbox{\tt void n() \{ \}}) \rrbracket, \\
+ &\llbracket \kw{Clight}(\mbox{\tt void f() \{ for(;;) n(); \}}) \rrbracket)
 \end{align*}
 In this case, $\sigma$ will contain the behaviors
 $n() \cdot \kw{r}$ and $f() \cdot (\bar{n}() \cdot \bar{\kw{r}})^\omega$.
 In $\mathcal{R}(\sigma)$,
 we substitute the behavior for $n$ within the behavior for $f$,
 which should yield the behavior $f() \cdot \Uparrow$.
-To identify such cases we introduce the coinductive predicate
-$\kw{Forever\_unobservable}(\vec{\tau})$,
-defined by the following rules:
-\[
-  \AxiomC{$d(\tau, \bar{q}) = \kappa$}
-  \AxiomC{$d(\sigma, q) = \nu$}
-  \AxiomC{$\kw{Forever\_unobservable}(\nu :: \kappa :: \vec{\kappa})$}
-  \doubleLine
-  \TrinaryInfC{$\kw{Forever\_unobservable}(\tau :: \vec{\kappa})$}
-  \DisplayProof
-\]
-\[
-  \AxiomC{$d(\nu, r) \ne \varnothing$}
-  \AxiomC{$d(\kappa, \bar{r}) = \tau$}
-  \AxiomC{$\kw{Forever\_unobservable}(\tau :: \vec{\kappa})$}
-  \doubleLine
-  \TrinaryInfC{$\kw{Forever\_unobservable}(\nu :: \kappa :: \vec{\kappa})$}
-  \DisplayProof
-\]
 
-\vfill
 
 \bibliography{lwcc}
-
 
 \appendix
 
