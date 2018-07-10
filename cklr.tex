@@ -1,0 +1,590 @@
+\section{Kripke logical relations for Compcert}
+
+%XXX: how does this relate to
+%the intrinsic preorder in 3.5 of [Abramsky \emph{Game Semantics}]?
+%Sound/complete reasoning principle?
+
+\subsection{Logical relations} %{{{
+
+In the broadest sense,
+logical relations are structure-preserving relations,
+in the same way that homomorphisms are structure-preserving maps
+\citep{lrp}.
+Logical relations can be of any arity,
+but in the present work
+we restrict our attention to
+binary logical relations.
+Given a structure $\mathcal{S}$
+involving a number of operations over a carrier set,
+a \emph{logical relation}
+between two instances $S_1, S_2$ of $\mathcal{S}$
+will be a relation $R \subseteq |S_1| \times |S_2|$
+between their carrier sets,
+such that the operations of $\mathcal{S}$
+take related arguments to related results.
+We write $R : \mathcal{R}(S_1, S_2)$.
+
+\begin{example}[Logical relation of monoids]
+\label{ex:monoid}
+A \emph{monoid} is a set $A$ equipped with
+an associative binary operation $\cdot$ and
+an identity element $\epsilon$.
+A \emph{logical relation of monoids} between
+a monoid $\langle A, \cdot_A, \epsilon_A \rangle$ and
+a monoid $\langle B, \cdot_B, \epsilon_B \rangle$
+is a relation $R \subseteq A \times B$
+such that:
+\begin{gather*}
+u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B v' \\
+\epsilon_A \ifr{R} \epsilon_B
+\end{gather*}
+[Possible example: some ``coded message'' relation,
+where sequences on the left correspond to sequences on the right,
+not possible with monoid homomorphisms.]
+\end{example}
+
+Logical relations between multisorted structures
+will include one relation for each sort,
+between the corresponding carrier sets.
+In the case of structures which include type operators,
+we can associate to each base type $A$
+a relation over its carrier set $\llbracket A \rrbracket$,
+and to each type operator $T(A_1, \ldots, A_n)$
+a corresponding \emph{relator},
+which given relations $R_1, \ldots, R_n$ over
+the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$
+will construct a relation $T(R_1, \ldots, R_n)$
+over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
+
+Relators for some common constructions are shown in Fig.~\ref{fig:relators}.
+Note that the first requirement given in Ex.~\ref{ex:monoid}
+can be expressed as:
+\[
+  \cdot_A \ifr{R \times R \rightarrow R} \cdot_B
+\]
+
+\begin{figure}
+  \begin{align*}
+    x \ifr{R_1 \times R_2} y \ \Leftrightarrow\  &
+      \pi_1(x) \ifr{R_1} \pi_1(y) \wedge
+      \pi_2(x) \ifr{R_2} \pi_2(y) \\
+    x \ifr{R_1 + R_2} y \ \Leftrightarrow\  &
+      (\exists \, x_1 \, y_1 \,.\,
+        x_1 \ifr{R_1} y_1 \wedge
+        x = i_1(x_1) \wedge
+        y = i_1(y_1)) \vee \\ &
+      (\exists \, x_2 \, y_2 \,.\,
+        x_2 \ifr{R_2} y_2 \wedge
+        x = i_2(x_2) \wedge
+        y = i_2(y_2)) \\
+    f \ifr{R_1 \rightarrow R_2} g \ \Leftrightarrow\  &
+      \forall \, x \, y \,.\,
+        x \ifr{R_1} y \Rightarrow
+        f(x) \ifr{R_2} g(y) \\
+    A \ifr{\mathcal{P}^+(R)} B \ \Leftrightarrow\  &
+      \forall \, x \in A \,.\,
+      \exists \, y \in B \,.\,
+      x \ifr{R} y \\
+    A \ifr{\mathcal{P}^-(R)} B \ \Leftrightarrow\  &
+      \forall \, y \in B \,.\,
+      \exists \, x \in A \,.\,
+      x \ifr{R} y
+  \end{align*}
+  \caption{A selection of relators}
+  \label{fig:relators}
+\end{figure}
+
+[Explain use in PL theory better]
+
+%}}}
+
+\subsection{Kripke logical relations} %{{{
+
+For stateful languages,
+which terms should be related
+will often depend on the current state of the store.
+This motivated the introduction of Kripke logical relations.
+[Some more background and references here.]
+
+\begin{definition}[Kripke logical relation]
+A \emph{Kripke frame} is a structure $\langle W, \leadsto \rangle$, where
+$W$ is a set of \emph{possible worlds}, and
+$\leadsto$ is an \emph{accessibility relation}
+between the sets $W + \{\star\}$ and $W$.
+Then a \emph{Kripke logical relation} is
+a $W$-indexed family of logical relations $(R_w)_{w \in W}$.
+\end{definition}
+
+We write $R : \mathcal{R}_W(S_1, S_2)$
+for a Kripke logical relation between structures $S_1$ and $S_2$.
+Note that our Kripke frames
+include a set of \emph{initial worlds}
+$W* = \{ w \in W \ |\  \star \leadsto w \}$.
+This will be useful when interpreting Kripke logical relations
+as regular logical relations
+by interpreting $\star$ as the ``current'' or ``actual'' world.
+In the context of our game semantics,
+the peculiar form of the definition
+also facilitates the correspondance with
+our arenas' enabling relations,
+as defined in Sec.~\ref{sec:games}.
+
+\paragraph{Relators}
+
+For a given Kripke frame $\langle W, \leadsto \rangle$,
+a logical relation $R : \mathcal{R}(A, B)$
+can be promoted to a $W$-indexed Kripke logical relation $\lceil R \rceil$
+which ignores the index, so that $\lceil R \rceil_w = R$.
+Likewise,
+a relator
+  $F : \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n) \rightarrow \mathcal{R}(A, B)$
+can be promoted to its Kripke version
+by pointwise extension over the set of possible worlds:
+\begin{gather*}
+  \lceil F \rceil : \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n) \rightarrow \mathcal{R}_W(A, B) \\
+  \lceil F \rceil (R_1, \ldots, R_n)_w = F(R_{1,w}, \ldots, R_{n,w})
+\end{gather*}
+In addition,
+$\Box, \Diamond : \mathcal{R}_W(A,B) \rightarrow \mathcal{R}_W(A,B)$
+are the Kripke relators defined by:
+\begin{align*}
+  x \ifr{(\Box R)_w} y &\Leftrightarrow
+    \forall w' \,.\, w \leadsto w' \rightarrow x \ifr{R_w} y \\
+  x \ifr{(\Diamond R)_w} y &\Leftrightarrow
+    \exists w' \,.\, w \leadsto w' \wedge x \ifr{R_w} y
+\end{align*}
+We also define
+$\Box, \Diamond : \mathcal{R}_W(A,B) \rightarrow \mathcal{R}(A,B)$
+which turn a Kripke logical relation $R$
+into (regular) logical relations as follows:
+\begin{align*}
+  x \ifr{\Box R} y &\Leftrightarrow
+    \forall w' \,.\, \star \leadsto w' \rightarrow x \ifr{R_w} y \\
+  x \ifr{\Diamond R} y &\Leftrightarrow
+    \exists w' \,.\, \star \leadsto w' \wedge x \ifr{R_w} y
+\end{align*}
+
+\begin{example}[Simulation diagram]
+\label{ex:sim}
+Consider a Kripke logical relation of sets $R : \mathcal{R}_W(A, B)$,
+and two transition relations $\alpha : A \rightarrow \mathcal{P}(A)$
+and $\beta : B \rightarrow \mathcal{P}(B)$.
+The simulation diagram:
+\[
+  \begin{tikzcd}
+    s_1 \arrow[r, "\alpha"]
+        \arrow[d, dash, "R_w"'] &
+    s_1' \arrow[d, dotted, dash, "R_{w'} \quad (w \leadsto w')"] \\
+    s_2 \arrow[r, dotted, "\beta"] &
+    s_2'
+  \end{tikzcd}
+\]
+can be written as:
+\[
+  \alpha \ifr{\Box (R \rightarrow \mathcal{P}^+(\Diamond R))} \beta \,.
+\]
+\end{example}
+
+Likewise,
+the simulation relations used by Compcert can be understood
+as Kripke logical relations.
+For instance,
+the basic types used to defined the semantics of Compcert languages
+are equipped with a notion of \emph{memory injection}
+(a special case of Kripke logical relation).
+Operations over these types
+satisfy properties similar to the simulation diagram in Ex.~\ref{ex:sim}.
+These basic operations are composed
+to obtain operational semantics
+which themselves
+satisfy such properties.
+
+This approach can be generalized:
+In the remainder of this section,
+we define a notion of \emph{Compcert KLR},
+which admits Compcert's injections and extensions
+as particular instances,
+but makes it possible to encode
+a broader range of properties.
+
+%}}}
+
+\subsection{Compcert KLRs} %{{{
+
+\begin{figure} % fig:cklr (Compcert KLRs) {{{
+  Values ($R^\kw{val}$)
+  \vspace{1em}
+  \[
+    \begin{array}{r@{\,}l@{\hspace{3em}}c}
+      v : \kw{val} ::= &
+        \kw{Vundef} &
+        \kw{Vundef} \ifr{\Box R^\kw{val}} \kw{Vundef} \\
+      \alt &
+        \kw{Vint}(n) &
+        \kw{Vint} \ifr{(=) \rightarrow \Box R^\kw{val}} \kw{Vint} \\
+      \alt &
+        \kw{Vlong}(n) &
+        \kw{Vlong} \ifr{(=) \rightarrow \Box R^\kw{val}} \kw{Vlong} \\
+      \alt &
+        \kw{Vfloat}(x) &
+        \kw{Vfloat} \ifr{(=) \rightarrow \Box R^\kw{val}} \kw{Vfloat} \\
+      \alt &
+        \kw{Vsingle}(x) &
+        \kw{Vsingle} \ifr{(=) \rightarrow \Box R^\kw{val}} \kw{Vsingle} \\
+      \alt &
+        \kw{Vptr}(p) &
+        \kw{Vptr} \ifr{\Box (R^\kw{ptr} \rightarrow R^\kw{val})} \kw{Vptr}
+    \end{array}
+  \]
+  \vspace{1em}
+  \[
+    \AxiomC{$w \leadsto w'$}
+    \UnaryInfC{$R^\kw{val}_w \subseteq R^\kw{val}_{w'}$}
+    \DisplayProof
+  \]
+
+  \vspace{2em}
+  Pointers ($R^\kw{ptr}, R^\kw{ptrrange}$)
+  \vspace{1em}
+  \[
+    \begin{array}{r@{\::=\:}l}
+      \kw{ptr} & \kw{block} \times \mathbb{Z} \\
+      \kw{ptrrange} & \kw{block} \times \mathbb{Z} \times \mathbb{Z}
+    \end{array}
+  \]
+  \vspace{1em}
+  \[
+    \AxiomC{$(b_1, o_1) \ifr{R^\kw{ptr}_w} (b_2, o_2)$}
+    \UnaryInfC{$(b_1, o_1 + \delta) \ifr{R^\kw{ptr}_w} (b_2, o_2 + \delta)$}
+    \DisplayProof
+  \]
+  \vspace{1em}
+  \[
+    \AxiomC{$(b_1, l_1) \ifr{R^\kw{ptr}_w} (b_2, l_2)$}
+    \AxiomC{$h_1 - l_1 = h_2 - l_2$}
+    \BinaryInfC{$(b_1, l_1, h_1) \ifr{R^\kw{ptrrange}_w} (b_2, l_2, h_2)$}
+    \DisplayProof
+  \]
+  \vspace{1em}
+  \[
+    \AxiomC{$w \leadsto w'$}
+    \UnaryInfC{$R^\kw{ptr}_w \subseteq R^\kw{ptr}_{w'}$}
+    \DisplayProof
+    \quad
+    \AxiomC{$w \leadsto w'$}
+    \UnaryInfC{$R^\kw{ptrrange}_w \subseteq R^\kw{ptrrange}_{w'}$}
+    \DisplayProof
+  \]
+
+  \vspace{2em}
+  Memory operations ($R^\kw{mem}$)
+  \vspace{1em}
+  \[
+    \begin{array}{c}
+      \kw{Genv.init\_mem} :
+        \kw{program} \rightarrow \kw{mem}
+      \\
+      \kw{Mem.alloc} :
+        \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
+        \kw{mem} \times \kw{block}
+      \\
+      \kw{Mem.free} :
+        \kw{mem} \rightarrow
+        \kw{ptrrange} \rightarrow
+        \kw{option}(\kw{mem})
+      \\
+      \kw{Mem.load} :
+        \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{option}(\kw{val})
+      \\
+      \kw{Mem.store} :
+        \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{mem})
+      \\
+      \kw{Mem.perm} :
+        \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
+    \end{array}
+  \]
+  \vspace{0.5em}
+  \[
+    \begin{array}{c}
+      \kw{Genv.init\_mem}
+      \ifr{(\approx) \rightarrow \Diamond R^\kw{mem}}
+      \kw{Genv.init\_mem}
+      \\
+      \kw{Mem.alloc}
+      \ifr{\Box(R^\kw{mem} \rightarrow (=) \rightarrow (=) \rightarrow
+        \Diamond (R^\kw{mem} \times R^\kw{block}))}
+      \kw{Mem.alloc}
+      \\
+      \kw{Mem.free}
+      \ifr{\Box(R^\kw{mem} \rightarrow R^\kw{ptrrange} \rightarrow
+        \kw{option}^+(\Diamond R^\kw{mem}))}
+      \kw{Mem.free}
+      \\
+      \kw{Mem.load}
+      \ifr{\Box(R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow
+        \kw{option}^+(R^\kw{val}))}
+      \kw{Mem.load}
+      \\
+      \kw{Mem.store}
+      \ifr{\Box(R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow R^\kw{val} \rightarrow
+        \kw{option}^+(\Diamond R^\kw{mem}))}
+      \kw{Mem.store}
+      \\
+      \kw{Mem.perm}
+      \ifr{\Box(R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow (\subseteq))}
+      \kw{Mem.perm}
+    \end{array}
+  \]
+  \caption{Some relational properties of Compcert KLRs}
+  \label{fig:cklr}
+\end{figure}
+%}}}
+
+The Compcert memory model \citep{compcertmmv2}
+is the core algebraic structure
+used in the definition of Compcert's language semantics.
+Some of its operations
+are shown in Fig.~\ref{fig:cklr}.
+The idealized version presented here
+involves
+the type of memory states \kw{mem},
+the type of pointers \kw{ptr}, and
+the type of runtime values \kw{val}.
+To keep our exposition concise and clear,
+we will gloss over the technical details
+associated with the encoding of offsets
+as concrete binary integers,
+and the associated modular arithmetic and overflow constraints.
+
+The memory is organized into a finite number of \emph{blocks}.
+Each memory block has a unique identifier ($b : \kw{block}$)
+represented as a positive integer,
+and is equipped with its own independent linear address space.
+Block identifiers and offsets are often manipulated together,
+as a pair $p = (b, o) : \kw{ptr} = \kw{block} \times \mathbb{Z}$.
+New blocks are created by the primitive $\kw{Mem.alloc}$,
+with prescribed boundaries for their usable offsets.
+
+A a runtime value ($v : \kw{val}$) can be stored at
+a given address using the primitive \kw{Mem.store},
+and retreived using the primitive \kw{Mem.load}.
+Values can be integers (\kw{Vint}, \kw{Vlong}) and
+floating point numbers (\kw{Vfloat}, \kw{Vsingle})
+of different sizes,
+as well as pointers (\kw{Vptr}).
+The special value \kw{Vundef}
+represents an undefined value;
+simulation relations sometime allow $\kw{Vundef}$
+to be refined into a more concrete value.
+
+
+%\subsection{Memory injections}
+%
+%For example,
+%Compcert's memory injections
+%define a Kripke logical relation \kw{inj} as follows.
+%The elementary relations \kw{Mem.inject} and \kw{Val.inject}
+%are indexed over the set of worlds \kw{meminj},
+%which specify how memory blocks in the source and target states
+%correspond to each other.
+%The accessibility relation \kw{inject\_incr}
+%specifies for a given injection
+%what are its possible ``futures'' are:
+%they should map existing blocks in the same way
+%but may additionally map blocks newly allocated in the source.
+%From \kw{Mem.inject}, \kw{Val.inject} and similary elementary relations,
+%more complex relations are defined,
+%culminating in a number of simulation diagrams.
+%Similarly,
+%\kw{Mem.extends}, \kw{Val.lessdef}, and related constructions
+%can be understood as the components of a KLR \kw{ext},
+%though one with a trivial set of worlds $\{*\}$.
+%Fig. X illustrates [much of Compcert's memory model spec
+%just expresses the compatibility of basic operations
+%with these KLRs and more].
+%
+%In the following,
+%we generalize from \kw{inj} and \kw{ext} and
+%introduce a family of Kripke logical relations for Compcert,
+%which define logical relations at all the types
+%involved in Compcert's semantics.
+%These relations are compatible with
+%all appropriate elementary operations
+%(in particular, operations of the Compcert memory model).
+%They satisfy enough properties that
+%the \kw{Clight} and \kw{Asm} transition relations
+%are stable under any of them
+%(a relational parametricity theorem),
+%yet are flexible enough that encode many interesting properties,
+%giving us many theorems about Compcert's operational semantics
+%``for free''.
+%
+%This reading of Compcert's foundations
+%in terms of logical relations
+%can provide us with new insight
+%[way to understand Compcert's complicated
+%statements about injections etc. in a uniform way]
+%[we will see also a guide for formulating our definitions
+%when moving into the realm of games].
+%
+
+%}}}
+
+\subsection{Compcert KSRs} %{{{
+
+The remainder of this section describes
+a family of Kripke logical relations over this structure,
+which can be used as a basic components
+when building simulation relations for Compcert.
+This family is closed under composition,
+subsumes the memory extensions, injections, and equalities
+used in Compcert,
+and can encode the requirements placed by Compcert
+on the behavior of external functions.
+
+\begin{definition}[Compcert Kripke simulation relation toolkit]
+A \emph{Compcert Kripke simulation relation} toolkit $R$
+is a tuple $(W_R, \leadsto_R, U^\kw{v}_R, U^\kw{b}_R, f_R, R^\kw{mem})$
+such that:
+\begin{itemize}
+\item $\langle W_R, \leadsto_R \rangle$
+  is the Kripke frame associated with $R$;
+\item $U^\kw{v}_R : \mathbb{B}$
+  is a boolean value which specifies whether undefined values on the left
+  can be refined into non-pointer values on the right;
+\item $U^\kw{b}_R : W_R \rightarrow \mathcal{P}(\kw{block})$
+  specifies whether they can be refined into pointers to a given block;
+\item $f_R : W_R \rightarrow \kw{meminj}$
+  specifies how pointers should be related;
+\item $R^\kw{mem} : W_R \rightarrow \mathcal{R}(\kw{mem})$
+  specifies how memory states should be related.
+\end{itemize}
+The components of $R$ must satisfy
+a number of properties which are shown in Fig~\ref{fig:simrelprop}
+and discussed below.
+We will omit the $R$ subscripts when discussing a single relation.
+\end{definition}
+
+Compcert Kripke simulation relation toolkits (CKSR for short)
+are named this way because we will ultimately
+use them to build simulation relations between
+Compcert transition systems.
+From the components of $R$,
+we define the Compcert Kripke logical relation
+whose constituent relations are further specified in Fig.~\ref{fig:simrel}.
+
+\begin{figure} % fig:simrelprop (Required properties of CKSRs) {{{
+  \begin{gather*}
+    w \leadsto w \\
+    \star \leadsto w \wedge w \leadsto w' \Rightarrow \star \leadsto w' \\
+    w \leadsto w' \wedge w' \leadsto w'' \Rightarrow w \leadsto w'' \\
+    U^\kw{b} \ifr{(\leadsto) \rightarrow (=) \rightarrow (\Rightarrow)} U^\kw{b} \\
+    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f \\
+    U^\kw{v} = \kw{t} \ \wedge\  p_1 \ifr{R^\kw{ptr}_w} (b_2, o_2) \ \Rightarrow\  b_2 \in U^\kw{b}_w \\
+    U^\kw{p}_w \neq \varnothing \ \Rightarrow\  U^\kw{v} = \kw{t} \\
+    [\ldots]
+  \end{gather*}
+  \caption{Required properties for Compcert Kripke simulation relation toolkits}
+  \label{fig:simrelprop}
+\end{figure}
+%}}}
+
+\begin{figure} % fig:simrel (Elementary relations for CKSRs) {{{
+  \small
+  \[ R = (W, \leadsto, U^\kw{v}, U^\kw{b}, f, R^\kw{mem}) \]
+  \noindent \fbox{$R_w^\kw{ptr}$} \hfill \ 
+  \[
+    \AxiomC{$f_w(b) = (b', \delta)$}
+    \UnaryInfC{$(b, o) \ifr{R_w^\kw{ptr}} (b', o + \delta)$}
+    \DisplayProof
+  \]
+  \noindent \fbox{$R_w^\kw{val}$} \hfill \ 
+  \begin{align*}
+    U^\kw{v} = \kw{t} &\Rightarrow
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vint}(n)
+        \\
+    U^\kw{v} = \kw{t} &\Rightarrow
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vlong}(n)
+        \\
+    U^\kw{v} = \kw{t} &\Rightarrow
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vfloat}(x)
+        \\
+    U^\kw{v} = \kw{t} &\Rightarrow
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vsingle}(x)
+        \\
+    b_2 \in U^\kw{b}_w &\Rightarrow
+        \kw{Vundef} \ifr{R_w^\kw{val}} \kw{Vptr}(b_2, o_2)
+  \end{align*}
+  \caption{Additional properties of the elementary relations associated with a CKSR $R$.}
+  \label{fig:simrel}
+\end{figure}
+%}}}
+
+Values are related in a way that largely mirrors $\kw{Val.inject}\,f_w$,
+however the additional parameters $U^\kw{v}$ and $U^\kw{b}$
+specify whether $\kw{Vundef}$ should be allowed to be refined
+into some defined value.
+The ability to switch off this behavior of \kw{Val.inject} and \kw{Val.lessdef}
+allows us to define the CKSR \kw{id},
+for which $R^\kw{mem}$ and $R^\kw{val}$ both reduce to equality,
+as well as coreflexive CKSRs
+which can be used to encode a number of invariants.
+
+The separate treatment of pointers with $U^\kw{b}$
+is necessary when defining the composite relation $R_2 \circ R_1$:
+if $R_1$ allows \kw{Vundef} to be refined by any value
+but $R_2$ does not,
+then for the composite relation
+a pointer $(b_2, o_2)$ can only refine \kw{Vundef} at a world $w$
+if there exists an intermediate pointer $(b_1, o_1)$
+such that $(b_1, o_1) \ifr{R_{2,w}^\kw{ptr}} (b_2, o_2)$.
+
+Note that the relational property associated to $f$,
+together with the definitions of
+derived relations such as $R^\kw{ptr}$ and $R^\kw{val}$,
+ensure that these relations are monotonic in $w$,
+in the sense that if $w \leadsto w'$
+then $R^x_w \subseteq R^x_{w'}$.
+However,
+this is not necessarily the case for $R^\kw{mem}$.
+
+%}}}
+
+\subsection{Relational parametricity of Compcert languages} %{{{
+
+Namely:
+\[ \forall R \,.\, \llbracket p \rrbracket \le_R \llbracket p \rrbracket \]
+
+Free theorems include
+stability under injections, extensions,
+and the fact that CompCertX function semantics
+respect the requirements for external calls (see below).
+
+%}}}
+
+\subsection{Categorical structure} %{{{
+
+[Define the Compcert KSRs \kw{id}, $\circ$.]
+
+%}}}
+
+\subsection{Memory extensions} %{{{
+
+[Extensions as Compcert KSRs.]
+
+%}}}
+
+\subsection{Memory injections} %{{{
+
+[Injections as Compcert KSRs.]
+
+%}}}
+
+\subsection{External calls} %{{{
+
+[Extending Tahina's tricks,
+the requirements on
+external calls
+can be expressed as a Compcert KSR.]
+
+%}}}
