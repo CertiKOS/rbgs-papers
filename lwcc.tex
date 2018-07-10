@@ -801,19 +801,22 @@ able to support compositional compilation.
 Labeled transition systems (LTS)
 are the main kind of semantic objects used by Compcert.
 A Compcert LTS specifies a set of states $S$,
-a labeled transition relation ${\rightarrow}$,
-and distinguished subsets of initial and final states;
-in addition,
-final states are associated with the a final integer result.
+a labeled transition relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
+a set of initial states
+$I \subseteq S$,
+and a set of final states
+$F \subseteq S \times \kw{int}$
+associated with a final integer result.
 Compcert LTS support a notion of interaction with the environment
 in the form of event traces:
 a transition $s \stackrel{t}{\rightarrow} s'$,
 indicates that the state $s$ may transition to state $s'$
-through an interaction recorded as the event trace $t$.
+through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
 
 \subsection{Language Interfaces} %{{{
 
-\begin{table*}
+\begin{table*} % tbl:li Language interfaces {{{
   \begin{tabular}{llll}
     \hline
     Name & Query & Reply & Description \\
@@ -831,6 +834,7 @@ through an interaction recorded as the event trace $t$.
   \caption{Language interfaces for the various Compcert intermediate languages.}
   \label{tbl:li}
 \end{table*}
+%}}}
 
 This model is insufficient to express
 the semantics of C and assembly modules.
@@ -849,10 +853,10 @@ which specifies
 a set $Q$ of \emph{queries} and
 a set $R$ of \emph{replies}.
 Queries
-correspond to the states in which
+correspond to the ways in which
 a module can be entered, whereas
 replies
-correspond to the states in which
+correspond to the ways in which
 the module can return control
 to its environment.
 \end{definition}
@@ -870,6 +874,80 @@ and the state of the memory at the point of exit.
 At the assembly level,
 both queries and replies are defined as
 the values of registers and the state of the memory.
+
+%}}}
+
+\subsection{Transition systems} %{{{
+
+Extending Compcert LTS to account for
+this extra structure yields the following definition.
+
+\begin{definition}[Labeled transition system]
+Given a language interface $\tau = (Q, R)$,
+a \emph{labeled transition system} for $\tau$
+is a tuple $\sigma = (S, \rightarrow, I, F)$ where
+$S$ is a set of states,
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$
+is a ternary \emph{transition relation},
+$I \subseteq Q \times S$
+assigns a set of \emph{initial states} to each query, and
+$F \subseteq S \times R \times \mathcal{P}(Q \times S)$
+is a relation designating \emph{final states}.
+Each final state is associated with a reply,
+and a \emph{continuation} specifying
+how the execution may be resumed by a further query.
+\end{definition}
+
+Note that $I$ is itself a continuation.
+By allowing the execution to be resumed
+after the transition system returns with a reply,
+rather than using a new initial state each time,
+a module can preserve persistent state across queries.
+For Compcert languages,
+it is not necessary to preserve state between successive function calls,
+because the memory state is passed around
+as part of the function call queries and replies.
+However,
+as we construct language interfaces
+allowing module to perform external calls,
+this capability will be important.
+
+%}}}
+
+\subsection{External calls} %{{{
+
+The use of language-specific queries and replies
+in the definition of transition systems
+takes care of the variety of ways
+in which the environment may invoke a module,
+but so far does not account for the ways in which
+the module may itself invoke the environment.
+The following construction adresses this.
+
+\begin{definition}[Arrow language interface]
+Given two language interfaces
+$\mathcal{A} = (Q_\mathcal{A}, R_\mathcal{A})$ and
+$\mathcal{B} = (Q_\mathcal{B}, R_\mathcal{B})$,
+we can define the composite interface
+$\mathcal{A} \rightarrow \mathcal{B}$
+in the following way:
+\begin{align*}
+  Q_{\mathcal{A} \rightarrow \mathcal{B}} &:=
+    Q_\mathcal{B} + \{ \bar{r} \:|\: r \in R_\mathcal{A} \} \\
+  R_{\mathcal{A} \rightarrow \mathcal{B}} &:=
+    R_\mathcal{B} + \{ \bar{q} \:|\: q \in Q_\mathcal{A} \}
+\end{align*}
+\end{definition}
+
+The language interface $\mathcal{B}$
+gives the types of incoming calls and corresponding returns.
+But instead of immediately replying to an incoming call of $Q_\mathcal{B}$
+with a return in $R_\mathcal{B}$,
+the module may perform an external call
+according to the interface $\mathcal{A}$:
+it will ``reply'' with a query of $Q_\mathcal{A}$,
+and expect a subsequent ``query'' from the replies of $R_\mathcal{A}$
+to resume its execution.
 
 %}}}
 
@@ -1041,86 +1119,6 @@ There,
 in addition to the criteria defined above,
 [arguments must be encoded into the target memory,
 but \emph{only} the target memory.]
-
-%}}}
-
-\subsection{Semantic objects} %{{{
-
-Extending Compcert LTS to account for
-this extra structure yields the following definition.
-
-\begin{definition}[Labeled transition system]
-Given a language interface $\tau = (Q, R)$,
-a \emph{labeled transition system} for $\tau$
-is a tuple $\sigma = (S, \rightarrow, I, F)$ where
-$S$ is a set of states,
-${\rightarrow} \subseteq S \times \mathbb{E}_\tau^* \times S$
-is a ternary \emph{transition relation},
-$I \subseteq Q \times S$
-assigns a set of \emph{initial states} to each query, and
-$F \subseteq S \times R$
-is a relation designating \emph{final states}
-together with the reply they produce.
-\end{definition}
-
-[Introduce determinacy?]
-
-We have not yet specified the set $\mathbb{E}_\tau$ of events
-used by a language interface $\tau$.
-They will consist of the same events already present in Compcert,
-augmented with a set of external call events.
-
-%}}}
-
-\subsection{External call events} %{{{
-
-The use of language-specific queries and replies
-in the definition of transition systems
-takes care of the variety of ways
-in which the environment may invoke an open module,
-but does not account for the ways in which
-the module may itself invoke the environment.
-We remedy this by introducing \emph{external call events}.
-
-Following \cite{cpp15},
-we use external call events of the form $\kw{extcall}[q, r]$,
-recording the fact that an external call was performed
-with the query $q$,
-and produced the reply $r$.
-
-Compcert does account for the fact that the program
-may call the outside world in the form of a global parameter
-specifying the semantics of external calls:
-\[
-  \kw{external\_call} :
-    \kw{ident} \rightarrow
-    \kw{val}^* \times \kw{mem} \rightarrow
-    \mathbb{E}^* \rightarrow
-    \mathcal{P}(\kw{val} \times \kw{mem})
-\]
-In addition,
-the predicate $\kw{extcall\_properties}$ defines
-requirements which must be satisfied by the semantics
-of every external function.
-The correctness proof of Compcert is contingent
-on the fact that for every external function $f$,
-the assertion $\kw{extcall\_properties}(\kw{external\_call}(f))$ holds.
-
-We can instantiate $\kw{external\_call}$ for the C language as:
-\[
-  \AxiomC{$e = \kw{extcall}[f(\vec{v})@m, v'@m']$}
-  \AxiomC{$\kw{valid}(e)$}
-  \BinaryInfC{$\kw{external\_call}(f) :
-    (\vec{v}, m) \stackrel{e}{\rightarrow} (v', m')$}
-  \DisplayProof
-\]
-This technique allows us to reuse Compcert's existing infrastructure
-for handling external calls,
-and ensures that our changes to the
-definition of semantics and the correctness proof are minimal.
-However,
-to make it work we need to update $\kw{extcall\_properties}$
-to account for trace refinement.
 
 %}}}
 
@@ -1381,6 +1379,24 @@ and relationship to refinement by $\mathbb{C}$.
 %}}}
 
 \subsection{Relation to Compcert semantics} %{{{
+
+[Compcert does account for the fact that the program
+may call the outside world in the form of a global parameter
+specifying the semantics of external calls:
+\[
+  \kw{external\_call} :
+    \kw{ident} \rightarrow
+    \kw{val}^* \times \kw{mem} \rightarrow
+    \mathbb{E}^* \rightarrow
+    \mathcal{P}(\kw{val} \times \kw{mem})
+\]
+In addition,
+the predicate $\kw{extcall\_properties}$ defines
+requirements which must be satisfied by the semantics
+of every external function.
+The correctness proof of Compcert is contingent
+on the fact that for every external function $f$,
+the assertion $\kw{extcall\_properties}(\kw{external\_call}(f))$ holds.]
 
 [If we forget extcall events,
 set $\tau = (\kw{unit}, \kw{int})$ and $\mathbb{C} = \kw{id}$,
