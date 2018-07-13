@@ -16,6 +16,6 @@ clean:
 	$(RM) $(patsubst %,lwcc.%,$(CRUFT))
 	$(RM) $(patsubst %,slides.%,$(CRUFT))
 
-lwcc.aux: cklr.tex
+lwcc.aux: cklr.tex modsem.tex
 lwcc.pdf: lwcc.bbl
 lwcc.bbl: ACM-Reference-Format.bst
