@@ -958,7 +958,9 @@ from the fact that syntactic composition of programs is defined.]
 \subsection{Small-step resolution}
 
 Take $L = (S_L, I_L, F_L, {\rightarrow_L})$ a small-step semantics
-for the language interface $\mathcal{L} \multimap \mathcal{L}$.
+for the language interface $\mathcal{L} \multimap \mathcal{L}$,
+and $D \subseteq Q_\mathcal{L}$ a set of queries of $\mathcal{L}$
+intended to be handled by $L$.
 We will write the queries of $\mathcal{L} \multimap \mathcal{L}$
 as $\bar{r}$ and $q$,
 whereas its replies will be written
@@ -968,20 +970,32 @@ and $\bar{r}$ is a corresponding return into the module.
 
 We can define $\kw{R}(L) = (S, I, F, {\rightarrow})$ in the following way:
 \begin{align*}
-  S := &\: S_L \times \mathcal{P}(Q_{\mathcal{L} \multimap \mathcal{L}} \times S_L)^* \\
-  I := &\: \{ (q, (s, \varepsilon)) \: \vert \: (q, s) \in I_L \} \\
-  F := &\: \{ ((s, S), r, k@S) \: \vert \:
+  S := &\: S_L^? \times \mathcal{P}(Q_{\mathcal{L} \multimap \mathcal{L}} \times S_L)^* \\
+  I := &\: \{ (q, (\lfloor s \rfloor, \varepsilon)) \: \vert \: (q, s) \in I_L \} \\
+  F := &\: \{ ((\lfloor s \rfloor, \vec{k}), r, k@\vec{k}) \: \vert \:
            (s, r, k) \in F_L \: \wedge \: r \mbox{ observable at } S \} \\
-  {\rightarrow} := &\: \{ ((s, S), t, (s', S)) \: \vert \: s \stackrel{t}{\longrightarrow}_L s' \} \\
-    \cup &\: \{ ((s, S), \varepsilon, (s', k::S)) \: \vert \:
+  {\rightarrow} :=
+    &\: \{ ((\lfloor s \rfloor, \vec{k}), t, (\lfloor s' \rfloor, \vec{k})) \: \vert \:
+        s \stackrel{t}{\longrightarrow}_L s' \} \\
+    \cup &\: \{ ((\lfloor s \rfloor, \vec{k}), \varepsilon, (s', k::\vec{k})) \: \vert \:
         (s, \bar{q}, k) \in F_L \: \wedge \:
-        (q, s') \in I_L \} \\
-    \cup &\: \{ ((s, k::S), \varepsilon, (s', S)) \: \vert \:
+        s' \in I_L \lhd q \} \\
+    \cup &\: \{ ((\lfloor s \rfloor, k::\vec{k}), \varepsilon, (s', \vec{k})) \: \vert \:
         (s, r, -) \in F_L \: \wedge \:
-        (\bar{r}, s') \in k \}
+        s' \in k \lhd \bar{r} \}
 \end{align*}
+where $A^? = \{ \varnothing \} \uplus \{ \lfloor a \rfloor \:|\: a \in A \}$, and:
+\[
+  k \lhd q :=
+  \begin{cases}
+    \{ \varnothing \} &\mbox{if } \forall s \,.\, (q, s) \notin k \\
+    \{ \lfloor s \rfloor \: | \: (q, s) \in k \} &\mbox{otherwise,}
+  \end{cases}
+\]
+so that $k \lhd q$ always contains at least one state.
+
 The states of $\kw{R}(L)$
-consist of a state $s$ of $L$ together with a stack of continuations of $L$.
+consist of an (optional) state $s$ of $L$ together with a stack of continuations of $L$.
 The stack is initially empty,
 and $s$ is initialized following $I_L$.
 Internal steps of $\rightarrow_L$ operate on the current state of $\kw{R}(L)$
@@ -994,7 +1008,7 @@ When a final state of $L$ is reached, three cases are possible:
   if $q$ does not have a corresponding initial state in $L$.
   An actual reply $r$ is observable when the continuation stack is empty.
   The continuation $k$ will be lifted to
-  $k@S := \{ (r, (s, S)) \: \vert \: (r, s) \in k \}$.
+  $k@\vec{k} := \{ (r, (s, \vec{k})) \: \vert \: (r, s) \in k \}$.
 \item[Recursive calls] happen when
   $(s, \bar{q}, k) \in F_L$ and $(q, s') \in I_L$.
   In this case, the call is handled as an internal step of $\kw{R}(L)$
@@ -1005,6 +1019,23 @@ When a final state of $L$ is reached, three cases are possible:
   In this case, the topmost continuation $k$ is popped
   and we pass $r$ to $k$ to obtain the next state $s'$.
 \end{description}
+
+There is a subtlety having to do with ``going wrong'':
+when we make an external call $\bar{q}$
+but $L$ immediately goes wrong after the incoming call $q$,
+we need this ``going wrong'' behavior to be inlined.
+For deterministic LTS this is not an issue:
+if there is no initial state in the callee,
+then this will translate to no transition in the caller,
+which will go wrong as it should.
+But if the caller has other behaviors
+besides the external call,
+this will not work and the external call will simply be
+forgotten.
+To remedy this we introduce an explicit ``going wrong''
+state in $\kw{R}(L)$ using the option type $--^?$,
+and define the continuation application operator $k \lhd q$
+as specified above.
 
 \subsection{Gametree resolution operator}
 \label{sec:res}
