@@ -1,19 +1,23 @@
 \section{Open Modules for Compcert}
 
-Applying our principles to the labeled transition systems
-used in Compcert yields a natural extension
-able to support compositional compilation.
+The semantics of CompCert languages are given mainly
+as labeled transition systems (LTS).
+Applying our principles to this framework
+yields a natural extension
+able to describle the semantics of
+open modules in these languages
+and support composable compilation.
 
-Labeled transition systems (LTS)
-are the main kind of semantic objects used by Compcert.
-A Compcert LTS specifies a set of states $S$,
+In the original CompCert,
+a labeled transition system is given as
+a set of states $S$,
 a labeled transition relation
 ${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
 a set of initial states
 $I \subseteq S$,
-and a set of final states
+and a set
 $F \subseteq S \times \kw{int}$
-associated with a final integer result.
+of final states associated with an integer result.
 Compcert LTS support a notion of interaction with the environment
 in the form of event traces:
 a transition $s \stackrel{t}{\rightarrow} s'$,
@@ -73,20 +77,22 @@ At the level of C,
 queries consist of
 the name and signature of the function being invoked,
 the values of its arguments,
-and the state of the memory at the point of entry.
-Replies
-will consist of the function's return value
+and the state of the memory at the point of entry;
+replies
+consist of the function's return value
 and the state of the memory at the point of exit.
 At the assembly level,
-both queries and replies are defined as
+both queries and replies specifies
 the values of registers and the state of the memory.
 
 %}}}
 
 \subsection{Transition systems} %{{{
 
+
 Extending Compcert LTS to account for
-this extra structure yields the following definition.
+the interaction described by language interfaces
+yields the following definition.
 
 \begin{definition}[Labeled transition system]
 Given a language interface $\tau = (Q, R)$,
@@ -116,7 +122,7 @@ as part of the function call queries and replies.
 However,
 as we construct language interfaces
 allowing module to perform external calls,
-this capability will be important.
+this capability will become important.
 
 %}}}
 
@@ -205,139 +211,242 @@ to resume its execution.
 In order to compare behaviors formulated in terms of
 different language interfaces,
 we need to specify a correspondance
-between the queries and between the replies
+between the potentially infinite sequences of queries and replies
 of the source and target languages.
-We formalize this correspondance in the following way.
+We specify this correspondance using a special kind of
+labeled transition system,
+defined as follows.
 
 \begin{definition}[Calling convention]
-Given a source language interface $\tau_1 = (Q_1, R_1)$ and
-a target language interface $\tau_2 = (Q_2, R_2)$,
-a \emph{calling convention} is a pair
-$\mathbb{C} = (\mathbb{C}_Q, \mathbb{C}_R)$.
-The component
-$\mathbb{C}_Q \subseteq Q_1 \times Q_2$
-relates queries of the source language to
-corresponding queries of the target language.
-Given related source and target queries,
-the component
-$\mathbb{C}_R(q_1, q_2) \subseteq R_1 \times R_2$
-relates replies of the source language to
-corresponding replies of the target language.
+For a source language interface $\mathcal{A}_1 = (Q_1, R_1)$ and
+a target language interface $\mathcal{A}_2 = (Q_2, R_2)$,
+a \emph{calling convention}
+is a tuple $\mathbb{A} = (W, w_0, \leadsto_Q, \leadsto_R)$.
+$W$ is a set of states, with $w_0 \in W$ specifying an initial state.
+${\leadsto_Q} \subseteq Q_1 \times W \times W \times Q_2$
+is the calling convention's \emph{query transition relation}, and
+${\leadsto_R} \subseteq R_1 \times W \times W \times R_2$
+is the calling convention's \emph{reply transition relation}.
+We will write:
+\[ q_1 \ifr{w \leadsto w'} q_2 \qquad
+   r_1 \ifr{w \leadsto w'} r_2 \]
+whenever $(q_1, w, w', q_2) \in {\leadsto_Q}$,
+resp. $(r_1, w, w', r_2) \in {\leadsto_R}$.
+We will write $\mathbb{A} : \mathcal{A}_1 \Leftrightarrow \mathcal{A}_2$
+to indicate that $\mathbb{A}$ is a calling convention between
+the source language interface $\mathcal{A}_1$ and
+the target language interface $\mathcal{A}_2$.
 \end{definition}
 
-Table~\ref{tbl:cc} describes the various calling conventions
-used in Composable Compert.
+% not very well-written but the basic idea I want to express is that things
+% that were internal before now become observable to the outside and how
+% language interfaces and calling conventions fit in that context
+As we extend CompCert languages
+by making part of their internal state observable
+in the form of queries and replies specified by language interfaces,
+the role of calling conventions
+will be to [do the corresponding thing for simulation relations].
+Previous work on compositional compilation \cite{compcompcert}
+does take into account the variety of language interfaces
+and calling conventions implicitely present in CompCert.
+Instead,
+Compositional CompCert introduces a universal calling convention
+in the form of \emph{structured injections},
+and the simulation relations in all of its passes
+need to be updated to conform to this universal convention.
 
-[Reframe] Compcert does not use explicit notions of
-language intefaces and calling convenentions.
-However,
-its model of external calls
-(\kw{extcall\_sem}),
-the requirements it imposes on their semantics
-(\kw{extcall\_properties}),
-and the internal invariants used by its simulation proofs
-can be read in this light
-and used to define
-compatible notions of refinement and calling conventions
-across Compcert languages.
+By contrast,
+our calling conventions
+allow us to express precisely the assumptions and guarantees
+made by each pass of CompCert,
+so that our changes to the existing correctness proofs
+can be minimal.
+We will show that our notion of calling convention
+can also be used in conjunction with self-simulations
+to express properties of interest for
+select CompCert languages.
+Section~\ref{sec:ccalgebra}
+presents the calling convention algebra that we will use
+for this purpose, and
+which allows us to [glue this heterogenous mess into a coherent whole.]
+As a starting point,
+we introduce some fundamental constructions that will be used
+in the remainder or this section.
 
-For simplicity,
-Compcert uses a common language interface
-for all of its languages.
-Queries are of the form:
+\begin{definition}[Identity calling convention]
+For a language interface $\mathcal{A}$,
+the identity calling convention
+$\kw{id}_\mathcal{A} : \mathcal{A} \Leftrightarrow \mathcal{A}$
+uses a single state $* \in \mathbbm{1}$,
+and its query and reply transition relations are defined by:
+\begin{gather*}
+  q_1 \ifr{* \leadsto *} q_2 \Leftrightarrow q_1 = q_2 \\
+  r_1 \ifr{* \leadsto *} r_2 \Leftrightarrow r_1 = r_2
+\end{gather*}
+\end{definition}
+
+\begin{definition}[Composition of calling conventions]
+The \emph{vertical composition} of
+$\mathbb{A}_{12} : \mathcal{A}_1 \Leftrightarrow \mathcal{A}_2$ and
+$\mathbb{A}_{23} : \mathcal{A}_2 \Leftrightarrow \mathcal{A}_3$
+is the calling convention
+$\mathbb{A}_{23} \circ \mathbb{A}_{12} :
+ \mathcal{A}_1 \Leftrightarrow \mathcal{A}_3$.
+The states of $\mathbb{A}_{23} \circ \mathbb{A}_{12}$
+are pairs consisting of
+one state of $\mathbb{A}_{12}$ and
+one state of $\mathbb{A}_{23}$.
+Its initial state is the pair consisting of
+the initial state of $\mathbb{A}_{12}$ and
+the initial state of $\mathbb{A}_{23}$.
+The query and reply transition relations are defined
+by the rules:
 \[
-  Q = \{ f(\vec{v})@m : (f, \vec{v}, m) \in
-    \kw{ident} \times \kw{val}^* \times \kw{mem} \} \,,
+  \AxiomC{$q_1 \ifr{w_{12} \leadsto w_{12}'} q_2$}
+  \AxiomC{$q_2 \ifr{w_{23} \leadsto w_{23}'} q_3$}
+  \BinaryInfC{$q_1 \ifr{(w_{12}, w_{23}) \leadsto (w_{12}', w_{23}')} q_3$}
+  \DisplayProof
 \]
-where $f$ identifies the function being called,
-$\vec{v}$ provides values for the function's arguments, and
-$m$ specifies the global memory's initial state for the call.
-Replies are of the form:
 \[
-  R = \{ v'@m' : (v', m') \in
-    \kw{val} \times \kw{mem} \} \,,
+  \AxiomC{$r_1 \ifr{w_{12} \leadsto w_{12}'} r_2$}
+  \AxiomC{$r_2 \ifr{w_{23} \leadsto w_{23}'} r_3$}
+  \BinaryInfC{$r_1 \ifr{(w_{12}, w_{23}) \leadsto (w_{12}', w_{23}')} r_3$}
+  \DisplayProof
 \]
-where $v'$ gives the function's return value and
-$m'$ specifies the global memory's new state.
+\end{definition}
 
-The refinement convention associated with this language interface
-specifies that
-related queries should carry the same function identifier,
-and that the values of arguments and the states of the memories
-can be related in one of three ways:
-\begin{itemize}
-\item they can be equal;
-\item the source query may be
-  \emph{less defined} than the target query,
-  meaning that the special value $\kw{Vundef}$
-  in the components of the source query
-  can be refined into concrete values in the target query,
-  and that the target memory,
-  in addition to having more defined contents,
-  may carry more liberal permissions
-  (a relation known as \emph{memory extension});
-\item they can related by a \emph{memory injection} $\iota$,
-  allowing memory addresses to be remapped
-  between the source and target queries.
-\end{itemize}
-Memory injections only constrain the contents of memories
-at addresses which are related by $\iota$.
-At these addresses,
-the contents of the target memory is furthermore
-allowed to be more defined than the contents of the source
-memory at the corresponding address.
-
-Given two queries related by
-the Compcert refinement convention,
-matching replies
-must be related in a compatible way:
-\begin{itemize}
-\item if the queries were equal,
-  the replies must be equal as well;
-\item if the source query was
-  \emph{less defined} than the target query,
-  then this must be true of the corresponding
-  replies as well;
-\item if the source and target queries
-  were related through a memory injection $\iota$,
-  then the corresponding replies
-  must be related through a potentially \emph{larger}
-  injection $\iota' \ge \iota$.
-\end{itemize}
-In addition,
-previously allocated regions of the target memory
-must remain unchanged
-at any addresses that were not mapped to valid locations
-of the initial source memory.
-This allows the target language to allocate additional,
-private memory locations (such as stack frames),
-which are not visible at the level of the source language.
-Compcert's refinement convention
-expresses the expectation that such locations
-will be left unchanged by the environment.
-
-Although the Compcert refinement convention is used as
-the calling convention for most compiler passes,
-a more specific calling convention is used
-at the point where function call arguments
-are marshalled onto the stack.
-There,
-in addition to the criteria defined above,
-[arguments must be encoded into the target memory,
-but \emph{only} the target memory.]
+In Sec.~\ref{sec:ccalgebra},
+we will define a notion of equivalence for calling conventions.
+With respect to that equivalence,
+the identity calling convention will be a unit for composition,
+and composition will be associative,
+so that language interfaces and calling conventions
+form a category.
 
 %}}}
 
-\subsection{Refinement} %{{{
+\subsection{Backward simulations} %{{{
 
-Compcert uses \emph{backward simulations}
+CompCert uses \emph{backward simulations}
 as its primary notion of refinement between labeled transition systems.
-Our version takes into account the notion of calling convention
-introduced in Sec.~\ref{sec:callconv}:
-because our events may expose language-specific details,
-we cannot assume the traces generated by the two LTS can be directly compared.
-Instead,
-we use the calling convention to compute an appropriate relation.
+% Footnote pointing out difference w/ "Fw & Bw Sim" terminology?
+A backward simulation asserts that any transition in the target program
+has a corresponding transition sequence in the source program.
+A transition in the target program can be matched with
+an empty transition sequence in the source program;
+however, to ensure the preservation of silent divergence,
+this can only happen for finitely many consecutive target transitions.
+This restriction is enforced by indexing the simulation relation
+over a well-founded order,
+and making sure that the index decreases
+whenever a potentially empty sequence of source transitions is used.
+
+We update CompCert's notion of backward simulation
+to take into account the way in which labeled transition systems
+may interact with the environment.
+First,
+we parametrize backward simulations by a calling convention,
+which specifies how the sequence of queries and replies
+performed by the two LTS should be related.
+Second,
+we extend the simulation to any continuations
+produced by the LTS when a final state is reached,
+so that the simulation may be resumed for subsequent queries.
+
+Note that because queries and replies
+correspond to respective actions of the environment and the system,
+they need to be treated differently.
+Indeed,
+if the specification $L_1$ is to be faithfully realized
+by the implementation $L_2$,
+we expect on one hand
+any query \emph{prescribed} by the specification $L_1$
+to be accepted by $L_2$ as well,
+but on the other hand
+we expect any reply that $L_2$ can produce
+to be \emph{permitted} by $L_1$.
+This asymmetry constitutes the distinguishing feature
+of game semantics \cite{cspgs},
+and leads to a notion of \emph{alternating refinement} \cite{altref}.
+In fact,
+the asymmetry is already present in a rudimentary form
+in CompCert backward simulations,
+in the conditions relating sets initial states.
+We generalize it in the following way.
+
+\begin{definition}[Backward simulation of continuations]
+Let $L_1 : \mathcal{A}_1$, $L_2 : \mathcal{A}_2$
+be two transition systems with states taken in the sets $S_1$, $S_2$,
+let $\mathbb{A} : \mathcal{A}_1 \Leftrightarrow \mathcal{A}_2$
+be a calling convention with states taken in the set $W$,
+let $(I, <)$ be a well-founded preorder, and
+let $R \subseteq W \times I \times S_1 \times S_2$
+be a simulation relation.
+We say that
+a continuation $k_1 \subseteq Q_1 \times S_1$
+\emph{simulates}
+a continuation $k_2 \subseteq Q_2 \times S_2$
+\emph{at $w$}
+if the following properties hold:
+\begin{enumerate}
+\item
+  for any queries $q_1$, $q_2$ and $w'$ such that
+  $q_1 \ifr{w \leadsto w'} q_2$,
+  and any resumption $(q_1, s_1) \in k_1$,
+  there exists a corresponding resumption $(q_2, s_2) \in k_2$;
+\item
+  for any queries $q_1$, $q_2$ and $w'$ such that
+  $q_1 \ifr{w \leadsto w'} q_2$,
+  and any resumptions $(q_1, s_1) \in k_1$, $(q_2, s_2) \in k_2$,
+  there exists $i$ such that $(s_1, s_2) \in R_{w',i}$.
+\end{enumerate}
+We will write $k_1 \ge^{\mathbb{A},R}_w k_2$.
+\end{definition}
+
+The definition above has a lot of moving parts, and
+it may not be immediately intuitive.
+[explain why the two parts in terms of
+actions of the environment and actions of the system,
+and the interpretation of non-determinism as
+several possible upcoming behaviors of the \emph{system},
+even as we're considering queries and initial states for now.]
+
+With this we are ready to define backward simulations.
+
+\begin{definition}[Backward simulation]
+Let $L_1 = (S_1, I_1, \rightarrow_1, F_1) : \mathcal{A}_1$ and
+and $L_2 = (S_2, I_2, \rightarrow_2, F_2) : \mathcal{A}_2$
+be two labeled transition systems,
+let $\mathbb{A} : \mathcal{A}_1 \Leftrightarrow \mathcal{A}_2$
+be a calling convention with states taken in the set $W$, and
+let $(I, <)$ be a well-founded preorder.
+The relation $R \subseteq W \times I \times S_1 \times S_2$
+is a \emph{simulation relation between $L_1$ and $L_2$}
+if the following properties hold:
+\begin{description}
+\item[Initial states]
+  $I_1 \ge^{\mathbb{A},R}_{w_0} I_2$
+\item[Transitions]
+  For all $(w, i, s_1, s_2) \in R$, $t \in \mathbb{E}^*$ and $s_2' \in S_2$
+  such that $s_2 \xrightarrow{t}^* s_2'$,
+  there exists $i', s_1'$ such that one of the following conditions hold:
+  \begin{enumerate}
+    \item $s_1 \xrightarrow{t}^+ s_2$
+    \item $s_1 \xrightarrow{t}^* s_2 \wedge i' < i$,
+  \end{enumerate}
+  and such that $(w, i', s_1', s_2') \in R$.
+\item[Final states]
+  For all $(w, i, s_1, s_2) \in R$ and $r_2 \in R_2$
+  such that $(s_2, r_2) \in F_2$,
+  there exists $w' \in W$ and $r_1 \in R_1$
+  such that 
+  there exists 
+
+\end{description}
+\end{definition}
+
+---
+
 Furthermore,
 the calling convention may introduce
 constraints on the environment in the target specification:
