@@ -96,19 +96,18 @@ As far as the first question goes,
 we probably want to keep in line with what CompCert does,
 so that:
 \begin{itemize}
-\item Only externally obsevable differences should be discriminated for:
-  we want something like trace equivalence / similarity,
-  rather than more structural / fine-grained equivalences like bisimulation;
-\item Finite amounts of internal activity are unobservable;
-\item However the semantics is divergence-sensitive,
-  with divergence ($\Delta$) incomparable with other behaviors;
-\item Unsafe behavior ($\delta$) is taken as $\top$;
+\item Only externally observable differences count (trace equivalence);
+\item Finite amounts of internal activity ($\tau$) are unobservable;
+  however,
+\item Divergence ($\Delta$) is observable,
+  and incomparable with other behaviors;
+\item Unsafe behavior ($\lightning$) is taken as $\top$;
 \item Input and outputs are distinguished.
 \end{itemize}
 It would be conceivable to weaken this
-(for instance to identify $\Delta$ with $\delta$,
+(for instance to identify $\Delta$ with $\lightning$,
 as is done in CertiKOS).
-On the other hand we cannot strenghten it
+On the other hand we cannot strengthen it
 (for instance by making $\tau$ observable)
 since we wouldn't be able to embed
 the CompCert correctness proof in a stronger setting.
@@ -121,7 +120,7 @@ The second question (representation) is more open-ended.
 We probably want to stay within the general realm of LTS.
 Then, there's a question of
 whether we allow internal actions ($\tau$),
-how $\delta$, $\Delta$ are represented,
+how $\lightning$, $\Delta$ are represented,
 and how inputs are handled.
 Each combination of choices yields
 its own definition of simulation for
@@ -129,11 +128,11 @@ expressing the CompCert preorder described above
 in that particular setting.
 
 The critical point here is:
-The choices are made in CompCert
+The choices made in CompCert
 are first and foremost oriented towards
 making it easy to define languages.
-They make the notion of simulation used
-super-complicated (backward simulations),
+They make the notion of simulation
+very complicated (backward simulations),
 but this can be avoided in most cases
 through the use of stronger forms of simulations
 as proof methods
@@ -141,13 +140,13 @@ as proof methods
 lemmas for using stronger but simpler simulation diagrams).
 Simulations are only ever used as a hypothesis
 for proving trace containement
-and composition theorems,
+and vertical composition,
 which gets slightly hairy but is manageable
 and a one-off thing.
 
 In our case,
 we care a lot about monotonicity properties in particular,
-because in addition to giving the one compiler correctness proof,
+because in addition to the compiler correctness proof,
 we want to do a fair amount of meta-theory.
 This is why we're looking to embed everything
 into a setting where simulations are simple.
@@ -172,7 +171,7 @@ the notion of simulation becomes more complex
 because we need to be able to skip over
 $\tau$ transitions on both sides.
 
-This being said simple simulations,
+This being said, simple simulations,
 which consider $\tau$ as an observable event
 and operate in a lockstep fashion,
 are a special case and can be used as a proof method.
@@ -189,10 +188,8 @@ It might also be the case that:
 \paragraph{No transitions}
 
 There is no explicit internal activity.
-
 The advantage is that
 the associated notion of simulation is simple.
-
 The inconvenient is that
 the LTS must be defined so that
 internal activity is bunched up into one transition
@@ -205,37 +202,39 @@ if it involves some internal ``big-stepping''.
 \subsection{Divergence} %{{{
 
 This is a related but distinct question:
-how do we represent a diverging behavior.
+how do we represent diverging behavior.
 
 \paragraph{Infinite sequence of $\tau$ transitions}
 
 The most direct way is to use an infinite sequence of $\tau$ transitions,
 since $\tau^\omega$ is essentially where divergence comes from.
-Obviously this can only work if there are $\tau$ transitions.
+Obviously this can only work if the model we're working with
+permits $\tau$ transitions.
 
 The advantage of this is that it is very natural and straightforward.
 When defining operators we can just pass along $\tau$ transitions from
 the LTS being combined,
 maybe introduce our own $\tau$ transitions,
-but we never have to worry about divergence
-in the definition.
+but we never have to handle divergence explicitely
+in the definition,
+including divergence introduced by the operator itself.
 
 The major drawback is that we have to use \emph{measured simulations},
 with the well-founded preorder and all that,
 and that's very painful to use as a hypothesis
-when proving monotonicity and the like.
+when proving monotonicity and similar properties.
 
 \paragraph{Explicit $\Delta$ event}
 
 Another approach is to represent divergence
 with an explicit $\Delta$ event (I've also called it $\Uparrow$ before).
-This yields a very natural definition of simulation,
+The associated definition of simulation is very straightforward,
 since we want divergence to be on par with other behaviors.
 
 This is possible with or without $\tau$ transitions.
-In a context where we \emph{so} have $\tau$ transitions,
+In a context where we have \emph{both} $\Delta$ events and $\tau$ transitions,
 it would make it possible for $\tau^\omega$ to denote $\tau^*$
---- any \emph{finite} number of $\tau$'s ---
+(any \emph{finite} number of $\tau$'s)
 but not divergence.
 
 \paragraph{Represented as $\varnothing$}
@@ -243,8 +242,8 @@ but not divergence.
 Finally representing divergence as $\varnothing$ (no transitions)
 would be possible, though probably ill-advised in the general case.
 
-One reason we would want to that is
-that it would make some constructions easier to define,
+One reason to do that is
+to make some constructions easier to define,
 for example the idea of defining composition
 by projecting out the observable components of an interaction
 (as is done in many typical game semantics papers):
@@ -257,12 +256,11 @@ The simulation would be slightly more complicated:
 we would need to add a condition that
 if the implementation has no transition,
 then the specification also must have no transition.
-Another issue is that we lose some expressivity,
-since it is no longer possible to express a specification
-permitting both divergence and another behavior,
-though one could argue this is not needed in practice.
+Another issue is the loss of expressivity,
+since it is no longer possible to give a specification
+permitting both divergence and another behavior.
 Finally this would be incompatible with
-representing $\delta$ as $\varnothing$.
+representing $\lightning$ as $\varnothing$.
 
 %}}}
 
@@ -274,35 +272,36 @@ or undefined behavior ($\lightning$) in the context of CompCert.
 Since anything correctly implements undefined behavior,
 we want it to be a greatest element in our preorder.
 
-\paragraph{Explicit $\delta$ event}
+\paragraph{Explicit $\lightning$ event}
 
 In this approach we use an explicit representation of
 unsafe behavior as its own event.
-The simulation needs to single out $\delta$
+The corresponding definition of simulation needs to single out $\lightning$
 so that whenever the specification hits it,
 the simulation otherwise holds unconditionally.
 With this representation,
 I expect it will be relatively easy
-for operators to preserve $\delta$ where appropriate,
+for operators to preserve $\lightning$ where appropriate,
 however it makes the definition of $\sqcap$
 more complicated because we need to make sure that
-$\delta \sqcap x = x$ for all specifications $x$.
+$\lightning \sqcap x = x$ for all specifications $x$.
 
 \paragraph{Representation as $\top$}
 
-Since the distinguishing feature of $\delta$ is that
+Since the distinguishing feature of $\lightning$ is that
 it can be implemented by any possible behavior,
-we could just \emph{represent it as} any possible behavior.
+we could just \emph{represent it as}
+the specification which permits any possible behavior.
 Adding a $\top$ state to LTS that transitions to itself
 with all possible outputs is straightforward enough.
 This also makes the definition of $\sqcap$ easy,
-and means that the simulation doesn't have to handle $\delta$
+and means that the simulation doesn't have to handle $\lightning$
 in any special way.
 
 One downside is that we lose the distinction between
 the ``all possible \emph{safe} behaviors'' specification,
 vs. ``undefined behavior'',
-although this can be remedied by keeping a $\delta$ event
+although this can be remedied by keeping a $\lightning$ event
 that is only ever used for $\top$.
 Another is that in some contexts,
 non-increasing operators 
@@ -323,14 +322,20 @@ However, for regular (backward) simulations,
 this means unsafe behavior has to be singled out:
 in CompCert this adds both the $\mathsf{safe}(s)$
 guards everywhere in the definition of backward simulations
-(similar to the condition dicussed above for $\delta$ events),
+(similar to the condition dicussed above for $\lightning$ events),
 but also the progress condition,
-which has to make sure that the implementation behavior
+which ensures that the implementation behavior
 can only be unsafe whenever the specification is.
 
 Another issue is that
 two safe but distinct behaviors no longer have a meet,
 so that we cannot define $\sqcap$.
+In other words there is no ``all behaviors prohibited'' specification.
+This may not seem like a specification we would want to write,
+but it can be useful to foreclose some execution paths \emph{in restrospect},
+especially depending on the result of an interaction with the environment.
+And I suspect having a formal lattice structure
+can be useful in many other ways.
 
 %}}}
 
@@ -339,18 +344,13 @@ so that we cannot define $\sqcap$.
 There is no such thing in our model,
 since final states are merely a way to emit
 a specific kind of event,
-and any terminating is temporary
-until the execution is resumed
+and any terminating we do is temporary,
+simply waiting for the execution to be resumed
 using the provided continuation.
 
 %}}}
 
 \subsection{System vs. environment actions} %{{{
-
-According to \cite{cspgs},
-distinguishing between system vs. environment actions
-is the essence of game semantics
-and a key ingredient for compositionality.
 
 The question of how to handle system vs. envronment actions is twofold:
 how do we encode the distinction between them, and
@@ -367,12 +367,12 @@ which tells us whether a given event
 is a system or environment action.
 
 In theory this can gives us the flexibility to shift between
-different ``views'' or ``active sets''.
-However note that in my model I still have distinct events
+different ``views'' --- active sets of components to be regarded as ``the system''.
+However in my model I still have distinct events
 for outgoing and incoming calls,
 because this is how my language interfaces are defined.
 They could conceivably be collapsed
-when we do the embedding,
+when we do the embedding of CompCert semantics,
 with the understanding that we would have an explicit domain
 for each component
 which would determine what calls are incoming vs. outgoing.
@@ -404,13 +404,14 @@ This is what happens at the level of my language interfaces,
 where queries and replies are given
 as two different types.
 The advantage is that we don't have to carry around
-an extra assignment.
+an extra polarity assignment.
 This also gives the possibility to define
+a type of
 inherently receptive transition systems (see below).
 
 %}}}
 
-\subsubsection{Simulation} %{{{
+\subsubsection{Simulation relations} %{{{
 
 \paragraph{Alternating simulation}
 
@@ -452,20 +453,18 @@ and we only need to show that they will preserve
 the simulation relation.
 Hence, we can fall back on a simple simulation
 that does not have a complicated polarity inversion.
+This is morally the approach taken in CompCert.
 
-Morally this is the approach taken in CompCert.
-
-\paragraph{Receptiveness by construction}
-
-This is all good an well,
-but it still requires us to prove and carry around
+One downside is that it still requires us to prove and carry around
 receptiveness theorems,
 and either show that our operators preserve receptiveness,
 or close them in some way that will make their definition more complex.
 
+\paragraph{Receptiveness by construction}
+
 An alternative would be to make receptiveness intrisic
-in our definition or transition systems.
-Here a labeled transition system over
+in our definition of transition systems.
+A labeled transition system over
 a type of environment actions $I$, and
 a type of system actions $O$,
 would be defined by giving a set of states $S$ together with:
@@ -489,7 +488,7 @@ would be an $R \subseteq S_1 \times S_2$ such that:
 
 \subsection{Omniscient vs. boundary views} %{{{
 
-I reseve the term \emph{output} (resp. \emph{input})
+I have been careful to reserve the term \emph{output} (resp. \emph{input})
 for the subset of system actions (resp. environment actions)
 which cross the boundary between the system and the environment.
 
@@ -499,10 +498,10 @@ In the ``boundary log'' paradigm,
 outputs are the only system actions, and
 inputs are the only environment actions,
 so that these concepts coincide.
-This enforces by construction
-the fact that the behavior of the system
+This enforces locality by construction:
+the behavior of the system
 cannot depend on non-local environment actions,
-and the fact that the environment
+and the environment
 cannot observe internal details of the system.
 
 One issue with that approach is that
@@ -513,6 +512,7 @@ framework in which it is formulated.
 In particular,
 in traditional game semantics
 divergence usually operates as $\bot$,
+so this is easy to deal with,
 but in our context it is a behavior on par with others.
 
 \paragraph{Global log}
@@ -545,8 +545,8 @@ to recover a boundary log for the composite system.
 
 Another possibility is to have a ``structurally global'' log
 where internal system events appear, but are hidden as $\tau$ moves.
-A dual approach can be used to have
-non-local environment action appear as $\bar{\tau}$ moves.
+Dually we can represent
+non-local environment action as $\bar{\tau}$ moves.
 
 %}}}
 
