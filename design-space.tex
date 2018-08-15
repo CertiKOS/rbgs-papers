@@ -10,8 +10,11 @@
 
 \begin{document}
 
+\maketitle
+
 Below I outline the design space for
-semantic domains that can help us
+defining syntactic and semantic objects
+that can help us
 formulate the meta-theory for Composable CompCert.
 
 %\section{What's our objective?} %{{{
@@ -225,35 +228,34 @@ if it involves some internal ``big-stepping''.
 
 \subsection{Divergence} %{{{
 
-A related but distinct question is
+A question related to but distinct from
+the status of silent transitions is
 how we represent silently diverging behavior.
 
 There is no such thing as an infinite amount of time,
 so that divergence can never be observed directly:
 for a process given as a black box,
-there is no experiment that can determine for sure
+there is no experiment that can establish
 whether that process is silently divergent.
 The best we can do is run the black box for a specific, finite amount of time
 and observe that nothing has happened so far.
 We can denote such an observation by $\tau^n$,
-where $n$ is the number of execution steps steps we are willing to wait for.
+where $n$ is the number of execution steps we are willing to wait for.
 
 Unfortunately,
 such observations are not invariant under
-the addition or compression of internal actions ($\tau$)---%
+the addition or removal of internal actions ($\tau$)---%
 which happens between the source and target programs
 of CompCert and
 which we usually seek to abstract away
 when we write specifications---%
-whereby any finite sequences of $\tau$ transitions
+whereby a finite sequence of $\tau$ transitions
 may be replaced by any other such finite sequence.
 
-Divergence ($\Delta$) is the property that we can observe $\tau^n$
+By contrast,
+divergence ($\Delta$) is the property that we can observe $\tau^n$
 for any $n \in \mathbb{N}$,
-and is invariant under such substitutions,
-since replacing one finite sequence of $\tau$s by another
-will simply replace some $\tau^n$ with some $\tau^m$,
-equally observable in the original.
+and is invariant under such substitutions.
 We can also regard divergence as a pseudo-observation
 representing the limit of
 the decreasing sequence of observations $(\tau^n)_n$,
@@ -281,7 +283,7 @@ and understanding what makes operators well-behaved in that context---%
 so that our proofs can carry through the mappings,
 is how to approach this.]
 Below I outline some representations of $\Delta$
-we've been thinking about.
+we have been thinking about.
 
 \paragraph{Infinite sequence of $\tau$ transitions}
 
@@ -318,7 +320,7 @@ but not divergence.
 
 \paragraph{Represented as $\varnothing$}
 
-Finally representing divergence as $\varnothing$ (no transitions)
+Representing divergence as $\varnothing$ (no transitions)
 would be possible, though probably ill-advised in the general case.
 
 One reason to do that is
@@ -340,6 +342,82 @@ since it is no longer possible to give a specification
 permitting both divergence and another behavior.
 Finally this would be incompatible with
 representing $\lightning$ as $\varnothing$.
+
+\paragraph{Heartbeat events}
+
+In practice,
+processes are usually run under some scheduling discipline,
+so that even a silently divergent process will be
+in an ongoing dialogue with its environment.
+We can model this by inserting \emph{heartbeat events} $h$
+in the behavior under consideration,
+representing the points in time where
+the process would be interrupted by
+or yield back control to its environment.
+The conjecture is that because this representation would
+unify silent divergence and reactive behavior,
+operators would not have to handle divergence
+in a particular way and
+would become simpler to define and/or reason about.
+
+We expect the schedule to be fair,
+so that the process eventually has an opportunity
+to make progress,
+but can only ever run for a finite amount of time.
+Under that assumption,
+writing $E$ for the set of non-heartbeat events,
+infinite behaviors would be in $x (h^+ E^+)^\omega$,
+and divergence in particular would be modeled as $x (h^+ \tau^+)^\omega$.
+A behavior containing
+an infinite sequence where no heartbeat event occurs ($E^\omega$)
+would represent only the set of finite prefixes
+of that sequence as possible observations,
+but would never denote divergence.
+
+Heartbeat events would influence the preorder in the following way.
+Since the schedule used to insert heartbeat events is arbitrary,
+a simple simulation between two such behaviors would be incomplete,
+distinguishing behaviors that differ only in their schedule.
+To remedy this,
+we will need our semantic objects to
+include all possible schedules.
+This can be accomplished using sets of behaviors
+as our semantic objects,
+or by using non-determinism.
+
+Another aspect of how heartbeat event fit within the preorder
+is whether they should count as input or output moves.
+Intuitively, categorizing $h$ as an input
+would represent the environment interrupting the execution,
+as a preemptive schduler would,
+whereas categorizing $h$ as an output
+would represent the system voluntarily yielding control
+back to the scheduler,
+as in cooperative threading schemes.
+In practice,
+this decision would influence how two behaviors
+which encode different sets of schedules
+would be related to one another in the preorder,
+and also whether a behavior encoding multiple schedules
+may still qualify as deterministic
+in the sense of output determinism.
+
+Another concern is the handling of heartbeat events
+in operators where diverging behavior may emerge
+from combining individual non-diverging components.
+The ``heartbeat version'' of this phenomenon
+is that an operator may introduce
+infinite sequences of non-heartbeat events
+when combining behavior
+without such sequences.
+If such sequences represent
+internal actions that would eventually be abstracted as $\tau$,
+the abstracted version should admit a divergence observation, however
+if the sequence contains no heartbeat events this will not be the case
+(it will be interpreted as $\tau^*$ not $\tau^* \cup \{\Delta\}$).
+This means heartbeat events would once again
+have to be treated specially by such operators,
+or the schedule made explicit.
 
 %}}}
 
