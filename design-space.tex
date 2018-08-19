@@ -3,6 +3,8 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{stmaryrd}
+\usepackage{mathtools}
+\usepackage{tikz-cd}
 
 \hyphenation{CompCert}
 
@@ -718,6 +720,298 @@ Dually we can represent
 non-local environment action as $\bar{\tau}$ moves.
 
 %}}}
+
+%}}}
+
+\section{Embeddings} %{{{
+
+In this section I will assume that we use
+a single model of transition systems $\mathbb{D}$ and
+a single set of actions $\Sigma$,
+but use different preorders to
+realize combinations of the possible choices
+described in the previous section.
+
+\subsection{Preorders} %{{{
+
+I will write the simulation preorders I consider as $\le^w_z$,
+where the superscript $w \subseteq \{\lightning, \varnothing\}$ will indicate
+the encoding of ``going wrong''
+(that is, which traces count as a $\top$ element),
+and the subscript $z \subseteq \{*, \omega, \varnothing\}$ will indicate
+how $\tau$ transitions ought to be handled.
+For a notion of simulation $\le^w_z$,
+I will call $\mathbb{D}^w_z$
+the semantic domain equipped with that notion of preorder.
+
+\paragraph{Simulations vs. trace containment} %{{{
+
+When considering transition systems
+we can distinguish simulation preorders
+from the more general preorders based on sets of traces.
+The distinction is in how they handle internal branching,
+whereby there may be several transitions for the same observable action.
+Consider for example
+the Y-shaped transition system $a(b + c)$ vs.
+the V-shaped $ab + ac$:
+they generate the same set of traces but are not similar.
+I will try to reserve the word \emph{refinement}
+and the notation $\sqsubseteq$
+for the more general trace-based preorders.
+
+When the transition systems are non-branching,
+the two notions coincide;
+therefore, if we work under that assumption
+we can gloss over the difference.
+We can also remove internal branching by using the usual
+powerset construction traditionally used for determinizing automata.
+I will write this operation $\mathsf{flatten}$,
+so that $\sqsubseteq$ may be related to $\le$ in the following way:
+\[ x \sqsubseteq^w_z y \quad \Leftrightarrow \quad
+  \mathsf{flatten}(x) \le^w_z \mathsf{flatten}(y) \,. \]
+The $\mathsf{flatten}$ operator is monotonic, so that
+${\le}^w_z \subseteq {\sqsubseteq}^w_z$.
+
+Note that silent $\tau$ transitions complicate the matter
+because they may introduce indirect branching,
+as in $a + \tau a$.
+For transition systems that are both non-branching and output-deterministic
+this is not an issue,
+but we will want to use non-determinism in our specifications.
+
+%}}}
+
+\paragraph{Simple simulations} %{{{
+
+The preorder $\le$
+corresponds to simple simulations.
+There is no special interpretation for any event
+(including $\tau$, $\Delta$, $h$, $\lightning$),
+and we just need to show that any (output) action of the implementation
+(the left-hand side LTS)
+has a corresponding action in the specification
+(the right-hand side LTS).
+
+Simple simulations serve as a baseline,
+and we will be able to embed more complex simulations
+into simple simulations
+by replacing complex observations by single events
+($\tau^*e$ becomes $e$, $\tau^\omega$ becomes $\Delta$),
+or by expanding $\lightning$ observations to $\Sigma^*$
+(the $\top$ behavior in the context of $\le$).
+
+%}}}
+
+\paragraph{Going wrong} %{{{
+
+When $\lightning \in w$,
+we will alter the simulation slightly
+so that any behavior that can start with the $\lightning$ action
+will be considered as ``going wrong'':
+as an additional alternative to other criteria,
+the simulation will hold whenever
+the specification can take a $\lightning$ transition.
+
+Similarly, when $\varnothing \in w$,
+then ``getting stuck'' (having no transition)
+will be interpreted as going wrong.
+In CompCert this corresponds to the $\mathsf{safe}$
+guards in the definition of backward simulations,
+as well as the progress condition---%
+which asserts that if the implementation is able to take any step,
+then the specification must be able to take a step as well.
+
+%}}}
+
+\paragraph{Silent $\tau$'s} %{{{
+
+When $* \in z$,
+we will consider $\tau$ actions
+unobservable by the preorder
+(with the possible exception of $\tau^\omega$, see below).
+The corresponding simulation criterion will be that
+any $\tau^* a$ sequence of moves in the implementation
+will have a corresponding $\tau^* a$ sequence in the specification,
+where the number of $\tau$s may differ between the two sequences.
+
+By default,
+this means that silent divergence will not be
+distinguishable from $\varnothing$,
+however we can independently add a
+silent divergence observation by using $\omega \in z$.
+
+%}}}
+
+\paragraph{Divergence} %{{{
+
+When $\omega \in z$,
+then infinite sequences of $\tau$'s
+are observable in their own right,
+so that if the implementation admits such a sequence,
+then the specification must admit one as well.
+
+This is independent of $* \in z$,
+so that $\le_{*\omega}$
+implements the CompCert approach of
+unobservable $\tau$'s except for divergence,
+whereas $\le_{\omega}$
+regards $\tau$'s as regular events
+except for infinite sequences.
+As an illustration of the differences consider the following:
+\[
+  \begin{array}{c@{\qquad}c@{\qquad}c@{\qquad}c}
+    a                     \le                   a \tau^\omega &
+    a                     \nleq                 \tau \tau a &
+    a \tau^\omega         \nleq                 a &
+    \tau a \tau^\omega    \nleq                 a \tau^\omega
+    \\
+    a                     \le_*                 a \tau^\omega &
+    a                     \le_*                 \tau \tau a &
+    a \tau^\omega         \le_*                 a &
+    \tau a \tau^\omega    \le_*                 a \tau^\omega
+    \\
+    a                     \le_\omega            a \tau^\omega &
+    a                     \nleq_\omega          \tau \tau a &
+    a \tau^\omega         \nleq_\omega          a &
+    \tau a \tau^\omega    \nleq_\omega          a \tau^\omega
+    \\
+    a                     \le_{*\omega}         a \tau^\omega &
+    a                     \le_{*\omega}         \tau \tau a &
+    a \tau^\omega         \le_{*\omega}         a &
+    \tau a \tau^\omega    \le_{*\omega}         a \tau^\omega
+  \end{array}
+\]
+
+Note that since $\omega$ merely adds an additional observation,
+it can only be \emph{more} discriminating than
+the corresponding notion of simulation without $\omega$,
+so that ${\le^w_{z \omega}} \subseteq {\le^w_z}$.
+
+%}}}
+
+\paragraph{CompCert} %{{{
+
+Glossing over some technical details,
+CompCert simulations can be understood in our framework
+in the following way:
+\emph{forward simulations}
+are a proof method for $\le^\varnothing_{*\omega}$;
+\emph{backward simulations}
+are a proof method for $\ge^\varnothing_{*\omega}$.
+
+The mapping is not perfect because
+CompCert uses \emph{lists} of events as transition labels,
+and there are additional properties
+required of CompCert transition systems
+for the simulations to make sense
+in terms of trace semantics.
+
+%}}}
+
+%}}}
+
+\subsection{Galois connections} %{{{
+
+There is not always a one-to-one correspondance between
+the possible semantic domains.
+For instance,
+we may want to define an operator ${\Downarrow}_\omega : {\le_\omega} \rightarrow {\le}$
+which detects $\tau^\omega$ in the source domain
+and encodes it in the target domain
+by inserting an explicit $\Delta$ event where $\tau^\omega$ appears,
+and removing any pre-existing $\Delta$ event where $\tau^\omega$ is absent,
+so that the target simulations no longer need to take
+divergence into account specifically.
+However,
+this is not a perfect embedding
+since pre-existing $\Delta$ events
+will be collapsed with
+detected occurences of $\tau^\omega$.
+Likewise,
+a reverse transformation which would expand $\Delta$ events into $\tau^\omega$
+would collapse
+occurences of $\tau^\omega$ in the right-hand side domain
+(which would denote $\tau^*$ rather than divergence)
+with any expanded $\Delta$ events.
+
+However,
+we can use the more general theory of (monotone) \emph{Galois connections}
+to account for the relationship between these two domains,
+and to investigate different order-preserving mappings between them
+and their relationships.
+I will write:
+\[
+    F \prescript{w}{z}\dashv^{w'}_{z'} G
+\]
+whenever
+$F : {\le^w_z} \rightarrow {\le^{w'}_{z'}}$ and
+$G : {\le^{w'}_{z'}} \rightarrow {\le^w_z}$
+are two monotonic functions such that:
+\[
+    F(x) \le^{w'}_{z'} y \Leftrightarrow x \le^w_z G(y)
+\]
+for all $x, y \in \mathbb{D}$.
+This can be visualized as follows:
+\[
+  \begin{tikzcd}[row sep=tiny, column sep=tiny]
+    G(y) &  & y \arrow[ll, "G"'] \\
+    & \Longleftrightarrow & \\
+    x \arrow[uu, dashed, "\le^w_z"] \arrow[rr, "F"'] & &
+    F(x) \arrow[uu, dashed, "\le^{w'}_{z'}"']
+  \end{tikzcd}
+\]
+$F$ is called the \emph{lower adjoint}, and
+$G$ is called the \emph{upper adjoint}.
+They are mutual quasi-inverses ($FGF = F$, $GFG = G$),
+and they are uniquely specified by each other.
+
+Because adjoints are uniquely determined by each other,
+given a semantic operator
+we may want to investigate whether it participates
+in Galois connections as a lower adjoint, as an upper adjoint, or both.
+Such operators are
+lower adjoints ($F$) if and only if they preserve all suprema, and
+upper adjoints ($G$) if and only if they preserve all infima.
+For instance, since $\Downarrow_\omega$ preserves all infima,
+it is the upper adjoint of some Galois connection.
+We will want to understand the corresponding lower adjoint,
+which is given by:
+\[
+    {\Uparrow_\omega}(y) =
+      \inf \{ x \in \mathbb{D} \:|\: y \le {\Downarrow_\omega}(x) \}
+\]
+In this case,
+${\Uparrow}_\omega(y)$ inserts an infinite sequence of $\tau$'s
+wherever a $\Delta$ event appears in $y$.
+On the other hand,
+$\Downarrow_\omega$ does not preserve suprema:
+$\bigsqcup_n \tau^n = \tau^*$ but
+$\bigsqcup_n {\Downarrow}_\omega(\tau^n) \neq {\Downarrow}_\omega(\tau^*)$.
+Therefore it has no upper adjoint.
+
+Every Galois connection gives rise to a closure operator $GF$,
+and an interior operator $FG$.
+In the case of $\Downarrow_\omega$,
+the closure operator
+${\Updownarrow}_\omega^- =
+ {\Uparrow}_\omega {\Downarrow_\omega} :
+ \mathbb{D} \rightarrow \mathbb{D}$
+expands all $\Delta$ events by adding
+$\tau^\omega$ wherever they appear,
+and the interior operator
+${\Updownarrow}_\omega^\circ =
+ {\Downarrow}_\omega {\Uparrow}_\omega :
+ \mathbb{D}_\omega \rightarrow \mathbb{D}_\omega$
+removes all spurious $\Delta$ events
+appearing where $\tau^\omega$ does not occur.
+
+%}}}
+
+\subsection{Internal activity} %{{{
+
+
+
+
 
 %}}}
 
