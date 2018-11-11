@@ -1,0 +1,466 @@
+\section{Main ideas}
+
+\subsection{Languages} %{{{
+
+Formally,
+a programming language $L$ is understood as
+a set of programs $p$
+which are assigned a meaning $\llbracket p \rrbracket$
+in a set $\mathbb{D}$.
+We call \emph{programs} or \emph{modules} the elements of $L$,
+preferring \emph{module} when
+the language supports
+a notion of horizontal composition (see Sec.~\ref{sec:cccomp}).
+We call \emph{behaviors} or \emph{specifications}
+the elements of the \emph{semantic domain} $\mathbb{D}$,
+preferring \emph{specification} when
+the semantic domain is equipped with
+a notion of refinement,
+and the specification under consideration
+may be refined by more specific behaviors.
+
+[I was hoping the examples below could provide a way to illustrate
+the concepts,
+but now I'm not sure if it's worth the space
+and reader's mental energy.
+Maybe use Compcert languages instead,
+two birds with one stone?]
+
+{\color{gray} %{{{
+
+As a running example,
+we present two simple languages
+whose programs define single-argument integer functions.
+
+\begin{example}[$\kw{AlgExp}$] %{{{
+We consider algebraic expressions
+built out of integer constants, $+$, $\times$,
+and a single variable $x$.
+This language $\kw{AlgExp}$ is defined by the following grammar:
+\[
+  e \in \kw{AlgExp} ::= c \:|\: x \:|\: (e + e) \:|\: (e \times e) \,,
+\]
+where $c \in \mathbb{Z}$ is any constant,
+and $x$ is a terminal symbol.
+One ``program'' in this language is the following expression:
+\[
+  e_a := ((x \times (3 + x)) + 2)
+\]
+An expression $e$ in \kw{AlgExp} is assigned a meaning
+$\llbracket e \rrbracket : \mathbb{Z} \rightarrow \mathbb{Z}$
+as follows:
+to compute $\llbracket e \rrbracket(n)$,
+substitute $n$ for $x$ in $e$,
+then evaluate the resulting integer expression.
+For example:
+\[
+  \llbracket e_a \rrbracket (n) = n^2 + 3n + 2 \,.
+\]
+\end{example}
+%}}}
+
+\begin{example}[$\kw{RegProg}$] %{{{
+Consider a machine with an infinite number of registers,
+which can perform elementary algebraic operations.
+The grammar of programs is:
+\begin{align*}
+  r \in \kw{RegName} &::= \kw{r1} \:|\: \kw{r2} \:|\: \cdots \\
+  e \in \kw{RegExpr} &::= c \:|\: r \:|\: r + r \:|\: r \times r \\
+  p \in \kw{RegProg} &::= r \leftarrow e; \, p \:|\: \bullet \,,
+\end{align*}
+where $\bullet$ denotes the empty program.
+An example is:
+\[
+  p_a :=
+  \kw{r2} \leftarrow 1; \,
+  \kw{r2} \leftarrow \kw{r1} + \kw{r2}; \,
+  \kw{r3} \leftarrow \kw{r2} \times \kw{r2}; \,
+  \kw{r1} \leftarrow \kw{r2} + \kw{r3};
+\]
+Each assignment $r \leftarrow e$ evaluates the computation $e$,
+then stores the result in register $r$.
+To interpret programs as functions,
+we initialize $\kw{r1}$ with the value of the argument,
+execute the program's assignments in sequence,
+then read out the answer from the new contents of $\kw{r1}$.
+The reader is invited to check that
+the behavior $\llbracket p_a \rrbracket$ associated to the program above
+is the same as that of $e_a$.
+\end{example}
+%}}}
+
+The $\kw{AlgExp}$ and $\kw{RegOps}$ languages
+are sufficient to illustrate a number of interesting phenomena.
+Because of their simplicity,
+it will be possible to do so with some degree of formality.
+Concurrently,
+we will discuss in a more casual manner
+the way in which these phenomena play out
+in the context of the compilation of C to assembly languages.
+
+} %}}}
+
+%}}}
+
+\subsection{Compilers} %{{{
+
+Given a source language $L_s$
+and a target language $L_t$,
+a compiler can be understood as a function
+$C : L_s \rightarrow L_t$
+which transforms a program $p \in L_s$
+into a program $C(p) \in L_t$.
+When the two languages are interpreted into
+a common semantic domain,
+the correctness of the compiler can be stated as:
+\[
+  \llbracket p \rrbracket_s = \llbracket C(p) \rrbracket_t \,.
+\]
+
+{\color{gray} %{{{
+
+\begin{example}[\kw{AlgExp} to \kw{RegOps}] %{{{
+To illustrate this definition,
+we define a simple compiler $C_a : \kw{AlgExp} \rightarrow \kw{RegOps}$.
+Compiling simple expressions is straightforward:
+\[
+  C_a(c) := \kw{r1} \leftarrow c; \qquad
+  C_a(x) := \bullet
+\]
+Compiling binary operations is more involved,
+because we need to evaluate each operand,
+making sure that the first computation does not overwrite
+the input value,
+and that the second computation does not overwrite
+the result of the first.
+To this end,
+we define a \emph{shift} operator ${\uparrow} p$,
+which replaces every register name in $p$ by its successor,
+so that for example:
+\[
+  {\uparrow} p_a =
+  \kw{r3} \leftarrow 1; \,
+  \kw{r3} \leftarrow \kw{r2} + \kw{r3}; \,
+  \kw{r4} \leftarrow \kw{r3} \times \kw{r3}; \,
+  \kw{r2} \leftarrow \kw{r3} + \kw{r4};
+\]
+We can now define for each binary operation $* \in \{+, \times\}$:
+\begin{align*}
+  C(e_1 * e_2) = \quad  % XXX overloading e_1
+    &\kw{r2} \leftarrow \kw{r1}; \, % XXX copy not allowed
+    {\uparrow} C(e_1); \\
+    &\kw{r3} \leftarrow \kw{r1}; \,
+    {\uparrow\uparrow} C(e_2); \\
+    &\kw{r1} \leftarrow \kw{r2} * \kw{r3};
+\end{align*}
+The subprogram ${\uparrow} C(e_1)$
+will use $\kw{r2}$ for its input and output,
+and use registers $\kw{r3}$ and above for its intermediate results,
+leaving the contents of $\kw{r1}$ unchanged.
+Likewise,
+${\uparrow\uparrow} C(e_2)$
+will operate on registers $\kw{r3}$ and above,
+leaving both $\kw{r1}$ and $\kw{r2}$ unchanged.
+The last instruction in the program performs
+the top-level operation and stores the result
+in the output register $\kw{r1}$.
+\end{example}
+%}}}
+
+To formally establish the correctness of $C_a$,
+we seek to prove that
+$\llbracket C_a(e) \rrbracket = \llbracket e \rrbracket$
+by structural induction on $e$.
+It is easy enough to check that:
+\[
+  \llbracket \bullet \rrbracket = \llbracket x \rrbracket \qquad
+  \llbracket \kw{r1} := c \rrbracket = \llbracket c \rrbracket
+\]
+However,
+the inductive cases for $e_1 + e_2$ and $e_1 \times e_2$
+are less obvious to handle.
+To articulate why,
+it is useful [to be overly pedantic:]
+
+When compiling $(e_1 * e_2)$,
+$C_a$ constructs a $\kw{RegProg}$ system
+in terms of the simpler components $C_a(e_1)$ and $C_a(e_2)$.
+As we try to understand the behavior of the resulting artefact,
+the mathematical theory we use to specify and analyse
+the behavior of these components,
+namely the semantic domain $\mathbb{Z} \rightarrow \mathbb{Z}$,
+should help us connect
+the behavior of the components to
+the behavior of the whole,
+ultimately allowing us to prove
+the conclusion $\llbracket C_a(e_1 * e_2) \rrbracket = \llbracket e_1 * e_2 \rrbracket$
+from our induction hypotheses
+$\llbracket C_a(e_1) \rrbracket = \llbracket e_1 \rrbracket$ and
+$\llbracket C_a(e_2) \rrbracket = \llbracket e_2 \rrbracket$.
+However,
+our theory is not rich enough to support this process:
+$\mathbb{Z} \rightarrow \mathbb{Z}$
+is not the right semantic domain
+to describe $\kw{RegProg}$ modules.
+
+%This is because while the program $C(e_1 * e_2)$
+%was built by stitching together more elementary components,
+%we have not yet defined a corresponding notion of \emph{composition}
+%at the level of our semantic domain (Sec.~\ref{sec:cccomp}).
+%[Condense the following tease]
+%Moreover,
+%the semantic domain $\mathbb{Z} \rightarrow \mathbb{Z}$
+%is not \emph{expressive} enough to account for the behavior of $\uparrow$:
+%using our convention for the meaning of $\kw{RegOps}$ programs,
+%$\llbracket {\uparrow}p \rrbracket$ is always the identity function!
+%This is addressed in Sec.~\ref{sec:ccexpr} by defining
+%a richer semantics for $\kw{RegOps}$.
+%Because this richer semantics no longer matches
+%the domain used to interpret the source language $\kw{AlgExp}$,
+%we then need to account for the \emph{abstraction} relationship
+%between the behaviors of $\kw{AlgExp}$ programs
+%and the behaviors of $\kw{RegOps}$ ones (Sec.~\ref{sec:ccabs}).
+%[refinement, open system whatever that means in this context].
+
+} %}}}
+
+%}}}
+
+{\color{gray} %{{{
+
+\subsection{Expressivity} %{{{
+
+The expressivity of our theories
+should be assessed
+[real-world,
+from the point of view of the outside.]
+
+The first problem we encounter when we try to understand $C_a(e_1 * e_2)$
+is the lack of expressivity of our semantic domain.
+For instance,
+$\mathbb{Z} \rightarrow \mathbb{Z}$
+fails to even explain the effect of the shift operator $\uparrow$:
+in fact, for any $\kw{RegProg}$ program $p$,
+the program ${\uparrow}p$ leaves $\kw{r1}$ unchanged,
+so that it is indistinguishable from the empty program!
+Note that this problem did not appear
+when defining our notion of compiler correctness.
+In fact,
+given a sufficiently precise semantics of $\kw{RegProg}$,
+there is no doubt we could work around the problem:
+bite the bullet, treat $C_a(e_1 * e_2)$ as a whole,
+and prove our compiler correct.
+However,
+the situation illustrates an important point:
+by overfitting our choice of semantics to the problem at hand,
+we have failed to account for important ways in which
+$\kw{RegProg}$ programs can interact with their environments
+in ways that $\kw{AlgExp}$ programs cannot.
+This limits the usefulness of our target semantics,
+and as such that of the compiler correctness theorem
+(or the induction hypotheses in this case).
+
+A better approach would have been to
+assess the expressivity of our semantics,
+not in terms of formulating the problem at hand,
+but in terms of the ways in which our system
+could be used.
+What is a $\kw{RegProg}$ machine good for?
+With a different convention,
+it could be used to compute function of several variables.
+It could be a component in a handheld calculator,
+or the control system of an airplane.
+
+[it seems like pandora's box,
+but maximal expressivity in how system communicates with its environment
++ open system = everything you want]
+
+Likewise, C programs are used to do all kind of things,
+but we don't need to know what:
+only the basic interaction principles
+between the C program and its environment that are involved
+in those things.
+Although communication model between program
+and the underlying system is simple and uniform
+(system calls / external function invocation),
+this protocol is general enough that
+when we link with the outside world,
+the source/target machine models are enough to
+implement all kinds of stuff:
+network services, GUIs, drivers, control software,
+operating systems, distributed computations, \ldots
+The same compiler is used in all of these contexts.
+
+%}}}
+
+} %}}}
+
+\subsection{Abstraction} %{{{
+
+The assumption that the source and target programs
+can be naturally assigned meanings in the same semantic domain
+is reasonable for compiler passes
+where the source and target languages are fairly similar.
+It can also hold when observable behaviors are simple:
+if we are only interested in the final result produced by a program,
+then the corresponding notion of behavior
+can be fairly language-independent.
+However,
+in most practical cases we are interested in
+the program's interaction with its environment
+as well as its ultimate outcome,
+and this interaction is often understood very differently
+in the context of the source and target languages.
+
+For instance,
+in the C programming language
+the memory is understood in terms of independent objects.
+Each object corresponds to a variable declared in the program,
+or to a chunck of heap-allocated memory.
+In C, a function call is performed
+by allocating and initializing new objects
+corresponding to the callee's arguments and local variables.
+By contrast,
+an assembly program
+operates in a single address space:
+the memory is essentially seen as a large array of bytes;
+the very notion of a function call in assembly
+is largely conventional as opposed to a primitive notion,
+and their mechanics are understood in very different terms.
+Consequently,
+semantic domains that can accurately account
+for module interaction will necessarily be distinct in C and assembly.
+
+This underscore importance of \emph{abstraction}:
+C compilers operate in the context of a given \emph{calling convention},
+which establishes a relationship between the behaviors of C modules
+and that of assembly modules.
+This calling convention can be modelled as a function
+$\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$,
+which is in some sense the semantic counterpart to the compiler $C$.
+Our correctness criterion becomes:
+\[
+  \mathbb{C}(\llbracket p \rrbracket_s) =
+  \llbracket C(p) \rrbracket_t
+\]
+
+[Compcert goes to great length to ensure $\mathbb{D}_s = \mathbb{D}_t$,
+defining unified memory model etc.
+Much compositional Compcert works keeps with this approach
+but this creates problems.
+In fact, even when $\mathbb{D}_s = \mathbb{D}_t$ formally,
+the source and target behaviors may be distinct
+and it can be important/useful to define
+$\mathbb{C} : \mathbb{D} \rightarrow \mathbb{D}$.
+In Sec.~\ref{sec:callconv} we show how taking abstraction seriously
+solves the extcall\_args problem.]
+
+%}}}
+
+\subsection{Refinement} %{{{
+
+In and of itself,
+abstraction is insufficient to reflect
+the relationship between the behaviors of C and assembly modules.
+This is because there is more than one way to realize
+a given C function call at the level of assembly.
+For instance,
+a typical calling convention specifies a classification of machine registers
+into \emph{callee-save} registers,
+which are guaranteed to be left unchanged by the function being invoked,
+and \emph{caller-save} registers,
+which the function being invoked may modify at will.
+Two assembly functions
+which modify the caller-save registers differently
+may still implement the same C behavior;
+however, they will be observationally distinct at the level of assembly.
+
+To account for this situation,
+the target semantic domain $\mathbb{D}_t$
+should contain specifications
+allowing a range of possible behaviors,
+and be equipped with a notion of refinement
+in the form of a transitive relation $\sqsupseteq$.
+The target behavior $\mathbb{C}(\sigma_s)$
+corresponding to the source behavior $\sigma_s$
+can then be broad enough to state,
+for instance,
+that the callee-save registers
+may contain any value after a function
+specified in $\sigma_s$ returns.
+Target programs
+which leave specific values in these registers
+but otherwise agree with $\mathbb{C}(\sigma_s)$
+will be considered valid implementations
+because their behavior will refine that specification.
+Taking this into account,
+the correctness statement becomes:
+\[
+  \mathbb{C}(\llbracket p \rrbracket_s) \sqsupseteq
+  \llbracket C(p) \rrbracket_t
+\]
+
+Note that while abstraction and refinement are distinct concepts,
+it can sometimes be advantageous to unify them
+in the form of a single, heterogenous relation
+${\sqsupseteq_\mathbb{C}} = {\sqsupseteq} \circ {\mathbb{C}}$.
+[Reference popl15's abstraction relations]
+[Forward reference to where we do that in this work].
+[Explain that confusing the two is the root of some limitation
+in existing work].
+
+[Role of refinement/abstraction in permitting optimizations?]
+
+%}}}
+
+\subsection{Open systems} %{{{
+
+Using powerset of behaviors is not good enough for refinement,
+we need to take distinction between system and environment seriously.
+-> this is how we define a notion of refinement in Sec.~3
+that solves some of the issues
+
+Discuss contextual refinement,
+which is not enough \emph{a priori}, and \emph{practically},
+because we don't want to limit ourselves to a set of systems we're gonna connect with.
+But also contextual refinement might be enough
+if the interaction of all the environments we would ever want to connect with
+can be "coobservationally equivalent" to a context in our set
+from the point of view of the program (aka oracle).
+
+Specs need to be able to express constraints on the environment.
+
+[Fit somewhere:]
+This calls into question
+the centrality of contextual refinement and contextual equivalence
+in standard approaches to compositionality.
+[Use game semantics and a smarter refinement instead;
+you'll get contextual refinement for free
+for whatever that's worth.]
+[There is no completed system.
+At the very least the context itself
+should have facilities to communicate with the larger world
+that are expressive enough.]
+
+%}}}
+
+\subsection{Compositionality} %{{{
+
+[Large programs are split into compilation units,
+which are compiled independently,
+then linked to produce the final artefact.]
+
+Syntactic composition
+(the way we stitch together components to build a system in the real world)
+should have corresponding notion
+in the semantics
+(the theory we use to analyse systems).
+
+%}}}
+
+\subsection{Resources} %{{{
+
+[The source model is usually much more idealized than target.
+Example: infinite stack vs. finite address space.]
+
+%}}}
