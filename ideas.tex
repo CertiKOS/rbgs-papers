@@ -1,5 +1,422 @@
 \section{Main ideas}
 
+\subsection{Principles for system construction}
+
+The goal of certified system design is
+to create a formal description of
+the system to be constructed (the program),
+while ensuring through careful analysis that the system
+will behave properly.
+
+To carry out this analysis,
+we need a model
+which assigns to each possible system description $p \in P$
+a mathematical object $\llbracket p \rrbracket \in \mathbb{D}$
+representing its behavior.
+We will call the set $\mathbb{D}$ a \emph{semantic domain}.
+In this section we elucidate
+the structure and properties of $\mathbb{D}$
+necessary to the process of builing
+large-scale certified systems.
+
+\paragraph{Specifications and refinement}
+
+System design starts with a set of requirements
+that constrain the behavior of the system to be constructed
+(the specification).
+These requirements may not capture every detail
+of the behavior of the eventual system,
+but instead delineate the range of acceptable behaviors
+from the point of view of its environment.
+
+In the context of refinement-based methods,
+the specifications are themselves elements of
+the semantic domain $\mathbb{D}$,
+which is equipped with a \emph{refinement} preorder
+${\sqsubseteq} \subseteq \mathbb{D} \times \mathbb{D}$.
+The proposition $\sigma_1 \sqsubseteq \sigma_2$
+assert that $\sigma_2$ is a less restrictive specification than $\sigma_1$,
+and in particular a system description $p \in P$ is a correct implementation
+of $\sigma \in \mathbb{D}$ when:
+\[ \llbracket p \rrbracket \sqsubseteq \sigma \]
+
+\paragraph{Compositionality}
+
+Complex systems are built by assembling components
+whose behavior is understood,
+such that their interaction achieves a desired effect.
+The syntactic constructions of
+the language used to describe systems
+correspond to the ways in which they can be composed.
+
+To enable compositional reasoning,
+a suitable model must provide an account of
+the behavior of the composite system
+in terms of the behavior of its parts.
+For instance,
+if the language contains a binary operator
+${+} : P \times P \rightarrow P$,
+then the semantic domain should be equipped with
+a corresponding operation
+${\bullet} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$
+such that:
+\[ \llbracket p_1 + p_2 \rrbracket =
+   \llbracket p_1 \rrbracket \bullet \llbracket p_2 \rrbracket \,. \]
+
+We can use this property
+to show that a composite system
+satisfies a given specification,
+for instance
+$\llbracket p_1 + p_2 \rrbracket \sqsubseteq \sigma$.
+Once this has been established,
+we will want to abstract the composite system as a ``black box''
+which can in turn be used as a primitive component in a larger system.
+Further reasoning can be done in terms of
+the new component's specification $\sigma$ rather than
+its concrete behavior $\llbracket p_1 + p_2 \rrbracket$.
+To support this,
+we must establish that semantic composition operators
+are compatible with refinement in the following sense:
+\[ \sigma_1 \sqsubseteq \sigma_1' \wedge
+   \sigma_2 \sqsubseteq \sigma_2' \Rightarrow
+   \sigma_1 \bullet \sigma_2 \sqsubseteq \sigma_1' \bullet \sigma_2' \,. \]
+Should $p_1 + p_2$ be used as a component in a larger system,
+this property will allow us to establish that:
+\[ \llbracket (p_1 + p_2) + p_3 \rrbracket \sqsubseteq
+   \sigma \bullet \llbracket p_3 \rrbracket \,. \]
+
+\paragraph{Abstraction}
+
+Large-scale systems operate across many layers of abstraction.
+Each abstraction layer defines its own ``view'' of the interaction
+between the system and its environment:
+at the physical level,
+communication over a wire may involve a series of voltages through time,
+but at a higher level of abstraction
+we will only be concerned with the sequence of bytes
+being transmitted.
+
+The correspondance between the two can be expressed as an embedding
+$\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$
+between the semantic domains
+used to reason at different levels of abstraction.
+
+
+Serial communication hardware (for instance a UART device)
+serves as a bridge between these two views,
+implementing a byte-oriented communication channel
+in a voltage-oriented world;
+to formally verify such a component we will need to
+express the correspondance between these two
+layers of abstraction.
+
+
+
+
+[...]
+
+\paragraph{Compilers}
+
+
+\paragraph{Heterogeneity}
+
+[What happens to $\mathbb{D}$ in the context of typed languages,
+how this can be used to gain expressivity and construct heterogenous systems.]
+
+
+\subsection{Game semantics}
+
+[introductory remarks]
+
+Types are interpreted as two-player games,
+which specify the form of valid interactions
+between the system and the environment.
+Terms are interpreted as strategies for these games,
+which for any position in the game
+specify the next move to be played by the system.
+
+\paragraph{Games}
+
+A game is usually defined by giving a set of moves $M$
+that players can choose from,
+as well as a specification of which
+sequences of moves are considered valid.
+For chess,
+moves will be taken in the set $(\{a, \ldots, h\} \times \{1, \ldots, 8\})^2$,
+and a sequence of moves may look like:
+\[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{e7d5} \cdots \]
+For a program expected to produce a natural number,
+the possible moves may be a request to evaluate ($q$)
+and primitive values ($42$),
+so that an interaction between the expression $21 \times 2 : \kw{nat}$
+and its evaluation context will proceed as:
+\[ q \cdot \underline{42} \]
+Note that we underline the moves of the second player,
+namely the system.
+
+We will focus on two-player, alternating games
+where the environment and the system each contribute every other move.
+The environment plays first.
+Positions in the game can be given
+as sequences of moves;
+even-length sequences correpond to positions
+where the environment is expected to move,
+and odd-length sequences correspond to positions
+where the system is expected to move.
+
+\paragraph{Compositionality}
+
+While the game for $\kw{nat}$ given above
+is extremely simple,
+the expressive power of game semantics
+comes from the way in which complex games can be derived
+from simple ones to interpret compound types.
+
+For instance,
+given two games $A$ and $B$,
+the game $A \otimes B$ is traditionally defined
+to allow $A$ and $B$ to be played side by side.
+The set of moves will be $M_{A \otimes B} = M_A + M_B$,
+and for any valid position of $A \otimes B$,
+the subsequence consisting of the moves of a constituent game
+is expected to be valid in that game.
+An interaction in the game
+$\llbracket \kw{nat} \rrbracket \otimes
+ \llbracket \kw{nat} \rrbracket$ could be:
+\[ i_2(q) \cdot \underline{i_2(42)} \cdot
+   i_1(q) \cdot \underline{i_1(7)} \]
+
+
+\paragraph{Strategies}
+
+In this context,
+it is natural to think of system strategies
+as functions from odd-length positions to moves:
+\[ \sigma : \bigcup_n M^{2n+1} \rightharpoonup M \]
+This is suitable to express the behavior of a concrete system.
+However, for specifications allowing a range of behavior,
+we must generalize strategies to allow nondeterminism:
+\[ \sigma : \bigcup_n M^{2n+1} \rightarrow \mathcal{P}(M) \]
+
+
+Transition system
+
+\[ \sigma : \exists \, K S \,.\, K \times
+      (K \times M \rightarrow \mathcal{P}(S)) \times
+      (S \rightarrow \mathcal{P}(M \times K)) \]
+
+
+
+
+\paragraph{Refinement}
+
+[alternating refinement, $\lightning$, etc]
+
+\paragraph{Abstraction}
+
+This concept of refinement can be extended to account for
+different levels of abstraction.
+
+
+[etc]
+
+The polarisation inherent in game semantics
+can be seen to naturally encode the rely-guarantee aspects
+of the C calling convention.
+
+
+\subsection{Logical relations}
+
+In the broadest sense,
+logical relations are structure-preserving relations,
+in the same way that homomorphisms are structure-preserving maps
+\citep{lrp}.
+Logical relations can be of any arity,
+but in the present work
+we restrict our attention to
+binary logical relations.
+Given an algebraic structure $\mathcal{S}$
+involving a number of operations over a carrier set,
+a \emph{logical relation}
+between two instances $S_1, S_2$ of $\mathcal{S}$
+will be a relation $R \subseteq |S_1| \times |S_2|$
+between their carrier sets,
+such that the operations of $\mathcal{S}$
+take related arguments to related results.
+We write $R : \mathcal{R}(S_1, S_2)$.
+
+\begin{example}[Logical relation of monoids]
+\label{ex:monoid}
+A \emph{monoid} is a set $A$ equipped with
+an associative binary operation $\cdot$ and
+an identity element $\epsilon$.
+A \emph{logical relation of monoids} between
+a monoid $\langle A, \cdot_A, \epsilon_A \rangle$ and
+a monoid $\langle B, \cdot_B, \epsilon_B \rangle$
+is a relation $R \subseteq A \times B$
+such that:
+\begin{gather*}
+u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B v' \\
+\epsilon_A \ifr{R} \epsilon_B
+\end{gather*}
+\end{example}
+
+Logical relations between multisorted structures
+will include one relation for each sort,
+between the corresponding carrier sets.
+In the case of structures which include type operators,
+we can associate to each base type $A$
+a relation over its carrier set $\llbracket A \rrbracket$,
+and to each type operator $T(A_1, \ldots, A_n)$
+a corresponding \emph{relator}:
+given relations $R_1, \ldots, R_n$ over
+the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$,
+the relator for $T$
+will construct a relation $T(R_1, \ldots, R_n)$
+over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
+
+\begin{figure} % fig:relators {{{
+  \begin{align*}
+    x \ifr{R_1 \times R_2} y \ \Leftrightarrow\  &
+      \pi_1(x) \ifr{R_1} \pi_1(y) \wedge
+      \pi_2(x) \ifr{R_2} \pi_2(y) \\
+    x \ifr{R_1 + R_2} y \ \Leftrightarrow\  &
+      (\exists \, x_1 \, y_1 \,.\,
+        x_1 \ifr{R_1} y_1 \wedge
+        x = i_1(x_1) \wedge
+        y = i_1(y_1)) \vee \\ &
+      (\exists \, x_2 \, y_2 \,.\,
+        x_2 \ifr{R_2} y_2 \wedge
+        x = i_2(x_2) \wedge
+        y = i_2(y_2)) \\
+    f \ifr{R_1 \rightarrow R_2} g \ \Leftrightarrow\  &
+      \forall \, x \, y \,.\,
+        x \ifr{R_1} y \Rightarrow
+        f(x) \ifr{R_2} g(y) \\
+    A \ifr{\mathcal{P}^+(R)} B \ \Leftrightarrow\  &
+      \forall \, x \in A \,.\,
+      \exists \, y \in B \,.\,
+      x \ifr{R} y \\
+    A \ifr{\mathcal{P}^-(R)} B \ \Leftrightarrow\  &
+      \forall \, y \in B \,.\,
+      \exists \, x \in A \,.\,
+      x \ifr{R} y
+  \end{align*}
+  \caption{A selection of relators}
+  \label{fig:relators}
+\end{figure}
+%}}}
+
+Relators for some common constructions are shown in Fig.~\ref{fig:relators}.
+Note that the first requirement given in Ex.~\ref{ex:monoid}
+can be expressed as:
+\[
+  \cdot_A \ifr{R \times R \rightarrow R} \cdot_B
+\]
+
+Logical relations have found widespread use in programming language theory.
+Unary logical relations can be used to establish
+various properties of type systems:
+a type-indexed predicate expressing a property of interest
+is shown to be compatible with the language's reduction,
+and to contain all of the well-type terms of the language.
+Binary logical relations can be used to capture
+contextual equivalence between terms,
+as well as notions such as non-interference or compiler correctness.
+Relational models of type quantification yield
+Reynold's well-known theory of relational parametricity,
+and can be used to establish so-called free theorems
+establishing properties that
+all terms of a given parametric type must satisfy.
+
+Logical relations used to establish contextual equivalence
+are often partial equivalence relations (PER);
+by contrast, our focus is refinement,
+so that most of the relations we consider will not be symmetric.
+
+%}}}
+
+\subsection{Kripke logical relations} %{{{
+
+For stateful languages,
+which terms should be related
+will often depend on the current state of the store.
+This motivated the introduction of Kripke logical relations.
+[Some more background and references here.]
+
+\begin{definition}[Kripke logical relation]
+A \emph{Kripke frame} is a structure $\langle W, \leadsto \rangle$, where
+$W$ is a set of \emph{possible worlds}, and
+$\leadsto$ is an \emph{accessibility relation} over $W$.
+Then a \emph{Kripke logical relation} is
+a $W$-indexed family of logical relations $(R_w)_{w \in W}$.
+\end{definition}
+
+We write $R : \mathcal{R}_W(S_1, S_2)$
+for a Kripke logical relation between structures $S_1$ and $S_2$.
+
+\paragraph{Relators}
+
+For a given Kripke frame $\langle W, \leadsto \rangle$,
+a logical relation $R : \mathcal{R}(A, B)$
+can be promoted to a $W$-indexed Kripke logical relation $\lceil R \rceil$
+which ignores the index, so that $\lceil R \rceil_w = R$.
+Likewise,
+a relator
+  $F : \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n) \rightarrow \mathcal{R}(A, B)$
+can be promoted to its Kripke version
+by pointwise extension over the set of possible worlds:
+\begin{gather*}
+  \lceil F \rceil : \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n) \rightarrow \mathcal{R}_W(A, B) \\
+  \lceil F \rceil (R_1, \ldots, R_n)_w = F(R_{1,w}, \ldots, R_{n,w})
+\end{gather*}
+In addition,
+$\Box, \Diamond : \mathcal{R}_W(A,B) \rightarrow \mathcal{R}_W(A,B)$
+are the Kripke relators defined by:
+\begin{align*}
+  x \ifr{(\Box R)_w} y &\Leftrightarrow
+    \forall w' \,.\, w \leadsto w' \rightarrow x \ifr{R_{w'}} y \\
+  x \ifr{(\Diamond R)_w} y &\Leftrightarrow
+    \exists w' \,.\, w \leadsto w' \wedge x \ifr{R_{w'}} y
+\end{align*}
+We also define
+$\Box, \Diamond : \mathcal{R}_W(A,B) \rightarrow \mathcal{R}(A,B)$
+which turn a Kripke logical relation $R$
+into a (regular) logical relation as follows:
+\begin{align*}
+  x \ifr{\Box R} y &\Leftrightarrow
+    \forall w \,.\, x \ifr{R_w} y \\
+  x \ifr{\Diamond R} y &\Leftrightarrow
+    \exists w \,.\, x \ifr{R_w} y
+\end{align*}
+
+\begin{example}[Simulation diagram]
+\label{ex:sim}
+Consider a Kripke logical relation of sets $R : \mathcal{R}_W(A, B)$,
+and two transition relations $\alpha : A \rightarrow \mathcal{P}(A)$
+and $\beta : B \rightarrow \mathcal{P}(B)$.
+The simulation diagram:
+\[
+  \begin{tikzcd}
+    s_1 \arrow[r, "\alpha"]
+        \arrow[d, dash, "R_w"'] &
+    s_1' \arrow[d, dotted, dash, "R_{w'} \quad (w \leadsto w')"] \\
+    s_2 \arrow[r, dotted, "\beta"] &
+    s_2'
+  \end{tikzcd}
+\]
+can be written as:
+\[
+  \alpha \ifr{\Box (R \rightarrow \mathcal{P}^+(\Diamond R))} \beta \,.
+\]
+\end{example}
+
+\subsection{CompCert}
+
+\endinput
+
+\section*{Before}
+
 \subsection{Languages} %{{{
 
 Formally,
