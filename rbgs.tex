@@ -1,0 +1,364 @@
+\section{Refinement-based game semantics}
+
+\subsection{Overview}
+
+
+
+Games are identified with the type of moves.
+
+\subsection{Alternating transition systems}
+
+Strategies are specified using transition systems
+alternating between a set of states $S$ and
+a set of continuations $K$.
+States correspond to points in the execution
+where the system is expected to move,
+whereas continuations expect a move from the environment
+and specify how the execution should be resumed.
+
+The initial configuration of the system
+is specified by a continuation.
+For each continuation $k \in K$
+and each possible move $m \in M$ from the environment
+we specify a set of possible \emph{resumptions}
+among the following:
+\[ r \in \kw{resumption}(S) ::=
+	\kw{resume}(s) \ |\ \kw{refuse} \]
+If the environment's input move is accepted,
+the execution can proceed in state $s$.
+Alternatively,
+a continuation may \emph{refuse} a given input move,
+as indicated by the resumption $\kw{refuse}$.
+In the context of composite systems,
+this will allow another component to proceed.
+
+We associate to each state $s$ a set of possible
+behaviors among the following:
+\[ b \in \kw{behavior}(M,S,K) ::=
+	\tau \cdot s' \ |\
+	\underline{m} \cdot k \ | \
+	\Delta \ |\ 
+	\lightning \]
+The behavior $\tau \cdot s'$
+performs an internal action and transitions to state $s'$;
+the behavior $\underline{m} \cdot k$
+plays the move $m$ and transitions to the continuation $k$;
+the behavior $\Delta$ represents silent divergence,
+an indication that the system will no longer perform
+any externally observable action;
+$\lightning$ indicates that the system ``goes wrong''.
+
+For simplicity, and without loss of generality,
+in the following we will take the set of continuations
+to be defined in terms of $S$ as:
+\[ K := M \rightarrow \mathcal{P}(\kw{resumption}(S)) \,. \]
+
+\begin{definition}[Alternating transition system]
+For a set of moves $M$ and a set of states $S$,
+an \emph{alternating transition system} is a relation:
+\[
+  \alpha : S \rightarrow \mathcal{P}(\kw{behavior}(M, S)) \,.
+\]
+The type of alternating transition systems on $M$ and $S$
+will be written as $\kw{ats}(M, S)$.
+\end{definition}
+
+For clarity,
+and to establish a connection with more typical
+labelled transition systems,
+we will write:
+\begin{itemize}
+\item $s \xrightarrow{\tau} s'$ whenever $\alpha(s) \ni \tau \cdot s'$;
+\item $s \xrightarrow{\underline{m}} k$
+	whenever $\alpha(s) \ni \underline{m} \cdot k$;
+\item $s \xrightarrow{\lightning} {\cdot}$
+	whenever $\alpha(s) \ni \lightning$,
+	and similarly for $\Delta$;
+\item $k \xrightarrow{m} r$ whenever $k(m) \ni r$.
+\end{itemize}
+These notations can be concatenated so that
+we will write $x \xrightarrow{t \cdot t'} z$
+whenever there exists $y$ such that $x \xrightarrow{t} y$ and
+$y \xrightarrow{t'} z$.
+For a given alternating transition system $\alpha$,
+the set of traces associated with a state or continuations $x$
+can be defined as:
+\[
+    \kw{traces}_\alpha(x) =
+	\{ t \:|\: \exists y \,.\, x \xrightarrow{t} y \} \,.
+\]
+
+Strategies can be defined in terms of alternating transition systems
+by providing an initial continuation and hiding the set of states.
+
+\begin{definition}[Strategy]
+For a set of moves $M$,
+a strategy $\sigma = (S, \alpha, k_0)$
+is a set of states $S$ together with
+an alternating transition system $\alpha : \kw{ats}(M, S)$ and
+an initial continuation $k_0 : S \rightarrow \mathcal{P}(\kw{resumption}(S))$.
+\end{definition}
+
+For a strategy $\sigma = (S, \alpha, k_0)$,
+we define its set of traces as
+$\kw{traces}(\sigma) = \kw{traces}_\alpha (k_0)$.
+
+\subsection{Refinement conventions}
+
+Given two strategies $\sigma_1, \sigma_2$,
+we want to formulate a notion of refinement
+$\sigma_1 \sqsubseteq \sigma_2$.
+To make it possible to relate strategies at different
+levels of abstraction,
+we will need to specify how the moves of $\sigma_1$
+relate to those of $\sigma_2$
+as the execution proceeds.
+since this is a stateful process,
+we formalize this \emph{refinement convention}
+as a Kripke logical relation between the two games.
+
+\begin{definition}[Refinement convention]
+Given two sets of moves $M_1$, $M_2$,
+a refinement convention
+is a Kripke logical relation $\mathbb{R} = (W, \leadsto, R_M)$
+between $M_1$ and $M_2$.
+\end{definition}
+
+We obtain our notion of refinement by extending $\mathbb{R}$
+in a natural way,
+first to state behaviors and continuation resumptions,
+then to simulations of transition systems,
+and finally to our refinement of strategies.
+
+\subsection{Simulations}
+
+For a refinement convention $\mathbb{R} : \mathcal{R}_W(M_1, M_2)$,
+a Kripke logical relation on states $R : \mathcal{R}_W(S_1, S_2)$
+can be extended to resumptions as follows:
+\[
+  \AxiomC{$s_1 \ifr{w \Vdash R} s_2$}
+  \UnaryInfC{$\kw{resume}(s_1) \ifr{w \Vdash R} \kw{resume}(s_2)$}
+  \DisplayProof
+  \qquad
+  \AxiomC{\rule{0pt}{\baselineskip}}
+  \UnaryInfC{$\kw{refuse} \ifr{w \Vdash R} \kw{refuse}$}
+  \DisplayProof
+\]
+For simple state behaviors,
+refinement is defined as follows:
+\[
+  \AxiomC{$s_1' \ifr{w \Vdash R} s_2'$}
+  \UnaryInfC{$\tau \cdot s_1' \ifr{w \Vdash R} \tau \cdot s_2'$}
+  \DisplayProof
+  \quad
+  \AxiomC{\rule{0pt}{\baselineskip}}
+  \UnaryInfC{$\Delta \ifr{w \Vdash R} \Delta$}
+  \DisplayProof
+  \quad
+  \AxiomC{\rule{0pt}{\baselineskip}}
+  \UnaryInfC{$b \ifr{w \Vdash R} \lightning$}
+  \DisplayProof
+\]
+Note that the behavior $\lightning$ is defined as a top element
+for refinement,
+so that a strategy that goes wrong can be refined arbitrarily
+but can only implement a specification that
+also goes wrong.
+By contrast,
+explicit divergence $\Delta$
+is only related to itself,
+and counts as a specific behavior on par with others.
+
+For interacting state behaviors,
+the KLR structure is going to come into play.
+Two continuations $k_1, k_2$ are related when
+for any world transition,
+and any two moves which are related in the new world,
+every resumption of $k_1$ has a corresponding resumption in $k_2$:
+\[
+  R_K := \Box (\mathbb{R} \rightarrow \mathcal{P}^+(R))
+\]
+Two interactions are related
+if there exists a world transition that relates the output moves,
+and relates the associated continuations:
+\[
+  \AxiomC{$(m_1, k_1) \ifr{w \Vdash \Diamond (\mathbb{R} \times R_K)} (m_2, k_2)$}
+  \UnaryInfC{$
+	{\underline{m_1} \cdot k_1}
+	\: \ifr{w \Vdash R} \:
+	{\underline{m_2} \cdot k_2}$}
+  \DisplayProof
+\]
+Based on these definitions for the refinement of
+resumptions and state behaviors,
+we can define our notion of simulation.
+
+\begin{definition}[Kripke simulation relation]
+For two transition systems
+$\alpha_1 : \kw{ats}(S_1, M_1)$,
+$\alpha_2 : \kw{ats}(S_2, M_2)$ and
+a refinement relation
+$\mathbb{R} : \mathcal{R}_W(M_1, M_2)$,
+we say that
+$R : \mathcal{R}_W(S_1, S_2)$
+is a Kripke simulation relation between $\alpha_1$ and $\alpha_2$
+when:
+\[
+    \alpha_1 \ifr{\Vdash R \rightarrow \mathcal{P}^+(R)} \alpha_2
+\]
+We will write $\alpha_1 \le_R \alpha_2$.
+\end{definition}
+
+Note for both states and continuations,
+nondeterminism is interpreted as \emph{output} nondeterminism,
+as determined by the use of the relator $\mathcal{P}^+$.
+This means that alternating transition system
+implicitely accept all possible inputs from the environment,
+although some of them may cause the system to immediately go wrong.
+Likewise,
+the special resumption $\kw{refuse}$
+is taken as a positive, output behavior from the system,
+rather than a restriction on the environment ---
+this will be important to establish the monotonicity
+of the composition operator defined in Sec.~\ref{?}.
+This approach corresponds to the saturation requirement on strategies
+often found in traditional game semantics,
+or notions of receptiveness used in CompCert
+and in concurrency theory.
+
+Furthermore, we need to distinguish between mere nondeterminism
+and \emph{branching}.
+This is explored in the following section.
+
+\subsection{Branching and determinism}
+
+Whereas nondeterminism allows a strategy to posess
+multiple observable behaviors,
+branching occurs when multiple state transitions
+are associated with the same immediate observable behavior.
+This can create spurious distinctions,
+whereby systems that yield the same sets of traces
+cannot be identified by simulation,
+and as such we consider it undesirable.
+The following definition
+formalizes the conditions a transition system must satisfy
+to be considered free from branching.
+
+\begin{definition}[Nonbranching transition system]
+For given sets of moves and states,
+a continuation $k : M \rightarrow \mathcal{P}(\kw{resumption}(S))$
+is \emph{nonbranching} if the following property holds:
+\[ \forall m \,.\, | k(m) | \le 1 \]
+A transition system $\alpha : \kw{ats}(M, S)$ is nonbranching
+if the following property holds:
+\[ \forall s, m, k_1, k_2 \,.\,
+     \alpha(s) \supseteq \{ m \cdot k_1, m \cdot k_2 \} \Rightarrow
+     k_1 = k_2 \,, \]
+and if for all $s, m, k$ such that $\alpha(s) \ni \underline{m} \cdot k$,
+the continuation $k$ is nonbranching.
+\end{definition}
+
+Determinism is a stronger property,
+and ensures that the system has at most one possible behavior
+at any point.
+We expect the semantics of concrete systems ---
+as opposed to specifications ---
+to be deterministic in the following sense.
+
+\begin{definition}[Deterministic transition system]
+For given sets of moves and states,
+a transition system $\alpha : \kw{ats}(M, S)$
+is deterministic if for all $s$, $|\alpha(s)| \le 1$,
+and if for all $s, m, k$ such that $\alpha(s) \ni \underline{m} \cdot k$,
+the continuation $k$ is nonbranching.
+\end{definition}
+
+Note that both nonbranching and determinism
+only relate to the behavior of the system.
+In both cases,
+the environment remains free to play any move.
+Abramsky notes in \cite{cspgs}
+that [it's one of the good things about game semantics].
+
+\subsection{Internal actions and divergence}
+
+The emergence of silent divergence
+is one of the major difficulties
+associated with modeling interacting systems.
+Indeed,
+two systems which, taken in isolation,
+only exhibit reactive behavior,
+can nonetheless become silently divergent when composed together,
+if it is possible to interact with each other continuously
+without intervening communication with the outside.
+
+An operational description of this phenomenon
+models this internal interaction explicitly
+in the form of silent actions $\tau$.
+When comparing the behavior of two systems,
+finite sequences of $\tau$'s will be considered equivalent.
+However,
+silent divergence in the form of an infinite sequence of $\tau$'s
+can only correspond to another infinite sequence.
+This is usually addressed by the introduction of
+sophisticated notions of simulation,
+such as the \emph{measure simulations} used for instance in CompCert.
+
+On the other hand,
+in most work on denotational semantics,
+including traditional game semantics such as \cite{pcfgs},
+[complicated fixpoints] 
+
+Our model includes a notion of internal action $\tau$,
+which makes it possible to handle silent divergence explicitely
+rather than through sophisticated domain-theoretic constructions.
+However,
+note that the notion of simulation we have defined
+does not allow any variation
+in the number of internal transitions
+between the two transition systems being related.
+Nevertheless,
+composition operators remain monotonic
+under this definition of simulation,
+because [...]
+Normalize using the following operator.
+
+\begin{definition}[Observation operator]
+For a transition system $\alpha : \kw{ats}(M, S)$,
+we define the \emph{observations} transition system
+$\mathcal{O}(\alpha)$ as follows.
+A behavior $r : \kw{behavior}(M, S)$ is said to be
+\emph{observable} if $r \ne \tau \cdot s$ for all $s \in S$.
+A state $s' \in S$ is said to be \emph{reachable} from $s \in S$
+if there is a sequence $s_0, s_1, \ldots s_n$ such that
+$s_0 = s$, $s_n = s'$,
+and for all $0 \le i < n$
+there is a transition $\alpha(s_i) \ni \tau \cdot s_{i+1}$.
+A state $s$ is said to be \emph{silently divergent}
+if there is an infinite sequence $s_0, s_1, \ldots$
+such that $s_0 = s$ and for all $i$,
+there is a transition $\alpha(s_i) \ni \tau \cdot s_{i+1}$.
+Then the observations transition system is defined as:
+\begin{align*}
+    \mathcal{O}(\alpha)(s) = &\{ r \:|\: r \mbox{ is observable } \wedge
+         \exists s' \,.\, s \rightarrow^* s' \wedge
+		\alpha(s') \ni r \} \\
+      \cup &\{ \Delta \:|\: s \mbox{ is silently divergent} \}
+\end{align*}
+\end{definition}
+
+Properties:
+preserve nonbranching (if that's defined in the right way), determinism.
+Monotonic.
+
+\subsection{Composite games}
+
+
+
+
+\subsection{Horizontal composition}
+
+
+
+
+
