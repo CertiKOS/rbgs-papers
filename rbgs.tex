@@ -1,18 +1,12 @@
 \section{Refinement-based game semantics}
 
-\subsection{Overview}
-
 In this section we introduce the category $\mathcal{G}$ of games and strategies
 we will use to interpret the behavior of low-level interacting components.
 
-As a category of games, $\mathcal{G}$ is remarkable only in its simplicity:
-its objects are elementary games whose plays consists of
-one question from the O followed by one answer from P,
-and its morphisms $\sigma : A \rightarrow B$
-are well-bracketed strategies for the game ${!A} \multimap {!B}$.
-The category
-$\mathcal{G}$ lacks the monoidal structure present in traditional game models
-and has no closed structure of any kind.
+The objects of $\mathcal{G}$ are elementary games whose plays consists of
+one question from the $\kw{O}$ followed by one answer from $\kw{P}$.
+The morphisms $\sigma : A \rightarrow B$
+are well-bracketed, alternating strategies for the game ${!A} \multimap {!B}$.
 These restrictions ensures that no pointers or indices
 are necessary to distinguish threads in a given play of the arrow game.
 
@@ -23,102 +17,191 @@ suitable for our purposes.
 
 \subsection{Games}
 
+\subsubsection{Elementary games}
+
 \begin{definition}
-An \emph{elementary game} is a tuple
-$A = \langle M_A, \lambda_A, W_A, \preceq_A \rangle$, where
-$M_A$ is the game's set of \emph{moves},
-$\lambda_A : M_A \rightarrow \{ \kw{Q}, \kw{A} \}$ is
-a \emph{labelling function},
-$W_A$ is a set of worlds, and
-${\preceq}_A : \mathcal{R}_{W_A}(M_A, M_A)$ is
-a $W_A$-indexed family of transitive relations on moves.
-The moves of $M_A^\kw{Q} = \lambda^{-1}(\kw{Q})$ are called \emph{questions},
-the moves of $M_A^\kw{A} = \lambda^{-1}(\kw{A})$ are called \emph{answers}.
+An \emph{elementary game} is given as a tuple
+$A = \langle M_A^\kw{Q}, M_A^\kw{A}, W_{\!A},
+       \preceq_A^\kw{Q}, \preceq_A^\kw{A} \rangle$, where
+$M_A^\kw{Q}$ is a set of \emph{questions},
+$M_A^\kw{A}$ is a set of \emph{answers}, and
+$W_{\!A}$ is a set of \emph{worlds}.
+The $W_{\!A}$-indexed relations
+${\preceq}_A^\kw{Q} : \mathcal{R}_{W_{\!A}}(M_A^\kw{Q}, M_A^\kw{Q})$ and
+${\preceq}_A^\kw{A} : \mathcal{R}_{W_{\!A}}(M_A^\kw{A}, M_A^\kw{A})$
+define notions of \emph{refinement} for questions and answers.
 \end{definition}
 
 Elementary games proceed as follows:
-$\kw{O}$ first chooses a question, then $\kw{P}$ chooses an answer.
-Hence the plays of $A$ are taken from the set:
+$\kw{O}$ first chooses a question, then
+$\kw{P}$ chooses an answer.
+We can think of strategies for $A$ as partial functions
+$\sigma : M_A^\kw{Q} \rightarrow \mathcal{P}^1(M_A^\kw{A})$
+ordered by the simulation relation
+$\Vdash {\preceq}_A^\kw{Q} \rightarrow \mathcal{P}^+({\preceq}_A^\kw{A})$.
+Moreover,
+we expect valid strategies to be self-simulating:
+whenever $m_1 \preceq_A^\kw{Q} m_2$,
+a valid strategy which reacts to the question $m_1$
+with the answer $n_1$
+will also react to the more general question $m_2$ ---
+with an answer $n_2$ such that $n_1 \preceq_A^\kw{A} n_2$.
+
+\subsubsection{Iterated games}
+
+If we allow multiple iterations of the game,
+the plays will be paths from $\kw{O}$ in the following graph:
 \[
-    P_A = \{ \epsilon, m, mn \:|\: m \in M_A^\kw{Q}, n \in M_A^\kw{A} \} \,,
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node (O) at (0,0) {\kw{O}};
+    \node (P) at (1,0) {\kw{P}};
+    \path [->] (O) edge[bend left] node[auto] {$m$} (P);
+    \path [->] (P) edge[bend left] node[auto] {$n$} (O);
+  \end{tikzpicture}
+  \qquad
+  \begin{array}{c@{\,}l}
+    m &\in M_A^\kw{Q} \\[1ex]
+    n &\in M_A^\kw{A}
+  \end{array}
 \]
-and strategies for $A$ are essentially
-functions $\sigma : M_A^\kw{Q} \rightarrow M_A^\kw{R}$.
-We can extend $\preceq_A$ to a notion of strategy simulation,
-namely $\Vdash {\preceq}_A^\kw{Q} \rightarrow {\preceq}_A^\kw{R}$,
-and by quotient we can obtain a partial order
-of equivalence classes 
-of strategies well-behaved under $\preceq_A$.
+To formalize the relational aspects of iterations
+of elementary games,
+we can adjust the graph above so that its vertices are taken
+from the set of worlds extended with a starting point $\star$,
+and its edges are labelled by \emph{pairs} of related moves:
+\[
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node (O) at (0,0) {$\star$};
+    \node (P) at (2,0) {$w$};
+    \path [->] (O) edge[bend left] node[auto] {$m_1, m_2$} (P);
+    \path [->] (P) edge[bend left] node[auto] {$n_2, n_2$} (O);
+  \end{tikzpicture}
+  \qquad
+  \begin{array}{c}
+    (m_1, m_2) \in {\preceq}_A^\kw{Q} \\[.5ex]
+    w \in W_{\!A} + \star \\[.5ex]
+    (n_1, n_2) \in {\preceq}_A^\kw{A}
+  \end{array}
+\]
+Two sequences of moves $s_1, s_2$
+are related at a world $w$
+if the graph contains a path $s : \star \leadsto w$
+such that $s_1 = \pi_1^*(s)$ and $s_2 = \pi_2^*(s)$.
+A strategy $\sigma_1$ is simulated by a strategy $\sigma_2$ if
+any move $n_1$ of $\sigma_1$ at the position $s_1$
+matches a corresponding move $n_2$ of $\sigma_2$ at the position $s_2$,
+such that $n_1 \preceq_A^\kw{A} n_2$.
 
-Strategies for elementary games are fairly uninteresting
-and we do not formally address them further.
-Instead,
-we will focus on the composite \emph{arrow game} $A \rightarrow B$
-derived from the elementary games $A$ and $B$.
-This game consists of
-nested series of instances of the games $A$ and $B$.
-Instances of $B$ proceed according to the description above,
-however in instances of $A$ the role of $\kw{P}$ and $\kw{O}$
-are reversed.
-When a new instance of $B$ is initiated by $\kw{O}$,
-or a new instance of $A$ is initiated by $\kw{P}$,
-the current instance is suspended
-until the new instance concludes.
+\subsubsection{Arrow games}
 
-\begin{definition}
 Given two elementary games $A$ and $B$,
-the arrow game $A \rightarrow B$ uses the set of moves:
+the game $A \rightarrow B$ consists of
+nested iterations of $A$ and $B$.
+Instances of $B$ proceed normally,
+however in instances of $A$
+the roles of $\kw{P}$ and $\kw{O}$ are exchanged.
+When a new instance is initiated,
+the current game is suspended
+until the new instance concludes.
+Plays of $A \rightarrow B$ are paths in the following graph:
 \[
-    M_{A \rightarrow B} = M_A + M_B \,,
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node (O1) at (0,0) {\kw{O}};
+    \node (P1) at (1,0) {\kw{P}};
+    \node (O2) at (2,0) {\kw{O}};
+    \node (P2) at (3,0) {\kw{P}};
+    \node (O3) at (4,0) {$\ldots$};
+    \path [->] (O1) edge[bend left] node[auto] {$m$} (P1);
+    \path [->] (P1) edge[bend left] node[auto] {$n$} (O1);
+    \path [->] (P1) edge[bend left] node[auto] {$q$} (O2);
+    \path [->] (O2) edge[bend left] node[auto] {$r$} (P1);
+    \path [->] (O2) edge[bend left] node[auto] {$m$} (P2);
+    \path [->] (P2) edge[bend left] node[auto] {$n$} (O2);
+    \path [->] (P2) edge[bend left] node[auto] {$q$} (O3);
+    \path [->] (O3) edge[bend left] node[auto] {$r$} (P2);
+  \end{tikzpicture}
+  \quad
+  \begin{array}{c@{\,}lc@{\,}l}
+    m &\in M_B^\kw{Q} & q &\in M_A^\kw{Q} \\[1ex]
+    n &\in M_B^\kw{A} & r &\in M_A^\kw{A}
+  \end{array}
 \]
-which is further partitioned into the sets:
-\begin{align*}
-    M_{A \rightarrow B}^\kw{PQ} &= \iota_1(M_A^\kw{Q}) &
-    M_{A \rightarrow B}^\kw{OQ} &= \iota_2(M_B^\kw{Q}) \\
-    M_{A \rightarrow B}^\kw{OA} &= \iota_1(M_A^\kw{A}) &
-    M_{A \rightarrow B}^\kw{PA} &= \iota_2(M_B^\kw{A}) \,.
-\end{align*}
-Plays of $A \rightarrow B$ are sequences of moves
-alternating between $\kw{O}$ and $\kw{P}$.
-The set of such sequences can be written as:
+The players alternate.
+The first move is always a question $m$ played by $\kw{O}$ in $B$.
+The player $\kw{P}$ can conclude the current instance of $B$
+with an answer $n$, or
+initiate an instance of $A$
+with a question $q$.
+The player $\kw{O}$ can then initiate a new instance of $B$
+with another $m$, or
+conclude any current instance of $A$
+with an answer $r$.
+
+A corresponding relational frame can be defined
+on worlds of the form $\vec{w} \in (W_{\!A} + W_B)^*$.
+The starting state $\varepsilon$ corresponds to
+the leftmost $\kw{O}$ position above.
+The transitions are as follows.
 \[
-    P_{A \rightarrow B} =
-      \left\{ s \in M_{A \rightarrow B}^* \:\middle\vert\:
-         \exists \, t \,.\, s t \in
-         (M_{A \rightarrow B}^\kw{O} M_{A \rightarrow B}^\kw{P})^* \right\}
-\]
-The valid plays
-are given by a Kripke frame over:
-\[
-    W_{A \rightarrow B} = (W_A + W_B)^* \,,
-\]
-labelled by pairs of moves
-$(m_1, m_2) \in M_{A \rightarrow B} \times M_{A \rightarrow B}$.
-The accessibility relation is defined as follows:
-\[
-    \AxiomC{$m_1 \ifr{w \Vdash {\preceq}_{A \rightarrow B}^\kw{Q}} m_2$}
+  \begin{array}{c@{\qquad}c}
+    \text{For $\lvert \vec{w} \rvert$ even:} &
+    \text{For $\lvert \vec{w} \rvert$ odd:} \\[1ex]
+    \AxiomC{$m_1 \ifr{w \Vdash {\preceq}_B^\kw{Q}} m_2$}
     \UnaryInfC{$\vec{w} \stackrel{m_1, m_2}{\leadsto} w :: \vec{w}$}
-    \DisplayProof \quad
-    \AxiomC{$n_1 \ifr{w \Vdash {\preceq}_{A \rightarrow B}^\kw{A}} n_2$}
+    \DisplayProof
+    &
+    \AxiomC{$q_1 \ifr{w \Vdash {\preceq}_A^\kw{Q}} q_2$}
+    \UnaryInfC{$\vec{w} \stackrel{q_1, q_2}{\leadsto} w :: \vec{w}$}
+    \DisplayProof
+    \\[3.3ex]
+    \AxiomC{$n_1 \ifr{w \Vdash {\preceq}_B^\kw{A}} n_2$}
     \UnaryInfC{$w :: \vec{w} \stackrel{n_1, n_2}{\leadsto} \vec{w}$}
     \DisplayProof
+    &
+    \AxiomC{$r_1 \ifr{w \Vdash {\preceq}_A^\kw{A}} r_2$}
+    \UnaryInfC{$w :: \vec{w} \stackrel{r_1, r_2}{\leadsto} \vec{w}$}
+    \DisplayProof
+  \end{array}
 \]
-Two sequences of moves are related if they have the same length
-and if there is a path from $\epsilon$ in $W_{A \rightarrow B}$
-whose edges are labelled by corresponding moves of the sequences:
+As before,
+two sequences of moves are related if
+there is a corresponding path in the graph:
 \[
-    \AxiomC{$\vec{w} \stackrel{s}{\leadsto} \vec{w}'$}
+    \AxiomC{$s : \varepsilon \leadsto^* \vec{w}$}
     \UnaryInfC{$\pi_1^*(s)
        \ifr{\vec{w} \Vdash {\preceq}_{A \rightarrow B}}
        \pi_2^*(s)$}
     \DisplayProof
 \]
-\end{definition}
+
+We now formally define the notion of strategy
+for the game $A \rightarrow B$
+which is the basis for our semantic domain.
 
 \subsection{Strategies}
 
-A strategies for $A \rightarrow B$
-associate to each even-length position
+%
+%then $\kw{P}$ either
+%\emph{refuses} the question, or
+%performs a number of \emph{internal actions} and chooses an answer.
+%Hence the set of plays $P_A \subseteq (M_A \uplus \{ \kw{R}, \tau \})^*$
+%for the game $A$
+%is the prefix closure of:
+%\[
+%    M_A^\kw{Q} \cdot \left( \kw{R} + \tau^* M_A^\kw{A} \right)
+%\]
+%
+%Refusals are used in our definition of
+%\emph{horizontal composition} (\S\ref{sec:hcomp}),
+%where they allow another component to proceed.
+%Internal actions are used in our explicit treatment of
+%\emph{divergence} (\S\ref{sec:divergence}):
+%since that there is no limit on the number of internal actions,
+%$\kw{P}$ may in fact fail to ever produce an answer,
+%in which case its strategy is said to diverge.
+
+A strategy for $A \rightarrow B$
+associates to each even-length position
 a set of behaviors among the following:
 \[
     b \in \kw{beh}_{A \rightarrow B} ::= m \mid \kw{R} \mid \Delta
