@@ -516,7 +516,7 @@ Proceeds in 3 stages.
 
 \subsubsection{Multi-component games and strategies}
 
-The simplest way to compose a family of strategies $(\sigma_i)_{i\in I}$
+The simplest way to aggregate a family of strategies $(\sigma_i)_{i\in I}$
 is to annotate all of the moves exchanged by the system with its environment
 by a component identifier $i$.
 
@@ -581,6 +581,11 @@ any move played by the component.
 
 \subsubsection{Flat composition}
 
+Once we have such an aggregate,
+we can ``flatten'' the communication between
+the system and the environment
+back to the unannotated game $A \rightarrow B$.
+
 \begin{definition}
 The \emph{flattening} of $\sigma : A^I \rightarrow B^I$
 is the strategy $\lhd \sigma : A \rightarrow B$
@@ -594,16 +599,16 @@ $S := S_\sigma \times I^*$ by the following rules:
     \BinaryInfC{$(k, \iota) \stackrel{m}{\rightarrow} (s, \iota)$}
     \DisplayProof
     &
-    \AxiomC{$k \stackrel{(i, r)}{\rightarrow_\sigma} s$}
-    \UnaryInfC{$(k, i :: \iota) \stackrel{r}{\rightarrow} (s, \iota)$}
+    \AxiomC{$s \stackrel{(i, q)}{\rightarrow_\sigma} k$}
+    \UnaryInfC{$(s, \iota) \stackrel{q}{\rightarrow} (k, i :: \iota)$}
     \DisplayProof
     \\[1.5em]
     \AxiomC{$s \stackrel{(i, n)}{\rightarrow_\sigma} k$}
     \UnaryInfC{$(s, \iota) \stackrel{n}{\rightarrow} (k, \iota)$}
     \DisplayProof
     &
-    \AxiomC{$s \stackrel{(i, q)}{\rightarrow_\sigma} k$}
-    \UnaryInfC{$(s, \iota) \stackrel{q}{\rightarrow} (k, i :: \iota)$}
+    \AxiomC{$k \stackrel{(i, r)}{\rightarrow_\sigma} s$}
+    \UnaryInfC{$(k, i :: \iota) \stackrel{r}{\rightarrow} (s, \iota)$}
     \DisplayProof
     \\[1.5em]
     \AxiomC{$s \stackrel{\tau}{\rightarrow_\sigma} s'$}
@@ -617,9 +622,81 @@ $S := S_\sigma \times I^*$ by the following rules:
 \]
 \end{definition}
 
+We direct an incoming question in $B$
+to a component $i$ when all other components reject it.
+If the component then asks a question in the game $A$,
+we save its identifier on the stack $\iota$,
+so that the corresponding answer can be directed back to $i$.
+
+Putting together multi-component strategies and flattening,
+the \emph{flat composition} operator
+$\mathcal{F} : [A \rightarrow B] \rightarrow [A \rightarrow B]$
+is:
+\[
+    \mathcal{F}(\vec{\sigma}) := \mathcal{M}(\vec{\sigma})^\rhd
+\]
+This allows us to bundle multiple components of the same type,
+however note that so far they do not interact with each other
+(only to decide who's going to handle what question).
+
 \subsubsection{Resolution operator}
 
+To allow interaction within a composite system,
+we define the following resolution operator,
+which feeds back a strategy's own questions to itself
+whenever possible.
 
+\begin{definition}
+The \emph{resolution} of $\sigma : A \rightarrow A$,
+written $\mathcal{R}(\sigma)$,
+is defined over the sets of states
+$K := K_\sigma \times \{\kw{O}, \kw{P}\}^*$ and
+$S := S_\sigma \times \{\kw{O}, \kw{P}\}^*$
+by the following rules:
+\[
+  \begin{array}{cc}
+    {\small m \in M_A^\kw{Q}, \:\: n \in M_A^\kw{A}}
+    &
+    {\small q \in M_A^\kw{Q}, \:\: r \in M_A^\kw{A}}
+    \\[1em]
+    \AxiomC{$k \stackrel{m}{\rightarrow_\sigma} s$}
+    \UnaryInfC{$(k, \iota) \stackrel{m}{\rightarrow} (s, \kw{O} :: \iota)$}
+    \DisplayProof
+    &
+    \AxiomC{$s \stackrel{q}{\rightarrow_\sigma} k$}
+    \AxiomC{$k \:\#_\sigma\: q$}
+    \BinaryInfC{$(s, \iota) \stackrel{q}{\rightarrow_\sigma} (k, \iota)$}
+    \DisplayProof
+    \\[1.5em]
+    \AxiomC{$s \stackrel{n}{\rightarrow_\sigma} k$}
+    \AxiomC{$k \stackrel{n}{\rightarrow_\sigma} s'$}
+    \BinaryInfC{$(s, \kw{P} :: \iota) \stackrel{\tau}{\rightarrow} (s', \iota)$}
+    \DisplayProof
+    &
+    \AxiomC{$s \stackrel{q}{\rightarrow_\sigma} k$}
+    \AxiomC{$k \stackrel{q}{\rightarrow_\sigma} s'$}
+    \BinaryInfC{$(s, \iota) \stackrel{\tau}{\rightarrow} (s', \kw{P} :: \iota)$}
+    \DisplayProof
+    \\[1.5em]
+    \AxiomC{$s \stackrel{n}{\rightarrow_\sigma} k$}
+    \UnaryInfC{$(s, \kw{O} :: \iota) \stackrel{n}{\rightarrow} (k, \iota)$}
+    \DisplayProof
+    &
+    \AxiomC{$k \stackrel{r}{\rightarrow_\sigma} s$}
+    \UnaryInfC{$(k, \iota) \stackrel{r}{\rightarrow} (s, \iota)$}
+    \DisplayProof
+    \\[1.5em]
+    \AxiomC{$s \stackrel{\tau}{\rightarrow_\sigma} s'$}
+    \UnaryInfC{$(s, \iota) \stackrel{\tau}{\rightarrow} (s', \iota)$}
+    \DisplayProof
+    &
+    \AxiomC{$k \:\#_\sigma\: m$}
+    \UnaryInfC{$(k, \iota) \:\#\: m$}
+    \DisplayProof
+  \end{array}
+\]
+The initial continuation is $(k_{0,\sigma}, \varepsilon)$.
+\end{definition}
 
 \subsubsection{Observation operator}
 
