@@ -68,12 +68,14 @@ are transitive at all worlds.
 In the context of games with refinement,
 the valid plays and strategies will be the ones
 that are self-related.
+
 Our focus will be the plays and strategies
 for the composite game $A \rightarrow B$
 described in \S\ref{sec:arrow}.
 Before we formally define them,
 we start by addressing
-the possibility for $\kw{P}$ to silently diverge
+the possibility for $\kw{P}$ to silently diverge,
+to signal an undefined behavior,
 and to refuse any question from $\kw{O}$.
 
 %}}}
@@ -111,6 +113,26 @@ in \S\ref{sec:bigstep}
 we introduce an operator $- \backslash \tau^*$
 that can be used to normalize strategies
 by eliminating altogether all such finite sequences.
+
+%}}}
+
+\subsubsection{Undefined behaviors} %{{{
+
+Low-level language semantics and specifications
+often contain \emph{undefined behaviors}:
+there are circumstances under which the behavior of the system
+is entierly unrestricted;
+any execution that reaches such circumstances is said to ``go wrong''.
+We model this by allowing $\kw{P}$ to play the special move
+$\lightning$
+to signal an undefined behavior,
+after which the game terminates.
+
+The undefined behavior can be implemented by anything,
+but can only implement itself;
+as such,
+the single-event trace $\lightning$
+acts as an upper bound with respect to refinement.
 
 %}}}
 
@@ -154,21 +176,23 @@ are described by the following graph:
     \node (O2) at (2,0) {\kw{O}};
     \node (P2) at (3,0) {\kw{P}};
     \node (O3) at (4,0) {$\ldots$};
-    \node (R) at (3,1.5) {\kw{P}};
-    \node (H) at (4,1.5) {$\kw{O}$};
+    \node (R) at (1,1.5) {\kw{P}};
+    \node (H) at (2,1.5) {\kw{O}};
     \path [->] (R) edge node[auto] {$\#$} (H);
     \path [->] (-0.5,0) edge (O1);
     \path [->] (O1) edge[bend left] node[auto] {$m$} (P1);
-    \path [->] (O1) edge[bend left] node[auto] {$m$} (R);
+    \path [->] (O1) edge[bend left=20] node[auto,anchor=base east] {$m$} (R);
     \path [->] (P1) edge[bend left] node[auto] {$n$} (O1);
     \path [->] (P1) edge[bend left] node[auto] {$q$} (O2);
     \path [->] (P1) edge[loop below] node[auto] {$\tau$} (P1);
+    \path [->] (P1) edge[bend left=20] node[auto,anchor=east] {$\lightning$} (H);
     \path [->] (O2) edge[bend left] node[auto] {$r$} (P1);
     \path [->] (O2) edge[bend left] node[auto] {$m$} (P2);
-    \path [->] (O2) edge[bend left] node[auto] {$m$} (R);
+    \path [->] (O2) edge[bend right=20] node[auto,anchor=west] {$m$} (R);
     \path [->] (P2) edge[bend left] node[auto] {$n$} (O2);
     \path [->] (P2) edge[bend left] node[auto] {$q$} (O3);
     \path [->] (P2) edge[loop below] node[auto] {$\tau$} (P2);
+    \path [->] (P2) edge[bend right=20] node[anchor=base west] {$\lightning$} (H);
     \path [->] (O3) edge[bend left] node[auto] {$r$} (P2);
   \end{tikzpicture}
   \quad
@@ -211,12 +235,12 @@ the prefix closure $P_{A \rightarrow B}$ of the set:
 \[
     (M_{A \rightarrow B}^\kw{O} \, \tau^*
      M_{A \rightarrow B}^\kw{P})^* \,
-    (\varepsilon + M_{A \rightarrow B}^\kw{O} \#) \,.
+    (\varepsilon + M_{A \rightarrow B}^\kw{O} \, (\# + \tau^*\lightning)) \,.
 \]
 By analogy with the more usual notion of alternating plays,
 we call \emph{even}
 the empty play and the plays ending in
-a move from $M_{A \rightarrow B}^\kw{P} \cup \{\#\}$, and
+a move from $M_{A \rightarrow B}^\kw{P} \cup \{\#, \lightning\}$, and
 we call \emph{odd} the plays ending in
 a move from $M_{A \rightarrow B}^\kw{O} \cup \{\tau\}$.
 We write $P_{A \rightarrow B}^\kw{even}$ and $P_{A \rightarrow B}^\kw{odd}$
@@ -334,6 +358,9 @@ whereas the second condition ensures that
 all possible behaviors of $\kw{O}$ are included
 at all reachable positions.
 
+XXX require downward closure wrt $\lightning$
+so that unique and ordered by inclusion.
+
 %}}}
 
 \subsubsection{Transition systems} %{{{
@@ -355,9 +382,12 @@ where:
   \item $K$ is a set of \emph{continuation states};
   \item $S$ is a set of \emph{running states};
   \item ${\stackrel{\kw{O}}{\rightarrow}} :
-         K \rightarrow M_{A \rightarrow B}^\kw{O} \rightarrow \mathcal{P}(S)$
+         K \rightarrow
+         M_{A \rightarrow B}^\kw{O} \rightarrow
+         \mathcal{P}(S^\lightning)$
     is a \emph{resumption relation};
-  \item ${\stackrel{\tau}{\rightarrow}} : S \rightarrow \mathcal{P}(S)$
+  \item ${\stackrel{\tau}{\rightarrow}} :
+         S \rightarrow \mathcal{P}(S^\lightning)$
     is an \emph{internal transition relation};
   \item ${\stackrel{\kw{P}}{\rightarrow}} :
          S \rightarrow \mathcal{P}(M_{A \rightarrow B}^\kw{P} \times K)$
@@ -367,6 +397,9 @@ where:
   \item $k_0$
     is the strategy's \emph{initial continuation}.
 \end{itemize}
+The set of states is extended to $S^\lightning = S \uplus \{\lightning\}$
+so that $\sigma$ may perform a transition to $\lightning$
+whenever an undefined behavior is encountered.
 We will write:
 \begin{itemize}
   \item $k \xrightarrow{m} s$ when ${\xrightarrow{\kw{O}} }(k, m) \ni s$, and
@@ -394,7 +427,8 @@ defined by mutual recursion as:
     \kw{traces}_\sigma(s) & = & \tau, \tau t &
       s \xrightarrow{\tau} s' \wedge t \in \kw{traces}_\sigma(s') \} \\
     & \cup & m t &
-      s \xrightarrow{m} k \wedge t \in \kw{traces}_\sigma(k) \}
+      s \xrightarrow{m} k \wedge t \in \kw{traces}_\sigma(k) \} \\
+    & \cup & \lightning & s = \lightning \}
   \end{array}
 \]
 Then the behavior of strategies can be made explicit
@@ -402,6 +436,8 @@ by specifying the corresponding sets of plays as:
 \[
   \kw{traces}(\sigma) = \kw{traces}_\sigma(k_0) \,.
 \]
+
+XXX downward closure wrt $\lightning$
 
 [Show that $\subseteq P_{A \rightarrow B}$,
 and that it satisfies the requirements outlined
@@ -489,11 +525,11 @@ $R_S : \mathcal{R}_{W_{\!A \rightarrow B}}(S_1, S_2)$
 such that:
 \begin{gather*}
   \xrightarrow{\kw{O}}_1
-  \ifr{\Vdash R_K \rightarrow \Box \rightarrow \mathcal{P}^+(R_S)}
+  \ifr{\Vdash R_K \rightarrow \Box \rightarrow \mathcal{P}^+(R_S^\lightning)}
   \xrightarrow{\kw{O}}_2
   \\
   \xrightarrow{\tau}_1
-  \ifr{\Vdash R_S \rightarrow \mathcal{P}^+(R_S)}
+  \ifr{\Vdash R_S \rightarrow \mathcal{P}^+(R_S^\lightning)}
   \xrightarrow{\tau}_2
   \\
   \xrightarrow{\kw{P}}_1
@@ -506,6 +542,11 @@ such that:
   \\
   k_{0,1} \ifr{\varepsilon \Vdash R_K} k_{0,2}
 \end{gather*}
+The relation on states is extended to:
+\[
+    R_S^\lightning =
+    R_S \cup \{ (s_1, \lightning) \mid s_1 \in S_1^\lightning \} \,.
+\]
 We will write
 $\sigma_1 \le_{\mathbb{C}_A \rightarrow \mathbb{C}_B}^R \sigma_2$
 when $R$ is a simulation relation in this sense, and write
