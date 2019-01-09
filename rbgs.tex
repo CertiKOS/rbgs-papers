@@ -648,9 +648,20 @@ when there exists any such simulation relation.
 The identity strategy $\kw{id}_A : A \rightarrow A$
 simply passes codomain questions to the domain game,
 and passes domain answers back to the codomain.
-It is easily defined as:
+It is defined as:
 $\kw{id}_A := \langle \{ * \}, \delta_\kw{id}, * \rangle$,
 with $\delta_\kw{id}(*, m) = \{(m, *)\}$.
+Furthermore,
+for a refinement convention
+$\mathbb{C} : \mathbb{R}_{W}(A_1, A_2)$,
+the relation $R_\kw{id}$ defined by the single rule:
+\[
+    \AxiomC{$\vec{w} = w_1 w_1 \cdots w_n w_n$}
+    \UnaryInfC{$* \ifr{\vec{w} \Vdash R_\kw{id}} *$}
+    \DisplayProof
+\]
+is such that
+$\kw{id}_{\!A_1} \le_{\mathbb{C} \rightarrow \mathbb{C}}^{R_\kw{id}} \kw{id}_{\!A_2}$.
 
 The composition $f \cdot g$ of
 $f : A \rightarrow B$ and $g : B \rightarrow C$
@@ -704,6 +715,81 @@ where:
 \[ \delta_{f \cdot g}(m) :=
    \kw{in}_m \cdot (\kw{step}_f + \kw{step}_g)^* \cdot \kw{out} \,. \]
 \end{definition}
+
+Having defined the categorical composition $\cdot$ and its identity $\kw{id}$,
+we will complement them with
+an additive component $\oplus, \bot$
+as well as a corresponding Kleene star $-^\oast$.
+Similarly to the corresponding structure
+on the behavior specification monad,
+this will allow us to construct
+more complex operators on strategies,
+such as the horizontal composition of CompCert components
+defined in \S\ref{sec:hcomp}.
+
+%}}}
+
+\subsubsection{Continuous choice} %{{{
+
+For the two strategies $f, g : A \rightarrow B$,
+the continuous choice operator $f \oplus g : A \rightarrow B$
+will implement a form of nondeterministic choice between $f$ and $g$.
+Specifically,
+for each incoming question in $M_B^\kw{Q}$,
+the operator will choose to route it to either $f$ or $g$.
+If the chosen component asks a question in $A$,
+the corresponding answer of $\kw{O}$ will be routed back
+to the same component.
+
+Therefore,
+in addition to keeping track of the components' states,
+the state of $f \oplus g$
+will need to remember which component originated
+each pending question of $\kw{P}$:
+\[ K_{f \oplus g} := K_f \times K_g \times \{\kw{L}, \kw{R}\}^* \]
+For a pair of moves
+$(m, n) \in M_{A \rightarrow B}^\kw{O} \times
+            M_{A \rightarrow B}^\kw{P}$
+corresponding to an interaction of the component $i \in \{\kw{L}, \kw{R}\}$,
+we can define their action on the stack as a relation:
+\[ \kw{upd}_i(m, n) :
+    \{\kw{L}, \kw{R}\}^* \rightarrow
+    \mathcal{B}(\{\kw{L}, \kw{R}\}^*) \,. \]
+Writing
+$m \in M_B^\kw{Q}$, $n \in M_B^\kw{A}$, $q \in M_A^\kw{Q}$, $r \in M_A^\kw{A}$,
+the relation $\kw{upd}_i$ is defined by the rules:
+\begin{align*}
+  \kw{upd}_i(m, n, \iota) &\ni \{ \iota \} &
+  \kw{upd}_i(r, n, i :: \iota) &\ni \{ \iota \} \\
+  \kw{upd}_i(m, q, \iota) &\ni \{ i :: \iota \} &
+  \kw{upd}_i(r, q, i :: \iota) &\ni \{ i :: \iota \}
+\end{align*}
+Then we can formulate the following definition.
+
+\begin{definition}[Continuous choice]
+Given two strategies $f, g : A \rightarrow B$,
+the continuous choice $f \oplus g : A \rightarrow B$
+is defined as the strategy
+$\langle K_{f \oplus g}, \delta_{f \oplus g}, k_{0, f \oplus g} \rangle$
+where:
+\begin{align*}
+  \delta_{f \oplus g}&(k_1, k_2, \iota, m) := \\
+    & \delta_f(k_1, m) \bind (n, k_1') \mapsto
+      \kw{upd}_\kw{L}(m, n, \iota) \bind \iota' \mapsto
+      (m, k_1', k_2, \iota') \\
+  + & \delta_g(k_2, m) \bind (n, k_2') \mapsto
+      \kw{upd}_\kw{R}(m, n, \iota) \bind \iota' \mapsto
+      (m, k_1, k_2', \iota')
+\end{align*}
+and $k_{0, f \oplus g} := (k_1, k_2, \varepsilon)$.
+\end{definition}
+
+The additive identity $\bot_{A,B} : A \rightarrow B$
+is simply defined as the empty strategy
+$\langle \{*\}, * \mapsto 0, * \rangle$.
+In the composite strategies $f \oplus \bot$ and $\bot \oplus g$,
+the stack will consist only of labels for the non-empty component,
+so that these strategies will be equivalent to $f$ and $g$ respectively.
 
 %}}}
 
