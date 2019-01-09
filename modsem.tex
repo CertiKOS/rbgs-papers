@@ -1,5 +1,11 @@
 \section{Open Modules for Compcert}
 
+Having laid out our basic game framework,
+we show how this framework can be used
+to construct a compositional semantics for CompCert.
+
+\subsection{Overview}
+
 CompCert is a C-to-assembly compiler written and verified
 in the Coq proof assistant.
 The compiler is accompanied by
@@ -11,34 +17,110 @@ refines that of the source program.
 The original CompCert
 only formalizes the execution of a complete program's
 \texttt{int main()} function called with no arguments.
-Interaction with the environment is modelled using event traces,
-and a global parameter specifies the semantics of external functions,
-however there is no way for C or assembly modules to
-satisfy that interface.
-Over the past few year,
-several attempts have been made to improve the compositionality of CompCert
-\cite{compcompcert,popl15,sepcompcert,cpp15}.
-[...]
+Language semantics interpret external calls
+using a predefined behavior for external functions,
+common to all languages.
+In turn,
+the behavior of external functions
+defines event traces
+recording their interaction with the environment
+from of a fixed set of possible actions,
+such as volatile memory accesses or the invocation of system calls.
+However,
+two-way interaction between program modules
+cannot be modeled using this facility.
 
-In this section,
-we present an open module semantics for CompCert
-...
+Following Compositional CompCert \cite{compcompcert},
+we replace this model by extending the semantics of CompCert programs
+in two ways:
+\begin{itemize}
+\item First,
+  we allow the initial and final states of CompCert modules
+  to account for a variety of entry points and final configurations,
+  so that every function in a program module
+  may be invoked with any combination of arguements,
+  and so that functions may pass back an arbitrary return value
+  and an updated memory state to the caller
+  once they terminate;
+\item Second,
+  rather than computing the semantics of external calls
+  using a predefined global parameter,
+  our model allows languages semantics to perform external calls explicitely,
+  using the same interface they implement for incoming calls.
+\end{itemize}
+Furthermore,
+our model is parametrized by elementary games
+specifying the form of the incoming and external calls
+used by a given language semantics.
+The model is defined formally in \S\ref{sec:lts}.
+
+This extends naturally to a notion of simulation
+parametrized by refinement conventions.
+Self-simulation under refinement conventions
+derived from a particular family of Kripke logical relations
+allow us to formulate parametricity theorems for CompCert languages,
+which in turn can be used to prove properties of interest
+as ``free theorems'',
+a technique used in \S\ref{sec:correctness} to
+establish a compositional correctness theorem
+for the updated compiler.
+
+\subsection{Language interfaces} %{{{
+\label{sec:langint}
+
+\begin{table*} % tbl:li Language interfaces {{{
+  \begin{tabular}{llll}
+    \hline
+    Name & Questions & Answers & Description \\
+    \hline
+    $\mathcal{C}$ & $(\kw{id}, \kw{sg}, \vec{v}, m)$ & $(v', m')$ &
+      C-style function calls \\
+    $\mathcal{L}$ & $(\kw{id}, \kw{sg}, \kw{ls}, m)$ & $(\kw{ls}', m')$ &
+      Arguments are passed in abstract locations (LTL, Linear) \\
+    $\mathcal{M}$ & $(\kw{id}, \kw{sp},\kw{ra},\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Arguments are passed through the in-memory stack (Mach) \\
+    $\mathcal{A}$ & $(\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Assembly-style control transfers (Asm) \\
+    \hline
+  \end{tabular}
+  \caption{Language interfaces for the various Compcert intermediate languages.}
+  \label{tbl:li}
+\end{table*}
+%}}}
+
+Our model uses elementary games to specify the interface
+of each language under consideration.
+Questions will be control transfers corresponding to function calls,
+whereas answers will return control to the caller.
+
+Table~\ref{tbl:li}
+shows the language interfaces used by Composable Compcert.
+At the level of C,
+questions consist of
+the name and signature of the function being invoked,
+the values of its arguments,
+and the state of the memory at the point of entry;
+answers
+consist of the function's return value
+and the state of the memory at the point of exit.
+At the assembly level,
+both queries and replies specifies
+the values of registers and the state of the memory.
+
+%}}}
+
+\subsection{Transition systems} %{{{
+\label{sec:lts}
 
 The semantics of CompCert languages are given mainly
 as labeled transition systems (LTS).
-Applying our principles to this framework
-yields a natural extension
-able to describle the semantics of
-open modules in these languages
-and support composable compilation.
-
 In the original CompCert,
 a labeled transition system is given as
 a set of states $S$,
-a labeled transition relation
-${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
 a set of initial states
 $I \subseteq S$,
+a labeled transition relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
 and a set
 $F \subseteq S \times \kw{int}$
 of final states associated with an integer result.
@@ -61,101 +143,61 @@ Following the \emph{interaction semantics} of
 Compositional CompCert \ref{compcompcert},
 we replace CompCert's event traces
 by an explicit model of module entry and exit.
-In addition,
-we introduce a rudimentary form of typing
-for transition systems
-in the form of \emph{language interfaces},
-which captures the language-dependent aspects
-of a module's interactions with the environment.
-This concept is defined in the following section.
+However,
+instead of a fixed format for module interaction,
+our model is parametrized by elementary games
+specifying the form of function calls (questions)
+and returns (answers) accepted by the module and the environment.
 
-\subsection{Language Interfaces} %{{{
-
-\begin{table*} % tbl:li Language interfaces {{{
-  \begin{tabular}{llll}
-    \hline
-    Name & Query & Reply & Description \\
-    \hline
-    $\mathcal{L}_\kw{C}$ & $(\kw{id}, \kw{sg}, \vec{v}, m)$ & $(v', m')$ &
-      C-style function calls \\
-    $\mathcal{L}_\kw{loc}$ & $(\kw{id}, \kw{sg}, \kw{ls}, m)$ & $(\kw{ls}', m')$ &
-      Arguments are passed in abstract locations (LTL, Linear) \\
-    $\mathcal{L}_\kw{mach}$ & $(\kw{id}, \kw{sp},\kw{ra},\kw{rs}, m)$ & $(\kw{rs}', m')$ &
-      Arguments are passed through the in-memory stack (Mach) \\
-    $\mathcal{L}_\kw{asm}$ & $(\kw{rs}, m)$ & $(\kw{rs}', m')$ &
-      Assembly-style control transfers (Asm) \\
-    \hline
-  \end{tabular}
-  \caption{Language interfaces for the various Compcert intermediate languages.}
-  \label{tbl:li}
-\end{table*}
-%}}}
-
-\begin{definition}[Language interface]
-A \emph{language interface} $\mathcal{A}$ consists in a pair $(Q, R)$
-which specifies
-a set $Q$ of \emph{queries} and
-a set $R$ of \emph{replies}.
-Queries
-correspond to the ways in which
-a module can be entered, whereas
-replies
-correspond to the ways in which
-the module can return control
-to its environment.
-\end{definition}
-
-Table~\ref{tbl:li}
-shows the language interfaces used by Composable Compcert.
-At the level of C,
-queries consist of
-the name and signature of the function being invoked,
-the values of its arguments,
-and the state of the memory at the point of entry;
-replies
-consist of the function's return value
-and the state of the memory at the point of exit.
-At the assembly level,
-both queries and replies specifies
-the values of registers and the state of the memory.
-
-%}}}
-
-\subsection{Transition systems} %{{{
-
-Modifying Compcert LTS to account for
-the interaction described by language interfaces
-yields the following definition.
-
-\begin{definition}[Language-specific interaction semantics]
-Given a language interface $\mathcal{A} = (Q, R)$,
-a \emph{language-specific interaction semantics} for $\mathcal{A}$
-is a tuple $\sigma = (S, \rightarrow, I, X, R, F)$.
+\begin{definition}[Small-step semantics]
+Given two elementary games $A, B$,
+a \emph{small-step semantics} for the game $A \rightarrow B$
+is a tuple $\sigma = \langle S, \rightarrow, I, X, R, F \rangle$.
 $S$ is a set of states,
 with ${\rightarrow} \subseteq S \times S$ a \emph{transition relation} on $S$.
 The handling of incoming calls is specified by
-$I \subseteq Q \times S$, which
-assigns a set of \emph{initial states} to each query, and
-$F \subseteq S \times R$,
-which designates \emph{final states} together with corresponding replies.
+$I \subseteq M_B^\kw{Q} \times S$, which
+assigns a set of \emph{initial states} to each question of $B$, and
+$F \subseteq S \times M_B^\kw{A}$,
+which designates \emph{final states} together with corresponding answers.
 The handling of external calls is specified by
-$X \subseteq S \times Q$,
+$X \subseteq S \times M_A^\kw{Q}$,
 which identifies \emph{external states} together with
-corresponding queries directed to the environment, and
-$R \subseteq S \times R \times S$,
+corresponding questions of $A$ directed to the environment, and
+$R \subseteq S \times M_A^\kw{A} \times S$,
 which is used to select a \emph{resumption state}
 based on the outcome of the external call
 after the environment returns control to the module.
 
-We write $L : \mathcal{A}$ to indicate that
-$L$ is a language-specific interaction semantics for $\mathcal{A}$.
+We write $L : \kw{semantics}(A, B)$ to indicate that
+$L$ is a small-step semantics for the game $A \rightarrow B$.
 \end{definition}
 
-Corresponds to the game $!\mathcal{A} \multimap \mathcal{A}$.
+In \S\ref{sec:embedding},
+we will show how small-step semantics can be used to define
+strategies for the game $A \rightarrow B$.
+For now,
+we can remark that transition systems in the form defined above
+describe the behavior of a \emph{single} invocation
+of the program module being modeled.
+With each incoming question,
+we will instantiate a new, independent state
+using the initial-state predicate $I$.
+The derived strategies will be innocent,
+in the sense that they will not maintain
+any hidden state across subsequent or reentrant
+invocations from the environment.
+Instead,
+relevant global state will be passed back into the module
+as a component of the environment's question
+(for instance in the form of the memory state component
+of the question as described in Table~\ref{tbl:li}).
 
 %}}}
 
 \subsection{Calling conventions} \label{sec:callconv} %{{{
+
+XXX: most of this should be moved to \S\ref{sec:rbgs}.
 
 \begin{table*} % tbl:cc Calling conventions {{{
   \begin{tabular}{lccp{.7\textwidth}}
@@ -309,7 +351,7 @@ form a category.
 \subsection{Backward simulations} %{{{
 
 CompCert uses \emph{backward simulations}
-as its primary notion of refinement between labeled transition systems.
+as its primary notion of refinement between small-step semantics.
 % Footnote pointing out difference w/ "Fw & Bw Sim" terminology?
 A backward simulation asserts that any transition in the target program
 has a corresponding transition sequence in the source program.
@@ -322,17 +364,28 @@ over a well-founded order,
 and making sure that the index decreases
 whenever a potentially empty sequence of source transitions is used.
 
-We adapt CompCert's notion of backward simulation
-to take into account the way in which labeled transition systems
-may interact with the environment.
-First,
-we parametrize backward simulations by a calling convention,
-which specifies how the sequence of queries and replies
-performed by the two LTS should be related.
-Second,
-we extend the simulation to any continuations
-produced by the LTS when a final state is reached,
-so that the simulation may be resumed for subsequent queries.
+In our setting,
+the definition of backward simulations needs to be extended
+to take into account the ways in which the questions and answers
+at the source and target level ought to be related.
+This can be specified using the notion of refinement convention
+defined in \S\ref{sec:refconv}:
+a simulation between the small-step semantics
+$L_1 : \kw{semantics}(A_1, B_1)$ and
+$L_2 : \kw{semantics}(A_2, B_2)$ will
+operate in the context of the refinement convention
+$\mathbb{C}_A : \mathcal{R}_{W_A}(A_1, A_2)$ and
+$\mathbb{C}_B : \mathcal{R}_{W_B}(B_1, B_2)$.
+In a sense,
+extending CompCert semantics with our question/answer interface
+amounts to making public the component of
+each language's state relevant
+to the communication between modules of that language
+at interaction points.
+Similarly,
+the refinement convention will correspond to the public,
+relevant part of the simulation relation used to establish
+the correctness of a given compiler pass.
 
 Note that because queries and replies
 correspond to respective actions of the environment and the system,

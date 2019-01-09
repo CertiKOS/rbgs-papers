@@ -84,13 +84,12 @@ and to refuse any question from $\kw{O}$.
 
 We model internal actions in the following way.
 Whenever $\kw{P}$ is to play,
-it may instead signal that an internal action took place
-by playing the special move $\tau$,
+it may instead perform an internal action ($\tau$),
 in which case $\kw{P}$ will retain control.
 There is no limit on the number of internal actions that
-$\kw{P}$ may perform before playing a regular move;
+$\kw{P}$ may perform before playing a move;
 we say that a strategy \emph{diverges}
-when it plays $\tau$ indefinitely.
+when it performs internal actions indefinitely.
 
 Internal actions usually correspond to the hidden interactions
 within composite systems, and
@@ -136,25 +135,6 @@ acts as an upper bound with respect to refinement.
 
 %}}}
 
-\subsubsection{Refusals} %{{{
-
-In our model,
-$\kw{P}$ may \emph{refuse} a question:
-immediately after $\kw{O}$ plays a question,
-$\kw{P}$ can play the special move $\kw{\#}$,
-after which the game terminates.
-In the context of
-\emph{horizontal composition} (\S\ref{sec:hcomp}),
-this will allow another component to proceed.
-
-Note that a nondeterministic specification
-may allow both answering and refusing a given question,
-and that refusal must be distinguished from
-the absence of behavior
-(which in our setting would refine any specification).
-
-%}}}
-
 \subsubsection{Arrow games} %{{{
 \label{sec:arrow}
 
@@ -166,9 +146,9 @@ When a new instance is initiated,
 the current game is suspended
 until the new instance concludes.
 
-Accounting for internal actions and refusals,
+Accounting for divergence ($\Delta$) and undefined behaviors ($\lightning$),
 the valid plays of $A \rightarrow B$
-are described by the following graph:
+are described by the graph:
 \[
   \begin{tikzpicture}[baseline=(O1.base)]
     \node (O1) at (0,0) {\kw{O}};
@@ -176,23 +156,17 @@ are described by the following graph:
     \node (O2) at (2,0) {\kw{O}};
     \node (P2) at (3,0) {\kw{P}};
     \node (O3) at (4,0) {$\ldots$};
-    \node (R) at (1,1.5) {\kw{P}};
     \node (H) at (2,1.5) {\kw{O}};
-    \path [->] (R) edge node[auto] {$\#$} (H);
     \path [->] (-0.5,0) edge (O1);
     \path [->] (O1) edge[bend left] node[auto] {$m$} (P1);
-    \path [->] (O1) edge[bend left=20] node[auto,anchor=base east] {$m$} (R);
     \path [->] (P1) edge[bend left] node[auto] {$n$} (O1);
     \path [->] (P1) edge[bend left] node[auto] {$q$} (O2);
-    \path [->] (P1) edge[loop below] node[auto] {$\tau$} (P1);
-    \path [->] (P1) edge[bend left=20] node[auto,anchor=east] {$\lightning$} (H);
+    \path [->] (P1) edge[bend left=20] node[auto,anchor=east] {$\lightning, \Delta$} (H);
     \path [->] (O2) edge[bend left] node[auto] {$r$} (P1);
     \path [->] (O2) edge[bend left] node[auto] {$m$} (P2);
-    \path [->] (O2) edge[bend right=20] node[auto,anchor=west] {$m$} (R);
     \path [->] (P2) edge[bend left] node[auto] {$n$} (O2);
     \path [->] (P2) edge[bend left] node[auto] {$q$} (O3);
-    \path [->] (P2) edge[loop below] node[auto] {$\tau$} (P2);
-    \path [->] (P2) edge[bend right=20] node[anchor=base west] {$\lightning$} (H);
+    \path [->] (P2) edge[bend right=20] node[anchor=base west] {$\lightning, \Delta$} (H);
     \path [->] (O3) edge[bend left] node[auto] {$r$} (P2);
   \end{tikzpicture}
   \quad
@@ -216,8 +190,7 @@ To formalize the plays and strategies of $A \rightarrow B$
 in a way that accounts for refinement,
 we decouple two aspects of this structure.
 The following definition of plays
-enforces the alternation between $\kw{O}$ and $\kw{P}$
-and specifies how the special moves $\tau$ and $\#$ can be used.
+enforces the alternation between $\kw{O}$ and $\kw{P}$.
 
 \begin{definition} % arrow game {{{
 Given two elementary games $A$ and $B$,
@@ -233,16 +206,15 @@ categorized as follows:
 The \emph{plays} are taken in
 the prefix closure $P_{A \rightarrow B}$ of the set:
 \[
-    (M_{A \rightarrow B}^\kw{O} \, \tau^*
+    (M_{A \rightarrow B}^\kw{O}
      M_{A \rightarrow B}^\kw{P})^* \,
-    (\varepsilon + M_{A \rightarrow B}^\kw{O} \, (\# + \tau^*\lightning)) \,.
+    (\varepsilon +
+     M_{A \rightarrow B}^\kw{O} \Delta +
+     M_{A \rightarrow B}^\kw{O} \lightning) \,.
 \]
-By analogy with the more usual notion of alternating plays,
-we call \emph{even}
-the empty play and the plays ending in
-a move from $M_{A \rightarrow B}^\kw{P} \cup \{\#, \lightning\}$, and
-we call \emph{odd} the plays ending in
-a move from $M_{A \rightarrow B}^\kw{O} \cup \{\tau\}$.
+Note that
+even-length plays represent positions where $\kw{O}$ is expected to play,
+whereas odd-length plays represent positions where $\kw{P}$ is.
 We write $P_{A \rightarrow B}^\kw{even}$ and $P_{A \rightarrow B}^\kw{odd}$
 for the corresponding subsets of $P_{A \rightarrow B}$.
 \end{definition}
@@ -324,6 +296,134 @@ to define our notion of simulation.
 %}}}
 
 %}}}
+
+%}}}
+
+\subsection{Behavior specifications} %{{{
+
+By contrast with more traditional settings,
+in our model strategies represent a range of possible behaviors
+of the system and as such are not expected to be deterministic.
+In addition,
+our explicit treatment of divergence,
+the possibility for strategies to exhibit undefined behaviors,
+and our commitment to strategy refinement as a first-class citizen
+[...]
+
+In this section,
+we capture these aspects of our model
+in the \emph{behavior specification} monad.
+
+\subsubsection{Definition}
+
+Given a base type $A$,
+a computation in $A$ may produce 
+may produce a value of type $A$,
+but it may also diverge or exhibit undefined behavior.
+Hence,
+a behavior specification for $A$ is an element:
+\[
+    x \in \mathcal{B}(A) = \mathcal{P}(A + \{ \Delta, \lightning \})
+\]
+The unit of $\kw{ret}_A : A \rightarrow \mathcal{B}(A)$
+of the monad $\mathcal{B}$ is given by:
+\[
+    \kw{ret}_A(a) = \{ a \} \,,
+\]
+and the binding operation is defined in the following way:
+\[
+    \AxiomC{$a \in x$}
+    \AxiomC{$b \in f(a)$}
+    \BinaryInfC{$b \in x >>= f$}
+    \DisplayProof
+    \quad
+    \AxiomC{$\Delta \in x$}
+    \UnaryInfC{$\Delta \in x >>= f$}
+    \DisplayProof
+    \quad
+    \AxiomC{$\lightning \in x$}
+    \UnaryInfC{$\lightning \in x >>= f$}
+    \DisplayProof
+\]
+The usual monad laws hold, and
+the Kleisi composition of $f : A \rightarrow \mathcal{B}(B)$ and
+$g : B \rightarrow \mathcal{B}(C)$ can be derived as:
+\[
+    (f \cdot g)(a) = (f(a) >>= g) \,.
+\]
+The action of $\mathcal{B}$ on functions can be derived as:
+\[
+    \mathcal{B}(f) = x \mapsto (x >>= \kw{ret}_A \circ f) \,.
+\]
+
+
+\subsubsection{Refinement}
+
+We can promote a relation $R : \mathcal{R}(A, B)$
+to behavior specifications as:
+\[ \mathcal{B}^+(R) :=
+   \mathcal{P}^+(R + \{ (\Delta, \Delta), (x, \lightning) \mid x \in A \}) \]
+Note that $\mathcal{B}$ preserves reflexivity and transitivity,
+so that if $\sqsubseteq$ is a preorder,
+then $\mathcal{B}(\sqsubseteq)$ is a preorder as well.
+
+The least and greatest elements
+can be defined as:
+\[ \bot := \varnothing \qquad \top := \{ \lightning \} \,, \]
+with the property that for all $R, x, S$:
+\[ \bot \ifr{\mathcal{B}^+(R)} x \ifr{\mathcal{B}^+(S)} \top \,. \]
+
+In addition,
+for $R : \mathcal{R}(A_1, A_2)$ and $S : \mathcal{R}(B_1, B_2)$,
+the monad operations satisfy the expected relational properties:
+\begin{gather*}
+\kw{ret}_{A_1} \ifr{R \rightarrow \mathcal{B}^+(R)} \kw{ret}_{A_2} \\
+({>>=}) \ifr{\mathcal{B}^+(R) \rightarrow (R \rightarrow \mathcal{B}^+(S))
+  \rightarrow \mathcal{B}^+(S)} ({>>=}) \\
+{\cdot} \ifr{(R \rightarrow \mathcal{B}^+(S)) \rightarrow
+             (S \rightarrow \mathcal{B}^+(T)) \rightarrow
+             (R \rightarrow \mathcal{B}^+(T))} {\cdot} \\
+\mathcal{B}(-) \ifr{(R \rightarrow S) \rightarrow (\mathcal{B}^+(R)
+\rightarrow \mathcal{B}^+(S))} \mathcal{B}(-)
+\end{gather*}
+
+\subsubsection{Kleene star}
+
+A Kleisli morphism of type $f : A \rightarrow \mathcal{B}(A)$
+can be interpreted as a transition relation on the set of states $A$,
+and we can define the iteration $f^*$
+in a way that recognizes silent divergence.
+Writing $f^n$ for the $n$-fold composition of the form
+$f \cdot f \cdots f$,
+divergence can be recognized as:
+\[ \kw{diverges}_f(a) \Leftrightarrow
+    \forall n \in \mathbb{N} \,.\,
+    \exists a' \in A \,.\,
+    f^n(a) \ni a' \]
+Nondeterministic choice
+and its unit can be defined as:
+\[ f + g := a \mapsto f(a) \cup g(a)  \qquad  0 := a \mapsto \bot \]
+Then the iteration of $f$ is:
+\[ f^* := \sum_{n \in \mathbb{N}} f^n +
+          (a \mapsto \{ \Delta \mid \kw{diverges_f(a)} \}) \]
+
+Using Kleisi composition as multiplication,
+the structure
+$\langle A \rightarrow \mathcal{B}(A), {\cdot}, {+}, \kw{ret}_A, 0, * \rangle$
+is analogous to a Kleene algebra.
+However, as noted in \cite{failkat},
+the possibility of an abnormal outcome
+means that annihilation of $\cdot$ by $0$ on the right
+does not hold.
+In particular:
+\[ \Delta \cdot 0 = \Delta \qquad \lightning \cdot 0 = \lightning \]
+
+Nevertheless,
+this notion of iteration
+and the associated equational theory
+will be useful
+for defining strategies operationally,
+in terms of small-step transition relations.
 
 %}}}
 
