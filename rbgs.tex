@@ -643,14 +643,257 @@ when there exists any such simulation relation.
 
 \subsection{Constructions} %{{{
 
+\subsubsection{Products} %{{{
+
+The simplest way to aggregate a family of strategies $(\sigma_i)_{i \in I}$
+is to annotate all of the moves by a component identifier $i$.
+This corresponds to the categorical product.
+
+\begin{definition} % Product game {{{
+Given a family of elementary games $(A_i)_{i \in I}$,
+we define their \emph{product} as the game:
+\[ \prod_{i \in I} A_i =
+   \Big\langle \sum_{i \in I} M_{A_i}^\kw{Q},
+            \: \sum_{i \in I} M_{A_i}^\kw{A} \Big\rangle \,. \]
+We will write $A_1 \times A_2 := \prod_{i \in \{1, 2\}} A_i$
+and $A^I := \prod_{i \in I} A$.
+\end{definition}
+%}}}
+
+The aggregated strategy uses the labels to direct each move
+to the corresponding component,
+and lets the components operate independently.
+
+\begin{definition} % Product of strategies {{{
+For a family of strategies
+$(\sigma_i : A_i \rightarrow B_i)_{i \in I}$,
+their product is the strategy
+$\prod_i \sigma_i := \langle \prod_i K_i, \prod_i \delta_i, (k_i)_{i\in I} \rangle$,
+where the relation
+$\prod_i \delta_i$
+is defined as:
+\[
+  (k, (i, m)) \mapsto
+    \delta_i(k_i, m) \bind (n, k_i') \mapsto ((i, n), k[i := k_i']) \,.
+\]
+As before,
+we write $\sigma_1 \times \sigma_2 := \prod_{i \in \{1, 2\}} \sigma_i$
+and $\sigma^I := \prod_{i \in I} \sigma$.
+\end{definition}
+%}}}
+
+%}}}
+
+\subsubsection{Interaction} %{{{
+
+While the product of two strategies
+let them operate independently,
+a construction like the composition $f \cdot g$ of
+$f : A \rightarrow B$ and $g : B \rightarrow C$
+is more subtle:
+it involves the unbounded interaction of $f$ and $g$
+over their common game $B$.
+
+To model this interaction,
+we introduce the following operator.
+Given a strategy $\sigma : \Gamma \times A \rightarrow A \times \Delta$,
+we will construct the strategy $Z(\sigma) : \Gamma \rightarrow \Delta$
+by letting $\sigma$ interact with itself
+over the game $A$ common to its domain and codomain.
+
+\begin{definition}
+Given $\sigma : \Gamma \times A \rightarrow A \times \Delta$,
+we define the strategy $Z(\sigma) : \Gamma \rightarrow \Delta$
+by iteration over the set of states:
+\[
+    S := K_\sigma \times (M_\Gamma + M_A + M_\Delta) \,.
+\]
+When a continuation of $Z(\sigma)$ is resumed by an opponent move,
+we first store the move as a component of the state:
+\begin{gather*}
+  \kw{in} : K_\sigma \rightarrow
+            M_{\Gamma \rightarrow \Delta}^\kw{O} \rightarrow
+            \mathcal{B}(S) \\
+  \kw{in}_k(m) := \{ (k, m) \}
+\end{gather*}
+Then, we will let $\sigma$ act on the state
+by lifting its transition relation to $S$.
+Given the obvious injections:
+\begin{align*}
+  \iota_\kw{O} &:
+    M_{\Gamma \times A \rightarrow A \times \Delta}^\kw{O}
+    \rightarrow
+    M_\Gamma + M_A + M_\Delta \\
+  \iota_\kw{P} &:
+    M_{\Gamma \times A \rightarrow A \times \Delta}^\kw{P}
+    \rightarrow
+    M_\Gamma + M_A + M_\Delta \,,
+\end{align*}
+we define the relation
+$\kw{step} : S \rightarrow \mathcal{B}(S)$
+using the rule:
+\[
+  \kw{step}(k, \iota_\kw{O}(m)) =
+    \delta_\sigma(k, m) \bind (m', k') \mapsto (k', \iota_\kw{P}(m')) \,,
+\]
+with the understanding that $\kw{step}(k, m) = \bot$
+whenever the current move $m$ is
+in $M_\Gamma^\kw{Q}$ or $M_\Delta^\kw{A}$.
+Instead,
+when we reach such a move
+we return control to the environment:
+\begin{gather*}
+  \kw{out} : S \rightarrow
+    \mathcal{B}(M_{\Gamma \rightarrow \Delta}^\kw{P} \times K) \\
+  \kw{out}(k, m) =
+    \{ (m, k) \mid m \in M_{A \rightarrow B}^\kw{P} \}
+\end{gather*}
+With these, the strategy $Z(\sigma)$ can be defined as:
+\[
+    Z(\sigma) := \langle
+       K_\sigma, \:
+       k \mapsto \kw{in}_k \cdot \kw{step}^* \cdot \kw{out}, \:
+       k_{0\sigma}
+     \rangle \,.
+\]
+\end{definition}
+
+%}}}
+
 \subsubsection{Identity and composition} %{{{
 
+Having defined products and the interaction combinator $Z$,
+we can define the categorical composition of
+$f : A \rightarrow B$ and $g : B \rightarrow C$ as:
+\[
+    f \cdot g := Z(f \times g) \,.
+\]
 The identity strategy $\kw{id}_A : A \rightarrow A$
 simply passes codomain questions to the domain game,
 and passes domain answers back to the codomain.
 It is defined as:
 $\kw{id}_A := \langle \{ * \}, \delta_\kw{id}, * \rangle$,
 with $\delta_\kw{id}(*, m) = \{(m, *)\}$.
+
+%}}}
+
+\subsubsection{Duplication} %{{{
+
+Although we have defined the product
+$\prod_i \sigma_i : \prod_i A_i \rightarrow \prod_i B_i$,
+we have not yet defined the tupling
+$\langle \sigma_i \rangle_{i \in I} : A \rightarrow \prod_i B_i$
+of a family of strategies
+$(\sigma_i : A \rightarrow B_i)_{i \in I}$,
+which distinguishes the cartesian product
+from weaker monoidal structures.
+To this end,
+we introduce the diagonal morphism
+$\Delta_A^I : A \rightarrow A^I$.
+
+The diagonal morphism simply passes through any
+opponent question from a component $i \in I$ of its codomain
+as a proponent question in its domain.
+To make sure the answer can be routed back to $i$,
+we need to remember which component of the codomain initiated
+each pending question.
+Hence,
+the continuations of $\Delta$
+consist of a stack $\iota \in I^*$
+of component identifiers.
+
+\begin{definition}[Diagonal morphism] % diagnoal morphism {{{
+For an elementary game $A$ and a set $I$,
+we define the strategy:
+\[ \Delta_A^I := \langle I^*, \delta_\Delta, \varepsilon \rangle
+  : A \rightarrow A^I \,. \]
+Writing $m \in M_A^\kw{Q}$ and $n \in M_A^\kw{A}$,
+the transition relation $\delta_\Delta$
+is defined by the rules:
+\begin{align*}
+  \delta_\Delta(\iota, (i, m)) &\ni (m, i :: \iota) & m &\in M_A^\kw{Q} \\
+  \delta_\Delta(i :: \iota, n) &\ni ((i, n), \iota) & n &\in M_A^\kw{A} \,.
+\end{align*}
+Then for a family of strategies $(\sigma_i : A \rightarrow B_i)_{i \in I}$,
+we define
+$\langle \sigma_i \rangle_{i \in I} : A \rightarrow \prod_i B_i$
+as the strategy:
+\[
+    \langle \sigma_i \rangle_{i \in I} := 
+      \Delta^I \cdot \prod_i \sigma_i \,.
+\]
+\end{definition}
+%}}}
+
+%}}}
+
+\subsubsection{Choice} %{{{
+
+Because our underlying notion of behavior supports
+nondeterministic choice,
+in addition to the diagonal morphism
+$\Delta : A \rightarrow A^I$,
+we can define a strategy
+$\Sigma : A^I \rightarrow A$
+which will pass each opponent question in the codomain
+to a nondeterministically chosen component in the domain.
+
+\begin{definition}
+For an elementary game $A$ and an index set $I$,
+the strategy $\Sigma_A^I : A^I \rightarrow A$
+is defined as $\langle \{*\}, \delta_\Sigma, * \rangle$
+where $\delta_\Sigma$ is defined by the rules:
+\begin{align*}
+  &\delta_\Sigma(*, m) \ni \{((i, m), *)\} & m &\in M_A^\kw{Q} \\
+  &\delta_\Sigma(*, (i, n)) \ni \{(n, *)\} & n &\in M_A^\kw{A} \,.
+\end{align*}
+For $f, g : A \rightarrow B$,
+the strategy $f \oplus g$ is defined as:
+\[ f \oplus g := \Delta \cdot (f \times g) \cdot \Sigma \,. \]
+\end{definition}
+
+This construction allows us to complement
+the multiplicative structure $\langle \cdot, \kw{id} \rangle$
+of our game model
+with an additive component $\langle \oplus, \bot \rangle$.
+The additive identity is defined as the empty strategy
+$\bot_{A,B} := \langle \{*\}, * \mapsto 0, * \rangle : A \rightarrow B$.
+The strategy $f \oplus g$
+implements a form of continuous nondeterministic choice between $f$ and $g$:
+for each incoming question in $M_B^\kw{Q}$,
+the operator will nondeterministically route it to either $f$ or $g$.
+
+%}}}
+
+\subsubsection{Iterated composition}
+
+The logical next step is to define the Kleene star
+associated with $\cdot$ and $\oplus$.
+Given a strategy $\sigma : A \rightarrow A$,
+we define:
+\begin{align*}
+  \sigma^{\oplus} &:= Z(\Sigma \cdot \sigma \cdot \Delta) \\
+  \sigma^{\oast} &:= \sigma^{\oplus} \oplus \kw{id}_A
+\end{align*}
+
+Once again,
+the structure
+$\langle \mathcal{G}[A,A], \cdot, \kw{id}, \oplus, \bot, {}^\oast \rangle$
+does not define a Kleene algebra,
+because $\bot$ may not act as an absorbing element
+on the left of $\cdot$.
+Nevertheless,
+these operations will allow us to construct
+more complex operators on strategies,
+such as the horizontal composition of CompCert components
+defined in \S\ref{sec:hcomp},
+and to use equational reasoning to
+establish properties of these operators.
+
+%}}}
+
+\subsection{Relational properties} %{{{
+
 Furthermore,
 for a refinement convention
 $\mathbb{C} : \mathbb{R}_{W}(A_1, A_2)$,
@@ -663,219 +906,28 @@ the relation $R_\kw{id}$ defined by the single rule:
 is such that
 $\kw{id}_{\!A_1} \le_{\mathbb{C} \rightarrow \mathbb{C}}^{R_\kw{id}} \kw{id}_{\!A_2}$.
 
-The composition $f \cdot g$ of
-$f : A \rightarrow B$ and $g : B \rightarrow C$
-is more subtle:
-it involves the unbounded interaction of $f$ and $g$
-over their common game $B$,
-which introduces the possibility of silent divergence.
-
-We will model this interaction by using the sets of states:
-\begin{align*}
-  K_{f \cdot g} &:= K_f \times K_g \\
-  S_{f \cdot g} &:= K_f \times K_g \times (M_A + M_B + M_C)
-\end{align*}
-When the composite strategy is resumed,
-we will first store the opponent move as a component of the state:
-\begin{gather*}
-  \kw{in} : M_{A \rightarrow C}^\kw{O} \rightarrow K_{f \cdot g} \rightarrow
-    \mathcal{B}(S_{f \cdot g}) \\
-  \kw{in}_m(k_f, k_g) := \{ (k_f, k_g, m) \}
-\end{gather*}
-
-Then, we will let $f$ and $g$ act on the state independently
-by lifting their transition relation to $S_{f \cdot g}$ as follows:
-\begin{gather*}
-  \kw{step}_f(k_f, k_g, m) :=
-    \delta_f(k_f, m) \bind (m', k_f') \mapsto (k_f', k_g, m') \\
-  \kw{step}_g(k_f, k_g, m) :=
-    \delta_f(k_g, m) \bind (m', k_g') \mapsto (k_f, k_g', m')
-\end{gather*}
-with the understanding that $\kw{step}_f(k_f, k_g, m) = \varnothing$
-whenever $m \notin M_{A \rightarrow B}^\kw{O}$,
-and likewise for $\kw{step}_g$.
-
-Finally,
-when we reach a move of $M_{A \rightarrow C}^\kw{P}$,
-we can return control to the environment:
-\begin{gather*}
-  \kw{out} : S_{f \cdot g} \rightarrow
-    \mathcal{B}(M_{A \rightarrow C}^\kw{P} \times K_{f \cdot g}) \\
-  \kw{out}(k_1, k_2, m) =
-    \{ (m, (k_1, k_2)) \mid m \in M_{A \rightarrow B}^\kw{P} \}
-\end{gather*}
-With these, categorical composition can be defined as follows.
-
 \begin{definition}
-The \emph{composition} $f \cdot g : A \rightarrow C$ of
-$f : A \rightarrow B$ and $g : B \rightarrow C$
-is the strategy
-$\langle S_{f \cdot g}, \delta_{f \cdot g}, (k_{0,f}, k_{0,g}) \rangle$
-where:
-\[ \delta_{f \cdot g}(m) :=
-   \kw{in}_m \cdot (\kw{step}_f + \kw{step}_g)^* \cdot \kw{out} \,. \]
-\end{definition}
-
-Having defined the categorical composition $\cdot$ and its identity $\kw{id}$,
-we will complement them with
-an additive component $\oplus, \bot$
-as well as a corresponding Kleene star $-^\oast$.
-Similarly to the corresponding structure
-on the behavior specification monad,
-this will allow us to construct
-more complex operators on strategies,
-such as the horizontal composition of CompCert components
-defined in \S\ref{sec:hcomp}.
-
-%}}}
-
-\subsubsection{Continuous choice} %{{{
-
-For the two strategies $f, g : A \rightarrow B$,
-the continuous choice operator $f \oplus g : A \rightarrow B$
-will implement a form of nondeterministic choice between $f$ and $g$.
-Specifically,
-for each incoming question in $M_B^\kw{Q}$,
-the operator will choose to route it to either $f$ or $g$.
-If the chosen component asks a question in $A$,
-the corresponding answer of $\kw{O}$ will be routed back
-to the same component.
-
-Therefore,
-in addition to keeping track of the components' states,
-the state of $f \oplus g$
-will need to remember which component originated
-each pending question of $\kw{P}$:
-\[ K_{f \oplus g} := K_f \times K_g \times \{\kw{L}, \kw{R}\}^* \]
-For a pair of moves
-$(m, n) \in M_{A \rightarrow B}^\kw{O} \times
-            M_{A \rightarrow B}^\kw{P}$
-corresponding to an interaction of the component $i \in \{\kw{L}, \kw{R}\}$,
-we can define their action on the stack as a relation:
-\[ \kw{upd}_i(m, n) :
-    \{\kw{L}, \kw{R}\}^* \rightarrow
-    \mathcal{B}(\{\kw{L}, \kw{R}\}^*) \,. \]
-Writing
-$m \in M_B^\kw{Q}$, $n \in M_B^\kw{A}$, $q \in M_A^\kw{Q}$, $r \in M_A^\kw{A}$,
-the relation $\kw{upd}_i$ is defined by the rules:
-\begin{align*}
-  \kw{upd}_i(m, n, \iota) &\ni \{ \iota \} &
-  \kw{upd}_i(r, n, i :: \iota) &\ni \{ \iota \} \\
-  \kw{upd}_i(m, q, \iota) &\ni \{ i :: \iota \} &
-  \kw{upd}_i(r, q, i :: \iota) &\ni \{ i :: \iota \}
-\end{align*}
-Then we can formulate the following definition.
-
-\begin{definition}[Continuous choice]
-Given two strategies $f, g : A \rightarrow B$,
-the continuous choice $f \oplus g : A \rightarrow B$
-is defined as the strategy
-$\langle K_{f \oplus g}, \delta_{f \oplus g}, k_{0, f \oplus g} \rangle$
-where:
-\begin{align*}
-  \delta_{f \oplus g}&(k_1, k_2, \iota, m) := \\
-    & \delta_f(k_1, m) \bind (n, k_1') \mapsto
-      \kw{upd}_\kw{L}(m, n, \iota) \bind \iota' \mapsto
-      (m, k_1', k_2, \iota') \\
-  + & \delta_g(k_2, m) \bind (n, k_2') \mapsto
-      \kw{upd}_\kw{R}(m, n, \iota) \bind \iota' \mapsto
-      (m, k_1, k_2', \iota')
-\end{align*}
-and $k_{0, f \oplus g} := (k_1, k_2, \varepsilon)$.
-\end{definition}
-
-The additive identity $\bot_{A,B} : A \rightarrow B$
-is simply defined as the empty strategy
-$\langle \{*\}, * \mapsto 0, * \rangle$.
-In the composite strategies $f \oplus \bot$ and $\bot \oplus g$,
-the stack will consist only of labels for the non-empty component,
-so that these strategies will be equivalent to $f$ and $g$ respectively.
-
-%}}}
-
-\subsubsection{Multi-component games and strategies} %{{{
-
-The simplest way to aggregate a family of strategies $(\sigma_i)_{i\in I}$
-is to annotate all of the moves exchanged by the system with its environment
-by a component identifier $i$.
-
-\begin{definition} % multi-channel game {{{
-For an elementary game $A$ and a set $I$,
-we define the \emph{multi-channel game}
-$A^I = \langle I \times M_G^\kw{Q}, I \times M_G^\kw{A} \rangle$.
-Given a refinement convention
-$\mathbb{C} : \mathcal{R}(A_1, A_2)$,
-we define
-$\mathbb{C}^I =
- \langle W, {\preceq}^\kw{Q}, {\preceq}^\kw{A} \rangle :
- \mathcal{R}(A_1^I, A_2^I)$
+For a family of refinement conventions
+$(\mathbb{C}_i : \mathcal{R}(A_i, B_i))_{i \in I}$,
+we define:
+\[ \prod_{i \in I} \mathbb{C}_i =
+   \langle W, {\preceq}^\kw{Q}, {\preceq}^\kw{A} \rangle :
+   \mathcal{R}\Big(\prod_i A_i, \prod_i B_i \Big) \]
 where
-$W = I \times W_\mathbb{C}$ and
+$W = \sum_i W_{\mathbb{C}_i}$ and
 $\preceq^\kw{Q}, \preceq^\kw{A}$
 are given by the rules:
 \[
     \small
-    \AxiomC{$m_1 \ifr{w \Vdash {\preceq}_\mathbb{C}^\kw{Q}} m_2$}
+    \AxiomC{$m_1 \ifr{w \Vdash {\preceq}_{\mathbb{C}_i}^\kw{Q}} m_2$}
     \UnaryInfC{$(i, m_1) \ifr{(i, w) \Vdash {\preceq}^\kw{Q}} (i, m_2)$}
     \DisplayProof
     \quad
-    \AxiomC{$m_1 \ifr{w \Vdash {\preceq}_\mathbb{C}^\kw{A}} m_2$}
+    \AxiomC{$m_1 \ifr{w \Vdash {\preceq}_{\mathbb{C}_i}^\kw{A}} m_2$}
     \UnaryInfC{$(i, m_1) \ifr{(i, w) \Vdash {\preceq}^\kw{A}} (i, m_2)$}
     \DisplayProof
 \]
 \end{definition}
-%}}}
-
-The aggregated strategy uses the labels to direct each move
-to the corresponding component,
-and lets the components operate independently.
-
-\begin{definition} % multi-component strategy {{{
-For a family of strategies
-$\vec{\sigma} = (\sigma_i)_{i \in I}$
-with
-$\sigma_i = \langle K_i, S_i, \xrightarrow{\kw{O}}_i,
-  \xrightarrow{\tau}_i, \xrightarrow{\kw{P}}_i, \#_i, k_{0i} \rangle :
-  A \rightarrow B$,
-the multi-component strategy
-$\mathcal{M}(\sigma_i)_{i \in I} : A^I \rightarrow B^I$
-is defined over the sets of states:
-\[
-  K := \prod_{i \in I} K_i \qquad
-  S := \sum_{i \in I}
-    \Big( S_i \times \prod_{i \ne j} K_j \Big)
-\]
-by the following rules:
-\[
-  \begin{array}{c@{\qquad}c}
-    \AxiomC{$k_i \xrightarrow{m}_i s$}
-    \UnaryInfC{$\vec{k} \xrightarrow{(i, m)} (i, s, \vec{k} \backslash i)$}
-    \DisplayProof
-    &
-    \AxiomC{$s \xrightarrow{m}_i k_i$}
-    \UnaryInfC{$(i, s, \vec{k} \backslash i) \xrightarrow{(i, m)} \vec{k}$}
-    \DisplayProof
-    \\[1.5em]
-    \AxiomC{$s \xrightarrow{\tau}_i s'$}
-    \UnaryInfC{$(i, s, \vec{k}) \xrightarrow{\tau} (i, s', \vec{k})$}
-    \DisplayProof
-    &
-    \AxiomC{$k \: \#_i \: m$}
-    \UnaryInfC{$\vec{k} \: \# \: (i, m)$}
-    \DisplayProof
-  \end{array}
-\]
-and uses the initial continuation $(k_{0i})_{i \in I}$.
-\end{definition}
-%}}}
-
-In other words,
-at most one component is active at any time,
-and the others remain in continuation states.
-A resumption activates the component whose index
-is read from the move,
-and the index is incoroporated back into
-any move played by the component.
 
 \begin{lemma} % monotonicity {{{
 For a family of simulation relations $\vec{R} = (R_i)_{i \in I}$ such that
