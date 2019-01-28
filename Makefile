@@ -3,11 +3,11 @@ CRUFT = aux pdf bbl blg log snm nav out toc
 all: lwcc.pdf slides.pdf
 
 %.aux: %.tex
-	pdflatex $* || true
+	pdflatex $* </dev/null || true
 
 %.bbl: %.bib %.aux
 	bibtex $*
-	pdflatex $* || true
+	pdflatex $* </dev/null || true
 
 %.pdf: %.tex %.aux
 	pdflatex $*

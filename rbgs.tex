@@ -9,6 +9,452 @@ our definition of strategy is generalized to accomodate specifications,
 and the morphisms of $\mathcal{G}$ are equipped with a notion of refinement
 suitable for our purposes.
 
+\subsection{Behavior specifications}
+
+Before we introduce games and strategies
+in the following sections,
+we define the \emph{behavior specification} monad $\mathcal{B}$
+which captures our treatment of
+silent divergence, undefined behaviors, and non-determinism,
+as well as the associated notion of refinement.
+
+\subsubsection{Divergence} %{{{
+
+[XXX update]
+
+We model internal actions in the following way.
+Whenever $\kw{P}$ is to play,
+it may instead perform an internal action ($\tau$),
+in which case $\kw{P}$ will retain control.
+There is no limit on the number of internal actions that
+$\kw{P}$ may perform before playing a move;
+we say that a strategy \emph{diverges}
+when it performs internal actions indefinitely.
+
+Internal actions usually correspond to the hidden interactions
+within composite systems, and
+divergence is an \emph{emergent} phenomenon:
+systems that are well-behaved when taken in isolation
+may nontheless exhibit divergence when they interact with one another.
+As such,
+divergence is one of the major sources of complexity
+in compositional semantics.
+
+In our setting,
+the occurence of internal actions
+is observable,
+and our definition of simulation
+makes no effort
+to identify finite sequences of internal actions
+which have different lengths.
+Instead,
+in \S\ref{sec:bigstep}
+we introduce an operator $- \backslash \tau^*$
+that can be used to normalize strategies
+by eliminating altogether all such finite sequences.
+
+%}}}
+
+\subsubsection{Undefined behaviors} %{{{
+
+Low-level language semantics and specifications
+often contain \emph{undefined behaviors}:
+there are circumstances under which the behavior of the system
+is entierly unrestricted;
+any execution that reaches such circumstances is said to ``go wrong''.
+We model this using the special outcome $\lightning$
+representing a computation whose behavior is undefined
+from that point on.
+
+The undefined behavior can be implemented by anything,
+but can only implement itself;
+as such,
+$\lightning$
+acts as a greatest element with respect to refinement.
+
+%}}}
+
+\subsubsection{Non-determinism} %{{{
+
+[of the system's specification,
+expresses the range of behaviors that are allowed]
+
+%}}}
+
+\subsubsection{Monad}
+
+The notion of computation outlined above
+yields the following definition
+for the behavior specification monad:
+\[
+    \mathcal{B}(X) := \mathcal{P}(X + \{\Delta\})^\lightning
+\]
+That is,
+computations are a sets of possible outcomes (values or silent divergence),
+which we augment with a special computation $\lightning$
+intended as a greatest element for refinement.
+
+The unit of $\kw{ret}_A : A \rightarrow \mathcal{B}(A)$
+of the monad $\mathcal{B}$ is given by:
+\[
+    \kw{ret}_A(a) = \{ a \} \,,
+\]
+and the binding operation is defined by the rules:
+\[
+    \AxiomC{$x \ni a$}
+    \AxiomC{$f(a) \ni b$}
+    \BinaryInfC{$(x \bind f) \ni b$}
+    \DisplayProof
+    \quad
+    \AxiomC{$x \ni \Delta$}
+    \UnaryInfC{$(x \bind f) \ni \Delta$}
+    \DisplayProof
+    \quad
+    \AxiomC{}
+    \UnaryInfC{$(\lightning \bind f) \ni \lightning$}
+    \DisplayProof
+\]
+The usual monad laws hold:
+\begin{align*}
+    \kw{ret}(v) \bind f &= f(v) \\
+    x \bind \kw{ret} &= x \\
+    x \bind (v \mapsto f(x) \bind g) &= (x \bind f) \bind g
+\end{align*}
+
+Recall that the Kleisli category associated with the monad $\mathcal{B}$
+has sets a objects and
+functions of type $f : A \rightarrow \mathcal{B}(B)$
+as its morphisms $A \leadsto B$ between sets $A$ and $B$.
+For $f : A \leadsto B$ and $g : B \leadsto C$,
+the Kleisli composition $f \cdot g : A \leadsto C$
+and its identity $\mathbf{1}_A : A \leadsto A$ are defined as:
+\[
+    f \cdot g := a \mapsto f(a) \bind g \qquad \mathbf{1}_A := \kw{ret}_A \,.
+\]
+In the remainder of this section we show that
+the Kleisli category associated with $\mathcal{B}$
+can further be equipped with a structure analogous
+to a typed Kleene algebra.
+
+\subsubsection{Refinement}
+
+We can promote a relation $R : \mathcal{R}(A, B)$
+to behavior specifications in the following way:
+\[ \mathcal{B}^+(R) :=
+   \mathcal{P}^+(R + \{ (\Delta, \Delta) \})^\lightning \]
+We will use:
+\[ {\sqsubseteq}_A := \mathcal{B}^+(=_A) \]
+as our notion of refinement.
+
+The relation lifting operator $\mathcal{B}^+$ defines a \emph{relator},
+so that the following properties hold:
+\begin{gather*}
+  {=}_{\mathcal{B}(X)} \subseteq \mathcal{B}^+(=_X) \\
+  \mathcal{B}^+(R) \cdot \mathcal{B}^+(S) \subseteq
+    \mathcal{B}^+(R \cdot S) \\
+  R \subseteq S \Rightarrow
+    \mathcal{B}^+(R) \subseteq \mathcal{B}^+(S) \,.
+\end{gather*}
+In particular, $\mathcal{B}^+(R)$ is compatible with $\sqsubseteq$
+in the following sense:
+\[
+    {\sqsubseteq} \cdot \mathcal{B}^+(R) \:\subseteq\: \mathcal{B}^+(R) \qquad
+    \mathcal{B}^+(R) \cdot {\sqsubseteq} \:\subseteq\: \mathcal{B}^+(R)
+\]
+Furthermore the monad operations satisfy the expected relational properties,
+summarized in Fig.~\ref{fig:monadr}.
+[known as "lax extension", monad relator]
+
+The refinement partial order $\sqsubseteq_A$
+defines a complete lattice on $\mathcal{B}(A)$.
+Given $x, y : \mathcal{B}(A)$,
+their supremum $x \vee y : \mathcal{B}(A)$
+can be interpreted as a non-deterministic choice
+between the computations $x$ and $y$,
+or as the specification that permits the behavior of either.
+On the other hand $x \wedge y : \mathcal{B}(A)$ can be interpreted as
+the specification requiring that $x$ and $y$ both be satisfied.
+The least element $\varnothing$
+is a specification that can never be satisfied;
+the greatest element $\lightning$
+is the specification that is always satisfied.
+
+This lattice structure
+can be extended pointwise to Kleisli morphisms.
+In particular, for $f : A \leadsto B$ and $g : A \leadsto B$,
+we define $f + g : A \leadsto B$ and $\mathbf{0}_{A,B} : A \leadsto B$ as:
+\[
+  f + g := a \mapsto f(a) \vee g(a) \qquad
+  \mathbf{0}_{A,B} := a \mapsto \varnothing \,.
+\]
+
+\begin{figure}
+  \begin{gather*}
+    R : \mathcal{R}(A_1, A_2),
+    S : \mathcal{R}(B_1, B_2),
+    T : \mathcal{R}(C_1, C_2) \\
+    \kw{ret}_{A_1}
+        \ifr{R \rightarrow \mathcal{B}^+(R)}
+        \kw{ret}_{A_2} \\
+    ({\bind})
+        \ifr{\mathcal{B}^+(R) \rightarrow (R \rightarrow \mathcal{B}^+(S))
+          \rightarrow \mathcal{B}^+(S)}
+        ({\bind}) \\
+    {\cdot}
+        \ifr{(R \rightarrow \mathcal{B}^+(S)) \rightarrow
+             (S \rightarrow \mathcal{B}^+(T)) \rightarrow
+             (R \rightarrow \mathcal{B}^+(T))}
+        {\cdot} \\
+    \mathcal{B}(-)
+        \ifr{(R \rightarrow S) \rightarrow
+             \mathcal{B}^+(R) \rightarrow \mathcal{B}^+(S)}
+        \mathcal{B}(-)
+  \end{gather*}
+  \caption{Relational properties for behavior specifications}
+  \label{fig:monadr}
+\end{figure}
+
+\subsubsection{Iteration}
+
+A Kleisli morphism of type $f : A \leadsto A$
+can be interpreted as a transition relation on $A$,
+and we define its non-deterministic iteration $f^*$
+in the usual way:
+\[
+    f^* := \sum_{n \in \mathbb{N}} f^n \,,
+\]
+where $f^n$ is
+the $n$-fold composition of the form $f \cdot f \cdots f$.
+To account for divergence,
+we also introduce the infinite iteration operation:
+\[
+    f^\omega := a \mapsto \{ \Delta \mid
+      \forall n \in \mathbb{N} \,.\,
+      f^n(a) \ne \varnothing \} \,,
+\]
+and define $f^\infty := f^* + f^\omega$.
+
+The structure
+$\langle A \leadsto B, {\cdot}, \mathbf{1}, {+}, \mathbf{0}, * \rangle$
+is analogous to a typed Kleene algebra,
+however it does not validate right-annihilation of $\cdot$ by $\mathbf{0}$.
+In particular, note that:
+\begin{gather*}
+  \mathbf{1}^\infty \cdot \mathbf{0} =
+    (a \mapsto \{ \Delta \}) \ne \mathbf{0} \\
+  (a \mapsto \lightning) \cdot \mathbf{0} =
+    (a \mapsto \lightning) \ne \mathbf{0} \,.
+\end{gather*}
+
+%\subsection{Left Kleene Categories}
+%
+%The properties of the behavior specification monad
+%are captured by the following definition.
+%
+%\begin{definition}
+%A \emph{left Kleene category}
+%is a category $\mathbf{C}$ whose homsets $\mathbf{C}(A, B)$
+%are equipped with the operations:
+%\begin{gather*}
+%  {+}_{A,B} :
+%    \mathbf{C}(A, B) \times \mathbf{C}(A, B) \rightarrow \mathbf{C}(A, B) \\
+%  0_{A,B} :
+%    \mathbf{C}(A, B) \\
+%  -^* :
+%    \mathbf{C}(A, A) \rightarrow \mathbf{C}(A, A)
+%\end{gather*}
+%In addition to the usual properties of categories, whereby for
+%$f : A \rightarrow B$, $g : B \rightarrow C$, and $h : C \rightarrow D$
+%we have:
+%\[
+%   f \circ \kw{id}_A = \kw{id}_B \circ f = f \qquad
+%   h \circ (g \circ f) = (h \circ g) \circ f \,,
+%\]
+%the additive structure is an idempotent commutative monoid:
+%\begin{align*}
+%   f_1 + f_2 &= f_2 + f_1 \\
+%   (f_1 + f_2) + f_3 &= f_1 + (f_2 + f_3) \\
+%   f + f &= f \,,
+%\end{align*}
+%and composition distributes over addition as follows:
+%\begin{align*}
+%  g \circ (f_1 + f_2) &= g \circ f_1 + g \circ f_2 \\
+%  (g_1 + g_2) \circ f &= g_1 \circ f + g_2 \circ f \\
+%  0 \circ f &= 0 \,.
+%\end{align*}
+%Finally, the iteration operation is characterized
+%by the following conditions:
+%\begin{align*}
+%  1 + f \circ f^* \sqsubseteq f^* \\
+%  1 + f^* \circ f \sqsubseteq f^* \\
+%  g \circ f \sqsubseteq g \rightarrow g \circ f^* \subseteq g \\
+%  f \circ g \sqsubseteq g \Rightarrow f^* \circ g \subseteq g
+%\end{align*}
+%A category is a left-Kleene category \emph{with infinite iteration} if,
+%in addition,
+%it has an operator $-^\omega$
+%with the properties:
+%
+%
+%
+%\end{definition}
+%
+%
+%with composition $\cdot$ and identities $\mathbf{1}$
+%
+%
+%
+%However, as noted in \cite{failkat},
+%the possibility of an abnormal outcome
+%means that annihilation of $\cdot$ by $0$ on the right
+%does not hold in general.
+%In particular, defining :
+%Likewise,
+%
+%
+%Nevertheless,
+%this notion of iteration
+%and the associated equational theory
+%will be useful
+%for defining strategies operationally,
+%in terms of small-step transition relations.
+%
+%%}}}
+
+\subsubsection{Interaction}
+
+Finally, we extend the behavior specification monad
+to account for interaction with the environment
+through an operation:
+\[
+    \kw{interact} : M^\kw{P} \leadsto M^\kw{O} \,.
+\]
+where $M^\kw{P}$, $M^\kw{O}$ are parameters of the monad.
+This will be useful when defining our notions of strategies.
+
+\begin{definition}
+Given two types $M^\kw{P}$ and $M^\kw{O}$,
+the \emph{interaction monad} is defined as:
+\[
+    \mathcal{I}_{M^\kw{P}, M^\kw{O}}(X) :=
+      (M^\kw{P} \times M^\kw{O})^* \rightarrow \mathcal{B}(M^\kw{P} + X) \,,
+\]
+with the additional requirement that
+for $x \in \mathcal{I}_{M^\kw{P}, M^\kw{O}}$:
+\begin{gather*}
+  x(s \cdot (m, n)) \ne \varnothing \Rightarrow x(s) \ni i_1(m) \\
+  x(s) = \lightning \Rightarrow x(st) = \lightning \,.
+\end{gather*}
+\end{definition}
+[XXX define $x \ni v$ as $\kw{ret}(v) \sqsubseteq x$?
+So that $\lightning \ni v$ always.]
+
+This definition is similar in spirit to
+the traditional treatement of strategies as prefix-closed sets of traces.
+Given a computation $x$ and
+the initial portion $s$ of its interaction with the environment,
+$x(s)$ specifies the evolution of the computation from there on:
+it may produce a result $v \in X$
+or an output $m \in M^\kw{P}$,
+in which case the environment will choose $n \in M^\kw{O}$
+and the computation will continue according to $x(s \cdot (m, n))$.
+
+Accordingly,
+the monad's unit and binding operation are the following.
+Using the corresponding operations of $\mathcal{B}$
+on the right-hand side, we define:
+\[
+    \kw{ret}(v)(s) :=
+      \begin{cases}
+        \kw{ret}(i_2(v)) & \mbox{if } s = \varepsilon \\
+        \varnothing  & \mbox{otherwise}
+      \end{cases}
+\]
+\begin{align*}
+    (x \bind f)(s) := \:
+      x(s) &\bind i_2^{-1} \bind i_2 \: \vee \\
+      \bigvee_{u \cdot v = s} x(u) &\bind i_1^{-1} \bind k \mapsto f(k)(v) \,,
+\end{align*}
+Our interaction construct can be defined as:
+\[
+    \kw{interact}(m)(s) :=
+      \begin{cases}
+        \kw{ret}(i_2(m)) & \mbox{if } s = \varepsilon \\
+        \kw{ret}(i_1(n)) & \mbox{if } s = (m, n) \\
+        \varnothing & \mbox{if } |s| > 1 \,.
+      \end{cases}
+\]
+
+Again,
+the lattice structure of $\mathcal{B}$
+can be extended pointwise to $\mathcal{I}_{M,N}$,
+and in turn to its Kleisli morphisms,
+and the algebraic properties of composition
+with respect to the lattice structure
+are similar to that found in $\mathcal{B}$.
+Consequently,
+so that non-deterministic choice and finite iteration
+can be used seamlessly on interacting computations.
+
+Note that the Kleene star $f^*$
+does not simply act pointwise on $f$,
+but iterates the interaction as well.
+While this behavior is desirable,
+it renders the definition of a corresponding notion of
+infinite iteration $f^\omega$ problematic.
+Instead,
+we define $f^\infty$ directly as:
+\[
+    f^\infty(a)(s) := f^*(a)(s) \vee (a \mapsto f^*(a)(\varepsilon))^\omega
+\]
+[Or maybe $f^* + f^*f^\omega$?]
+
+\subsubsection{Simulations}
+
+The pointwise extension of the relator $\mathcal{B}^\sqsubseteq$
+to the interaction monad
+yields a notion of simulation for interactive computations.
+However,
+it is limited to computations which have identical interactions
+with their environment,
+and for which the way values are related
+is independent of the histories of the computations.
+In the following
+we present a ternary Kripke relator $\mathcal{I}^+_{\preceq_M,\preceq_N}(R)$
+which allows us to compare interactions
+operating with different inputs and outputs,
+and for whose outcomes may be related in a way
+sensitive to the interactions' histories.
+
+Suppose we have a set of worlds $W$
+together with two Kripke frames
+$\leadsto^\kw{O} : M_1^O \times M_2^O \rightarrow \mathcal{R}(W, W)$ and
+$\leadsto^\kw{P} : M_1^P \times M_2^P \rightarrow \mathcal{R}(W, W)$.
+These can be used to define a form of rely-guarantee simulation
+between two interactive computations
+$x_1 : \mathcal{I}_{M_1^\kw{P},M_1^\kw{P}}(A_1)$ and
+$x_2 : \mathcal{I}_{M_2^\kw{P},M_2^\kw{P}}(A_2)$
+in the following way.
+The computations will be related at $w$
+if for all interactions $s = (m_1, n_1) \cdot (m_2, n_2) \cdots (m_k, n_k)$
+the following holds:
+\[
+    x_1(s)
+    \ifr{\langle m_1 \rangle [n_1]
+         \langle m_2 \rangle [n_2] \cdots
+         \langle m_k \rangle [n_k]
+         \mathcal{B}(\Diamond + R)}
+    x_2(s) \,,
+\]
+where $\Diamond : \mathcal{R}(M_1^\kw{P}, M_2^\kw{P}$
+is the relation defined as:
+\[
+    m_1 \ifr{w \Vdash \Diamond} m_2 \Leftrightarrow
+      \exists w' \,.\, w \stackrel{m_1,m_2}{\leadsto}^\kw{P} w'
+\]
+
+[Define substitution?]
+
 \subsection{Games} %{{{
 
 \subsubsection{Elementary games} %{{{
@@ -77,61 +523,6 @@ we start by addressing
 the possibility for $\kw{P}$ to silently diverge,
 to signal an undefined behavior,
 and to refuse any question from $\kw{O}$.
-
-%}}}
-
-\subsubsection{Divergence} %{{{
-
-We model internal actions in the following way.
-Whenever $\kw{P}$ is to play,
-it may instead perform an internal action ($\tau$),
-in which case $\kw{P}$ will retain control.
-There is no limit on the number of internal actions that
-$\kw{P}$ may perform before playing a move;
-we say that a strategy \emph{diverges}
-when it performs internal actions indefinitely.
-
-Internal actions usually correspond to the hidden interactions
-within composite systems, and
-divergence is an \emph{emergent} phenomenon:
-systems that are well-behaved when taken in isolation
-may nontheless exhibit divergence when they interact with one another.
-As such,
-divergence is one of the major sources of complexity
-in compositional semantics.
-
-In our setting,
-the occurence of internal actions
-is observable,
-and our definition of simulation
-makes no effort
-to identify finite sequences of internal actions
-which have different lengths.
-Instead,
-in \S\ref{sec:bigstep}
-we introduce an operator $- \backslash \tau^*$
-that can be used to normalize strategies
-by eliminating altogether all such finite sequences.
-
-%}}}
-
-\subsubsection{Undefined behaviors} %{{{
-
-Low-level language semantics and specifications
-often contain \emph{undefined behaviors}:
-there are circumstances under which the behavior of the system
-is entierly unrestricted;
-any execution that reaches such circumstances is said to ``go wrong''.
-We model this by allowing $\kw{P}$ to play the special move
-$\lightning$
-to signal an undefined behavior,
-after which the game terminates.
-
-The undefined behavior can be implemented by anything,
-but can only implement itself;
-as such,
-the single-event trace $\lightning$
-acts as an upper bound with respect to refinement.
 
 %}}}
 
@@ -296,156 +687,6 @@ to define our notion of simulation.
 %}}}
 
 %}}}
-
-%}}}
-
-\subsection{Behavior specifications} %{{{
-
-By contrast with more traditional settings,
-in our model strategies represent a range of possible behaviors
-of the system and as such are not expected to be deterministic.
-In addition,
-our explicit treatment of divergence,
-the possibility for strategies to exhibit undefined behaviors,
-and our commitment to strategy refinement as a first-class citizen
-[...]
-
-In this section,
-we capture these aspects of our model
-in the \emph{behavior specification} monad.
-
-\subsubsection{Definition}
-
-Given a base type $A$,
-a computation in $A$
-may produce a value of type $A$,
-but it may also diverge or exhibit undefined behavior.
-Hence,
-a behavior specification for $A$ is a set:
-\[
-    x \in \mathcal{B}(A) := \mathcal{P}(A + \{ \Delta, \lightning \})
-\]
-The unit of $\kw{ret}_A : A \rightarrow \mathcal{B}(A)$
-of the monad $\mathcal{B}$ is given by:
-\[
-    \kw{ret}_A(a) = \{ a \} \,,
-\]
-and the binding operation is defined by the rules:
-\[
-    \AxiomC{$x \ni a$}
-    \AxiomC{$f(a) \ni b$}
-    \BinaryInfC{$(x \bind f) \ni b$}
-    \DisplayProof
-    \quad
-    \AxiomC{$x \ni \Delta$}
-    \UnaryInfC{$(x \bind f) \ni \Delta$}
-    \DisplayProof
-    \quad
-    \AxiomC{$x \ni \lightning$}
-    \UnaryInfC{$(x \bind f) \ni \lightning$}
-    \DisplayProof
-\]
-The usual monad laws hold, and
-the Kleisi composition of $f : A \rightarrow \mathcal{B}(B)$ and
-$g : B \rightarrow \mathcal{B}(C)$ can be derived as:
-\[
-    (f \cdot g)(a) := (f(a) \bind g) \,.
-\]
-The action of $\mathcal{B}$ on functions is:
-\[
-    \mathcal{B}(f) := x \mapsto (x \bind \kw{ret}_A \circ f) \,.
-\]
-
-
-\subsubsection{Refinement}
-
-We can promote a relation $R : \mathcal{R}(A, B)$
-to behavior specifications in the following way:
-\[ \mathcal{B}^+(R) :=
-   \mathcal{P}^+(R + \{ (\Delta, \Delta), (x, \lightning) \mid x \in A \}) \]
-$\mathcal{B}^+$ preserves reflexivity and transitivity,
-so that if $\sqsubseteq$ is a preorder,
-then $\mathcal{B}^+(\sqsubseteq)$ is a preorder as well.
-
-Note that under the definition above,
-computations which may exhibit undefined behavior
-are identified,
-and can be refined by any other.
-Consequently,
-the least and greatest elements
-can be defined as:
-\[ \bot := \varnothing \qquad \top := \{ \lightning \} \,, \]
-with the property that for all $R, x, S$:
-\[ \bot \ifr{\mathcal{B}^+(R)} x \ifr{\mathcal{B}^+(S)} \top \,. \]
-
-In addition,
-the monad operations satisfy the expected relational properties.
-Those are summarized in Fig.~\ref{fig:monadr}.
-
-\begin{figure}
-  \begin{gather*}
-    R : \mathcal{R}(A_1, A_2),
-    S : \mathcal{R}(B_1, B_2),
-    T : \mathcal{R}(C_1, C_2) \\
-    \vspace{1em}
-    \kw{ret}_{A_1}
-        \ifr{R \rightarrow \mathcal{B}^+(R)}
-        \kw{ret}_{A_2} \\
-    ({\bind})
-        \ifr{\mathcal{B}^+(R) \rightarrow (R \rightarrow \mathcal{B}^+(S))
-          \rightarrow \mathcal{B}^+(S)}
-        ({\bind}) \\
-    {\cdot}
-        \ifr{(R \rightarrow \mathcal{B}^+(S)) \rightarrow
-             (S \rightarrow \mathcal{B}^+(T)) \rightarrow
-             (R \rightarrow \mathcal{B}^+(T))}
-        {\cdot} \\
-    \mathcal{B}(-)
-        \ifr{(R \rightarrow S) \rightarrow
-             \mathcal{B}^+(R) \rightarrow \mathcal{B}^+(S)}
-        \mathcal{B}(-)
-  \end{gather*}
-  \caption{Relational properties for behavior specifications}
-  \label{fig:monadr}
-\end{figure}
-
-\subsubsection{Kleene star}
-
-A Kleisli morphism of type $f : A \rightarrow \mathcal{B}(A)$
-can be interpreted as a transition relation on $A$,
-and we can define the iteration $f^*$
-in a way that recognizes silent divergence.
-Writing $f^n$ for the $n$-fold composition of the form
-$f \cdot f \cdots f$,
-divergence can be recognized as:
-\[ \kw{diverges}_f(a) \Leftrightarrow
-    \forall n \in \mathbb{N} \,.\,
-    \exists a' \in A \,.\,
-    f^n(a) \ni a' \]
-Nondeterministic choice
-and its unit can be defined as:
-\[ f + g := a \mapsto f(a) \cup g(a)  \qquad  0 := a \mapsto \bot \]
-Then the iteration of $f$ is:
-\[ f^* := \sum_{n \in \mathbb{N}} f^n +
-          (a \mapsto \{ \Delta \mid \kw{diverges_f(a)} \}) \]
-
-Using the Kleisli composition as multiplication,
-the structure
-$\langle A \rightarrow \mathcal{B}(A), {\cdot}, {+}, \kw{ret}_A, 0, * \rangle$
-is analogous to a Kleene algebra.
-However, as noted in \cite{failkat},
-the possibility of an abnormal outcome
-means that annihilation of $\cdot$ by $0$ on the right
-does not hold.
-In particular:
-\[ \Delta \cdot 0 = \Delta \qquad \lightning \cdot 0 = \lightning \]
-
-Nevertheless,
-this notion of iteration
-and the associated equational theory
-will be useful
-for defining strategies operationally,
-in terms of small-step transition relations.
 
 %}}}
 
