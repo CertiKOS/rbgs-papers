@@ -1,0 +1,1090 @@
+\documentclass{article}
+
+% Packages {{{
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bbm}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{graphs}
+\usetikzlibrary{cd}
+\usepackage{bussproofs}
+\usepackage{stmaryrd}
+\usepackage{calc}
+\usepackage{bbm}
+% }}}
+
+% Macros {{{
+
+\newtheorem{example}{Example}
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+
+\newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
+\newcommand{\ifr}[1]{\ [{#1}]\ }
+\newcommand{\ifrw}[2]{\ [{#1}]_{#2}\ }
+\newcommand{\alt}{\ |\ } % use \mid instead
+\newcommand{\bind}{\gg\!\!=}
+
+\newcommand{\EC}{\kw{C}}
+\newcommand{\simrel}{\kw{simrel}}
+
+% Moves
+\newcommand{\mcall}[3]{\kw{#1}({#2})@{#3}}
+\newcommand{\pcall}[3]{%
+  \underline{\mcall{#1}{#2}{#3}}%
+}
+\newcommand{\mret}[2]{{#1}@{#2}}
+\newcommand{\pret}[2]{%
+  \underline{\mret{#1}{#2}}%
+}
+\newcommand{\mretx}[3]{{#1}@{#2}/{#3}}
+\newcommand{\pretx}[3]{%
+  \underline{\mretx{#1}{#2}{#3}}%
+}
+
+% Pointers for justified sequences %{{{
+
+% Parameters
+\newcommand{\pshift}{1.6ex}
+\newcommand{\pcdist}{2.5}
+\newcommand{\pcangle}{60}
+
+% Pointer hook
+\newcommand{\ph}[1]{%
+  \tikz[remember picture]{\coordinate (#1);}}
+
+% Pointer to
+\newcommand{\pt}[1]{%
+  \rule{0pt}{1.4em}%
+  \tikz[remember picture, overlay]{
+    \draw[->]
+      let \p{dest} = (#1),
+          \n1 = {ln(veclen(\x{dest}, \y{dest}) + 1)},
+          \p1 = ($(0,0)+(0,\pshift)$),
+          \p4 = ($(#1)+(0,\pshift)$),
+          \p2 = ($(\p1)!\n1*\pcdist!-\pcangle:(\p4)$),
+          \p3 = ($(\p4)!\n1*\pcdist!+\pcangle:(\p1)$) in
+        (\p1) .. controls (\p2) and (\p3) .. (\p4);}}
+
+%}}}
+
+% }}}
+
+\title{Refinement-Based Game Semantics for CompCert}
+
+\begin{document}
+
+\section{Introduction} %{{{
+
+Our goal is end-to-end verification of computer systems.
+
+\subsection{Scaling Up Verification} %{{{
+
+%}}}
+
+\subsection{Certified Compilers} %{{{
+
+Compilers are essential component;
+quitessential tool for working across abstraction layers.
+On one hand good "litmus test" for framework
+of how certified compilers fit into the picture.
+On this other hand suggests thinking about not just
+"certified compilers" but "compilers of certified components".
+
+%}}}
+
+\subsection{Refinement-Based Game Semantics} %{{{
+
+Mix of refinement, abstraction, game semantics
+is how we should go about this.
+
+%}}}
+
+\subsection{Logical Relations} %{{{
+
+%}}}
+
+\subsection{Contributions} %{{{
+
+\begin{itemize}
+\item Present a conceptual framework for thinking about
+  the construction of large-scale, end-to-end verified systems;
+\item Show how ideas from refinement-based verification,
+  abstraction layers, game semantics, relators
+  can be synthesized
+  to build a compositional semantics for CompCert open modules;
+\item In particular, expressivity of abstraction helps us
+  update compiler correctness proof
+  is a more conservative way,
+  improving on Compositional CompCert.
+\item New model for interaction that resolves the tension between
+  operational and trace semantics
+  by using monad.
+\end{itemize}
+
+%}}}
+
+%}}}
+
+\section{Main Ideas} %{{{
+
+%}}}
+
+\section{The Interaction Monad} %{{{
+
+% preamble {{{
+
+Representing strategies as
+prefix-closed sets of traces
+offers many advantages:
+it is simple;
+the ordering properties of down-set lattices
+are straightforward and well-understood;
+and as a trace semantics
+it is well-suited as a fully abstract description
+of a system's external behavior.
+
+On the other hand,
+the transition systems
+used to define the semantics of CompCert languages
+correspond more closely to the internal operation of the system
+and lend themselves better
+to operational resoning and intuition,
+but involve considerations such as branching
+and a spectrum of diverse and complex bisimilarity
+and bisimulation relations as their notion of equivalence.
+
+We attempt to get ``best of both worlds''
+by introducing the \emph{interaction} monad $\mathcal{I}_{M,N}(-)$.
+Following traditional work on game semantics,
+we use a simple trace model to formalize
+the behavior of interactive components.
+However,
+the accompanying monadic structure
+introduces a notion of sequential composition
+which makes it possible to define strategies
+in a compositional and operational way.
+We present this approach in \S\ref{sec:monad:def}--\S\ref{sec:monad:iter}.
+
+Using the interaction monad,
+alternating strategies for a game with
+opponent moves in $M^\kw{O}$ and
+proponent moves in $M^\kw{P}$,
+where $\kw{O}$ is expected to make the first move,
+can be modelled as computations of type
+$M^\kw{O} \rightarrow
+      \mathcal{I}_{M^\kw{P}, M^\kw{O}}(\varnothing)$.
+In \S\ref{sec:games} we use a similar approach
+to formalize the more restricted notion of strategy
+which will serve as the foundation for our semantics model.
+
+%}}}
+
+\subsection{Overview} %{{{
+
+The interaction monad models
+a computation which may interact with its environment.
+At any point,
+the computation can perform and output $m \in M$.
+It is then suspended
+until an input $n \in N$ is received from the environment.
+This is modelled by the operation:
+\[
+    \kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N) \,.
+\]
+
+Additionally,
+to accomodate specifications which permit a range of possible behaviors,
+the interaction monad is equipped with a complete refinement lattice,
+Given $x, y : \mathcal{I}_{M,N}(A)$,
+their supremum $x \vee y : \mathcal{I}_{M,N}(A)$
+is the smallest specification that permits the behavior of either;
+it can also be interpreted as non-deterministic choice.
+Conversely, $x \wedge y : \mathcal{I}_{M,N}(A)$ can be interpreted as
+the largest specification requiring that $x$ and $y$ both be satisfied.
+The least element $\bot$
+is a specification that can never be satisfied;
+the greatest element $\top$
+is the specification that is always satisfied ---
+or a computation whose behavior is entierely undefined.
+
+Finally,
+we model non-deterministic iteration with the operator:
+\[
+     -^\infty : (A \rightarrow \mathcal{I}_{M,N}(A)) \rightarrow
+                (A \rightarrow \mathcal{I}_{M,N}(A)) \,.
+\]
+Notably,
+$-^\infty$ is different from
+the Kleene star associated with the refinement lattice,
+because we account for silent divergence as a specific behavior,
+incomparable with terminating computations.
+rather than identifying it with
+the unsatisfiable specification $\bot$
+or the undefined behavior $\top$.
+
+%}}}
+
+\subsection{Definition} %{{{
+
+Following the usual approach,
+we formalize strategies as prefix-closed sets of plays.
+We do not allow strategies to restrict the move available to $\kw{O}$,
+so the plays we will consider are odd-length sequences of moves.
+To support the monadic structure and account
+for silent divergence and undefined behaviors,
+we extend them with the
+terminal moves $v \in X$, $\Delta$, and $\lightning$:
+\[
+    \mathcal{T}_{M,N}(X) :=
+      (M N)^* \times (M + X + \{\Delta, \lightning\})
+\]
+Any trace is considered a prefix of $(\varepsilon, \lightning)$,
+so that our extended prefix relation on $\mathcal{T}_{M,N}(X)$
+is defined by the rules:
+\[
+  \begin{array}{r@{\:\sqsubseteq\:}l}
+    (\varepsilon, m) & (mn, s) \\
+    (\varepsilon, v) & (\varepsilon, v) \\
+    (\varepsilon, \Delta) & (\varepsilon, \Delta) \\
+    (\varepsilon, \lightning) & (s, p)
+  \end{array}
+  \quad
+  \AxiomC{$(s, p) \sqsubseteq (t, q)$}
+  \UnaryInfC{$(mns, p) \sqsubseteq (mnt, q)$}
+  \DisplayProof
+\]
+An interactive computation is
+a prefix-closed set of traces:
+\[
+    \mathcal{I}_{M,N}(X) :=
+    \{ T \subseteq \mathcal{T}_{M,N}(X) \mid
+       {\sqsubseteq}^{-1}(T) \subseteq T \}
+\]
+
+Note that since any trace is a prefix of $\lightning$,
+a computation which admits a trace ending with $\lightning$
+will also admit all possible interactions
+sharing the same initial segment. 
+This allows us to define our notion of refinement
+as simple trace containment.
+For $x, y \in \mathcal{I}_{M,N}(X)$, refinement is defined as:
+\[
+    x \sqsubseteq y \Leftrightarrow x \subseteq y
+\]
+Since unions and intersections
+preserve prefix closure,
+they induce a lattice structure on $\mathcal{I}_{M,N}(X)$.
+
+%}}}
+
+\subsection{Monad operations} %{{{
+
+The monad's unit associates to each value $v \in X$
+the computation with a single trace $(\varepsilon, v)$:
+\[
+    \kw{ret}_X(v) := \{ (\varepsilon, v) \} \,.
+\]
+The binding operation corresponds to
+the sequential composition of
+a computation $x \in \mathcal{I}_{M,N}(A)$ and
+a continuation $f : A \rightarrow \mathcal{I}_{M,N}(B)$.
+The result is a computation in $\mathcal{I}_{M,N}(B)$ which
+contains the traces of $x$ where
+any final value $v$ has been replaced with
+all possible traces in $f(v)$:
+\begin{align*}
+    s \bind f := &\:\{ (s, \: r) \mid (s, r) \in x \wedge r \notin A \} \\
+      \cup &\:\{ (st, r) \mid (s, a) \in x \wedge (t, r) \in f(a) \}
+\end{align*}
+It is straightforward to verify that
+the monad laws hold:
+\begin{align*}
+  \kw{ret}(v) \bind f &= f(v) \\
+  x \bind \kw{ret} &= x \\
+  x \bind (v \mapsto f(v) \bind g) &= (x \bind f) \bind g
+\end{align*}
+
+%}}}
+
+\subsection{Interaction} %{{{
+
+The interaction primitive
+$\kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N)$
+can be defined as follows:
+\[
+    \kw{interact}(m) := \{ (\varepsilon, m), (mn, n) \mid n \in N \}
+\]
+That is,
+$\kw{interact}(m)$ first emits the output $m$,
+then returns the input $n$ received from the environment.
+
+Conversely,
+the following operator
+will allow us to evaluate a computation
+while ``monitoring'' its interactions:
+\[
+    \kw{next} :
+       \mathcal{I}_{M,N}(X) \rightarrow
+       \mathcal{I}_{P,Q}(X + M \times (N \rightarrow \mathcal{I}_{M,N}(X)))
+\]
+When the computation $x$ silently terminates, diverges, or goes wrong,
+then $\kw{next}(x)$ will exhibit the same behavior:
+\begin{align*}
+    \kw{next}(\kw{ret}(a)) &= \kw{ret}(i_1(a)) \\
+    \kw{next}(\Omega) &= \Omega \\
+    \kw{next}(\top) &= \top
+\end{align*}
+However,
+if $x$ attempts to interact,
+then $\kw{next}(x)$ will suspend it,
+and return the output $m \in M$ attempted by $x$,
+as well as a continuation $N \rightarrow \mathcal{I}_{M,N}(X)$
+which can be used to resume the computation
+on an input $n \in N$.
+In particular,
+\[
+    \kw{next}(\kw{interact}(m)) = \kw{ret}(i_2(m), \kw{ret}) \,.
+\]
+The operator can be defined as follows:
+\begin{align*}
+    \kw{next}(x) &= \{ (\varepsilon, i_1(v)) \mid
+                       (\varepsilon, v) \in x \wedge
+                       v \in X \} \\
+              &\cup \{ (\varepsilon, r) \mid
+                       (\varepsilon, r) \in x \wedge
+                       r \in \{\Delta,\lightning\} \} \\
+              &\cup \{ (\varepsilon, i_2(m, \delta_m(x))) \mid
+                       (\varepsilon, m) \in x \wedge
+                       m \in M \} \,,
+\end{align*}
+where the derivative
+$\delta(x) :
+   \mathcal{I}_{M,N}(X) \rightarrow M \rightarrow N \rightarrow
+   \mathcal{I}_{M,N}(X)$
+is defined as:
+\[
+    \delta(x)(m)(n) := \{ (s, r) \mid (mns, r) \in x \} \,.
+\]
+
+%}}}
+
+\subsection{Iteration} %{{{
+
+A Kleisli morphism $f : A \rightarrow \mathcal{I}_{M,N}(A)$
+can be iterated as follows.
+First,
+we identify silently diverging computations by defining:
+\[
+    f_\Delta(v) :=
+      f \cup \{ \Delta \mid \forall n, \exists x \notin M, f^n(v) \ni x \}
+\]
+Then the iteration of $f$ is:
+\[
+    f^\infty(v) :=
+      \bigvee_{n} f_\Delta^n \,.
+\]
+Here $f^n$ refers to the $n$-fold composition of $f$,
+where:
+\begin{align*}
+    f^0(a) &:= \kw{ret}(a) \\
+    f^{n+1}(a) &:= f^n(a) \bind f \,.
+\end{align*}
+
+%}}}
+
+\subsection{Substitution} %{{{
+
+[Define $x[f]$ where $f : M \rightarrow \mathcal{I}_{P,Q}(N)$
+is substituted for the interactions of $x : \mathcal{I}_{M,N}(A)$.
+Define $x[f]^\infty$ when $P=M, Q=N$,
+the non-deterministic iteraction of $x[f]$.]
+
+%}}}
+
+\subsection{Relations} %{{{
+
+The powerset monad $\mathcal{P}$
+can be embedded into the monad $\mathcal{I}_{M,N}$
+using the natural transformation
+$\eta^\mathcal{P}_X : \mathcal{P}(X) \rightarrow \mathcal{I}_{M,N}(X)$
+defined as:
+\[
+    \eta^\mathcal{P}_X(V) := \{ (\varepsilon, v) \mid v \in V \}
+\]
+In particular,
+a relation $R : A \rightarrow \mathcal{P}(B)$
+can be interpreted as the Kleisli morphism
+$\eta^\mathcal{P}_B \circ R : A \rightarrow \mathcal{I}_{M,N}(B)$.
+
+\begin{example} \label{ex:ts}
+Consider a transition system $\alpha = (S, I, {\rightarrow}, F)$,
+where
+$S$ is a set of states,
+$I : \mathcal{P}(S)$
+is a set of initial states,
+${\rightarrow} : S \rightarrow \mathcal{P}(S)$
+is a transition relation, and
+$F : S \rightarrow \mathcal{P}(A)$
+associate potential output values to each state.
+The behavior of $\alpha$ can be expressed as:
+\[
+    \llbracket \alpha \rrbracket :=
+    \eta^\mathcal{P}_S(I) \bind
+    (\eta^\mathcal{P}_S \circ {\rightarrow})^\infty \bind
+    (\eta^\mathcal{P}_S \circ F)
+    : \mathcal{I}_{M,N}(A) \,.
+\]
+\end{example}
+
+We use a similar pattern in \S\ref{sec:modsem:def}
+to express the behavior of CompCert small-step semantics
+in terms of interactive computations.
+For conciseness,
+we will sometimes rely implicitely on $\eta_X^\mathcal{P}$
+when a set $x : \mathcal{P}(A)$ is used
+in a context where an interactive computation
+of type $\mathcal{I}_{M,N}(A)$ is expected,
+for instance expressing $\llbracket \alpha \rrbracket$ above as
+$I \bind {\rightarrow}^\infty \bind F$.
+
+%}}}
+
+\subsection{Abstraction} %{{{
+
+We now consider the problem of relating the interactive computations
+$x_1 \mathcal{I}_{M_1,N_1}(X_1)$ and
+$x_2 \mathcal{I}_{M_2,N_2}(X_2)$
+whose inputs, outputs, and results are taken in different sets.
+We will use Kripke logical relations to relate these components,
+so that the correspondance between the two interactions
+can be sensitive to the history of the computation.
+
+\begin{definition}
+For sets of inputs $M_1, M_2$, outputs $N_1, N_2$, and results $X_1, X_2$,
+a \emph{simulation convention} between them
+is a tuple $\mathbb{R} = \langle W, \leadsto, R_M, R_N, R_X \rangle$
+where $\langle W, \leadsto \rangle$ is a Kripke frame, and
+$R_M : \mathcal{R}_W(M_1, M_2)$,
+$R_N : \mathcal{R}_W(N_1, N_2)$,
+$R_X : \mathcal{R}_W(X_1, X_2)$
+are $W$-indexed Kripke logical relations
+between the respective sets of inputs, outputs and results.
+\begin{itemize}
+\item
+The identity simulation convention is defined as
+$\mathbbm{1} := \langle \{*\}, \{(*,*)\}, {=}, {=}, {=} \rangle$.
+\item
+The composition of
+the simulation conventions $\mathbb{R}$ and $\mathbb{S}$ is:
+\[
+    \mathbb{R} \cdot \mathbb{S} :=
+      \langle
+        W_\mathbb{R} \times W_\mathbb{S}, \:
+        {\leadsto}_\mathbb{R} \times {\leadsto}_\mathbb{S}, \:
+        R_M \cdot S_M, \:
+        R_N \cdot S_N, \:
+        R_X \cdot S_X
+      \rangle \,,
+\]
+where $R \cdot S$ denotes the Kripke relation defined by:
+\[
+    (w_1, w_2) \Vdash R \cdot S \: := \:
+      (w_1 \Vdash R) \cdot (w_2 \Vdash S) \,.
+\]
+\item
+Given
+$\mathbb{R} = \langle W, \leadsto, R_M, R_N, R_V \rangle$ and
+$\mathbb{R}' = \langle W', \leadsto, R_M', R_N', R_V' \rangle$,
+we say that $\mathbb{R}$ \emph{refines} $\mathbb{R}'$
+and write $\mathbb{R} \sqsubseteq \mathbb{R}'$
+when:
+\begin{align*}
+  \forall w \in W \,.\, (
+    &\forall (v_1, v_2) \in [w \Vdash R_V] \,.\, \\
+    &\exists w' \in W' \,.\, (v_1, v_2) \in [w' \Vdash R_V']) \\
+  \wedge \: (
+    &\forall (m_1, m_2) \in [w \Vdash R_M] \,.\, \\
+    &\exists w' \in W' \,.\, (m_1, m_2) \in [w' \Vdash R_M'] \: \wedge \\
+    &\forall v' \in W' \,.\, w' \leadsto v' \Rightarrow \\
+    &\forall (n_1, n_2) \in [v' \Vdash R_N'] \,.\, \\
+    &\exists v \,.\, w \leadsto v \wedge (n_1, n_2) \in [v \Vdash R_N] )
+\end{align*}
+\end{itemize}
+\end{definition}
+
+Simulation conventions relate interactions which have the same ``shape'',
+in the sense that there is a one-to-one correspondance between
+the inputs and outputs of $x_1$ and $x_2$.
+Nevertheless,
+extending a simulation convention $\mathbb{R}$ to computations
+is complicated by the alternating roles of the system and the environment.
+Our goal will be to define a Kripke relator:
+\[ {\le}_\mathbb{R} \: = \:
+   \mathcal{I}^\le_{R_M,R_N}(R_X) \: : \:
+   \mathcal{R}_W(\mathcal{I}_{M_1,N_1}(X_1), \mathcal{I}_{M_2,N_2}(X_2)) \]
+such that $x_1 \le_\mathbb{R} x_2$
+whenever $x_1$ is simulated by $x_2$ according to $\mathbb{R}$.
+We will proceed by defining a mapping:
+\[ \mathbb{R}^*_w : \mathcal{I}_{M_2,N_2}(X_2) \rightarrow
+                    \mathcal{I}_{M_1,N_1}(X_1) \, \]
+such that $\mathbb{R}^*_w(x_2)$ is
+the largest computation in $\mathcal{I}_{M_1,N_1}(X_1)$
+simulated by $x_2$.
+Accordingly,
+we will define:
+\[ w \Vdash x_1 \le_\mathbb{R} x_2 \: \Leftrightarrow \:
+   x_1 \sqsubseteq \mathbb{R}^*_w(x_2) \,. \]
+
+In the presence of different levels of abstraction
+related by a convention $\mathbb{R}$,
+the mapping $\mathbb{R}^*$ will allow us to embed a high-level specification
+into a low-level semantic domain
+where it can be compared with
+the concrete behavior of the system we seek to verify.
+In a complementary way, $\le_\mathbb{R}$
+allows us to express abstraction relationally;
+specifically, the primitives of the interaction monad
+will enjoy properties with respect to $\le_\mathbb{R}$
+which will help us construct
+simulations between
+structurally similar computations
+operating at different levels of abstraction.
+
+\begin{definition}
+For a simulation convention $\mathbb{R} = \langle R_M, R_N, R_X \rangle$
+and a computation $x_2 : \mathcal{I}_{M_2, N_2}(X_2)$,
+the computation $\mathbb{R}^*_w(x_2)$ is defined by the rules:
+\begin{gather*}
+  \AxiomC{$(\varepsilon, v_2) \in x_2$}
+  \AxiomC{$v_1 \ifr{w \Vdash R_X} v_2$}
+  \BinaryInfC{$(\varepsilon, v_1) \in \mathbb{R}^*_w(x_2)$}
+  \DisplayProof
+  \qquad
+  \AxiomC{$(\varepsilon, \Delta) \in x_2$}
+  \UnaryInfC{$(\varepsilon, \Delta) \in \mathbb{R}^*_w(x_2)$}
+  \DisplayProof
+  \qquad
+  \AxiomC{$(\varepsilon, \lightning) \in x_2$}
+  \UnaryInfC{$t \in \mathbb{R}^*_w(x_2)$}
+  \DisplayProof
+  \\[1ex]
+  \AxiomC{$(\varepsilon, m_2) \in x_2$}
+  \AxiomC{$w \leadsto w'$}
+  \AxiomC{$m_1 \ifr{w' \Vdash R_M} m_2$}
+  \TrinaryInfC{$(\varepsilon, m_1) \in \mathbb{R}^*_w(x_2)$}
+  \DisplayProof
+  \\[1ex]
+  \AxiomC{$
+    \begin{array}{c}
+      (\varepsilon, m_2) \in x_2 \qquad
+      w \leadsto w' \qquad
+      m_1 \ifr{w' \Vdash R_M} m_2
+      \\[.3ex]
+      \forall \: w'' \, n_2 \:.\:
+        w' \leadsto w'' \: \wedge \:
+        n_1 \ifr{w'' \Vdash R_N} n_2 \: \Rightarrow \:
+        t_1 \in \mathbb{R}^*_{w''}(\delta(x_2, m_2)(n_2))
+    \end{array}$}
+  \UnaryInfC{$m_1 n_1 t_1 \in \mathbb{R}^*_w(x_2)$}
+  \DisplayProof
+\end{gather*}
+\end{definition}
+
+The mapping $\mathbb{R}^*$ preserves our constructions
+on simulation conventions in the following ways:
+\begin{gather*}
+\mathbbm{1}^*_w(x) = x \\
+(\mathbb{R} \cdot \mathbb{S})^* = \mathbb{S}^* \circ \mathbb{R}^* \\
+-^* : {\sqsubseteq} \rightarrow {\sqsubseteq} \rightarrow {\sqsubseteq}
+\end{gather*}
+These properties ensure that
+the relational version $\le_\mathbb{R}$ of $\mathbb{R}^*$
+behaves as a relator.
+
+\begin{definition}
+For a simulation convention $\mathbb{R} = \langle R_M, R_N, R_X \rangle$,
+a world $w$,
+and two computations
+$x_1 : \mathcal{I}_{M_1, N_1}(X_1)$ and
+$x_2 : \mathcal{I}_{M_2, N_2}(X_2)$,
+we say that
+\emph{$x_1$ is simulated at $w$ by $x_2$ according to $\mathbb{R}$}
+and write:
+\[
+    x_1 \ifr{w \Vdash {\le}_\mathbb{R}} x_2
+    \quad \mbox{or} \quad
+    x_1 \ifr{w \Vdash \mathcal{I}^\le_{R_M,R_N}(R_X)} x_2
+\]
+whenever $x_1 \sqsubseteq \mathbb{R}^*_w(x_2)$.
+\end{definition}
+
+Identity and composition yield
+${\le}_\mathbbm{1} = {\sqsubseteq}$ and
+${\le}_{\mathbb{R} \cdot \mathbb{S}} =
+ {\le}_\mathbb{R} \cdot {\le}_\mathbb{S}$.
+More generally,
+the following properties make
+$\le_\mathbb{R}$ a \emph{relator} \cite{something}:
+\begin{align*}
+  {=} &\subseteq {\le}_\mathbbm{1} \\
+  {\le}_{\mathbb{R} \cdot \mathbb{S}} &\subseteq
+    {\le}_\mathbb{R} \cdot {\le}_\mathbb{S} \\
+  \mathbb{R} \sqsubseteq \mathbb{S} &\Rightarrow
+    {\le}_\mathbb{R} \subseteq {\le}_\mathbb{S}
+\end{align*}
+In particular, $\le_\mathbb{R}$ is compatible with $\sqsubseteq$
+in the following sense:
+\begin{align*}
+    {\sqsubseteq} \cdot {\le}_\mathbb{R} &\:\subseteq\: {\le}_\mathbb{R} \\
+    {\le}_\mathbb{R} \cdot {\sqsubseteq} &\:\subseteq\: {\le}_\mathbb{R}
+\end{align*}
+
+We can now formulate the following properties,
+which describe the behavior of the monad's primitives
+with respect to abstraction:
+\begin{align*}
+  \kw{ret} &:
+    {}\Vdash R_X \rightarrow \mathcal{I}^\le_{R_M,R_N}(R_X) \\
+  \bind &:
+    (\Vdash R_X \rightarrow
+     \mathcal{I}^\le_{R_M,R_N}(R_Y)) \rightarrow
+    (\Vdash \mathcal{I}^\le_{R_M,R_N}(R_X) \rightarrow
+     \mathcal{I}^\le_{R_M,R_N}(R_Y)) \\
+  \kw{interact} &:
+    (\Vdash (\Diamond R_M) \rightarrow
+     \mathcal{I}^\le_{R_M,R_N}(R_N)) \\
+  \kw{next} &:
+    (\Vdash \mathcal{I}^\le_{R_M,R_N}(R_X) \rightarrow
+     R_X +
+     \Diamond (R_M \times
+     \Box (R_N \rightarrow \mathcal{I}^\le_{R_M,R_N}(R_X)))) \\
+  -^\infty &:
+    (\Vdash R_X \rightarrow \mathcal{I}^\le_{R_M,R_N}(R_X)) \rightarrow
+    (\Vdash R_X \rightarrow \mathcal{I}^\le_{R_M,R_N}(R_X)) \\
+  \eta^\mathcal{P} &:
+    (\Vdash \mathcal{P}^\le(R_X) \rightarrow
+     \mathcal{I}^\le_{R_M,R_N}(R_X))
+\end{align*}
+Together,
+these properties allow us to construct
+heterogenous simulations
+between monadic terms with similar structures.
+
+\begin{example} \label{ex:sim}
+Building on our previous example,
+consider
+$\alpha_1 = (S_1, I_1, {\rightarrow}_1, F_1)$ and
+$\alpha_2 = (S_2, I_2, {\rightarrow}_2, F_2)$
+two transition systems,
+together with a relation
+$R : \mathcal{R}(S_1, S_2)$
+satisfying:
+\begin{gather*}
+  I_1 \ifr{\mathcal{P}^\le(R)} I_2 \\
+  {\rightarrow}_1 \ifr{R \rightarrow \mathcal{P}^\le(R)} {\rightarrow}_2 \\
+  F_1 \ifr{R \rightarrow \mathcal{P}^\le(=)} F_2
+\end{gather*}
+That is, $R$ is a simulation relation between $\alpha_1$ and $\alpha_2$.
+Then by using the properties above
+following the structure of $\llbracket - \rrbracket$,
+we can show that:
+\[
+    \llbracket \alpha_1 \rrbracket \sqsubseteq
+    \llbracket \alpha_2 \rrbracket \,.
+\]
+\end{example}
+
+%}}}
+
+\subsection{Games and Strategies} %{{{
+
+[Just define our notion of elementary game / language interface,
+and the notion of strategy for $A \rightarrow B$
+that we will use for CompCert semantics.
+Connect to HON games]
+
+%}}}
+
+%}}}
+
+\section{Semantics of CompCert Modules} %{{{
+
+% preamble {{{
+
+Having laid out our basic semantic framework,
+we now use it to construct a compositional semantic model
+for open modules in CompCert.
+
+%}}}
+
+\subsection{Overview} %{{{
+
+CompCert is a C-to-assembly compiler written and verified
+in the Coq proof assistant.
+The compiler is accompanied by
+a formal semantics of the source, target, and intermediate languages,
+and a proof that if the compiler succeeds,
+then the behavior of the emitted target program
+refines that of the source program.
+
+The semantics of CompCert languages
+are given as labeled transition systems (LTS)
+modeling the execution of a whole program's \kw{int main()} function.
+The semantics of external calls
+is a global parameter common to all languages,
+and may use a fixed set of actions as a rudimentary model
+of the program's interaction with the environment.
+The externally observable behavior of the program
+is given by defining the set of traces associated with any LTS,
+and the various kinds of simulations used by CompCert
+are shown to be sound with respect to trace containement.
+
+CompCert, however,
+does not attempt to model the semantics of open modules,
+nor to define a semantic notion of module composition.
+We remedy this using the following approach:
+\begin{itemize}
+\item Following Compositional CompCert \cite{compcompcert},
+  we extend CompCert's LTS model
+  to explicitely account for the two-way interaction
+  between a program module and its environment
+  in terms of control transfers associated with
+  function calls and returns.
+\item We further extend this approach by
+  using elementary games to parametrize the LTS model, and
+  using refinement conventions to parametrize
+  CompCert's notions of simulations.
+  Games specify the form of function calls and returns,
+  whereas refinement conventions serve to express
+  a generalized calling convention between the various
+  languages involved in the compilation process.
+\end{itemize}
+
+In \S\ref{sec:modsem:def},
+we introduce our changes to CompCert's LTS model,
+and define their behavior in terms of interactive computations.
+In \S\ref{sec:modsem:ref},
+we carry out those changes to the notions of
+forward and backward simulations
+present in CompCert,
+and show them sound with respect to refinement.
+In \S\ref{sec:modsem:comp},
+[composition].
+[Figure out how abstraction fits in].
+
+%}}}
+
+\subsection{Definition} %{{{
+\label{sec:modsem:def}
+
+The semantics of CompCert languages are given mainly
+as labeled transition systems (LTS).
+In the original CompCert,
+a labeled transition system is given as
+a set of states $S$,
+a set of initial states
+$I \subseteq S$,
+a labeled transition relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
+and a set
+$F \subseteq S \times \kw{int}$
+of final states associated with an integer result.
+Compcert LTS support a notion of interaction with the environment
+in the form of event traces:
+a transition $s \stackrel{t}{\rightarrow} s'$,
+indicates that the state $s$ may transition to state $s'$
+through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
+
+For the range of languages that we are considering
+($\kw{Clight}$--$\kw{Asm}$),
+non-empty event traces are only generated by
+the predefined semantics of external calls.
+Since this model is insufficient to express
+the semantics of open C and assembly modules,
+we replace this facility with
+and explicit treatment of incoming and outgoing calls
+at the level of transition systems.
+
+\begin{definition}[Small-step semantics]
+Given two elementary games $A, B$,
+a \emph{small-step semantics} for the game $A \rightarrow B$
+is a tuple $L = \langle S, \rightarrow, I, X, R, F \rangle$.
+$S$ is a set of states,
+with ${\rightarrow} \subseteq S \times S$ a \emph{transition relation} on $S$.
+The handling of incoming calls is specified by
+$I \subseteq M_B^\kw{Q} \times S$, which
+assigns a set of \emph{initial states} to each question of $B$, and
+$F \subseteq S \times M_B^\kw{A}$,
+which designates \emph{final states} together with corresponding answers.
+The handling of external calls is specified by
+$X \subseteq S \times M_A^\kw{Q}$,
+which identifies \emph{external states} together with
+corresponding questions of $A$ directed to the environment, and
+$R \subseteq S \times M_A^\kw{A} \times S$,
+which is used to select a \emph{resumption state}
+based on the outcome of the external call
+after the environment returns control to the module.
+
+We write $L : \kw{semantics}(A, B)$ to indicate that
+$L$ is a small-step semantics for the game $A \rightarrow B$.
+\end{definition}
+
+CompCert interprets the lack of any transition (``getting stuck'')
+as undefined behavior.
+This convention fits the context of
+language semantics defined through inductive sets of rules:
+the behavior of a state for which there are no rules is undefined.
+For a small-step semantics
+$L = \langle S, {\rightarrow}, I, X, R, F \rangle : \kw{semantics}(A,B)$,
+we recognize those states using the predicate:
+\[
+    \kw{stuck}_L(s) :=
+      ({\rightarrow}(s) = \varnothing) \wedge
+      (X(s) = \varnothing) \wedge
+      (F(s) = \varnothing)
+\]
+Taking this into account,
+the immediate behavior of a state $s \in S$
+can be expressed as the interactive computation
+$\kw{step}_L(s) : \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(S)$
+defined as follows:
+\[
+  \kw{step}_L(s) :=
+    \begin{cases}
+      \top & \mbox{if } \kw{stuck}(s) \\
+      {\rightarrow}(s) \vee
+      (X(s) \bind \kw{interact} \bind R(s)) & \mbox{otherwise,}
+   \end{cases}
+\]
+The overall external behavior of $L$
+can then be given as an interactive computation
+$
+    \llbracket L \rrbracket :
+      M_B^\kw{Q} \rightarrow \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(M_B^\kw{A})
+$
+defined by:
+%Then $\llbracket L \rrbracket$ can be defined as:
+\begin{align*}
+  \llbracket L \rrbracket (q) :=
+    \begin{cases}
+       \top & \mbox{if } I(q) = \varnothing \\
+       I(q) \bind \kw{step}^\infty \bind F & \mbox{otherwise.}
+     \end{cases}
+\end{align*}
+
+[Perhaps make this point here:
+For now,
+we can remark that transition systems in the form defined above
+describe the behavior of a \emph{single} invocation
+of the program module being modeled.
+With each incoming question,
+we will instantiate a new, independent state
+using the initial-state predicate $I$.
+The derived strategies will be innocent,
+in the sense that they will not maintain
+any hidden state across subsequent or reentrant
+invocations from the environment.
+Instead,
+relevant global state will be passed back into the module
+as a component of the environment's question
+(for instance in the form of the memory state component
+of the question as described in Table~\ref{tbl:li}).]
+
+%}}}
+
+\subsection{Refinement and Abstraction} %{{{
+\label{sec:modsem:ref}
+
+The correctness of CompCert is expressed in terms of
+a so-called \emph{backward simulations}
+between the small-step semantics of the source and target programs.
+In turn, backward simulations
+are shown to be sound with respect to trace containement.
+In this section,
+we define backward simulations for our updated notion
+of small-step semantics,
+and show that they are sound with respect to
+the refinement of their behaviors.
+
+% Footnote pointing out difference w/ "Fw & Bw Sim" terminology?
+A backward simulation asserts that any transition in the target program
+has a corresponding transition sequence in the source program.
+A transition in the target program can be matched with
+an empty transition sequence in the source program;
+however, to ensure the preservation of silent divergence,
+this can only happen for finitely many consecutive target transitions.
+This restriction is enforced by indexing the simulation relation
+over a well-founded order,
+and making sure that the index decreases
+whenever a potentially empty sequence of source transitions is used.
+
+In our setting,
+the definition of backward simulations needs to be extended
+to take into account the ways in which the questions and answers
+at the source and target level ought to be related.
+This can be specified using the notion of simulation convention
+defined in \S\ref{sec:monad:abs}:
+a simulation between the small-step semantics
+$L_1 : \kw{semantics}(A_1, B_1)$ and
+$L_2 : \kw{semantics}(A_2, B_2)$ will
+operate in the context of the refinement convention
+$\mathbb{C}_A : \mathcal{R}_{W_A}(A_1, A_2)$ and
+$\mathbb{C}_B : \mathcal{R}_{W_B}(B_1, B_2)$.
+
+Note that initial and resumption states on one hand,
+and external and final states on the other hand,
+correspond to respective actions of the environment and the system;
+as such, they need to be treated differently.
+Furthermore,
+the potential non-determinism present in small-step semantics
+is interpreted as \emph{system} non-determinism,
+so that when relating sets of states
+we will want to make sure that
+each \emph{target} state has a corresponding \emph{source} state,
+but the source program may allow additional behaviors
+that are not realized in the target program.
+This rule is slightly altered to take into account the convention that
+empty sets of states correspond to undefined behaviors,
+so that if the source set is empty,
+no restrictions are placed on the target state.
+This is formalizes as follows.
+
+\begin{definition}[Backward simulation between sets of states]
+We say that $R : \mathcal{R}(S_1, S_2)$ is a
+\emph{backward simulation relation
+  between the sets $X_1 \subseteq S_1$ and  $X_2 \subseteq S_2$}
+if the following conditions hold:
+\begin{enumerate}
+\item
+  If $X_1$ is non-empty,
+  then $X_2$ is non-empty as well.
+\item
+  If $X_1$ is non-empty,
+  then for all $s_2 \in X_2$,
+  there exists $s_1 \in X_1$
+  such that $(s_1, s_2) \in R$.
+\end{enumerate}
+We will write $X_1 \ge_R X_2$.
+\end{definition}
+
+More generally,
+we will say that a state $s$ \emph{goes wrong}
+if it is neither an external nor a final state,
+and if there no transition $s \rightarrow s'$;
+we will say that a state $s$ is \emph{safe}
+if no state that goes wrong is reachable from $s$
+by the transition relation $\rightarrow$.
+Safe states will be denoted using the predicate $\kw{safe}(s)$.
+With this we are ready to define backward simulations.
+
+\begin{definition}[Backward simulation]
+Given
+two simulation conventions
+$\mathbb{C}_A : \mathcal{R}(A_1, A_2)$ and
+$\mathbb{C}_B : \mathcal{R}(B_1, B_2)$,
+and given
+$L_1 : \kw{semantics}(A_1, B_1)$ and
+$L_2 : \kw{semantics}(A_2, B_2)$
+two small-step semantics,
+a \emph{backward simulation} between $L_1$ and $L_2$
+consists in a
+well-founded order $(I, <)$
+together with a family of relations
+$(R_i : \mathcal{R}_{W_B}(S_1, S_2))_{i \in I}$
+satisfying the following properties:
+\begin{description}
+\item[Initial states]
+  For all
+  $q_1 \ifr{w \Vdash {\preceq}_B^\kw{Q}} q_2$,
+  the condition $I_1(q_1) \ge_{\exists i . R_i} I_2(q_2)$ holds.
+\item[External calls]
+  For all $s_1 \ifr{w \Vdash R_i} s_2$
+  with $s_1$ a safe state, and
+  for any question $m_2 \in M_{A_2}^\kw{Q}$
+  such that $(s_2, m_2) \in X_2$,
+  there exists $w' \in W_A$ and $q_1 \in M_{A_1}^\kw{Q}$
+  such that $q_1 \ifr{w' \Vdash {\preceq}_A^\kw{Q}} q_2$.
+  In addition, for all corresponding answers
+  $r_1 \ifr{w' \Vdash {\preceq}_A^\kw{A}} r_2$,
+  the condition $R_1(s_1, r_1) \ge_{\exists i . R_i} R_2(s_2, r_2)$ holds.
+\item[Final states]
+  For all $s_1 \ifr{w \Vdash R_i} s_2$
+  with $s_1$ a safe state, and
+  for any answer $r_2 \in M_{B_2}^\kw{A}$
+  such that $(s_2, r_2) \in F_2$,
+  there exists a state $s_1'$ reachable from $s_1$ and
+  an answer $r_1 \in M_{B_1}^\kw{A}$ such that
+  $(s_1', r_1) \in F_1$ and $r_1 \ifr{w \Vdash {\preceq}_B^\kw{A}} r_2$.
+\item[Progress]
+  For all $s_1 \ifr{w \Vdash R_i} s_2$
+  with $s_1$ a safe state,
+  $s_2$ does not go wrong.
+\item[Simulation]
+  For all $s_1 \ifr{w \Vdash R_i} s_2$,
+  if $s_1$ is a safe state and $s_2 \rightarrow s_2'$,
+  then there exists $i' \in I$ and $s_1' \in S_1$
+  such that $s_1' \ifr{w \Vdash R_{i'}} s_2'$ and
+  such that one the following conditions hold:
+  \[
+    s_1 \rightarrow^+ s_1' \,, \quad \mbox{or} \quad
+    s_1 \rightarrow^* s_1' \wedge i' < i \,.
+  \]
+\end{description}
+We will write $L_1 \ge_{\mathbb{C}_A \rightarrow \mathbb{C}_B} L_2$.
+\end{definition}
+
+[Maybe short commentary to unpack some of that.]
+
+Stated in their full generality,
+CompCert backward simulations are notably complex.
+Fortunately,
+many simpler formulations and related constructions
+can be used to establish
+the existence of backward simulations
+for specific compiler passes.
+However,
+backward simulations are not easily amenable to
+meta-theoretical analysis
+where they can appear both as hypotheses and conclusions,
+which is an additional motivation for introducing
+our game-based framework.
+In the rest of this section we show that
+backward simulations between small-step semantics
+are sound with respect to
+our much simpler notion of refinement
+over interactive computations.
+
+[Do that.]
+
+%}}}
+
+\subsection{Composition} %{{{
+\label{sec:modsem:comp}
+
+Horizontal composition
+
+%}}}
+
+\subsection{Abstraction} %{{{
+
+%}}}
+
+%}}}
+
+\section{Compiler Correctness} %{{{
+
+[Actually existing CompCert: concrete stuff about languages,
+memory model, correctness proofs of passes, calling convention algebra]
+
+The changes we make to CompCert so that it fits this model
+
+%}}}
+
+\section{Discussion and Related Work} %{{{
+
+%}}}
+
+\end{document}
