@@ -122,6 +122,7 @@ is how we should go about this.
 \item New model for interaction that resolves the tension between
   operational and trace semantics
   by using monad.
+\item[+] [Logical relations, verified in Coq]
 \end{itemize}
 
 %}}}
@@ -132,7 +133,7 @@ is how we should go about this.
 
 %}}}
 
-\section{The Interaction Monad} %{{{
+\section{The Interaction Monad} \label{sec:monad} %{{{
 
 % preamble {{{
 
@@ -142,7 +143,7 @@ offers many advantages:
 it is simple;
 the ordering properties of down-set lattices
 are straightforward and well-understood;
-and as a trace semantics
+as a trace semantics
 it is well-suited as a fully abstract description
 of a system's external behavior.
 
@@ -176,18 +177,18 @@ where $\kw{O}$ is expected to make the first move,
 can be modelled as computations of type
 $M^\kw{O} \rightarrow
       \mathcal{I}_{M^\kw{P}, M^\kw{O}}(\varnothing)$.
-In \S\ref{sec:games} we use a similar approach
+In \S\ref{sec:monad:games} we use a similar approach
 to formalize the more restricted notion of strategy
 which will serve as the foundation for our semantics model.
 
 %}}}
 
-\subsection{Overview} %{{{
+\subsection{Overview} \label{sec:monad:overview} %{{{
 
 The interaction monad models
 a computation which may interact with its environment.
 At any point,
-the computation can perform and output $m \in M$.
+the computation can perform an output $m \in M$.
 It is then suspended
 until an input $n \in N$ is received from the environment.
 This is modelled by the operation:
@@ -227,7 +228,7 @@ or the undefined behavior $\top$.
 
 %}}}
 
-\subsection{Definition} %{{{
+\subsection{Definition} \label{sec:monad:def} %{{{
 
 Following the usual approach,
 we formalize strategies as prefix-closed sets of plays.
@@ -371,7 +372,7 @@ is defined as:
 
 %}}}
 
-\subsection{Iteration} %{{{
+\subsection{Iteration} \label{sec:monad:iter} %{{{
 
 A Kleisli morphism $f : A \rightarrow \mathcal{I}_{M,N}(A)$
 can be iterated as follows.
@@ -395,7 +396,7 @@ where:
 
 %}}}
 
-\subsection{Substitution} %{{{
+\subsection{Substitution} \label{sec:monad:subst} %{{{
 
 [Define $x[f]$ where $f : M \rightarrow \mathcal{I}_{P,Q}(N)$
 is substituted for the interactions of $x : \mathcal{I}_{M,N}(A)$.
@@ -452,7 +453,7 @@ $I \bind {\rightarrow}^\infty \bind F$.
 
 %}}}
 
-\subsection{Abstraction} %{{{
+\subsection{Abstraction} \label{sec:monad:abs} %{{{
 
 We now consider the problem of relating the interactive computations
 $x_1 \mathcal{I}_{M_1,N_1}(X_1)$ and
@@ -699,7 +700,7 @@ we can show that:
 
 %}}}
 
-\subsection{Games and Strategies} %{{{
+\subsection{Games and Strategies} \label{sec:monad:games} %{{{
 
 [Just define our notion of elementary game / language interface,
 and the notion of strategy for $A \rightarrow B$
@@ -1061,16 +1062,110 @@ over interactive computations.
 
 %}}}
 
-\subsection{Composition} %{{{
-\label{sec:modsem:comp}
+\subsection{Composition} \label{sec:modsem:comp} %{{{
 
-Horizontal composition
+This section introduces two ways in which
+our semantic objects can be composed.
+The first one is fairly simple to define
+and is a fairly typical notion of categorical composition.
+The second, more elaborate one
+is a symmetric notion of composition which
+models the mutual interactions
+between the components of low-level programs.
+
+\begin{definition}[Categorical Composition]
+For the elementary games $A$, $B$ and $C$,
+the \emph{categorical composition} of
+$\sigma_1 : M_C^\kw{Q} \rightarrow
+ \mathcal{I}_{M_B^\kw{Q},M_B^\kw{A}}(M_C^\kw{A})$ and
+$\sigma_2 : M_B^\kw{Q} \rightarrow
+ \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(M_B^\kw{A})$
+is the interactive computation
+$\sigma_1 \circ \sigma_2 : M_C^\kw{Q} \rightarrow
+ \mathcal{I}_{M_A^\kw{Q},A_B^\kw{A}}(M_C^\kw{A})$
+defined as:
+\[
+    \sigma_1 \circ \sigma_2 := q \mapsto \sigma_2(q)[\sigma_1] \,.
+\]
+\end{definition}
+
+[Explain in terms of low-level components]
+
+By the properties of $-[-]$ introduced in \S\ref{sec:monad:subst},
+the operation $\circ$ is associative and
+$\kw{interact}$ is its unit,
+justifying its name.
+
+\begin{definition}[Horizontal composition]
+For an elementary game $A$,
+the \emph{horizontal composition} of the interactive computations
+$\sigma_1, \sigma_2 : M_A^\kw{Q} \rightarrow
+ \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(M_A^\kw{A})$
+is the interactive computation
+$\sigma_1 \bullet \sigma_2 : M_A^\kw{Q} \rightarrow
+ \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(M_A^\kw{A})$
+defined as:
+\[
+    \sigma_1 \bullet \sigma_2 :=
+      (\sigma_1 \oplus \sigma_2)^\oast \,.
+\]
+\end{definition}
+
+Approximations that can be useful for proof in specific cases:
+\[
+    \sigma_1 \circ \sigma_2 \quad \sqsubseteq \quad
+    \sigma_1 \circ (\sigma_2 \oplus \kw{interact}) \quad \sqsubseteq \quad
+    \sigma_1 \bullet \sigma_2
+\]
+
+[Other option:
+define $\circ$ alongside $-[-]$, and
+in this section merely explain its effect and concentrate on $\bullet$]
 
 %}}}
 
-\subsection{Abstraction} %{{{
+\subsection{Hiding} %{{{
+
+Note that
+in the behavior $\sigma_1 \bullet \sigma_2$,
+cross-component calls remain observable:
+while the external calls of $\sigma_1$
+can be resolved to behaviors implemented in $\sigma_2$
+(and conversely),
+the original external calls remain
+as non-deterministic alternatives in the final result.
+[Only way to ensure associativity
+because nothing prevents other components
+to \emph{also} implement these functions,
+in which case eliminating the calls
+would make the result sensitive to the order of composition.]
+
+This phenomenon is reminiscent of a similar one observed
+in the process calculus CCS \cite{ccs}
+in the context of \emph{parallel composition}.
+Following this precedent,
+we then define a separate \emph{hiding} operator
+which retains only the external calls
+which belong to a given set.
+
+\begin{definition}[Hiding]
+
+\end{definition}
 
 %}}}
+
+%}}}
+
+\section{Multi-module programs} %{{{
+
+[Following composition + hiding in the last section,
+extend semantic model to include component domains and/or range
+and construct a notion of composition with built-in hiding
+that is nevertheless associative.
+Build corresponing syntactic notation
+for multi-module programs.]
+
+[Alt., syntactic linking]
 
 %}}}
 

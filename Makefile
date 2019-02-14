@@ -1,6 +1,6 @@
 CRUFT = aux pdf bbl blg log snm nav out toc
 
-all: lwcc.pdf slides.pdf
+all: lwcc.pdf slides.pdf compcert.pdf
 
 %.aux: %.tex
 	pdflatex $* </dev/null || true
