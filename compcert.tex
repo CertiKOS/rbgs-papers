@@ -137,7 +137,7 @@ is how we should go about this.
 
 % preamble {{{
 
-Representing strategies as
+The traditional representation of strategies as
 prefix-closed sets of traces
 offers many advantages:
 it is simple;
@@ -157,8 +157,8 @@ but involve considerations such as branching
 and a spectrum of diverse and complex bisimilarity
 and bisimulation relations as their notion of equivalence.
 
-We attempt to get ``best of both worlds''
-by introducing the \emph{interaction} monad $\mathcal{I}_{M,N}(-)$.
+The \emph{interaction monad} $\mathcal{I}_{M,N}(-)$
+defined in this section offers advantages of both of these models.
 Following traditional work on game semantics,
 we use a simple trace model to formalize
 the behavior of interactive components.
@@ -185,12 +185,11 @@ which will serve as the foundation for our semantics model.
 
 \subsection{Overview} \label{sec:monad:overview} %{{{
 
-The interaction monad models
-a computation which may interact with its environment.
+The interaction monad specifies
+the behavior of a system which interacts with its environment.
 At any point,
-the computation can perform an output $m \in M$.
-It is then suspended
-until an input $n \in N$ is received from the environment.
+the system can perform an output $m \in M$ and
+wait for a subsequent input $n \in N$ from the environment.
 This is modelled by the operation:
 \[
     \kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N) \,.
@@ -202,14 +201,15 @@ the interaction monad is equipped with a complete refinement lattice,
 Given $x, y : \mathcal{I}_{M,N}(A)$,
 their supremum $x \vee y : \mathcal{I}_{M,N}(A)$
 is the smallest specification that permits the behavior of either;
-it can also be interpreted as non-deterministic choice.
+it can also be interpreted as non-deterministic choice
+of the system.
 Conversely, $x \wedge y : \mathcal{I}_{M,N}(A)$ can be interpreted as
 the largest specification requiring that $x$ and $y$ both be satisfied.
 The least element $\bot$
 is a specification that can never be satisfied;
 the greatest element $\top$
 is the specification that is always satisfied ---
-or a computation whose behavior is entierely undefined.
+or represents a computation whose behavior is entierely undefined.
 
 Finally,
 we model non-deterministic iteration with the operator:
@@ -221,7 +221,7 @@ Notably,
 $-^\infty$ is different from
 the Kleene star associated with the refinement lattice,
 because we account for silent divergence as a specific behavior,
-incomparable with terminating computations.
+incomparable with terminating ones,
 rather than identifying it with
 the unsatisfiable specification $\bot$
 or the undefined behavior $\top$.
@@ -230,43 +230,43 @@ or the undefined behavior $\top$.
 
 \subsection{Definition} \label{sec:monad:def} %{{{
 
-Following the usual approach,
-we formalize strategies as prefix-closed sets of plays.
-We do not allow strategies to restrict the move available to $\kw{O}$,
+Following the traditional game semantics approach,
+we formalize interactive behaviors as prefix-closed sets of plays.
+We do not restrict the move available to $\kw{O}$,
 so the plays we will consider are odd-length sequences of moves.
 To support the monadic structure and account
 for silent divergence and undefined behaviors,
-we extend them with the
-terminal moves $v \in X$, $\Delta$, and $\lightning$:
+we augment the set of outputs with the
+distinguished terminal moves $v \in X$, $\Delta$, and $\lightning$:
 \[
-    \mathcal{T}_{M,N}(X) :=
-      (M N)^* \times (M + X + \{\Delta, \lightning\})
+    s, t \in
+    \mathcal{T}_{M,N}(X) ::=
+    v \mid \Delta \mid \lightning \mid m \mid mnt \,.
 \]
-Any trace is considered a prefix of $(\varepsilon, \lightning)$,
+Any trace is considered a prefix of $\lightning$,
 so that our extended prefix relation on $\mathcal{T}_{M,N}(X)$
 is defined by the rules:
-\[
-  \begin{array}{r@{\:\sqsubseteq\:}l}
-    (\varepsilon, m) & (mn, s) \\
-    (\varepsilon, v) & (\varepsilon, v) \\
-    (\varepsilon, \Delta) & (\varepsilon, \Delta) \\
-    (\varepsilon, \lightning) & (s, p)
-  \end{array}
+\begin{gather*}
+  v \sqsubseteq v , \quad
+  \Delta \sqsubseteq \Delta , \quad
+  t \sqsubseteq \lightning , \quad
+  m \sqsubseteq m , \quad
+  m \sqsubseteq mnt ,
   \quad
-  \AxiomC{$(s, p) \sqsubseteq (t, q)$}
-  \UnaryInfC{$(mns, p) \sqsubseteq (mnt, q)$}
+  \AxiomC{$s \sqsubseteq t$}
+  \UnaryInfC{$mns \sqsubseteq mnt$}
   \DisplayProof
-\]
-An interactive computation is
+\end{gather*}
+An interactive behavior is
 a prefix-closed set of traces:
 \[
     \mathcal{I}_{M,N}(X) :=
     \{ T \subseteq \mathcal{T}_{M,N}(X) \mid
-       {\sqsubseteq}^{-1}(T) \subseteq T \}
+       \forall t \in T \,.\, \forall s \sqsubseteq t \,.\, s \in T \}
 \]
 
 Note that since any trace is a prefix of $\lightning$,
-a computation which admits a trace ending with $\lightning$
+a behavior which admits a trace ending with $\lightning$
 will also admit all possible interactions
 sharing the same initial segment. 
 This allows us to define our notion of refinement
@@ -284,28 +284,45 @@ they induce a lattice structure on $\mathcal{I}_{M,N}(X)$.
 \subsection{Monad operations} %{{{
 
 The monad's unit associates to each value $v \in X$
-the computation with a single trace $(\varepsilon, v)$:
+the computation with a single trace $v$:
 \[
-    \kw{ret}_X(v) := \{ (\varepsilon, v) \} \,.
+    \kw{ret}_X(v) := \{ v \} \,.
 \]
 The binding operation corresponds to
 the sequential composition of
-a computation $x \in \mathcal{I}_{M,N}(A)$ and
+a behavior $x \in \mathcal{I}_{M,N}(A)$ and
 a continuation $f : A \rightarrow \mathcal{I}_{M,N}(B)$.
-The result is a computation in $\mathcal{I}_{M,N}(B)$ which
+The result is an interactive behavior in $\mathcal{I}_{M,N}(B)$ which
 contains the traces of $x$ where
 any final value $v$ has been replaced with
-all possible traces in $f(v)$:
-\begin{align*}
-    s \bind f := &\:\{ (s, \: r) \mid (s, r) \in x \wedge r \notin A \} \\
-      \cup &\:\{ (st, r) \mid (s, a) \in x \wedge (t, r) \in f(a) \}
-\end{align*}
+all possible traces in $f(v)$.
+For a single trace $t \in x$ we define $t \bind f$
+using the following rules:
+\begin{gather*}
+  m \in (m \bind f)
+  \quad
+  \Delta \in (\Delta \bind f)
+  \quad
+  t \in (\lightning \bind f)
+  \\[1ex]
+  \AxiomC{$t \in f(v)$}
+  \UnaryInfC{$t \in (v \bind f)$}
+  \DisplayProof
+  \quad
+  \AxiomC{$s \in (t \bind f)$}
+  \UnaryInfC{$mns \in (mnt \bind f)$}
+  \DisplayProof
+\end{gather*}
+Then $x \bind f$ can be defined as:
+\[
+    (x \bind f) = \bigcup_{t \in x} (t \bind f)
+\]
 It is straightforward to verify that
 the monad laws hold:
 \begin{align*}
-  \kw{ret}(v) \bind f &= f(v) \\
-  x \bind \kw{ret} &= x \\
-  x \bind (v \mapsto f(v) \bind g) &= (x \bind f) \bind g
+  (\kw{ret}(v) \bind f) &= f(v) \\
+  (x \bind \kw{ret}) &= x \\
+  (x \bind (v \mapsto f(v) \bind g)) &= ((x \bind f) \bind g)
 \end{align*}
 
 %}}}
@@ -316,28 +333,27 @@ The interaction primitive
 $\kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N)$
 can be defined as follows:
 \[
-    \kw{interact}(m) := \{ (\varepsilon, m), (mn, n) \mid n \in N \}
+    \kw{interact}(m) := \{ m, mnn \mid n \in N \}
 \]
-That is,
-$\kw{interact}(m)$ first emits the output $m$,
-then returns the input $n$ received from the environment.
+Note that in the trace $mnn$,
+the first occurence of $n$ denotes an input,
+whereas the second one denotes the value returned by $\kw{interact}$.
 
 Conversely,
 the following operator
-will allow us to evaluate a computation
-while ``monitoring'' its interactions:
+will allow us to ``unfold the next step'' of a behavior
+while monitoring its interactions:
 \[
     \kw{next} :
        \mathcal{I}_{M,N}(X) \rightarrow
        \mathcal{I}_{P,Q}(X + M \times (N \rightarrow \mathcal{I}_{M,N}(X)))
 \]
 When the computation $x$ silently terminates, diverges, or goes wrong,
-then $\kw{next}(x)$ will exhibit the same behavior:
-\begin{align*}
-    \kw{next}(\kw{ret}(a)) &= \kw{ret}(i_1(a)) \\
-    \kw{next}(\Omega) &= \Omega \\
-    \kw{next}(\top) &= \top
-\end{align*}
+then $\kw{next}(x)$ will exhibit the same behavior.
+In particular:
+\[
+    \kw{next}(\kw{ret}(a)) = \kw{ret}(i_1(a))
+\]
 However,
 if $x$ attempts to interact,
 then $\kw{next}(x)$ will suspend it,
@@ -349,26 +365,13 @@ In particular,
 \[
     \kw{next}(\kw{interact}(m)) = \kw{ret}(i_2(m), \kw{ret}) \,.
 \]
-The operator can be defined as follows:
+Writing $\delta_{mn}(x) := \{ t \mid mnt \in x \}$,
+the operator $\kw{next}$ can be defined as follows:
 \begin{align*}
-    \kw{next}(x) &= \{ (\varepsilon, i_1(v)) \mid
-                       (\varepsilon, v) \in x \wedge
-                       v \in X \} \\
-              &\cup \{ (\varepsilon, r) \mid
-                       (\varepsilon, r) \in x \wedge
-                       r \in \{\Delta,\lightning\} \} \\
-              &\cup \{ (\varepsilon, i_2(m, \delta_m(x))) \mid
-                       (\varepsilon, m) \in x \wedge
-                       m \in M \} \,,
+    \kw{next}(x) = \: & \{ i_1(v) \mid v \in x \wedge v \in X \} \\
+              \cup \: & \{ r \mid r \in x \wedge r \in \{\Delta,\lightning\} \} \\
+              \cup \: & \{ i_2(m, n \mapsto \delta_{mn}(x)) \mid m \in x \wedge m \in M \} \,.
 \end{align*}
-where the derivative
-$\delta(x) :
-   \mathcal{I}_{M,N}(X) \rightarrow M \rightarrow N \rightarrow
-   \mathcal{I}_{M,N}(X)$
-is defined as:
-\[
-    \delta(x)(m)(n) := \{ (s, r) \mid (mns, r) \in x \} \,.
-\]
 
 %}}}
 
@@ -376,32 +379,30 @@ is defined as:
 
 A Kleisli morphism $f : A \rightarrow \mathcal{I}_{M,N}(A)$
 can be iterated as follows.
-First,
-we identify silently diverging computations by defining:
-\[
-    f_\Delta(v) :=
-      f \cup \{ \Delta \mid \forall n, \exists x \notin M, f^n(v) \ni x \}
-\]
-Then the iteration of $f$ is:
-\[
-    f^\infty(v) :=
-      \bigvee_{n} f_\Delta^n \,.
-\]
-Here $f^n$ refers to the $n$-fold composition of $f$,
-where:
+We start by defining
+the $n$-fold sequential composition of $f$
+and the associated notion of Kleene star as:
 \begin{align*}
     f^0(a) &:= \kw{ret}(a) \\
-    f^{n+1}(a) &:= f^n(a) \bind f \,.
+    f^{n+1}(a) &:= f^n(a) \bind f \\
+    f^*(a) &:= \bigcup_n f^n(a) \,.
 \end{align*}
-
-%}}}
-
-\subsection{Substitution} \label{sec:monad:subst} %{{{
-
-[Define $x[f]$ where $f : M \rightarrow \mathcal{I}_{P,Q}(N)$
-is substituted for the interactions of $x : \mathcal{I}_{M,N}(A)$.
-Define $x[f]^\infty$ when $P=M, Q=N$,
-the non-deterministic iteraction of $x[f]$.]
+In order to recognize silent divergence in the iteration of $f$,
+we introduce $f_\Delta$,
+defined by the following coinductive rule.
+Note that $f_\Delta(v) = \{\Delta\}$ or $f_\Delta(v) = \bot$.
+\[
+    \AxiomC{$v' \in f(v)$}
+    \AxiomC{$\Delta \in f_\Delta(v')$}
+    \doubleLine
+    \BinaryInfC{$\Delta \in f_\Delta(v)$}
+    \DisplayProof
+\]
+Then the non-deterministic, infinite iteration of $f$ is:
+\[
+    f^\infty := (f \oplus f_\Delta)^*
+\]
+XXX define $\oplus$ (pointwise join)
 
 %}}}
 
@@ -413,7 +414,7 @@ using the natural transformation
 $\eta^\mathcal{P}_X : \mathcal{P}(X) \rightarrow \mathcal{I}_{M,N}(X)$
 defined as:
 \[
-    \eta^\mathcal{P}_X(V) := \{ (\varepsilon, v) \mid v \in V \}
+    \eta^\mathcal{P}_X(V) := \{ v \mid v \in V \}
 \]
 In particular,
 a relation $R : A \rightarrow \mathcal{P}(B)$
@@ -442,22 +443,108 @@ The behavior of $\alpha$ can be expressed as:
 
 We use a similar pattern in \S\ref{sec:modsem:def}
 to express the behavior of CompCert small-step semantics
-in terms of interactive computations.
+in terms of interactive behaviors.
 For conciseness,
 we will sometimes rely implicitely on $\eta_X^\mathcal{P}$
 when a set $x : \mathcal{P}(A)$ is used
-in a context where an interactive computation
+in a context where an interactive behavior
 of type $\mathcal{I}_{M,N}(A)$ is expected,
 for instance expressing $\llbracket \alpha \rrbracket$ above as
 $I \bind {\rightarrow}^\infty \bind F$.
 
 %}}}
 
+\subsection{Composition} \label{sec:monad:subst} %{{{
+
+Given two Kleisli morphisms for $\mathcal{I}_{M,N}$,
+namely
+$f : A \rightarrow \mathcal{I}_{M,N}(B)$ and
+$g : B \rightarrow \mathcal{I}_{M,N}(C)$,
+we can define their Kleisli composition
+in the usual way using the monad's $\bind$ operator.
+The behavior:
+\[
+    (f \cdot g)(a) := f(a) \bind g
+\]
+corresponds to the sequential composition of $f$ followed by $g$.
+
+Another way to compose two interactive behaviors
+is to resolve the interactions of the first one
+by invoking the second one,
+so that given
+$x : \mathcal{I}_{M,N}(A)$ and
+$f : M \rightarrow \mathcal{I}_{P,Q}(N)$,
+the behavior $x[f] : \mathcal{I}_{P,Q}(A)$
+will proceed according to $x$,
+but whenever $x$ attempts to perform an output $m \in M$,
+the behavior $f(m)$ will be substituted,
+and whenever $f(m)$ returns a value $n \in N$,
+the value will be used as an input to resume to evaluation of $x$.
+
+\begin{definition}[Substitution]
+For a type $A$ and
+an interactive continuation $f : M \rightarrow \mathcal{I}_{P,Q}(N)$,
+we define
+$[f] : \mathcal{I}_{M,N}(A) + A \rightarrow
+ \mathcal{I}_{P,Q}(\mathcal{I}_{M,N}(A) + A)$
+as the transition system:
+\begin{align*}
+  [f](s) := i_1^{-1}(s) \bind \kw{next} \bind
+      [i_2, (m, k) \mapsto f(m) \bind k \bind i_1]
+%        (&i_1^{-1} \bind i_2) \\ {} \oplus
+%        (&i_2^{-1} \bind (m, k) \mapsto f(m) \bind k \bind i_1)
+\end{align*}
+Then for a behavior $x : \mathcal{I}_{M,N}(A)$,
+the \emph{substitution} $x[f] : \mathcal{I}_{P,Q}(A)$ is defined as:
+\[
+    x[f] := i_1(x) \bind [f]^\infty \bind i_2^{-1} \,,
+\]
+and for $g : A \rightarrow \mathcal{I}_{M,N}(B)$,
+the \emph{interactive composition}
+$g \circ f : A \rightarrow \mathcal{I}_{P,Q}(B)$ is defined as:
+\[
+    (g \circ f)(a) := g(a) [f] \,.
+\]
+\end{definition}
+
+[XXX find another symbol than $\circ$ b/c confusing
+wrt. function composition, which can also apply.
+Or just don't define $\circ$ just $x[f]$.]
+
+The definition of $x[f]$ works by iterating $\kw{next}$
+over a state $s : \mathcal{I}_{M,N}(A)$ initialized with $x$.
+If the next action of $s$ is to return a value $v$,
+then $x[f]$ returns that value as well,
+but if $s$ performs an output $m$,
+then $x[f]$ evalutes $f(m)$,
+and passes any result $n$ to the continuation $k$
+in order to compute the next state.
+
+To let a behavior interact with itself,
+we can iterate interactive composition and
+define $f^\oast$,
+which is similar with respect to the interactive composition $g \circ f$
+to the infinite iteration $f^\infty$ with respect to Kleene composition.
+
+\begin{definition}[Interactive iteration]
+[A bit more involved because we need to keep a stack of continuations.
+Maybe define in terms of traces if that's more transparent.]
+\end{definition}
+
+[Properties:
+\begin{itemize}
+\item $x[\kw{interact}] = x$, $\kw{interact}(m)[f] = f(m)$
+\item $x[g \circ f] = x[g][f]$
+\end{itemize}
+etc.]
+
+%}}}
+
 \subsection{Abstraction} \label{sec:monad:abs} %{{{
 
-We now consider the problem of relating the interactive computations
-$x_1 \mathcal{I}_{M_1,N_1}(X_1)$ and
-$x_2 \mathcal{I}_{M_2,N_2}(X_2)$
+We now consider the problem of relating the interactive behaviors
+$x_1 : \mathcal{I}_{M_1,N_1}(X_1)$ and
+$x_2 : \mathcal{I}_{M_2,N_2}(X_2)$
 whose inputs, outputs, and results are taken in different sets.
 We will use Kripke logical relations to relate these components,
 so that the correspondance between the two interactions
@@ -520,7 +607,7 @@ Simulation conventions relate interactions which have the same ``shape'',
 in the sense that there is a one-to-one correspondance between
 the inputs and outputs of $x_1$ and $x_2$.
 Nevertheless,
-extending a simulation convention $\mathbb{R}$ to computations
+extending a simulation convention $\mathbb{R}$ to behaviors
 is complicated by the alternating roles of the system and the environment.
 Our goal will be to define a Kripke relator:
 \[ {\le}_\mathbb{R} \: = \:
@@ -556,8 +643,8 @@ operating at different levels of abstraction.
 
 \begin{definition}
 For a simulation convention $\mathbb{R} = \langle R_M, R_N, R_X \rangle$
-and a computation $x_2 : \mathcal{I}_{M_2, N_2}(X_2)$,
-the computation $\mathbb{R}^*_w(x_2)$ is defined by the rules:
+and a behavior $x_2 : \mathcal{I}_{M_2, N_2}(X_2)$,
+the behavior $\mathbb{R}^*_w(x_2)$ is defined by the rules:
 \begin{gather*}
   \AxiomC{$(\varepsilon, v_2) \in x_2$}
   \AxiomC{$v_1 \ifr{w \Vdash R_X} v_2$}
@@ -602,13 +689,14 @@ on simulation conventions in the following ways:
 -^* : {\sqsubseteq} \rightarrow {\sqsubseteq} \rightarrow {\sqsubseteq}
 \end{gather*}
 These properties ensure that
-the relational version $\le_\mathbb{R}$ of $\mathbb{R}^*$
+the relational version of $\mathbb{R}^*$,
+defined below as $\le_\mathbb{R}$,
 behaves as a relator.
 
 \begin{definition}
 For a simulation convention $\mathbb{R} = \langle R_M, R_N, R_X \rangle$,
 a world $w$,
-and two computations
+and two interactive behaviors
 $x_1 : \mathcal{I}_{M_1, N_1}(X_1)$ and
 $x_2 : \mathcal{I}_{M_2, N_2}(X_2)$,
 we say that
@@ -621,6 +709,11 @@ and write:
 \]
 whenever $x_1 \sqsubseteq \mathbb{R}^*_w(x_2)$.
 \end{definition}
+
+Whenever possible,
+for brevity's sake we will use the notation $\le_\mathbb{R}$.
+When we need to make the components relations of $\mathbb{R}$ explicit,
+we will use the notation $\mathcal{I}_{R_M,R_N}(R_X)$ instead.
 
 Identity and composition yield
 ${\le}_\mathbbm{1} = {\sqsubseteq}$ and
@@ -689,7 +782,7 @@ satisfying:
   F_1 \ifr{R \rightarrow \mathcal{P}^\le(=)} F_2
 \end{gather*}
 That is, $R$ is a simulation relation between $\alpha_1$ and $\alpha_2$.
-Then by using the properties above
+Then by using the properties above and
 following the structure of $\llbracket - \rrbracket$,
 we can show that:
 \[
