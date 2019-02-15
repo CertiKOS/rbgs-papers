@@ -76,6 +76,8 @@
 
 \begin{document}
 
+\maketitle
+
 \section{Introduction} %{{{
 
 Our goal is end-to-end verification of computer systems.
@@ -130,6 +132,486 @@ is how we should go about this.
 %}}}
 
 \section{Main Ideas} %{{{
+
+[XXX update and trim down for the reduced scope of this paper]
+
+\subsection{Principles for system construction}
+
+The goal of certified system design is
+to create a formal description of
+the system to be constructed (the program),
+while ensuring through careful analysis that the system
+will behave properly.
+
+To carry out this analysis,
+we need a model
+which assigns to each possible system description $p \in P$
+a mathematical object $\llbracket p \rrbracket \in \mathbb{D}$
+representing its behavior.
+We will call the set $\mathbb{D}$ a \emph{semantic domain}.
+In this section we elucidate
+the structure and properties of $\mathbb{D}$
+necessary to the process of builing
+large-scale certified systems.
+
+\subsubsection{Specifications and refinement}
+
+System design starts with a set of requirements
+that constrain the behavior of the system to be constructed
+(the specification).
+These requirements may not capture every detail
+of the behavior of the eventual system,
+but instead delineate the range of acceptable behaviors
+from the point of view of its environment.
+
+In the context of refinement-based methods,
+the specifications are themselves elements of
+the semantic domain $\mathbb{D}$,
+which is equipped with a \emph{refinement} preorder
+${\sqsubseteq} \subseteq \mathbb{D} \times \mathbb{D}$.
+The proposition $\sigma_1 \sqsubseteq \sigma_2$
+assert that $\sigma_2$ is a less restrictive specification than $\sigma_1$,
+and in particular a system description $p \in P$ is a correct implementation
+of $\sigma \in \mathbb{D}$ when:
+\[ \llbracket p \rrbracket \sqsubseteq \sigma \]
+
+\subsubsection{Compositionality}
+
+Complex systems are built by assembling components
+whose behavior is understood,
+such that their interaction achieves a desired effect.
+The syntactic constructions of
+the language used to describe systems
+correspond to the ways in which they can be composed.
+
+To enable compositional reasoning,
+a suitable model must provide an account of
+the behavior of the composite system
+in terms of the behavior of its parts.
+For instance,
+if the language contains a binary operator
+${+} : P \times P \rightarrow P$,
+then the semantic domain should be equipped with
+a corresponding operation
+${\bullet} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$
+such that:
+\[ \llbracket p_1 + p_2 \rrbracket =
+   \llbracket p_1 \rrbracket \bullet \llbracket p_2 \rrbracket \,. \]
+
+We can use this property
+to show that a composite system
+satisfies a given specification,
+for instance
+$\llbracket p_1 + p_2 \rrbracket \sqsubseteq \sigma$.
+Once this has been established,
+we will want to abstract the composite system as a ``black box''
+which can in turn be used as a primitive component in a larger system.
+Further reasoning can be done in terms of
+the new component's specification $\sigma$ rather than
+its concrete behavior $\llbracket p_1 + p_2 \rrbracket$.
+To support this,
+we must establish that semantic composition operators
+are compatible with refinement in the following sense:
+\[ \sigma_1 \sqsubseteq \sigma_1' \wedge
+   \sigma_2 \sqsubseteq \sigma_2' \Rightarrow
+   \sigma_1 \bullet \sigma_2 \sqsubseteq \sigma_1' \bullet \sigma_2' \,. \]
+Should $p_1 + p_2$ be used as a component in a larger system,
+this property will allow us to establish that:
+\[ \llbracket (p_1 + p_2) + p_3 \rrbracket \sqsubseteq
+   \sigma \bullet \llbracket p_3 \rrbracket \,. \]
+
+\subsubsection{Abstraction}
+
+Large-scale systems operate across many layers of abstraction.
+Each abstraction layer defines its own understanding of the interaction
+between the system and its environment.
+To relate abstraction layers we will need to give an explicit account
+of how their formulations of the interaction correspond to one another.
+
+For example,
+at the physical level,
+communication over a wire may involve a series of voltages through time,
+but at a higher level of abstraction
+we will only be concerned with the sequence of bytes
+being transmitted.
+Serial communication hardware (for instance a UART device)
+serves as a bridge between these two views,
+implementing a byte-oriented communication channel
+in a voltage-oriented world;
+to formally verify such a component we will need to
+express the correspondance between these two
+layers of abstraction.
+
+This can be done by defining an embedding
+$\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$
+between the semantic domains
+used to reason at different levels of abstraction.
+
+[...]
+
+\subsubsection{Compilers}
+
+
+\subsubsection{Heterogeneity}
+
+[What happens to $\mathbb{D}$ in the context of typed languages,
+how this can be used to gain expressivity and construct heterogenous systems.]
+
+
+\subsection{Game semantics}
+
+[introductory remarks]
+
+Types are interpreted as two-player games,
+which specify the form of valid interactions
+between the system and the environment.
+Terms are interpreted as strategies for these games,
+which for any position in the game
+specify the next move to be played by the system.
+
+\subsubsection{Games}
+
+A game is usually defined by giving a set of moves $M$
+that players can choose from,
+as well as a specification of which
+sequences of moves are considered valid.
+For chess,
+moves will be taken in the set $(\{a, \ldots, h\} \times \{1, \ldots, 8\})^2$,
+and a sequence of moves may look like:
+\[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{e7d5} \cdots \]
+For a program expected to produce a natural number,
+the possible moves may be a request to evaluate ($\kw{q}$)
+and primitive values ($42$),
+so that an interaction between the expression $21 \times 2 : \kw{nat}$
+and its evaluation context will proceed as:
+\[ \kw{q} \cdot \underline{42} \]
+Note that we underline the moves of the second player,
+namely the system.
+
+We will focus on two-player, alternating games
+where the environment and the system each contribute every other move.
+The environment plays first.
+Positions in the game can be given
+as sequences of moves;
+even-length sequences correpond to positions
+where the environment is expected to move,
+and odd-length sequences correspond to positions
+where the system is expected to move.
+
+\subsubsection{Strategies}
+
+In this context,
+it is natural to think of system strategies
+as functions from odd-length positions to moves:
+\[ \sigma : \bigcup_n M^{2n+1} \rightharpoonup M \]
+For example,
+the strategy $\llbracket 21 \times 2 \rrbracket$
+will be the partial function with a single mapping $\kw{q} \mapsto 21$,
+whereas the black player in the chess play above
+has used a strategy $\sigma$ containing:
+\[
+  \sigma(e2e4) = c7c5 , \quad
+  \sigma(e2e4 \cdot c7c5 \cdot c2c3) = e7d5 , \quad
+  \ldots
+\]
+
+This is suitable to express the behavior of a concrete system.
+However, for specifications allowing a range of behavior,
+we must generalize strategies to allow nondeterminism:
+\[ \sigma : \bigcup_n M^{2n+1} \rightarrow \mathcal{P}(M) \]
+This is isomorphic to
+$\mathcal{P}(\bigcup_n M^{2n+2})$
+and corresponds to the usual encoding of strategies
+as sets of traces.
+
+Equivalently,
+a strategy can be given as a
+nonbranching
+\emph{alternating transition system},
+with environment moves performing transitions from
+a set of continuations $K$ to a set of states $S$,
+and conversely
+transitions from a state $S$ to a continuation $K$
+emitting a system move.
+We obtain a strategy by
+specifying an initial continuation and
+abstracting over $K$ and $S$:
+\[ \sigma : \exists \, K S \,.\, K \times
+      (K \times M \rightharpoonup S) \times
+      (S \times M \rightharpoonup K) \]
+Two strategies will be equivalent
+when simulations can be established between them.
+
+Any strategy given as a transition system
+defines a partial mapping between the positions in the game
+where the system is to play
+and the set of states $S$ used by the strategy,
+which can then be queries for the set of possible
+system moves associated with the position.
+The transition-system presentation of strategies
+is less standard in existing game semantics literature
+but is easier to relate to operational semantics
+and may be easier for formalize.
+
+\subsubsection{Compositionality}
+
+While the game for $\kw{nat}$ given above
+is extremely simple,
+the expressive power of game semantics
+comes from the way in which complex games can be derived
+from simple ones to interpret compound types.
+
+For instance,
+given two games $A$ and $B$,
+the game $A \otimes B$ is traditionally defined
+to allow $A$ and $B$ to be played side by side.
+The set of moves will be $M_{A \otimes B} = M_A + M_B$,
+and for any valid position of $A \otimes B$,
+the subsequence consisting of the moves of a constituent game
+is expected to be valid in that game.
+An interaction in the game
+$\llbracket \kw{nat} \rrbracket \otimes
+ \llbracket \kw{nat} \rrbracket$ could be:
+\[ i_2(q) \cdot \underline{i_2(42)} \cdot
+   i_1(q) \cdot \underline{i_1(7)} \]
+
+There are two other important constructions on games.
+In the game $A \multimap B$,
+we play the games $A$ and $B$ simultaneously,
+but in the game $A$ we play the role of the environment.
+In other words,
+a strategy for $A \multimap B$
+primarily implements the game $B$,
+but can also rely on an implementation of $A$.
+Finally,
+the game $!A$
+consists of multiple copies of the game $A$,
+which are instantiated at the discretion of the environment.
+
+These constructions can be used together
+to express the structure of various kinds of interactions.
+For instance,
+the type $!A \multimap B$ is traditionally used
+to model the behavior of a $\lambda$-term of type $A \rightarrow B$,
+which can access its argument multiple times.
+In the context of CompCert,
+the game $!C \multimap C$
+represents the way a C module behaves in response to an activation
+(as specified by the game $C$),
+while being able to perform any number of external calls ($!C$),
+and corresponds to the \emph{interaction semantics} defined in
+\cite{compcompcert}.
+In this work,
+we will extend this to the game $!C \multimap !C$,
+which will allow components to maintain
+persitent, hidden state across activations
+and express the behavior of reentrant calls.
+
+\subsubsection{Refinement}
+
+[alternating refinement, $\lightning$, etc]
+
+\subsubsection{Abstraction}
+
+This concept of refinement can be extended to account for
+different levels of abstraction.
+
+
+[etc]
+
+The polarisation inherent in game semantics
+can be seen to naturally encode the rely-guarantee aspects
+of the C calling convention.
+
+\subsection{Logical relations}
+
+Given an algebraic structure $\mathcal{S}$
+involving a number of operations over a carrier set,
+a \emph{logical relation}
+between two instances $S_1, S_2$ of $\mathcal{S}$
+will be a relation $R \subseteq |S_1| \times |S_2|$
+between their carrier sets,
+such that the operations of $\mathcal{S}$
+take related arguments to related results.
+We write $R : \mathcal{R}(S_1, S_2)$.
+
+\begin{example}[Logical relation of monoids]
+\label{ex:monoid}
+A \emph{monoid} is a set $A$ equipped with
+an associative binary operation $\cdot$ and
+an identity element $\epsilon$.
+A \emph{logical relation of monoids} between
+a monoid $\langle A, \cdot_A, \epsilon_A \rangle$ and
+a monoid $\langle B, \cdot_B, \epsilon_B \rangle$
+is a relation $R \subseteq A \times B$
+such that:
+\begin{gather*}
+u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B v' \\
+\epsilon_A \ifr{R} \epsilon_B
+\end{gather*}
+\end{example}
+
+Logical relations between multisorted structures
+will include one relation for each sort,
+between the corresponding carrier sets.
+In the case of structures which include type operators,
+we can associate to each base type $A$
+a relation over its carrier set $\llbracket A \rrbracket$,
+and to each type operator $T(A_1, \ldots, A_n)$
+a corresponding \emph{relator}:
+given relations $R_1, \ldots, R_n$ over
+the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$,
+the relator for $T$
+will construct a relation $T(R_1, \ldots, R_n)$
+over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
+
+\begin{figure} % fig:relators {{{
+  {\small
+  \begin{align*}
+    x \ifr{R_1 \times R_2} y \ \Leftrightarrow\  &
+      \pi_1(x) \ifr{R_1} \pi_1(y) \wedge
+      \pi_2(x) \ifr{R_2} \pi_2(y) \\
+    x \ifr{R_1 + R_2} y \ \Leftrightarrow\  &
+      (\exists \, x_1 \, y_1 \,.\,
+        x_1 \ifr{R_1} y_1 \wedge
+        x = i_1(x_1) \wedge
+        y = i_1(y_1)) \\ \vee\ &
+      (\exists \, x_2 \, y_2 \,.\,
+        x_2 \ifr{R_2} y_2 \wedge
+        x = i_2(x_2) \wedge
+        y = i_2(y_2)) \\
+    f \ifr{R_1 \rightarrow R_2} g \ \Leftrightarrow\  &
+      \forall \, x \, y \,.\,
+        x \ifr{R_1} y \Rightarrow
+        f(x) \ifr{R_2} g(y) \\
+    A \ifr{\mathcal{P}^+(R)} B \ \Leftrightarrow\  &
+      \forall \, x \in A \,.\,
+      \exists \, y \in B \,.\,
+      x \ifr{R} y \\
+    A \ifr{\mathcal{P}^-(R)} B \ \Leftrightarrow\  &
+      \forall \, y \in B \,.\,
+      \exists \, x \in A \,.\,
+      x \ifr{R} y
+  \end{align*}
+  }%
+  \caption{A selection of relators}
+  \label{fig:relators}
+\end{figure}
+%}}}
+
+Relators for some common constructions are shown in Fig.~\ref{fig:relators}.
+Note that the first requirement given in Ex.~\ref{ex:monoid}
+can be expressed as:
+\[
+  \cdot_A \ifr{R \times R \rightarrow R} \cdot_B
+\]
+
+Logical relations used to establish contextual equivalence
+are often partial equivalence relations (PER);
+by contrast, our focus is refinement,
+so that most of the relations we consider will not be symmetric.
+
+\subsection{Kripke logical relations} %{{{
+\label{sec:klr}
+
+The ways in which the components of a complex structure should be related
+are not always independent.
+To preserve compositionality while ensuring that
+components are related in a consistent way,
+we can parametrize a logical relation
+over a set $W$ of \emph{possible worlds}.
+Components related at the same world will be related
+in compatible ways.
+
+\begin{definition}
+For a given set $W$,
+a \emph{Kripke logical relation} is
+$W$-indexed family of logical relations $(R_w)_{w \in W}$.
+We write $R : \mathcal{R}_W(S_1, S_2)$
+for a Kripke logical relation between structures $S_1$ and $S_2$,
+and define the following relations:
+\begin{align*}
+  x \ifr{w \Vdash R} y &\Leftrightarrow x \ifr{R_w} y \\
+  x \ifr{\Vdash R} y &\Leftrightarrow \forall w \,.\, x \ifr{R_w} y \,.
+\end{align*}
+\end{definition}
+
+In the remainder of this section,
+we introduce some useful constructions on
+Kripke logical relations.
+
+\subsubsection{Kripke relators}
+
+A logical relation $R : \mathcal{R}(A, B)$
+can be promoted to a $W$-indexed Kripke logical relation $\lceil R \rceil$
+which ignores the index, so that $\lceil R \rceil_w = R$.
+Likewise,
+a relator
+  $F : \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n) \rightarrow \mathcal{R}(A, B)$
+can be promoted to its Kripke version
+by pointwise extension over the set of possible worlds:
+\begin{gather*}
+  \lceil F \rceil : \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n) \rightarrow \mathcal{R}_W(A, B) \\
+  \lceil F \rceil (R_1, \ldots, R_n)_w = F(R_{1,w}, \ldots, R_{n,w})
+\end{gather*}
+We use $\lceil - \rceil$ implicitly
+when a relator appears in a context where
+a Kripke logical relation is expected.
+
+\subsubsection{Modalities}
+
+Next we define Kripke relators
+allowing us to [move between possible worlds].
+
+\begin{definition}
+A \emph{Kripke frame}
+is a labelled transition system
+$\langle W, (\stackrel{l}{\leadsto})_{l \in \Lambda} \rangle$, where
+$W$ is a set of \emph{possible worlds},
+$\Lambda$ is a set of labels, and
+$(\stackrel{l}{\leadsto})_{l \in \Lambda}$ is a family of
+binary \emph{accessibility relations} over $W$.
+\end{definition}
+
+For a Kripke frame
+$\langle W, (\stackrel{l}{\leadsto})_{l \in \Lambda} \rangle$,
+we define the Kripke relators $\langle l \rangle$, $[l]$ as follows:
+\begin{align*}
+  x \ifr{w \Vdash \langle l \rangle R} y & \: \Leftrightarrow \:
+    \exists \, w' \,.\, w \stackrel{l}{\leadsto} w' \wedge
+      x \ifr{w' \Vdash R} y \\
+  x \ifr{w \Vdash [ l ] R} y & \: \Leftrightarrow \:
+    \forall \, w' \,.\, w \stackrel{l}{\leadsto} w' \Rightarrow
+      x \ifr{w' \Vdash R} y
+\end{align*}
+In the context of an unlabelled Kripke frame ($\Lambda = \{ * \}$),
+we will write $\langle * \rangle$ as $\Diamond$ and
+$[ * ]$ as $\Box$.
+
+\begin{example}[Simulation diagram]
+\label{ex:sim}
+Consider a Kripke logical relation of sets $R : \mathcal{R}_W(A, B)$,
+and two transition relations $\alpha : A \rightarrow \mathcal{P}(A)$
+and $\beta : B \rightarrow \mathcal{P}(B)$.
+The simulation diagram:
+\[
+  \begin{tikzcd}
+    s_1 \arrow[r, "\alpha"]
+        \arrow[d, dash, "R_w"'] &
+    s_1' \arrow[d, dotted, dash, "R_{w'} \quad (w \leadsto w')"] \\
+    s_2 \arrow[r, dotted, "\beta"] &
+    s_2'
+  \end{tikzcd}
+\]
+can be written as:
+\[
+  \alpha \ifr{\Vdash R \rightarrow \mathcal{P}^+(\Diamond R)} \beta \,.
+\]
+\end{example}
+
+%\subsection{CompCert}
+
+%}}}
 
 %}}}
 
