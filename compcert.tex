@@ -15,6 +15,12 @@
 \usepackage{bbm}
 % }}}
 
+% Parameters {{{
+
+\hyphenation{Comp-Cert}
+
+% }}}
+
 % Macros {{{
 
 \newtheorem{example}{Example}
@@ -153,9 +159,9 @@ used to define the semantics of CompCert languages
 correspond more closely to the internal operation of the system
 and lend themselves better
 to operational resoning and intuition,
-but involve considerations such as branching
-and a spectrum of diverse and complex bisimilarity
-and bisimulation relations as their notion of equivalence.
+but phenomena such as branching and divergence
+make it harder to pin down a single notion of equivalence \cite{blts}
+and in some cases complicates the corresponding definitions of simulations.
 
 The \emph{interaction monad} $\mathcal{I}_{M,N}(-)$
 defined in this section offers advantages of both of these models.
@@ -166,20 +172,17 @@ However,
 the accompanying monadic structure
 introduces a notion of sequential composition
 which makes it possible to define strategies
-in a compositional and operational way.
+in an operational way.
 We present this approach in \S\ref{sec:monad:def}--\S\ref{sec:monad:iter}.
 
-Using the interaction monad,
-alternating strategies for a game with
-opponent moves in $M^\kw{O}$ and
-proponent moves in $M^\kw{P}$,
-where $\kw{O}$ is expected to make the first move,
-can be modelled as computations of type
-$M^\kw{O} \rightarrow
-      \mathcal{I}_{M^\kw{P}, M^\kw{O}}(\varnothing)$.
-In \S\ref{sec:monad:games} we use a similar approach
-to formalize the more restricted notion of strategy
-which will serve as the foundation for our semantics model.
+The interaction monad,
+can be used to formalize various notions of alternating strategies.
+In \S\ref{sec:monad:games},
+we show a simple encoding of the
+innocent, well-bracketed strategies
+of a specific class of games,
+we we will use as the foundation for
+the semantic model presented in \S\ref{sec:modsem}.
 
 %}}}
 
@@ -197,7 +200,7 @@ This is modelled by the operation:
 
 Additionally,
 to accomodate specifications which permit a range of possible behaviors,
-the interaction monad is equipped with a complete refinement lattice,
+the interaction monad is equipped with a complete refinement lattice.
 Given $x, y : \mathcal{I}_{M,N}(A)$,
 their supremum $x \vee y : \mathcal{I}_{M,N}(A)$
 is the smallest specification that permits the behavior of either;
@@ -291,7 +294,7 @@ the computation with a single trace $v$:
 The binding operation corresponds to
 the sequential composition of
 a behavior $x \in \mathcal{I}_{M,N}(A)$ and
-a continuation $f : A \rightarrow \mathcal{I}_{M,N}(B)$.
+a function $f : A \rightarrow \mathcal{I}_{M,N}(B)$.
 The result is an interactive behavior in $\mathcal{I}_{M,N}(B)$ which
 contains the traces of $x$ where
 any final value $v$ has been replaced with
@@ -299,11 +302,17 @@ all possible traces in $f(v)$.
 For a single trace $t \in x$ we define $t \bind f$
 using the following rules:
 \begin{gather*}
-  m \in (m \bind f)
+  \AxiomC{}
+  \UnaryInfC{$\Delta \in (\Delta \bind f)$}
+  \DisplayProof
   \quad
-  \Delta \in (\Delta \bind f)
+  \AxiomC{}
+  \UnaryInfC{$t \in (\lightning \bind f)$}
+  \DisplayProof
   \quad
-  t \in (\lightning \bind f)
+  \AxiomC{}
+  \UnaryInfC{$m \in (m \bind f)$}
+  \DisplayProof
   \\[1ex]
   \AxiomC{$t \in f(v)$}
   \UnaryInfC{$t \in (v \bind f)$}
@@ -322,56 +331,41 @@ the monad laws hold:
 \begin{align*}
   (\kw{ret}(v) \bind f) &= f(v) \\
   (x \bind \kw{ret}) &= x \\
-  (x \bind (v \mapsto f(v) \bind g)) &= ((x \bind f) \bind g)
+  (x \bind (v \mapsto f(v) \bind g)) &= ((x \bind f) \bind g) \,.
 \end{align*}
 
 %}}}
 
-\subsection{Interaction} %{{{
+\subsection{Kleisli morphisms} %{{{
 
-The interaction primitive
-$\kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N)$
-can be defined as follows:
-\[
-    \kw{interact}(m) := \{ m, mnn \mid n \in N \}
-\]
-Note that in the trace $mnn$,
-the first occurence of $n$ denotes an input,
-whereas the second one denotes the value returned by $\kw{interact}$.
+While interactive behaviors $x : \mathcal{I}_{M,N}(A)$
+represent active computations,
+the monad's Kleisli morphisms $f : A \rightarrow \mathcal{I}_{M,N}(B)$
+can be interpreted as \emph{interactive continuations}:
+suspended computations which can be resumed by an input $v : A$.
+Kleisli morphisms can be used to
+model strategies for games in which $\kw{O}$ plays first,
+as demonstrated in \S\ref{sec:monad:games}.
+In addition,
+a Kleisli morphism
+$f : A \rightarrow \mathcal{I}_{M,N}(A)$
+with identical argument and result types
+can be interpreted as an \emph{interactive transition relation},
+as demonstrated in \S\ref{sec:monad:iter}.
 
-Conversely,
-the following operator
-will allow us to ``unfold the next step'' of a behavior
-while monitoring its interactions:
-\[
-    \kw{next} :
-       \mathcal{I}_{M,N}(X) \rightarrow
-       \mathcal{I}_{P,Q}(X + M \times (N \rightarrow \mathcal{I}_{M,N}(X)))
-\]
-When the computation $x$ silently terminates, diverges, or goes wrong,
-then $\kw{next}(x)$ will exhibit the same behavior.
-In particular:
-\[
-    \kw{next}(\kw{ret}(a)) = \kw{ret}(i_1(a))
-\]
-However,
-if $x$ attempts to interact,
-then $\kw{next}(x)$ will suspend it,
-and return the output $m \in M$ attempted by $x$,
-as well as a continuation $N \rightarrow \mathcal{I}_{M,N}(X)$
-which can be used to resume the computation
-on an input $n \in N$.
-In particular,
-\[
-    \kw{next}(\kw{interact}(m)) = \kw{ret}(i_2(m), \kw{ret}) \,.
-\]
-Writing $\delta_{mn}(x) := \{ t \mid mnt \in x \}$,
-the operator $\kw{next}$ can be defined as follows:
+The binding operation $\bind$
+and the lattice structure on $\mathcal{I}_{M,N}(A)$
+can be extended to Kleisli morphisms as follows:
 \begin{align*}
-    \kw{next}(x) = \: & \{ i_1(v) \mid v \in x \wedge v \in X \} \\
-              \cup \: & \{ r \mid r \in x \wedge r \in \{\Delta,\lightning\} \} \\
-              \cup \: & \{ i_2(m, n \mapsto \delta_{mn}(x)) \mid m \in x \wedge m \in M \} \,.
+    (f \cdot g)(a) &:= f(a) \bind g &
+    \mathbf{1}(a) &:= \kw{ret}(a) \\
+    (f \oplus g)(a) &:= f(a) \vee g(a) &
+    \mathbf{0}(a) &:= \bot
 \end{align*}
+Together with the iteraction principles
+defined in the following section,
+these operations constitute a structure
+analogous to a typed Kleene algebra \cite{tka}.
 
 %}}}
 
@@ -387,10 +381,10 @@ and the associated notion of Kleene star as:
     f^{n+1}(a) &:= f^n(a) \bind f \\
     f^*(a) &:= \bigcup_n f^n(a) \,.
 \end{align*}
-In order to recognize silent divergence in the iteration of $f$,
+In order to recognize silent divergence,
 we introduce $f_\Delta$,
 defined by the following coinductive rule.
-Note that $f_\Delta(v) = \{\Delta\}$ or $f_\Delta(v) = \bot$.
+Note that $f_\Delta(v) \sqsubseteq \{\Delta\}$.
 \[
     \AxiomC{$v' \in f(v)$}
     \AxiomC{$\Delta \in f_\Delta(v')$}
@@ -402,11 +396,10 @@ Then the non-deterministic, infinite iteration of $f$ is:
 \[
     f^\infty := (f \oplus f_\Delta)^*
 \]
-XXX define $\oplus$ (pointwise join)
 
 %}}}
 
-\subsection{Relations} %{{{
+\subsection{Sets and Functions} %{{{
 
 The powerset monad $\mathcal{P}$
 can be embedded into the monad $\mathcal{I}_{M,N}$
@@ -421,7 +414,7 @@ a relation $R : A \rightarrow \mathcal{P}(B)$
 can be interpreted as the Kleisli morphism
 $\eta^\mathcal{P}_B \circ R : A \rightarrow \mathcal{I}_{M,N}(B)$.
 
-\begin{example} \label{ex:ts}
+\begin{example} \label{ex:ts} % Transition system {{{
 Consider a transition system $\alpha = (S, I, {\rightarrow}, F)$,
 where
 $S$ is a set of states,
@@ -440,6 +433,7 @@ The behavior of $\alpha$ can be expressed as:
     : \mathcal{I}_{M,N}(A) \,.
 \]
 \end{example}
+%}}}
 
 We use a similar pattern in \S\ref{sec:modsem:def}
 to express the behavior of CompCert small-step semantics
@@ -452,26 +446,87 @@ of type $\mathcal{I}_{M,N}(A)$ is expected,
 for instance expressing $\llbracket \alpha \rrbracket$ above as
 $I \bind {\rightarrow}^\infty \bind F$.
 
+Another application of $\eta^\mathcal{P}$
+is its use for computing the \emph{preimage} of a function
+$f : A \rightarrow B$ as the Kleisli morphism
+$f^{-1} : B \rightarrow \mathcal{I}_{M,N}(A)$ defined by:
+\[
+    f^{-1}(b) = \eta^\mathcal{P}_A(\{ a \mid f(a) = b \}) \,.
+\]
+For symmetry we will sometimes implicitely promote
+$f : A \rightarrow B$ to the Kleisli morphism
+$\kw{ret} \circ f : A \rightarrow \mathcal{I}_{M,N}(B)$,
+so that for instance given two Kleisli morphisms $f$ and $g$,
+their coproduct in the Kleisli category can be expressed as:
+\[
+    f + g = (i_1^{-1} \cdot f \cdot i_1) \oplus (i_2^{-1} \cdot g \cdot i_2) \,.
+\]
+
 %}}}
 
-\subsection{Composition} \label{sec:monad:subst} %{{{
+\subsection{Interaction} %{{{
 
-Given two Kleisli morphisms for $\mathcal{I}_{M,N}$,
-namely
-$f : A \rightarrow \mathcal{I}_{M,N}(B)$ and
-$g : B \rightarrow \mathcal{I}_{M,N}(C)$,
-we can define their Kleisli composition
-in the usual way using the monad's $\bind$ operator.
-The behavior:
+The interaction primitive
+$\kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N)$
+can be defined as follows:
 \[
-    (f \cdot g)(a) := f(a) \bind g
+    \kw{interact}(m) := \{ m, mnn \mid n \in N \}
 \]
-corresponds to the sequential composition of $f$ followed by $g$.
+Note that in the trace $mnn$,
+the first occurence of $n$ denotes an input,
+whereas the second one denotes the value returned by $\kw{interact}$.
 
-Another way to compose two interactive behaviors
-is to resolve the interactions of the first one
-by invoking the second one,
-so that given
+To eliminate interaction,
+we can use the the following operator to
+to ``silently unfold'' the next action of a behavior $x$:
+\[
+    \kw{next} :
+       \mathcal{I}_{M,N}(X) \rightarrow
+       \mathcal{I}_{P,Q}(X + M \times (N \rightarrow \mathcal{I}_{M,N}(X)))
+\]
+When $x$ diverges or goes wrong, so does $\kw{next}(x)$.
+If $x$ returns a value $a$, then $\kw{next}(x)$
+has a similar behavior:
+\[
+    \kw{next}(\kw{ret}(a)) = \kw{ret}(i_1(a))
+\]
+However,
+if $x$ attempts to interact,
+then $\kw{next}(x)$ will instead
+return the output $m \in M$ attempted by $x$,
+as well as a continuation $N \rightarrow \mathcal{I}_{M,N}(X)$
+which can be used to resume the evaluation of $x$
+on a subsequent input $n \in N$:
+\[
+    \kw{next}(\kw{interact}(m)) = \kw{ret}(i_2(m), \kw{ret}) \,.
+\]
+
+\begin{definition}[Silent unfolding]
+For an interactive behavior $x : \mathcal{I}_{M,N}(A)$,
+the behavior $\kw{next}(x)$ is defined by the rules:
+\begin{gather*}
+    \AxiomC{$v \in x$}
+    \UnaryInfC{$i_1(v) \in \kw{next}(x)$}
+    \DisplayProof
+    \quad
+    \AxiomC{$\Delta \in x$}
+    \UnaryInfC{$\Delta \in \kw{next}(x)$}
+    \DisplayProof
+    \quad
+    \AxiomC{$\lightning \in x$}
+    \UnaryInfC{$\lightning \in \kw{next}(x)$}
+    \DisplayProof
+    \\[1ex]
+    \AxiomC{$m \in x$}
+    \UnaryInfC{$i_2(m, n \mapsto \delta_{mn}(x)) \in \kw{next}(x)$}
+    \DisplayProof
+\end{gather*}
+where $\delta_{mn}(x) := \{ t \mid mnt \in x \}$.
+\end{definition}
+
+Interaction introduces a second notion of composition
+besides the one induced by the $\bind$ operator:
+given
 $x : \mathcal{I}_{M,N}(A)$ and
 $f : M \rightarrow \mathcal{I}_{P,Q}(N)$,
 the behavior $x[f] : \mathcal{I}_{P,Q}(A)$
@@ -481,54 +536,47 @@ the behavior $f(m)$ will be substituted,
 and whenever $f(m)$ returns a value $n \in N$,
 the value will be used as an input to resume to evaluation of $x$.
 
+Note that $x[f]$ may introduce silent divergence;
+for instance:
+\[
+    \kw{interact}^\infty(*) [\kw{ret}] = \{ \Delta \} \,,
+\]
+even though neither $\kw{interact}^\infty(*)$
+nor $\kw{ret}$ silently diverge on their own.
+To formulate the definition of $x[f]$,
+we will use an interactive transition system
+based on $\kw{next}$,
+over states of type $\mathcal{I}_{M,N}(A) + A$.
+A state $i_1(\hat{x})$ denotes that
+the evaluation of $x$ is still active,
+with $\hat{x}$ the remaining suffix of its behavior.
+A state $i_2(v)$ denotes that
+$x$ has terminated with the return value $v$.
+
 \begin{definition}[Substitution]
 For a type $A$ and
 an interactive continuation $f : M \rightarrow \mathcal{I}_{P,Q}(N)$,
 we define
-$[f] : \mathcal{I}_{M,N}(A) + A \rightarrow
+$\vec{f}_A : \mathcal{I}_{M,N}(A) + A \rightarrow
  \mathcal{I}_{P,Q}(\mathcal{I}_{M,N}(A) + A)$
-as the transition system:
+as the interactive transition system:
 \begin{align*}
-  [f](s) := i_1^{-1}(s) \bind \kw{next} \bind
-      [i_2, (m, k) \mapsto f(m) \bind k \bind i_1]
+  \vec{f}_A(s) := i_1^{-1}(s) \bind \kw{next} \bind
+      [i_2, (m, k) \mapsto f(m) \bind n \mapsto \kw{ret}(i_1(k(n)))]
 %        (&i_1^{-1} \bind i_2) \\ {} \oplus
 %        (&i_2^{-1} \bind (m, k) \mapsto f(m) \bind k \bind i_1)
 \end{align*}
 Then for a behavior $x : \mathcal{I}_{M,N}(A)$,
 the \emph{substitution} $x[f] : \mathcal{I}_{P,Q}(A)$ is defined as:
 \[
-    x[f] := i_1(x) \bind [f]^\infty \bind i_2^{-1} \,,
+    x[f] := \kw{ret}(i_1(x)) \bind \vec{f}_A^\infty \bind i_2^{-1} \,.
 \]
-and for $g : A \rightarrow \mathcal{I}_{M,N}(B)$,
+For $g : A \rightarrow \mathcal{I}_{M,N}(B)$,
 the \emph{interactive composition}
-$g \circ f : A \rightarrow \mathcal{I}_{P,Q}(B)$ is defined as:
+$g \odot f : A \rightarrow \mathcal{I}_{P,Q}(B)$ is defined as:
 \[
-    (g \circ f)(a) := g(a) [f] \,.
+    (g \odot f)(a) := g(a) [f] \,.
 \]
-\end{definition}
-
-[XXX find another symbol than $\circ$ b/c confusing
-wrt. function composition, which can also apply.
-Or just don't define $\circ$ just $x[f]$.]
-
-The definition of $x[f]$ works by iterating $\kw{next}$
-over a state $s : \mathcal{I}_{M,N}(A)$ initialized with $x$.
-If the next action of $s$ is to return a value $v$,
-then $x[f]$ returns that value as well,
-but if $s$ performs an output $m$,
-then $x[f]$ evalutes $f(m)$,
-and passes any result $n$ to the continuation $k$
-in order to compute the next state.
-
-To let a behavior interact with itself,
-we can iterate interactive composition and
-define $f^\oast$,
-which is similar with respect to the interactive composition $g \circ f$
-to the infinite iteration $f^\infty$ with respect to Kleene composition.
-
-\begin{definition}[Interactive iteration]
-[A bit more involved because we need to keep a stack of continuations.
-Maybe define in terms of traces if that's more transparent.]
 \end{definition}
 
 [Properties:
@@ -537,6 +585,22 @@ Maybe define in terms of traces if that's more transparent.]
 \item $x[g \circ f] = x[g][f]$
 \end{itemize}
 etc.]
+
+Similarly to the way
+the Kleene composition $f \cdot g$ can be iterated as $f^\infty$,
+we can let a behavior interact with itself
+by iterating the interactive composition $f \odot g$ as $f^\oast$.
+For $f : M \rightarrow \mathcal{I}_{M,N}(N)$,
+The transition system used to defined $f^\oast$
+uses states of type $(N \rightarrow \mathcal{I}_{M,N}(N)$
+
+\begin{definition}[Interactive iteration]
+[A bit more involved because we need to keep a stack of continuations.
+Maybe define in terms of traces if that's more transparent.]
+\end{definition}
+
+%}}}
+
 
 %}}}
 
@@ -992,8 +1056,8 @@ of the question as described in Table~\ref{tbl:li}).]
 \subsection{Refinement and Abstraction} %{{{
 \label{sec:modsem:ref}
 
-The correctness of CompCert is expressed in terms of
-a so-called \emph{backward simulations}
+The correctness of CompCert is established in terms of
+a \emph{backward simulation}
 between the small-step semantics of the source and target programs.
 In turn, backward simulations
 are shown to be sound with respect to trace containement.
@@ -1064,11 +1128,10 @@ if the following conditions hold:
 We will write $X_1 \ge_R X_2$.
 \end{definition}
 
-More generally,
-we will say that a state $s$ \emph{goes wrong}
+A state $s$ \emph{goes wrong}
 if it is neither an external nor a final state,
 and if there no transition $s \rightarrow s'$;
-we will say that a state $s$ is \emph{safe}
+a state $s$ is \emph{safe}
 if no state that goes wrong is reachable from $s$
 by the transition relation $\rightarrow$.
 Safe states will be denoted using the predicate $\kw{safe}(s)$.
@@ -1124,7 +1187,7 @@ satisfying the following properties:
   such that one the following conditions hold:
   \[
     s_1 \rightarrow^+ s_1' \,, \quad \mbox{or} \quad
-    s_1 \rightarrow^* s_1' \wedge i' < i \,.
+    s_1 \rightarrow^* s_1' \:\wedge\: i' < i \,.
   \]
 \end{description}
 We will write $L_1 \ge_{\mathbb{C}_A \rightarrow \mathbb{C}_B} L_2$.
