@@ -5,7 +5,7 @@ all: lwcc.pdf slides.pdf compcert.pdf
 %.aux: %.tex
 	pdflatex $* </dev/null || true
 
-%.bbl: %.bib %.aux
+%.bbl: lwcc.bib %.aux
 	bibtex $*
 	pdflatex $* </dev/null || true
 
@@ -18,3 +18,4 @@ clean:
 
 lwcc.aux: intro.tex ideas.tex rbgs.tex modsem.tex cklr.tex
 lwcc.pdf: lwcc.bbl
+compcert.pdf: compcert.bbl
