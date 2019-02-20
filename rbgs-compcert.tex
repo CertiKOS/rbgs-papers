@@ -761,7 +761,7 @@ a prefix-closed set of traces:
 Note that since any trace is a prefix of $\lightning$,
 a behavior which admits a trace ending with $\lightning$
 will also admit all possible interactions
-sharing the same initial segment. 
+sharing the same initial segment.
 This allows us to define our notion of refinement
 as simple trace containment.
 For $x, y \in \mathcal{I}_{M,N}(X)$, refinement is defined as:
@@ -1918,9 +1918,6 @@ etc.
       \kw{block} \times \mathbb{Z} \times \mathbb{Z}
   \end{gather*}
   \begin{align*}
-    \kw{Genv.init\_mem} &:
-        \kw{program} \rightarrow \kw{mem}
-    \\
     \kw{Mem.alloc} &:
       \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
       \kw{mem} \times \kw{block}
@@ -1983,21 +1980,95 @@ the simulation relations used by Compcert
 usually allow $\kw{Vundef}$
 to be refined into a more concrete value.
 
-From the explicit representation of
-block identifiers and offsets as integers,
-it may seem that a user of the memory model
-is free to manipulate and rely on this encoding,
-for instance using a conventional assignment of block identifiers
-for a given purpose.
-However,
+The memory model is shared by all of the languages in CompCert.
+The states used to define their semantics consist of
+a memory component $m : \kw{mem}$,
+together with language-specific components
+built mainly out of additional run-time values ($\kw{val}$).
+For higher-level languages,
+the language-specific component may consist of
+a control stack with local environments for each activation;
+for lower-level languages,
+the additional component will mainly contain
+the values stored in various registers.
+Similarly,
+our models of cross-module communication
+will be centered around a memory component,
+accompanied by language-specific information
+about function call or return events.
+
+%}}}
+
+\subsection{Language Interfaces} %{{{
+
+\begin{table*} % tbl:li Language interfaces {{{
+  \begin{tabular}{clll}
+    \hline
+    Name & Questions & Answers & Description \\
+    \hline
+    $\mathcal{C}$ & $(\kw{id}, \kw{sg}, \vec{v}, m)$ & $(v', m')$ &
+      C-style function calls (Clight--RTL) \\
+    $\mathcal{L}$ & $(\kw{id}, \kw{sg}, \kw{ls}, m)$ & $(\kw{ls}', m')$ &
+      Arguments passed in abstract locations (LTL, Linear) \\
+    $\mathcal{M}$ & $(\kw{id}, \kw{sp},\kw{ra},\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Arguments passed through the in-memory stack (Mach) \\
+    $\mathcal{A}$ & $(\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Assembly-style control transfers (Asm) \\
+    \hline
+  \end{tabular}
+  \caption{Language interfaces for the various Compcert intermediate languages.}
+  \label{tbl:li}
+\end{table*}
+%}}}
+
+The elementary games we use to model
+the cross-module interactions of CompCert languages
+are shown in Table~\ref{tbl:li}.
+Moves correspond to control transfers
+between a module and its environment:
+questions correspond to function invocations;
+answers return control to the caller.
+
+At the source level ($\mathcal{C}$),
+questions consist of
+the name and signature of the function being invoked,
+the values of its arguments,
+and the state of the memory at the point of entry;
+answers
+consist of the function's return value
+and the state of the memory at the point of exit.
+This language interface is used for Clight and
+for the majority of CompCert's intermediate languages.
+
+However, starting with LTL, [...]
+Once we reach Asm ($\mathcal{A}$),
+queries and replies simply specify
+the values of registers and the state of the memory.
+
+%}}}
+
+\subsection{Simulation Relations} %{{{
+
+[Simulation relations account for refinement and abstraction,
+for the change in structure between the states of different languages.
+Simulation convention is the ``externally visible'' component of that.
+Since core of states is mem,
+core of simulation relations and conventions
+are logical relation on memories.
+Specific cases used in CompCert are
+injections and extensions (explain).
+We're going to generalize to CKLR.]
+
+Although block identifiers and offsets
+are concretely represented as integers,
 there is an implicit expectation throughout CompCert
 that constructions using the memory model
 will not depend on specific block identities
-or absolute pointer offsets,
-among other conventions.
-Concretely,
-this translates to the fact that such constructions
-are compatible with \emph{memory extensions} and \emph{memory injections}.
+or absolute pointer offsets.
+[Explain connection to relational parametricity.]
+
+{\color{gray}
+--- [Some former material in the rest of this section:] ---
 
 Besides equality,
 the simulation proofs used
@@ -2060,49 +2131,7 @@ are expressed in terms of a unified relational language,
 it will be possible to mechanize these proofs
 to some extent.
 
-%}}}
-
-\subsection{Language Semantics} %{{{
-\label{sec:langint}
-
-\begin{table*} % tbl:li Language interfaces {{{
-  \begin{tabular}{llll}
-    \hline
-    Name & Questions & Answers & Description \\
-    \hline
-    $\mathcal{C}$ & $(\kw{id}, \kw{sg}, \vec{v}, m)$ & $(v', m')$ &
-      C-style function calls \\
-    $\mathcal{L}$ & $(\kw{id}, \kw{sg}, \kw{ls}, m)$ & $(\kw{ls}', m')$ &
-      Arguments are passed in abstract locations (LTL, Linear) \\
-    $\mathcal{M}$ & $(\kw{id}, \kw{sp},\kw{ra},\kw{rs}, m)$ & $(\kw{rs}', m')$ &
-      Arguments are passed through the in-memory stack (Mach) \\
-    $\mathcal{A}$ & $(\kw{rs}, m)$ & $(\kw{rs}', m')$ &
-      Assembly-style control transfers (Asm) \\
-    \hline
-  \end{tabular}
-  \caption{Language interfaces for the various Compcert intermediate languages.}
-  \label{tbl:li}
-\end{table*}
-%}}}
-
-Our model uses elementary games to specify the interface
-of each language under consideration.
-Questions will be control transfers corresponding to function calls,
-whereas answers will return control to the caller.
-
-Table~\ref{tbl:li}
-shows the language interfaces used by Composable Compcert.
-At the level of C,
-questions consist of
-the name and signature of the function being invoked,
-the values of its arguments,
-and the state of the memory at the point of entry;
-answers
-consist of the function's return value
-and the state of the memory at the point of exit.
-At the assembly level,
-both queries and replies specifies
-the values of registers and the state of the memory.
+}
 
 %}}}
 
