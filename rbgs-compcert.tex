@@ -663,9 +663,11 @@ the accompanying monadic structure
 introduces a notion of sequential composition
 which makes it possible to define strategies
 in an operational way.
-We present this approach in \S\ref{sec:monad:def}--\S\ref{sec:monad:iter}.
+We present this approach in \S\ref{sec:monad:def}--\S\ref{sec:monad:int}.
 
-The interaction monad,
+[Something about simulations and abstraction in \S\ref{sec:monad:abs}]
+
+The interaction monad
 can be used to formalize various notions of alternating strategies.
 In \S\ref{sec:monad:games},
 we show a simple encoding of the
@@ -679,7 +681,7 @@ the semantic model presented in \S\ref{sec:modsem}.
 \subsection{Overview} \label{sec:monad:overview} %{{{
 
 The interaction monad specifies
-the behavior of a system which interacts with its environment.
+the behavior of an open system.
 At any point,
 the system can perform an output $m \in M$ and
 wait for a subsequent input $n \in N$ from the environment.
@@ -692,11 +694,11 @@ Additionally,
 to accomodate specifications which permit a range of possible behaviors,
 the interaction monad is equipped with a complete refinement lattice.
 Given $x, y : \mathcal{I}_{M,N}(A)$,
-their supremum $x \vee y : \mathcal{I}_{M,N}(A)$
+their supremum $x \sqcup y : \mathcal{I}_{M,N}(A)$
 is the smallest specification that permits the behavior of either;
 it can also be interpreted as non-deterministic choice
 of the system.
-Conversely, $x \wedge y : \mathcal{I}_{M,N}(A)$ can be interpreted as
+Conversely, $x \sqcap y : \mathcal{I}_{M,N}(A)$ can be interpreted as
 the largest specification requiring that $x$ and $y$ both be satisfied.
 The least element $\bot$
 is a specification that can never be satisfied;
@@ -724,9 +726,11 @@ or the undefined behavior $\top$.
 \subsection{Definition} \label{sec:monad:def} %{{{
 
 Following the traditional game semantics approach,
-we formalize interactive behaviors as prefix-closed sets of plays.
-We do not restrict the move available to $\kw{O}$,
-so the plays we will consider are odd-length sequences of moves.
+we formalize interactive behaviors as prefix-closed sets of traces.
+We restrict our focus to
+alternating games which do not put any restriction on $\kw{O}$,
+so the traces we will consider are odd-length sequences of moves
+representing the interaction between the system and the environment.
 To support the monadic structure and account
 for silent divergence and undefined behaviors,
 we augment the set of outputs with the
@@ -814,7 +818,7 @@ using the following rules:
 \end{gather*}
 Then $x \bind f$ can be defined as:
 \[
-    (x \bind f) = \bigcup_{t \in x} (t \bind f)
+    (x \bind f) = \bigsqcup_{t \in x} (t \bind f)
 \]
 It is straightforward to verify that
 the monad laws hold:
@@ -823,10 +827,6 @@ the monad laws hold:
   (x \bind \kw{ret}) &= x \\
   (x \bind (v \mapsto f(v) \bind g)) &= ((x \bind f) \bind g) \,.
 \end{align*}
-
-%}}}
-
-\subsection{Kleisli morphisms} \label{sec:monad:kmor} %{{{
 
 While interactive behaviors $x : \mathcal{I}_{M,N}(A)$
 represent active computations,
@@ -840,7 +840,7 @@ In addition,
 a Kleisli morphism
 $f : A \rightarrow \mathcal{I}_{M,N}(A)$
 with identical argument and result types
-can be interpreted as an \emph{interactive transition relation},
+can be interpreted as an \emph{interactive transition system},
 as demonstrated in \S\ref{sec:monad:powerset}.
 
 The binding operation $\bind$
@@ -849,10 +849,10 @@ can be extended to Kleisli morphisms as follows:
 \begin{align*}
     (f \cdot g)(a) &:= f(a) \bind g &
     \mathbf{1}(a) &:= \kw{ret}(a) \\
-    (f \oplus g)(a) &:= f(a) \vee g(a) &
+    (f \oplus g)(a) &:= f(a) \sqcup g(a) &
     \mathbf{0}(a) &:= \bot
 \end{align*}
-Together with the iteraction principles
+Together with the iteration principles
 defined in the following section,
 these operations constitute a structure
 analogous to a typed Kleene algebra \cite{tka}.
@@ -869,7 +869,7 @@ and the associated notion of Kleene star as:
 \begin{align*}
     f^0(a) &:= \kw{ret}(a) \\
     f^{n+1}(a) &:= f^n(a) \bind f \\
-    f^*(a) &:= \bigcup_n f^n(a) \,.
+    f^*(a) &:= \bigsqcup_n f^n(a) \,.
 \end{align*}
 In order to recognize silent divergence,
 we introduce $f_\Delta$,
@@ -901,7 +901,7 @@ defined as:
 \]
 In particular,
 a relation $R : A \rightarrow \mathcal{P}(B)$
-can be interpreted as the Kleisli morphism
+can be interpreted as
 $\eta^\mathcal{P}_B \circ R : A \rightarrow \mathcal{I}_{M,N}(B)$.
 
 \begin{example} \label{ex:ts} % Transition system {{{
@@ -936,25 +936,27 @@ of type $\mathcal{I}_{M,N}(A)$ is expected,
 for instance expressing $\llbracket \alpha \rrbracket$ above as
 $I \bind {\rightarrow}^\infty \bind F$.
 
-Another application of $\eta^\mathcal{P}$
-is its use for computing the \emph{preimage} of a function
-$f : A \rightarrow B$ as the Kleisli morphism
-$f^{-1} : B \rightarrow \mathcal{I}_{M,N}(A)$ defined by:
+Given a function $f : A \rightarrow B$,
+its \emph{preimage}
+$f^{-1} : B \rightarrow \mathcal{I}_{M,N}(A)$
+can be defined as:
 \[
     f^{-1}(b) = \eta^\mathcal{P}_A(\{ a \mid f(a) = b \}) \,.
 \]
-For symmetry we will sometimes implicitely promote
+For instance, given two Kleisli morphisms
+$f : A \rightarrow \mathcal{I}_{M,N}(X)$ and
+$g : B \rightarrow \mathcal{I}_{M,N}(X)$,
+their copairing $[f, g] : A + B \rightarrow \mathcal{I}_{M,N}(X)$
+in the Kleisli category can be expressed as
+$(i_1^{-1} \cdot f) \oplus (i_2^{-1} \cdot g)$.
+
+For the sake of symmetry we will sometimes implicitely promote
 $f : A \rightarrow B$ to the Kleisli morphism
-$\kw{ret} \circ f : A \rightarrow \mathcal{I}_{M,N}(B)$,
-so that for instance given two Kleisli morphisms $f$ and $g$,
-their coproduct in the Kleisli category can be expressed as:
-\[
-    f + g = (i_1^{-1} \cdot f \cdot i_1) \oplus (i_2^{-1} \cdot g \cdot i_2) \,.
-\]
+$\kw{ret} \circ f : A \rightarrow \mathcal{I}_{M,N}(B)$.
 
 %}}}
 
-\subsection{Interaction} %{{{
+\subsection{Interaction} \label{sec:monad:int} %{{{
 
 The interaction primitive
 $\kw{interact} : M \rightarrow \mathcal{I}_{M,N}(N)$
@@ -968,27 +970,26 @@ whereas the second one denotes the value returned by $\kw{interact}$.
 
 To eliminate interaction,
 we can use the the following operator to
-to ``silently unfold'' the next action of a behavior $x$:
+``silently unfold'' the next action of a behavior $x$:
 \[
     \kw{next} :
        \mathcal{I}_{M,N}(X) \rightarrow
        \mathcal{I}_{P,Q}(X + M \times (N \rightarrow \mathcal{I}_{M,N}(X)))
 \]
 When $x$ diverges or goes wrong, so does $\kw{next}(x)$.
-If $x$ returns a value $a$, then $\kw{next}(x)$
-has a similar behavior:
+If $x$ returns a value $a$, then $\kw{next}(x)$ behaves as:
 \[
     \kw{next}(\kw{ret}(a)) = \kw{ret}(i_1(a))
 \]
 However,
 if $x$ attempts to interact,
 then $\kw{next}(x)$ will instead
-return the output $m \in M$ attempted by $x$,
+return the corresponding output $m \in M$,
 as well as a continuation $N \rightarrow \mathcal{I}_{M,N}(X)$
 which can be used to resume the evaluation of $x$
 on a subsequent input $n \in N$:
 \[
-    \kw{next}(\kw{interact}(m) \bind f) = \kw{ret}(i_2(m), f) \,.
+    \kw{next}(\kw{interact}(m) \bind f) = \kw{ret}(i_2(m, f)) \,.
 \]
 
 \begin{definition}[Silent unfolding]
@@ -1022,8 +1023,8 @@ $f : M \rightarrow \mathcal{I}_{P,Q}(N)$,
 the behavior $x[f] : \mathcal{I}_{P,Q}(A)$
 will proceed according to $x$,
 but whenever $x$ attempts to perform an output $m \in M$,
-the behavior $f(m)$ will be substituted,
-and whenever $f(m)$ returns a value $n \in N$,
+the behavior $f(m)$ will be substituted;
+if $f(m)$ returns a value $n \in N$,
 the value will be used as an input to resume to evaluation of $x$.
 
 Note that $x[f]$ may introduce silent divergence;
@@ -1041,7 +1042,7 @@ A state $i_1(\hat{x})$ denotes that
 the evaluation of $x$ is still active,
 with $\hat{x}$ the remaining suffix of its behavior.
 A state $i_2(v)$ denotes that
-$x$ has terminated with the return value $v$.
+$x$ has terminated with the result $v$.
 
 \begin{definition}[Substitution]
 For a type $A$ and
@@ -1096,9 +1097,7 @@ given that it is the identity for $\odot$?]
 
 \subsection{Abstraction} \label{sec:monad:abs} %{{{
 
-We now consider the problem of relating the interactive behaviors
-$x_1 : \mathcal{I}_{M_1,N_1}(X_1)$ and
-$x_2 : \mathcal{I}_{M_2,N_2}(X_2)$
+We now consider the problem of relating interactive behaviors
 whose inputs, outputs, and results are taken in different sets.
 We will use Kripke logical relations to relate these components,
 so that the correspondance between the two interactions
@@ -1137,7 +1136,7 @@ where $R \cdot S$ denotes the Kripke relation defined by:
       (w_1 \Vdash R) \cdot (w_2 \Vdash S) \,.
 \]
 \item
-Given
+Given two simulation conventions
 $\mathbb{R} = \langle W, \leadsto, R_M, R_N, R_V \rangle$ and
 $\mathbb{R}' = \langle W', \leadsto, R_M', R_N', R_V' \rangle$,
 we say that $\mathbb{R}$ \emph{refines} $\mathbb{R}'$
@@ -1157,7 +1156,7 @@ when:
 \end{itemize}
 \end{definition}
 
-Simulation conventions relate interactions which have the same ``shape'',
+Simulation conventions relate interactions which have the same \emph{shape},
 in the sense that there is a one-to-one correspondance between
 the inputs and outputs of $x_1$ and $x_2$.
 Nevertheless,
@@ -1200,28 +1199,28 @@ For a simulation convention $\mathbb{R} = \langle R_M, R_N, R_X \rangle$
 and a behavior $x_2 : \mathcal{I}_{M_2, N_2}(X_2)$,
 the behavior $\mathbb{R}^*_w(x_2)$ is defined by the rules:
 \begin{gather*}
-  \AxiomC{$(\varepsilon, v_2) \in x_2$}
+  \AxiomC{$v_2 \in x_2$}
   \AxiomC{$v_1 \ifr{w \Vdash R_X} v_2$}
-  \BinaryInfC{$(\varepsilon, v_1) \in \mathbb{R}^*_w(x_2)$}
+  \BinaryInfC{$v_1 \in \mathbb{R}^*_w(x_2)$}
   \DisplayProof
   \qquad
-  \AxiomC{$(\varepsilon, \Delta) \in x_2$}
-  \UnaryInfC{$(\varepsilon, \Delta) \in \mathbb{R}^*_w(x_2)$}
+  \AxiomC{$\Delta \in x_2$}
+  \UnaryInfC{$\Delta \in \mathbb{R}^*_w(x_2)$}
   \DisplayProof
   \qquad
-  \AxiomC{$(\varepsilon, \lightning) \in x_2$}
+  \AxiomC{$\lightning \in x_2$}
   \UnaryInfC{$t \in \mathbb{R}^*_w(x_2)$}
   \DisplayProof
   \\[1ex]
-  \AxiomC{$(\varepsilon, m_2) \in x_2$}
+  \AxiomC{$m_2 \in x_2$}
   \AxiomC{$w \leadsto w'$}
   \AxiomC{$m_1 \ifr{w' \Vdash R_M} m_2$}
-  \TrinaryInfC{$(\varepsilon, m_1) \in \mathbb{R}^*_w(x_2)$}
+  \TrinaryInfC{$m_1 \in \mathbb{R}^*_w(x_2)$}
   \DisplayProof
   \\[1ex]
   \AxiomC{$
     \begin{array}{c}
-      (\varepsilon, m_2) \in x_2 \qquad
+      m_2 \in x_2 \qquad
       w \leadsto w' \qquad
       m_1 \ifr{w' \Vdash R_M} m_2
       \\[.3ex]
@@ -1285,14 +1284,15 @@ $\le_\mathbb{R}$ a \emph{relator} \cite{something}:
 \end{align*}
 In particular, $\le_\mathbb{R}$ is compatible with $\sqsubseteq$
 in the following sense:
-\begin{align*}
-    {\sqsubseteq} \cdot {\le}_\mathbb{R} &\:\subseteq\: {\le}_\mathbb{R} \\
-    {\le}_\mathbb{R} \cdot {\sqsubseteq} &\:\subseteq\: {\le}_\mathbb{R}
-\end{align*}
+\[
+    {\sqsubseteq} \cdot {\le}_\mathbb{R} =
+    {\le}_\mathbb{R} \cdot {\sqsubseteq} =
+    {\le}_\mathbb{R}
+\]
 
 We can now formulate the following properties,
 which describe the behavior of the monad's primitives
-with respect to abstraction:
+with respect to abstraction and refinement:
 \begin{align*}
   \kw{ret} &:
     {}\Vdash R_X \rightarrow \mathcal{I}^\le_{R_M,R_N}(R_X) \\
@@ -1358,7 +1358,7 @@ Connect to HON games]
 
 %}}}
 
-\section{Semantics of CompCert Modules} %{{{
+\section{Semantics of CompCert Modules} \label{sec:modsem} %{{{
 
 % preamble {{{
 
@@ -1380,7 +1380,7 @@ refines that of the source program.
 
 The semantics of CompCert languages
 are given as labeled transition systems (LTS)
-modeling the execution of a whole program's \kw{int main()} function.
+modeling the execution of a whole program's \texttt{int main()} function.
 The semantics of external calls
 is a global parameter common to all languages,
 and may use a fixed set of actions as a rudimentary model
@@ -1393,21 +1393,21 @@ are shown to be sound with respect to trace containement.
 CompCert, however,
 does not attempt to model the semantics of open modules,
 nor to define a semantic notion of module composition.
-We remedy this using the following approach:
+We achive this using the following approach:
 \begin{itemize}
 \item Following Compositional CompCert \cite{compcompcert},
-  we extend CompCert's LTS model
+  we modify CompCert's LTS model
   to explicitely account for the two-way interaction
   between a program module and its environment
   in terms of control transfers associated with
   function calls and returns.
-\item We further extend this approach by
+\item We generalize this model further by
   using elementary games to parametrize the LTS model, and
   using refinement conventions to parametrize
   CompCert's notions of simulations.
   Games specify the form of function calls and returns,
   whereas refinement conventions serve to express
-  a generalized calling convention between the various
+  generalized calling conventions between the various
   languages involved in the compilation process.
 \end{itemize}
 
@@ -1433,13 +1433,12 @@ as labeled transition systems (LTS).
 In the original CompCert,
 a labeled transition system is given as
 a set of states $S$,
-a set of initial states
-$I \subseteq S$,
+a subset $I \subseteq S$ of initial states,
 a labeled transition relation
 ${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
 and a set
 $F \subseteq S \times \kw{int}$
-of final states associated with an integer result.
+of final states associated with integer results.
 Compcert LTS support a notion of interaction with the environment
 in the form of event traces:
 a transition $s \stackrel{t}{\rightarrow} s'$,
@@ -1458,8 +1457,8 @@ at the level of transition systems.
 
 \begin{definition}[Small-step semantics]
 Given two elementary games $A, B$,
-a \emph{small-step semantics} for the game $A \rightarrow B$
-is a tuple $L = \langle S, \rightarrow, I, X, R, F \rangle$.
+a \emph{small-step semantics} for the game $A \Rightarrow B$
+is a tuple $L = \langle S, \rightarrow, I, X, Y, F \rangle$.
 $S$ is a set of states,
 with ${\rightarrow} \subseteq S \times S$ a \emph{transition relation} on $S$.
 The handling of incoming calls is specified by
@@ -1471,7 +1470,7 @@ The handling of external calls is specified by
 $X \subseteq S \times M_A^\kw{Q}$,
 which identifies \emph{external states} together with
 corresponding questions of $A$ directed to the environment, and
-$R \subseteq S \times M_A^\kw{A} \times S$,
+$Y \subseteq S \times M_A^\kw{A} \times S$,
 which is used to select a \emph{resumption state}
 based on the outcome of the external call
 after the environment returns control to the module.
@@ -1486,7 +1485,7 @@ This convention fits the context of
 language semantics defined through inductive sets of rules:
 the behavior of a state for which there are no rules is undefined.
 For a small-step semantics
-$L = \langle S, {\rightarrow}, I, X, R, F \rangle : \kw{semantics}(A,B)$,
+$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : \kw{semantics}(A,B)$,
 we recognize those states using the predicate:
 \[
     \kw{stuck}_L(s) :=
@@ -1503,8 +1502,8 @@ defined as follows:
   \kw{step}_L(s) :=
     \begin{cases}
       \top & \mbox{if } \kw{stuck}(s) \\
-      {\rightarrow}(s) \vee
-      (X(s) \bind \kw{interact} \bind R(s)) & \mbox{otherwise,}
+      {\rightarrow}(s) \sqcup
+      (X(s) \bind \kw{interact} \bind Y(s)) & \mbox{otherwise,}
    \end{cases}
 \]
 The overall external behavior of $L$
@@ -1555,7 +1554,7 @@ In this section,
 we define backward simulations for our updated notion
 of small-step semantics,
 and show that they are sound with respect to
-the refinement of their behaviors.
+refinement and abstraction of interactive behaviors.
 
 % Footnote pointing out difference w/ "Fw & Bw Sim" terminology?
 A backward simulation asserts that any transition in the target program
@@ -1571,8 +1570,8 @@ whenever a potentially empty sequence of source transitions is used.
 
 In our setting,
 the definition of backward simulations needs to be extended
-to take into account the ways in which the questions and answers
-at the source and target level ought to be related.
+to take into account the correspondance between
+the source and target questions and answers
 This can be specified using the notion of simulation convention
 defined in \S\ref{sec:monad:abs}:
 a simulation between the small-step semantics
@@ -1598,7 +1597,6 @@ This rule is slightly altered to take into account the convention that
 empty sets of states correspond to undefined behaviors,
 so that if the source set is empty,
 no restrictions are placed on the target state.
-This is formalizes as follows.
 
 \begin{definition}[Backward simulation between sets of states]
 We say that $R : \mathcal{R}(S_1, S_2)$ is a
@@ -1629,16 +1627,16 @@ With this we are ready to define backward simulations.
 
 \begin{definition}[Backward simulation]
 Given
-two simulation conventions
 $\mathbb{C}_A : \mathcal{R}(A_1, A_2)$ and
-$\mathbb{C}_B : \mathcal{R}(B_1, B_2)$,
+$\mathbb{C}_B : \mathcal{R}(B_1, B_2)$
+two simulation conventions,
 and given
 $L_1 : \kw{semantics}(A_1, B_1)$ and
 $L_2 : \kw{semantics}(A_2, B_2)$
 two small-step semantics,
 a \emph{backward simulation} between $L_1$ and $L_2$
 consists in a
-well-founded order $(I, <)$
+well-founded relation $(I, <)$
 together with a family of relations
 $(R_i : \mathcal{R}_{W_B}(S_1, S_2))_{i \in I}$
 satisfying the following properties:
@@ -1656,7 +1654,7 @@ satisfying the following properties:
   such that $q_1 \ifr{w' \Vdash {\preceq}_A^\kw{Q}} q_2$.
   In addition, for all corresponding answers
   $r_1 \ifr{w' \Vdash {\preceq}_A^\kw{A}} r_2$,
-  the condition $R_1(s_1, r_1) \ge_{\exists i . R_i} R_2(s_2, r_2)$ holds.
+  the condition $Y_1(s_1, r_1) \ge_{\exists i . R_i} Y_2(s_2, r_2)$ holds.
 \item[Final states]
   For all $s_1 \ifr{w \Vdash R_i} s_2$
   with $s_1$ a safe state, and
@@ -1680,7 +1678,7 @@ satisfying the following properties:
     s_1 \rightarrow^* s_1' \:\wedge\: i' < i \,.
   \]
 \end{description}
-We will write $L_1 \ge_{\mathbb{C}_A \rightarrow \mathbb{C}_B} L_2$.
+We will write $L_1 \ge_{\mathbb{C}_A \Rightarrow \mathbb{C}_B} L_2$.
 \end{definition}
 
 [Maybe short commentary to unpack some of that.]
@@ -1702,7 +1700,7 @@ In the rest of this section we show that
 backward simulations between small-step semantics
 are sound with respect to
 our much simpler notion of refinement
-over interactive computations.
+over interactive behaviors.
 
 [Do that.]
 
@@ -1713,8 +1711,8 @@ over interactive computations.
 Given two semantic objects
 $\sigma_1 : B \Rightarrow C$ and
 $\sigma_2 : A \Rightarrow B$,
-their categorical composition $\sigma_1 \odot \sigma_2 : A \Rightarrow C$,
-per the definition in \S\ref{sec:monad:kmor},
+their interactive composition $\sigma_1 \odot \sigma_2 : A \Rightarrow C$,
+per the definition in \S\ref{sec:monad:int},
 computes the behavior of $\sigma_1$ when $\sigma_2$ is used
 to interpret its external calls.
 In addition,
@@ -1730,12 +1728,10 @@ in a mutually recursive fashion.
 
 \begin{definition}[Horizontal composition]
 For an elementary game $A$,
-the \emph{horizontal composition} of the interactive computations
-$\sigma_1, \sigma_2 : M_A^\kw{Q} \rightarrow
- \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(M_A^\kw{A})$
-is the interactive computation
-$\sigma_1 \bullet \sigma_2 : M_A^\kw{Q} \rightarrow
- \mathcal{I}_{M_A^\kw{Q},M_A^\kw{A}}(M_A^\kw{A})$
+the \emph{horizontal composition} of the interactive behaviors
+$\sigma_1, \sigma_2 : A \Rightarrow A$
+is the interactive behavior
+$\sigma_1 \bullet \sigma_2 : A \Rightarrow A$
 defined as:
 \[
     \sigma_1 \bullet \sigma_2 :=
@@ -1823,8 +1819,10 @@ interact with their respective environments.
 The semantics of CompCert $\kw{Clight}$ and $\kw{Asm}$ programs
 can then be expressed as interactive behaviors of types:
 \[
-    \kw{Clight}(p_s) : \mathcal{C} \Rightarrow \mathcal{C} \,, \qquad
-    \kw{Asm}(p_t) : \mathcal{A} \Rightarrow \mathcal{A} \,.
+    \kw{Clight} \llbracket p_s \rrbracket :
+      \mathcal{C} \Rightarrow \mathcal{C} \,, \qquad
+    \kw{Asm} \llbracket p_t \rrbracket :
+      \mathcal{A} \Rightarrow \mathcal{A} \,.
 \]
 We will show that there exists a simulation convention
 $\mathbb{R} : \mathcal{A} \Leftrightarrow \mathcal{C}$
@@ -2017,7 +2015,7 @@ about function call or return events.
       Assembly-style control transfers (Asm) \\
     \hline
   \end{tabular}
-  \caption{Language interfaces for the various Compcert intermediate languages.}
+  \caption{Language interfaces for the various languages of CompCert.}
   \label{tbl:li}
 \end{table*}
 %}}}
@@ -2303,10 +2301,11 @@ then $g(b) = (b', \delta)$ as well.
 
 \subsubsection{Composition}
 
-The composition $R ; S$ of two CompCert KLRs
+Given
 $R = \langle W_R, {\leadsto}_R, f_R, R^\kw{mem} \rangle$ and
-$S = \langle W_S, {\leadsto}_S, f_S, S^\kw{mem} \rangle$
-is defined as:
+$S = \langle W_S, {\leadsto}_S, f_S, S^\kw{mem} \rangle$,
+we can define
+their composition $R ; S$ as:
 \[
   R ; S := \langle
     W_R \times W_S, \:
@@ -2315,21 +2314,36 @@ is defined as:
     R^\kw{mem} \cdot S^\kw{mem}
   \rangle
 \]
+Note that
+$(R \cdot S)^\kw{val} = R^\kw{val} \cdot S^\kw{val}$
+and similarly for other derived relations.
 Composition is associative
-and verifies $(\kw{ext} ; R) = (R ; \kw{ext}) = R$.
+and verifies $(\kw{ext} ; R) \equiv (R ; \kw{ext}) \equiv R$.
 
-\subsubsection{Algebra}
+\subsubsection{External call requirements}
 
+The requirements on external calls
+relating the contents of the initial and final memory states
+can also be put in the form of a CKLR:
+...
 
+\subsubsection{Properties}
 
-
-[Define the CKLRs
-$\kw{inj}$, $\kw{ext}$, $\kw{injp}$, $\kw{extp}$, $\kw{injn}$
-and their useful properties.]
+[The theorems on how these CKLRs interact with
+one another that we will use to derive the
+final correctness theorem.]
 
 %}}}
 
 \subsection{Relational Parametricity} %{{{
+
+For each language interface
+$\mathcal{X} \in \{ \mathcal{C}, \mathcal{L}, \mathcal{M}, \mathcal{A} \}$
+
+
+For each of the language interfaces described in \S\ref{sec:compcert:li},
+
+
 
 [Describe simulation conventions derived from CKLR,
 plus parametricity theorems for Clight and RTL,
