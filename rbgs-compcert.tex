@@ -78,7 +78,8 @@
 
 % }}}
 
-\title{Refinement-Based Game Semantics for CompCert}
+\title{Refinement-Based Game Semantics as
+  a Calculus for Certified Components}
 
 \author{J\'er\'emie Koenig}
 \affiliation{Yale University}
@@ -150,6 +151,10 @@ if the proof is mechanized in a general-purpose proof assistant,
 it can be validated by a third-party with minimal effort
 and without the need to trust the original developers.
 
+%}}}
+
+\subsection{Specifications as Intefaces} %{{{
+
 Such achievements remain discrete efforts, but
 there has been increasing interest in rendering them interoperable,
 as exemplified by the DeepSpec project \cite{deepspec}.
@@ -162,24 +167,13 @@ obtain formal guarantees about composite systems
 operating over a wide range of abstraction layers.
 If successful,
 such an achievement would represent a deployment of formal methods
-at a scale and depth far beyond the current state of the art.
+at a scale far beyond the current state of the art.
 
-%}}}
-
-\subsection{Specifications as Intefaces} %{{{
-
-At present, many verification projects
-use ad-hoc semantic models and specifications,
-expressed in paradigms chosen first and foremost
-to render modeling and verification tasks tractable.
-Since verification is often challenging,
-the freedom to choose an appropriate semantic model
-is quite desirable,
-however the current approach has several drawbacks.
-
-First,
-a certified component is only as reliable as its specification.
-Having specifications tied too much to a verification effort
+In addition,
+this approach could provide reliability and security guarantees
+even beyond those of existing formally verified components.
+A certified component is only as trustworthy as its specification;
+having specifications tied too much to a single verification effort
 increases the risk of
 implementation bugs being simply propagated to
 the specification.
@@ -191,41 +185,45 @@ specifications used as internal interfaces
 in a larger certified system cease to be part of
 the overall system's trusted base;
 in this way,
-building larger certified systems would reduce the
-ratio between the size of the (trusted) specification to
+building larger certified systems
+by composing existing ones
+would reduce the
+ratio between the size of the external specification to
 the overall size of the system.
 
-However,
+%}}}
+
+\subsection{Challenges} %{{{
+
+At present, many verification projects
+use ad-hoc semantic models and specifications,
+expressed in paradigms chosen first and foremost
+to render modeling and verification tasks tractable.
+Since verification is challenging,
+the freedom to choose an appropriate semantic model
+is quite desirable.
+On the other hand,
 the diversity of paradigms used for specification and verification
 makes it difficult
 to interface projects using different approaches.
-Since we wish to preserve the diversity in models
-that has made the current trend in
-the feasibility of verification for large and complex systems,
-this suggests that we need to identify a common,
+These competing concerns
+suggest the need to identify a common,
 flexible semantic framework
 into which existing models could be embedded
-so as to render them interoperable.
-This framework should be equipped with
+for integration purposes.
+
+To enable the construction of certified systems
+by assembling off-the-shelf components,
+this framework should be equipped with
 a rich composition infrastructure
 and high-level principles for
 reasoning about composite systems.
-
-[Gap between operational models used for verification,
-and denotational models that have good properties
-and support high-level reasoning principles]
-
-While ongoing work on \emph{interaction trees} \cite{itrees}
-shows promising progress in this direction,
-[much work remains etc]
-
-Moreover,
-it could signal a shift
-[where we go from ad-hoc verification to
-off-the-shelf components
-certified against common, widely studied and refined
-models and specs,
-which you could use to construct large-scale certified systems.]
+This represent another point of tension
+between the operational models
+often used for verification,
+and denotational models
+that feature compositionality and
+support equational reasoning.
 
 %}}}
 
@@ -284,81 +282,55 @@ of compiler passes.
 
 %}}}
 
-\section*{[TO MOVE]} %{{{
+\section{Main Ideas} \label{sec:mainideas} %{{{
 
-[Incorporate this old content into \S2]
+\subsection{Principles for system construction} %{{{
 
-\subsection{Certified Compilers} %{{{
+% preamble {{{
 
-Compilers are essential component;
-quitessential tool for working across abstraction layers.
-On one hand good "litmus test" for framework
-of how certified compilers fit into the picture.
-On this other hand suggests thinking about not just
-"certified compilers" but "compilers of certified components".
+The goal of certified system design is
+to create a formal description of
+the system to be constructed (the program),
+while ensuring through careful analysis that the system
+will behave properly.
 
-%}}}
-
-\subsection{Game semantics} %{{{
-
-The mathematical study of the semantics of programming languages
-has traditionally opposed denotational and operational approaches.
-Operational semantics describes
-the behavior of a program in terms of
-a state evolving across time.
-Denotational semantics is a more abstract approach,
-whereby the meaning of a program fragment (its denotation)
-is computed from the meanings of its constituents.
-
-This compositionality makes denotational semantics
-more amenable to some forms of large-scale reasoning,
-but its abstract character makes it more difficult
-to connect to the concrete behavior of the system.
-Therefore, when defining a denotational semantics,
-it is customary to demonstrate its accuracy
-with respect to an operational model.
-This is done by proving a full abstraction theorem,
-which asserts that the denotations of two programs
-are equal exactly when the programs are observationally equivalent.
-
-Game semantics is a denotational approach that
-incoroporates some operational aspects.
-Each type in the language
-is interpreted as a game,
-which specifies the structure of the interaction
-between program components of this type
-and their execution context.
-The behavior of a component
-is then modeled as a strategy for this game,
-specifying the next move of the component
-for all relevant positions in the game.
-
-Positions are usually identified with sequences of moves,
-and strategies can be identified with the set of positions
-that a component can reach.
-In this sense,
-game semantics is similar to
-the trace semantics of process algebras.
-However, game semantics is distinguished
-by a strong polarization between
-the system and the environment,
-and a strong distinction between outputs and inputs.
-This confers an inherent ``rely-guarantee'' flavor
-to games which facilitates compositional reasoning
-in the context of heterogenous systems \cite{cspgs}.
+To carry out this analysis,
+we need to assign
+to each possible system description $p \in P$
+a mathematical object $\llbracket p \rrbracket \in \mathbb{D}$
+representing its behavior.
+We will call the set $\mathbb{D}$ a \emph{semantic domain}.
+In this section we elucidate
+the structure and properties of $\mathbb{D}$
+necessary to the process of builing
+large-scale certified systems.
 
 %}}}
 
-\subsection{Refinement-based verification} %{{{
+\subsubsection{Specifications and refinement} %{{{
 
-The goal of program verification
-is to establish that a program conforms
-to a given mathematical specification.
+System design starts with a set of requirements
+that constrain the behavior of the system to be constructed
+(the specification).
+These requirements may not capture every detail
+of the behavior of the eventual system,
+but instead delineate the range of acceptable behaviors
+from the point of view of its environment.
+
 In refinement-based approaches,
 programs and specifications are interpreted in the same
-semantic domain,
-and conformance is expressed in terms of a
-refinement preorder.
+semantic domain $\mathbb{D}$,
+which is equipped with a \emph{refinement} preorder
+${\sqsubseteq} \subseteq \mathbb{D} \times \mathbb{D}$.
+The proposition $\sigma_1 \sqsubseteq \sigma_2$
+assert that $\sigma_2$ is a less restrictive specification than $\sigma_1$,
+and in particular a system description $p \in P$ is a correct implementation
+of $\sigma \in \mathbb{D}$ when
+$\llbracket p \rrbracket \sqsubseteq \sigma$.
+
+-------
+
+[Old stuff, not great, maybe just remove this]
 
 In stepwise refinement methods,
 programs and specifications share a common syntax as well,
@@ -403,73 +375,89 @@ more in line with CCS and the like.]
 
 %}}}
 
-\subsection{Logical relations} %{{{
+\subsubsection{Compositionality} %{{{
 
-In the broadest sense,
-logical relations are structure-preserving relations,
-in the same way that homomorphisms are structure-preserving maps.
-However,
-logical relations are more compositional than homomorphisms,
-because they do not suffer from the same problems
-in the presence of mixed-variance constructions,
-such as the function arrow $\rightarrow$ \cite{lrp}.
-This is a major advantage
-for reasoning about typed languages,
-where type-indexed logical relations
-can be defined by recursion over the structure of types.
+Complex systems are built by assembling components
+whose behavior is understood,
+such that their interaction achieves a desired effect.
+The syntactic constructions of
+the language used to describe systems
+correspond to the ways in which they can be composed.
 
-Logical relations have found widespread use in programming language theory.
-Unary logical relations can be used to establish
-various properties of type systems:
-a type-indexed predicate expressing a property of interest
-is shown to be compatible with the language's reduction,
-and to contain all of the well-typed terms of the language.
-Binary logical relations can be used to capture
-contextual equivalence between terms,
-as well as notions such as non-interference or compiler correctness.
-Relational models of type quantification yield
-Reynold's well-known theory of relational parametricity,
-and can be used to establish so-called free theorems
-establishing properties that
-all terms of a given parametric type must satisfy.
-
-For stateful languages,
-which terms should be related
-will often depend on the current state.
-This motivated the introduction of Kripke logical relations,
-which are parametrized over a set of state-dependent \emph{worlds}.
-Different components related at the same world
-will be guaranteed to be related in compatible ways.
-An accessibility relation between worlds
-specifies the ways in which a world can evolve
-as the execution progresses.
-
-In Sec.~\ref{sec:klr},
-we give a general account of Kripke logical relations
-by drawing on their connection with
-the Kripke semantics of modal logic.
-We apply this framework
-in our treatment of refinement
-in the context of game semantics,
-and in Sec.~\ref{sec:cklr},
-we use it to develop a logical-relations
-understanding of some key aspects of CompCert,
-and show how parametricity
-can be used to derive important properties
-of CompCert languages.
-
-Logical relations can be of any arity,
-but in the present work
-we will restrict our attention to
-binary logical relations.
+To enable compositional reasoning,
+a suitable model must provide an account of
+the behavior of the composite system
+in terms of the behavior of its parts.
+For instance,
+if the language contains a binary operator
+${+} : P \times P \rightarrow P$,
+then the semantic domain should be equipped with
+a corresponding operation
+${\bullet} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$
+such that:
+\[ \llbracket p_1 + p_2 \rrbracket =
+   \llbracket p_1 \rrbracket \bullet \llbracket p_2 \rrbracket \,. \]
 
 %}}}
 
-\subsection{Abstraction layers} %{{{
+\subsubsection{Monotonicity} %{{{
+
+Once a component has been shown to conform to a given specification,
+say $\llbracket p_1 \rrbracket \sqsubseteq \sigma_1$,
+we will want to abstract the component as a ``black box'',
+so that further reasoning can be done in terms of
+the component's specification rather than its implementation details.
+To support this,
+we must establish that semantic composition operators
+are compatible with refinement in the following sense:
+\[ \sigma_1 \sqsubseteq \sigma_1' \wedge
+   \sigma_2 \sqsubseteq \sigma_2' \Rightarrow
+   \sigma_1 \bullet \sigma_2 \sqsubseteq \sigma_1' \bullet \sigma_2' \,. \]
+Then to establish that
+$\llbracket p_1 + p_2 \rrbracket \sqsubseteq \sigma$,
+it is sufficient to show that
+$\sigma_1 \bullet \llbracket p_2 \rrbracket \sqsubseteq \sigma$:
+\[
+   \llbracket p_1 + p_2 \rrbracket \sqsubseteq
+   \llbracket p_1 \rrbracket \bullet \llbracket p_2 \rrbracket \sqsubseteq
+   \sigma_1 \bullet \llbracket p_2 \rrbracket \sqsubseteq
+   \sigma
+\]
 
 %}}}
 
-\subsection{Compilers} %{{{
+\subsubsection{Abstraction} %{{{
+
+Large-scale systems operate across many layers of abstraction.
+Each abstraction layer defines its own understanding of the interaction
+between the system and its environment.
+To relate abstraction layers we will need to give an explicit account
+of how their formulations of the interaction correspond to one another.
+
+For example,
+at the physical level,
+communication over a wire may involve a series of voltages through time,
+but at a higher level of abstraction
+we will only be concerned with the sequence of bytes
+being transmitted.
+Serial communication hardware (for instance a UART device)
+serves as a bridge between these two views,
+implementing a byte-oriented communication channel
+in a voltage-oriented world;
+to formally verify such a component we will need to
+express the correspondance between these two
+layers of abstraction.
+
+This can be done by defining an embedding
+$\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$
+between the semantic domains
+used to reason at different levels of abstraction.
+
+[...]
+
+%}}}
+
+\subsubsection{Compilers} %{{{
 
 Compilers play a central role
 in the construction of modern computer systems.
@@ -518,178 +506,62 @@ to build larger certified systems.
 
 %}}}
 
-\subsection{Contributions} %{{{
-
-This article makes two significant contributions
-towards a general framework for the construction of certified systems.
-
-First, in Sec.~\ref{sec:rbgs} we introduce the general framework of
-\emph{refinement-based game semantics}.
-Like traditional game semantics,
-refinement-based game semantics provides
-a typed, compositional, semantic domain
-supporting fully abstract expression of
-the behavior of heterogenous components.
-However,
-by relaxing the traditional focus on definability,
-our model can also express more general specifications,
-and serve as a setting for refinement-based verification.
-[enumerate some of the things we do]
-
-Second, we demonstrate the suitability of our approach
-by applying it to the problem of compositional certified compilation.
-We show that we can build previous work \cite{compcomp,sepcomp,popl15,cpp15}
-to equip CompCert with an open module semantics
-that can naturally be embedded into our semantic framework.
-Moreover,
-our explicit account of abstraction
-allows us considerable economy
-when updating the correctness theorem of CompCert
-to account for this additional structure,
-and our logical-relations approach
-makes it possible to ...
-
-%}}}
-
-%}}}
-
-\section{Main Ideas} \label{sec:mainideas} %{{{
-
-[XXX update and trim down for the reduced scope of this paper]
-
-\subsection{Principles for system construction}
-
-The goal of certified system design is
-to create a formal description of
-the system to be constructed (the program),
-while ensuring through careful analysis that the system
-will behave properly.
-
-To carry out this analysis,
-we need a model
-which assigns to each possible system description $p \in P$
-a mathematical object $\llbracket p \rrbracket \in \mathbb{D}$
-representing its behavior.
-We will call the set $\mathbb{D}$ a \emph{semantic domain}.
-In this section we elucidate
-the structure and properties of $\mathbb{D}$
-necessary to the process of builing
-large-scale certified systems.
-
-\subsubsection{Specifications and refinement}
-
-System design starts with a set of requirements
-that constrain the behavior of the system to be constructed
-(the specification).
-These requirements may not capture every detail
-of the behavior of the eventual system,
-but instead delineate the range of acceptable behaviors
-from the point of view of its environment.
-
-In the context of refinement-based methods,
-the specifications are themselves elements of
-the semantic domain $\mathbb{D}$,
-which is equipped with a \emph{refinement} preorder
-${\sqsubseteq} \subseteq \mathbb{D} \times \mathbb{D}$.
-The proposition $\sigma_1 \sqsubseteq \sigma_2$
-assert that $\sigma_2$ is a less restrictive specification than $\sigma_1$,
-and in particular a system description $p \in P$ is a correct implementation
-of $\sigma \in \mathbb{D}$ when:
-\[ \llbracket p \rrbracket \sqsubseteq \sigma \]
-
-\subsubsection{Compositionality}
-
-Complex systems are built by assembling components
-whose behavior is understood,
-such that their interaction achieves a desired effect.
-The syntactic constructions of
-the language used to describe systems
-correspond to the ways in which they can be composed.
-
-To enable compositional reasoning,
-a suitable model must provide an account of
-the behavior of the composite system
-in terms of the behavior of its parts.
-For instance,
-if the language contains a binary operator
-${+} : P \times P \rightarrow P$,
-then the semantic domain should be equipped with
-a corresponding operation
-${\bullet} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$
-such that:
-\[ \llbracket p_1 + p_2 \rrbracket =
-   \llbracket p_1 \rrbracket \bullet \llbracket p_2 \rrbracket \,. \]
-
-We can use this property
-to show that a composite system
-satisfies a given specification,
-for instance
-$\llbracket p_1 + p_2 \rrbracket \sqsubseteq \sigma$.
-Once this has been established,
-we will want to abstract the composite system as a ``black box''
-which can in turn be used as a primitive component in a larger system.
-Further reasoning can be done in terms of
-the new component's specification $\sigma$ rather than
-its concrete behavior $\llbracket p_1 + p_2 \rrbracket$.
-To support this,
-we must establish that semantic composition operators
-are compatible with refinement in the following sense:
-\[ \sigma_1 \sqsubseteq \sigma_1' \wedge
-   \sigma_2 \sqsubseteq \sigma_2' \Rightarrow
-   \sigma_1 \bullet \sigma_2 \sqsubseteq \sigma_1' \bullet \sigma_2' \,. \]
-Should $p_1 + p_2$ be used as a component in a larger system,
-this property will allow us to establish that:
-\[ \llbracket (p_1 + p_2) + p_3 \rrbracket \sqsubseteq
-   \sigma \bullet \llbracket p_3 \rrbracket \,. \]
-
-\subsubsection{Abstraction}
-
-Large-scale systems operate across many layers of abstraction.
-Each abstraction layer defines its own understanding of the interaction
-between the system and its environment.
-To relate abstraction layers we will need to give an explicit account
-of how their formulations of the interaction correspond to one another.
-
-For example,
-at the physical level,
-communication over a wire may involve a series of voltages through time,
-but at a higher level of abstraction
-we will only be concerned with the sequence of bytes
-being transmitted.
-Serial communication hardware (for instance a UART device)
-serves as a bridge between these two views,
-implementing a byte-oriented communication channel
-in a voltage-oriented world;
-to formally verify such a component we will need to
-express the correspondance between these two
-layers of abstraction.
-
-This can be done by defining an embedding
-$\mathbb{C} : \mathbb{D}_s \rightarrow \mathbb{D}_t$
-between the semantic domains
-used to reason at different levels of abstraction.
-
-[...]
-
-\subsubsection{Compilers}
-
-
-\subsubsection{Heterogeneity}
+\subsubsection{Heterogeneity} %{{{
 
 [What happens to $\mathbb{D}$ in the context of typed languages,
 how this can be used to gain expressivity and construct heterogenous systems.]
 
+%}}}
 
-\subsection{Game semantics}
+%}}}
 
-[introductory remarks]
+\subsection{Game semantics} %{{{
 
-Types are interpreted as two-player games,
-which specify the form of valid interactions
-between the system and the environment.
-Terms are interpreted as strategies for these games,
-which for any position in the game
-specify the next move to be played by the system.
+The mathematical study of the semantics of programming languages
+has traditionally opposed denotational and operational approaches.
+Operational semantics describes
+the behavior of a program in terms of
+a state evolving across time.
+Denotational semantics is a more abstract approach,
+whereby the meaning of a program fragment (its denotation)
+is computed from the meanings of its constituents.
+
+This compositionality makes denotational semantics
+more amenable to some forms of large-scale reasoning,
+but its abstract character makes it more difficult
+to connect to the concrete behavior of the system.
+Therefore, when defining a denotational semantics,
+it is customary to demonstrate its accuracy
+with respect to an operational model.
+This is done by proving a full abstraction theorem,
+which asserts that the denotations of two programs
+are equal exactly when the programs are observationally equivalent.
+
+Game semantics is a denotational approach that
+incoroporates some operational aspects.
+Each type in the language
+is interpreted as a game,
+which specifies the structure of the interaction
+between program components of this type
+and their execution context.
+The behavior of a term or component
+is then modeled as a strategy for this game,
+specifying the next move of the component
+for all relevant positions in the game.
+
+Positions are usually identified with sequences of moves,
+and strategies can be identified with the set of positions
+that a component can reach.
+In this sense,
+game semantics is similar to
+the trace semantics of process algebras.
+However, game semantics is distinguished
+by a strong polarization between
+the system and the environment,
+and a strong distinction between outputs and inputs.
+This confers an inherent ``rely-guarantee'' flavor
+to games which facilitates compositional reasoning
+in the context of heterogenous systems \cite{cspgs}.
 
 \subsubsection{Games}
 
@@ -845,8 +717,67 @@ The polarisation inherent in game semantics
 can be seen to naturally encode the rely-guarantee aspects
 of the C calling convention.
 
-\subsection{Logical relations}
+%}}}
 
+\subsection{Logical relations} %{{{
+
+In the broadest sense,
+logical relations are structure-preserving relations,
+in the same way that homomorphisms are structure-preserving maps.
+However,
+logical relations are more compositional than homomorphisms,
+because they do not suffer from the same problems
+in the presence of mixed-variance constructions,
+such as the function arrow $\rightarrow$ \cite{lrp}.
+This is a major advantage
+for reasoning about typed languages,
+where type-indexed logical relations
+can be defined by recursion over the structure of types.
+
+Logical relations have found widespread use in programming language theory.
+Unary logical relations can be used to establish
+various properties of type systems:
+a type-indexed predicate expressing a property of interest
+is shown to be compatible with the language's reduction,
+and to contain all of the well-typed terms of the language.
+Binary logical relations can be used to capture
+contextual equivalence between terms,
+as well as notions such as non-interference or compiler correctness.
+Relational models of type quantification yield
+Reynold's well-known theory of relational parametricity,
+and can be used to establish so-called free theorems
+establishing properties that
+all terms of a given parametric type must satisfy.
+
+For stateful languages,
+which terms should be related
+will often depend on the current state.
+This motivated the introduction of Kripke logical relations,
+which are parametrized over a set of state-dependent \emph{worlds}.
+Different components related at the same world
+will be guaranteed to be related in compatible ways.
+An accessibility relation between worlds
+specifies the ways in which a world can evolve
+as the execution progresses.
+
+In the following,
+we give a general account of Kripke logical relations
+by drawing on their connection with
+the Kripke semantics of modal logic.
+We apply this framework
+in our treatment of refinement
+in the context of game semantics,
+and in \S\ref{sec:compcert:klr},
+we use it to develop a logical-relations
+understanding of some key aspects of CompCert,
+and show how parametricity
+can be used to derive important properties
+of CompCert languages.
+
+Logical relations can be of any arity,
+but in the present work
+we will restrict our attention to
+binary logical relations.
 Given an algebraic structure $\mathcal{S}$
 involving a number of operations over a carrier set,
 a \emph{logical relation}
@@ -933,7 +864,7 @@ are often partial equivalence relations (PER);
 by contrast, our focus is refinement,
 so that most of the relations we consider will not be symmetric.
 
-\subsection{Kripke logical relations} %{{{
+\subsection{Kripke logical relations}
 \label{sec:klr}
 
 The ways in which the components of a complex structure should be related
@@ -1030,8 +961,6 @@ can be written as:
   \alpha \ifr{\Vdash R \rightarrow \mathcal{P}^+(\Diamond R)} \beta \,.
 \]
 \end{example}
-
-%\subsection{CompCert}
 
 %}}}
 
