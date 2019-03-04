@@ -235,7 +235,7 @@ a successful synthesis of existing research
 on game semantics,
 refinement-based verification,
 and certified abstraction layers
-can serve as a general framework
+could provide a general framework
 for the construction of large-scale certified systems.
 We call this approach \emph{refinement-based game semantics}.
 
@@ -248,7 +248,7 @@ refinement-based game semantics,
 and explain the ways in which
 [we think it's up to the task].
 
-The first technical contribution of this paper
+Our first technical contribution
 appears in \S\ref{sec:monad}:
 we construct a semantic framework, formalized in the Coq proof assistant,
 by enriching a simple game model
@@ -385,7 +385,7 @@ $\sigma_1 \bullet \llbracket p_2 \rrbracket \sqsubseteq \sigma$:
 
 Large-scale systems operate across many layers of abstraction.
 Each abstraction layer defines its own understanding of the interaction
-between the system and its environment.
+between a component and its environment.
 To relate abstraction layers we will need to give an explicit account
 of how their formulations of the interaction correspond to one another.
 
@@ -472,6 +472,8 @@ how this can be used to gain expressivity and construct heterogenous systems.]
 
 \subsection{Game semantics} %{{{
 
+% preamble {{{
+
 The mathematical study of the semantics of programming languages
 has traditionally opposed denotational and operational approaches.
 Operational semantics describes
@@ -518,7 +520,9 @@ This confers an inherent ``rely-guarantee'' flavor
 to games which facilitates compositional reasoning
 in the context of heterogenous systems \cite{cspgs}.
 
-\subsubsection{Games}
+%}}}
+
+\subsubsection{Games} %{{{
 
 A game is usually defined by giving a set of moves $M$
 that players can choose from,
@@ -528,14 +532,22 @@ For chess,
 moves will be taken in the set $(\{a, \ldots, h\} \times \{1, \ldots, 8\})^2$,
 and a sequence of moves may look like:
 \[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{e7d5} \cdots \]
-For a program expected to produce a natural number,
-the possible moves may be a request to evaluate ($\kw{q}$)
-and primitive values ($42$),
-so that an interaction between the expression $21 \times 2 : \kw{nat}$
-and its evaluation context will proceed as:
-\[ \kw{q} \cdot \underline{42} \]
-Note that we underline the moves of the second player,
-namely the system.
+As a more relevant example,
+the game $\mathcal{C}$ is defined in \S\ref{sec:compcert:li}
+to model the semantics of C compilation units.
+Its plays are of the form:
+\[ f[sg](\vec{v})@m \cdot \underline{v'@m'} \]
+The environment indicates
+which function $f$ should be invoked
+using what signature $sg$,
+and specifies the values $\vec{v}$ of the arguments
+as well as the state $m$ of the memory
+at the time of invocation.
+When the function returns,
+the system replies with a move $v'@m'$,
+transferring control back to the environment
+with the return value $v'$
+and the updated memory state $m'$.
 
 We will focus on two-player, alternating games
 where the environment and the system each contribute every other move.
@@ -546,131 +558,206 @@ even-length sequences correpond to positions
 where the environment is expected to move,
 and odd-length sequences correspond to positions
 where the system is expected to move.
+Note that when typesetting examples,
+we underline the moves of the second player,
+namely the system.
 
-\subsubsection{Strategies}
+Most game semantics
+include additional structure
+in the description of games.
+The set of moves is usually partitioned
+into proponent and opponent moves ($M = M^\kw{O} \uplus M^\kw{P}$),
+and into questions and answers ($M = M^\kw{Q} \uplus M^\kw{A}$).
+The structure of valid plays
+is often contrained by an \emph{enabling relation} $\vdash$
+on moves,
+which prevents some moves from being played
+until a related move has been made by the other player.
+[We stick to first-order stuff and don't need any of this.]
 
-In this context,
-it is natural to think of system strategies
-as functions from odd-length positions to moves:
-\[ \sigma : \bigcup_n M^{2n+1} \rightharpoonup M \]
+%}}}
+
+\subsubsection{Strategies} %{{{
+
+Following trace semantics of process calculi,
+traditional work on game semantics
+represents strategies as
+the set of positions that the player may reach.
+Hence,
+a strategy is a prefix-closed set of sequences of moves,
+subject to certain well-formedness constraints.
 For example,
-the strategy $\llbracket 21 \times 2 \rrbracket$
-will be the partial function with a single mapping $\kw{q} \mapsto 21$,
-whereas the black player in the chess play above
-has used a strategy $\sigma$ containing:
+the strategy $\sigma$ used by
+the black player in the chess play above
+contained the plays:
 \[
-  \sigma(e2e4) = c7c5 , \quad
-  \sigma(e2e4 \cdot c7c5 \cdot c2c3) = e7d5 , \quad
-  \ldots
+  \sigma \: = \: \{
+    e2e4, \quad
+    e2e4 \cdot \underline{c7c5}, \quad
+    e2e4 \cdot \underline{c7c5} \cdot c2c3, \quad
+    \ldots
+  \}
 \]
 
-This is suitable to express the behavior of a concrete system.
-However, for specifications allowing a range of behavior,
-we must generalize strategies to allow nondeterminism:
-\[ \sigma : \bigcup_n M^{2n+1} \rightarrow \mathcal{P}(M) \]
-This is isomorphic to
-$\mathcal{P}(\bigcup_n M^{2n+2})$
-and corresponds to the usual encoding of strategies
-as sets of traces.
+Strategies are usually subject to a number
+of well-formedness constraints beyond prefix closure.
+Commonly used contraints include the following:
+\begin{description}
+\item[Receptivity]
+  requires that all possible behaviors of the environment
+  be included in the strategy,
+  so that if $s \in \sigma$ is an even-length play and
+  $m$ is an environment move such that $sm$ is a valid play of the game,
+  then $sm \in \sigma$ as well.
+\item[Determinism]
+  prevents the strategy from allowing
+  more than one behavior of the system at any given point,
+  so that if $s \in \sigma$ is an odd-length play,
+  then any moves $m, n$ of the system
+  such that $sm \in \sigma$ and $sn \in \sigma$
+  must be equal ($m = n$).
+\item[Well-bracketing]
+  only allows the most recently asked question
+  to be answered at any given point.
+  That is,
+  the game proceeds accoring to a strict stack discipline.
+\item[Innocence]
+  requires that the behavior of a strategy
+  only depends on the most recent move
+  as well as the chain of moves enabling it.
+  This means the strategy is not allowed to maintain
+  private state across
+  successive but independent queries.
+\end{description}
+The original game semantics of PCF \cite{pcfajm,pcfhon}
+imposes all of these constraints,
+and subsequent work was able to model additional language features
+by relaxing a combination of them.
+We will impose the receptivity constraint structurally,
+by only considering odd-length plays
+in our definition of strategy.
+However, following \cite{gsnondet} we eschew the determinism constraint;
+this is used in our framework
+to model specifications permitting
+a range of implementation behaviors.
+The family of games which we will consider
+is restricted enough that
+the well-bracketing and innocence constraints
+will always be satisfied by construction.
 
-Equivalently,
-a strategy can be given as a
-nonbranching
-\emph{alternating transition system},
-with environment moves performing transitions from
-a set of continuations $K$ to a set of states $S$,
-and conversely
-transitions from a state $S$ to a continuation $K$
-emitting a system move.
-We obtain a strategy by
-specifying an initial continuation and
-abstracting over $K$ and $S$:
-\[ \sigma : \exists \, K S \,.\, K \times
-      (K \times M \rightharpoonup S) \times
-      (S \times M \rightharpoonup K) \]
-Two strategies will be equivalent
-when simulations can be established between them.
+%}}}
 
-Any strategy given as a transition system
-defines a partial mapping between the positions in the game
-where the system is to play
-and the set of states $S$ used by the strategy,
-which can then be queries for the set of possible
-system moves associated with the position.
-The transition-system presentation of strategies
-is less standard in existing game semantics literature
-but is easier to relate to operational semantics
-and may be easier for formalize.
+\subsubsection{Compositionality} %{{{
 
-\subsubsection{Compositionality}
-
-While the game for $\kw{nat}$ given above
+While the game $\mathcal{C}$ used as an example above
 is extremely simple,
 the expressive power of game semantics
-comes from the way in which complex games can be derived
-from simple ones to interpret compound types.
+comes from the way in which complex games can be derived from simple ones,
+and used to interpret compound types.
+In the following we recall a few standard constructions
+and demonstrate how they can be used
+to complete our semantic model for C compilation units.
 
-For instance,
-given two games $A$ and $B$,
-the game $A \otimes B$ is traditionally defined
-to allow $A$ and $B$ to be played side by side.
-The set of moves will be $M_{A \otimes B} = M_A + M_B$,
-and for any valid position of $A \otimes B$,
-the subsequence consisting of the moves of a constituent game
-is expected to be valid in that game.
-An interaction in the game
-$\llbracket \kw{nat} \rrbracket \otimes
- \llbracket \kw{nat} \rrbracket$ could be:
-\[ i_2(q) \cdot \underline{i_2(42)} \cdot
-   i_1(q) \cdot \underline{i_1(7)} \]
+For a game $A$,
+the game $!A$ consists of multiple copies of $A$,
+instantiated at the discretion of the environment.
+For example,
+the following is a play for the game $!\mathcal{C}$:
+\[
+    \kw{pow}(3,2)@m_1 \cdot
+    \underline{9@m_2} \cdot
+    \kw{pi}()@m_3 \cdot
+    \underline{3.1416@m_4} \cdot
+    \kw{pow}(5,0)@m_5 \cdot
+    \underline{1@m_6}
+\]
+Because $\mathcal{C}$ is an elementary game
+and our strategies are alternating,
+in this examples the different copies of $\mathcal{C}$
+will always be played in succession.
+However,
+in richer models multiple copies may proceed
+concurrently
+and be played in an interleaved manner.
 
-There are two other important constructions on games.
-In the game $A \multimap B$,
-we play the games $A$ and $B$ simultaneously,
-but in the game $A$ we play the role of the environment.
-In other words,
-a strategy for $A \multimap B$
-primarily implements the game $B$,
-but can also rely on an implementation of $A$.
-Finally,
-the game $!A$
-consists of multiple copies of the game $A$,
-which are instantiated at the discretion of the environment.
+Another common construction is the game $A \multimap B$
+which consist of the games $A$ and $B$ played side-by-side.
+However, in $A$ the r\^oles of the system and the environment
+are reversed.
+In our context,
+this means the game will always start
+with a move of $B$ played by the environment,
+but the player may initiate the game $A$.
+For instance, in $\mathcal{C} \multimap \mathcal{C}$,
+a possible scenario is:
+\[
+    \kw{pow}(3,2)@m_1 \cdot
+    \underline{\kw{mult}(3,3)@m_2} \cdot
+    9@m_3 \cdot
+    \underline{9@m_4}
+\]
+Here,
+the component's function $\kw{pow}$
+is invoked (in the right-hand side game),
+but instead of immediately returning a result,
+the component first performs an external call to $\kw{mult}$.
+After the environment replies to this request with the result $9$,
+the component in turn answers the invocation of $\kw{pow}$
+with the same value.
 
 These constructions can be used together
 to express the structure of various kinds of interactions.
 For instance,
 the type $!A \multimap B$ is traditionally used
 to model the behavior of a $\lambda$-term of type $A \rightarrow B$,
-which can access its argument multiple times.
-In the context of CompCert,
-the game $!C \multimap C$
-represents the way a C module behaves in response to an activation
-(as specified by the game $C$),
-while being able to perform any number of external calls ($!C$),
-and corresponds to the \emph{interaction semantics} defined in
-\cite{compcompcert}.
-In this work,
-we will extend this to the game $!C \multimap !C$,
-which will allow components to maintain
-persitent, hidden state across activations
-and express the behavior of reentrant calls.
+which can access its argument multiple times;
+we will denote this game by $A \Rightarrow B$.
+In our context,
+the game $\mathcal{C} \Rightarrow \mathcal{C}$
+represents the way a C compilation unit behaves in response to
+an activation,
+while being able to perform any number of external calls.
 
-\subsubsection{Refinement}
+%}}}
 
-[alternating refinement, $\lightning$, etc]
+\subsubsection{Refinement} %{{{
 
-\subsubsection{Abstraction}
+The distinction between system and environment actions
+present in game semantics
+leads to a notion of \emph{alternating} refinement:
+a behavior $x$ refines a behavior $y$ if
+all \emph{system} actions in $x$ are also possible in $y$, and if
+all \emph{environment} actions in $y$ are also possible in $x$
+\cite{altref,alfaro}.
+This makes it possible for specifications to
+place constraints on the environment as well as the system,
+and enables a rely-guarantee style of reasoning.
 
-This concept of refinement can be extended to account for
-different levels of abstraction.
+When the receptivity requirement is imposed on strategies,
+all environment actions are always possible,
+so that refinement is ``flattened'' back to trace containement.
+However,
+rely-guarantee reasoning can still be supported:
+bad moves of the environment are technically allowed,
+but the specification places no requirement on
+the subsequent behavior of the system.
+In \S\ref{sec:monad:def},
+we will go one step further and introduce a distinguished
+system action $\lightning$,
+which is refined by all other actions,
+and reifies this notion of undefined behavior.
 
+%}}}
 
-[etc]
+\subsubsection{Abstraction} %{{{
+
+Galois connection like in abstract interpretation.
 
 The polarisation inherent in game semantics
 can be seen to naturally encode the rely-guarantee aspects
 of the C calling convention.
+
+%}}}
 
 %}}}
 
@@ -2300,7 +2387,7 @@ about function call or return events.
 
 %}}}
 
-\subsection{Language Interfaces} %{{{
+\subsection{Language Interfaces} \label{sec:compcert:li} %{{{
 
 \begin{table*} % tbl:li Language interfaces {{{
   \begin{tabular}{clll}
@@ -2368,7 +2455,7 @@ will not depend on specific block identities
 or absolute pointer offsets.
 [Explain connection to relational parametricity.]
 
-{\color{gray}
+{\color{gray} %{{{
 --- [Some former material in the rest of this section:] ---
 
 Besides equality,
@@ -2433,6 +2520,8 @@ it will be possible to mechanize these proofs
 to some extent.
 
 }
+
+%}}}
 
 %}}}
 
