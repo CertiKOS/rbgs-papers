@@ -650,7 +650,7 @@ will always be satisfied by construction.
 
 %}}}
 
-\subsubsection{Compositionality} %{{{
+\subsubsection{Compositionality} \label{sec:mainideas:gs:comp} %{{{
 
 While the game $\mathcal{C}$ used as an example above
 is extremely simple,
@@ -917,7 +917,9 @@ are often partial equivalence relations (PER);
 by contrast, our focus is refinement,
 so that most of the relations we consider will not be symmetric.
 
-\subsection{Kripke logical relations}
+%}}}
+
+\subsection{Kripke logical relations} %{{{
 \label{sec:klr}
 
 The ways in which the components of a complex structure should be related
@@ -1086,9 +1088,219 @@ the simulation diagram shown above can be written as:
 
 %}}}
 
+\newpage
 \section{Semantic Framework} \label{sec:monad} %{{{
 
+As a first step towards
+the development of refinement-based game semantics,
+we present a semantic framework
+integrating refinement and abstraction
+into a simple game model.
+To facilitate the expression of operational constructions
+within this framework,
+we formulate our model around an \emph{interaction monad},
+which generalizes strategies to enable
+sequential composition and iteration.
+
+\subsection{Game model}
+
+As a starting point,
+we will consider the alternating, well-bracketed, receptive strategies
+for the game $A \Rightarrow B$ (see \S\ref{sec:mainideas:gs:comp})
+where $A$ and $B$ are games with a very simple structure.
+
+\subsubsection{Games} %{{{
+
+Our family of games is built from
+a class of \emph{elementary games},
+which have an extremely simple structure.
+
+\begin{definition} % elementary game {{{
+An \emph{elementary game} is a pair
+$A = \langle M_A^\kw{Q}, M_A^\kw{A} \rangle$, where
+$M_A^\kw{Q}$ is a set of \emph{questions}, and
+$M_A^\kw{A}$ is a set of \emph{answers}.
+\end{definition}
+%}}}
+
+Elementary games proceeds as follows:
+first $\kw{O}$ chooses a question,
+then $\kw{P}$ chooses an answer.
+On their own,
+elementary games present little interest.
+We will instead focus on
+the composite game $A \Rightarrow B$
+described below.
+
+The arrow game $A \Rightarrow B$ consists of
+an instance of $B$ played concurrently with
+instances of $A$ in which the roles of $\kw{P}$ and $\kw{O}$ are exchanged.
+When considering alternating, well-bracketed strategies,
+the game proceeds as follows:
+\begin{itemize}
+  \item The environment first plays a question from the set $M_B^\kw{Q}$.
+  \item The system may then ask a question from $M_A^\kw{Q}$,
+    which will be answered by the environment by a move in $M_A^\kw{A}$.
+    This can be iterated any number of times, at the system's discretion.
+  \item The system then plays a move from $M_B^\kw{A}$
+    to answer the environment's original question.
+\end{itemize}
+Hence,
+the opponent moves for $A \Rightarrow B$ are
+$M^\kw{O}_{A \Rightarrow B} = M^\kw{Q}_B + M^\kw{A}_A$, whereas
+the proponent moves are
+$M^\kw{P}_{A \Rightarrow B} = M^\kw{A}_B + M^\kw{Q}_A$, and
+the valid alternating, well-bracketed plays of $A \Rightarrow B$
+are described by the graph:
+\[
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node (I) at (0,0) {};
+    \node (P) at (1,0) {\kw{P}};
+    \node (O) at (2,0) {\kw{O}};
+    \path [->] (I) edge[bend left] node[auto] {$m$} (P);
+    \path [->] (P) edge[bend left] node[auto] {$n$} (O);
+    \path [->] (P) edge[bend left] node[auto] {$q$} (I);
+    \path [->] (O) edge[bend left] node[auto] {$r$} (P);
+  \end{tikzpicture}
+  \quad
+  \begin{array}{c@{\,}l@{\quad}c@{\,}l}
+    m &\in M_B^\kw{Q} & q &\in M_A^\kw{Q} \\[1ex]
+    n &\in M_B^\kw{A} & r &\in M_A^\kw{A}
+  \end{array}
+\]
+
+The simplicity of our ``ground-level'' games
+and the fact that we remain within the realm of
+first-order types
+makes our model very straightforward
+compared to the game models used to describe
+the semantics of high-order functional languages.
+Nevertheless,
+our model is expressive enough to model low-level components
+of the kind treated in \S\ref{sec:modsem},
+and many concepts inherited from traditional game semantics
+remain relevant and useful in our context.
+
+%}}}
+
+\subsubsection{Strategies} %{{{
+
+Following the usual trace-based approach,
+we will represent strategies as prefix-closed sets of
+alternating plays.
+To enforce the receptivity constraint,
+we will simply leave out odd-length plays.
+Taking well-bracketing into account as well,
+a first approximation of the type of strategies
+for the game $A \Rightarrow B$ is:
+\[
+  \mathcal{S}_{A \Rightarrow B} \: \approx \:
+   \big\{ \sigma \subseteq
+      M^\kw{Q}_B
+      \big( M^\kw{Q}_A M^\kw{A}_A \big)^*
+      \big( M^\kw{Q}_A \cup M^\kw{A}_B \big) \mid
+      \sigma \mbox{ prefix-closed} \big\}
+\]
+
+%}}}
+
+\subsubsection{Composition} \label{sec:sem:games:comp} %{{{
+
+Consider two strategies
+$\sigma : \mathcal{S}_{A \Rightarrow B}$ and
+$\tau : \mathcal{S}_{B \Rightarrow C}$ \ldots
+
+[Describe the traditional construction
+$\{ (t \restriction {A,C}) \mid (t \restriction {A,B}) \in \sigma^\dagger \wedge
+        (t \restriction {B,C}) \in \tau \}$]
+
+Note that this traditional formulation
+relies on identifying silent divergence with
+the absence of any behavior,
+since for any play $s$ consisting of an interaction
+between $\sigma$ and $\tau$ over the common game $B$,
+which will become silent in the composition,
+we will have $s \restriction A,C = \varepsilon$.
+
+%}}}
+
+\subsubsection{Nondeterminism} %{{{
+
+Notice that we do not impose
+the usual determinism requirement on strategies,
+so that at any given point
+a strategy may allow several possible behaviors
+of the system, or none.
+We will use this potential multiplicity
+to represent specifications permitting a range of possible
+concrete behaviors,
+with trace containement as the corresponding notion of refinement.
+
+%}}}
+
+\subsubsection{Divergence} %{{{
+
+The introduction of nondeterminisim raises the question of
+where divergence fit with respect to that refinement preorder.
+In traditional denotational semantics,
+answers to this question correspond to the variety of constructions
+that can be used as powerdomains to model nondeterminism.
+Thankfully,
+the simplicity and operational flavor of game semantics
+will allow us to treat this question in a much more
+concrete and direct way. [elaborate, be more precise]
+
+In our context,
+identifying silent divergence with $\bot$
+is inappropriate:
+in particular,
+this would mean a diverging program
+would refine any specification.
+Instead,
+from the point of view of refinement,
+we wish to treat divergence as a behavior on par with others.
+This means our strategy model must be extended
+with an explicit representation of silent divergence.
+
+In \cite{gsnondet},
+this is accomplished by adjoining to every strategy
+a set of plays after which the system may silently diverge.
+Instead,
+we extend our model by allowing plays to contain
+the special move $\Delta$ as the last move of the system.
+This approach is more convenient given our treatment of divergence
+as a standard behavior from the point of view of the refinement order,
+but is otherwise equivalent to that found in \cite{gsnondet}.
+
+Note that by contrast with \cite{gsnondet},
+[b/c monad gives us just enough branching-time info,
+we don't run into problems with unbounded nondeterminism]
+
+\subsubsection{Abstraction}
+\subsubsection{Undefined Behaviors}
+
+\subsubsection{---}
+
+we treat divergence by
+[extending strategy representation with explicit divergence info];
+however from the point of view of refinement
+divergence is largely a behavior on par with others.
+The semantic domain obtained follows
+[Vardi's argument for trace semantics
+as the externally observable things]
+however
+[the monadic approach gives us just enough
+local/intermediate branching-time info
+that we can avoid the usual problems
+around unbounded nondeterminism.]
+
+%}}}
+
+\subsection{The Interaction Monad}
+
 % preamble {{{
+
+[Say it's formalized in Coq / uses CIC as foundation]
 
 The traditional representation of strategies as
 prefix-closed sets of traces
@@ -1136,6 +1348,11 @@ the semantic model presented in \S\ref{sec:modsem}.
 %}}}
 
 \subsection{Overview} \label{sec:monad:overview} %{{{
+
+
+
+
+
 
 The interaction monad specifies
 the behavior of an open system.
@@ -1275,7 +1492,7 @@ using the following rules:
 \end{gather*}
 Then $x \bind f$ can be defined as:
 \[
-    (x \bind f) = \bigsqcup_{t \in x} (t \bind f)
+    (x \bind f) = \bigcup_{t \in x} (t \bind f)
 \]
 It is straightforward to verify that
 the monad laws hold:
