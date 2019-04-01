@@ -2262,7 +2262,7 @@ of the question as described in Table~\ref{tbl:li}).]
 
 %}}}
 
-\subsection{Refinement and Abstraction} %{{{
+\subsection{Refinement and Abstraction} \label{sec:modsem:sim} %{{{
 \label{sec:modsem:ref}
 
 The correctness of CompCert is established in terms of
@@ -2529,7 +2529,7 @@ In this section
 we show how the correctness proof of CompCert
 can be updated to account for this additional structure.
 
-\subsection{Overview} %{{{
+\subsection{Overview} \label{sec:compcert:overview} %{{{
 
 Based on the existing CompCert semantics,
 we will define the elementary games
@@ -2766,128 +2766,150 @@ the values of registers and the state of the memory.
 
 %}}}
 
-\subsection{Simulation Relations} %{{{
+\subsection{Simulations} %{{{
 
-[Simulation relations account for refinement and abstraction,
-for the change in structure between the states of different languages.
-Simulation convention is the ``externally visible'' component of that.
-Since core of states is mem,
-core of simulation relations and conventions
-are logical relation on memories.
-Specific cases used in CompCert are
-injections and extensions (explain).
-We're going to generalize to CKLR.]
+The correctness of each pass of CompCert
+is proved by establishing a simulation between
+the semantics of the source and target programs
+of that pass.
+To generalize the existing proofs to our framework,
+we extend them to fit the model presented in \S\ref{sec:modsem:sim}.
+To this end,
+we need to specify for each pass
+two simulation conventions:
+one for incoming and one for external calls.
 
-Although block identifiers and offsets
-are concretely represented as integers,
-there is an implicit expectation throughout CompCert
-that constructions using the memory model
-will not depend on specific block identities
-or absolute pointer offsets.
-[Explain connection to relational parametricity.]
+In the same way language interfaces
+reveal details of language semantics
+that were previously internal
+and establish an external interface for
+the function call mechanism,
+simulation conventions reveal
+details of the simulation relations
+used in CompCert passes
+that were previously hidden from
+the user of the correctness proof.
+In practice,
+the states of all CompCert languages
+embed a memory state,
+and passes fall into three categories
+depending on how they relate
+the memory states at their source and target languages:
+\begin{itemize}
+\item \emph{Equalty} is used when the memory states
+  in the source and target execution remain identical,
+  for instance when the differences between
+  the source and target programs are mostly a matter of syntax,
+  but they execute in the same way.
+\item \emph{Memory extensions} are somewhat less constrained:
+  the target memory is allowed to contain values that are
+  \emph{more defined} than that of the source memory,
+  and to have less restrictive permissions,
+  so that all operations succeeding on the source memory
+  will succeed on the target memory as well.
+  However,
+  the two memory states must share the same overall structure.
+\item \emph{Memory injection} relations
+  are the most general ones used in CompCert,
+  and allow the structures of the source and target memories
+  to differ, as specified by an injection mapping
+  (see Example~\ref{ex:meminj}).
+\end{itemize}
 
-{\color{gray} %{{{
---- [Some former material in the rest of this section:] ---
+Table~\ref{tbl:passes} shows
+the intermediate languages and compilation passes
+used in our version of CompCert,
+together with the respective
+language interfaces and
+simulation conventions
+that are used for each one.
+In the remainder of this section,
+we will explain how these simulation conventions are constructed
+and how the compiler's overall incoming and outgoing conventions
+can be reconciled.
 
-Besides equality,
-the simulation proofs used
-to establish the correctness of Compcert passes
-relate the runtime values and memory state
-that make up the states for a given language
-in one of two possible ways:
-memory extensions
-allow the target values and memory to be more defined
-than the source ones;
-memory injections
-additionally permits a remapping of source memory blocks
-into target memory blocks at given offsets.
-This remapping is specified by an injection mapping
-$f : \kw{meminj}$,
-where the type $\kw{meminj}$ is defined as
-$\kw{block} \rightarrow \kw{option}(\kw{block} \times \mathbb{Z})$.
-An entry of the form $f(b) = (b', \delta)$
-signifies that the block $b$ of the source memory
-is mapped into the block $b'$ of the target memory,
-with offsets shifted so that
-offset $0$ in $b$ will be mapped at offset $\delta$ in $b'$.
-
-Compatibility of a given component
-with extensions and injections
-asserts that given two input memory states and surrounding values
-in a ``memory extension'' relation
-(resp. in a specific ``memory injection'' relation),
-the component's outputs will preserve that relationship.
-If the component allocates new memory blocks,
-the injection mapping may be correspondingly extended
-to introduce entries for the allocated blocks.
-This is an informal description,
-and the exact formulation of such theorems
-vary on a component-by-component basis.
-Moreover,
-for many components,
-CompCert needs to introduce two separate,
-but very similar proofs:
-one for extensions and one for injections.
-
-As we generalize from extensions and injections
-to define a family of Kripke logical relations
-over the Compcert memory model,
-we will be able to formalize these restrictions
-in the form of unified relational parametricity theorems:
-for any Compcert KLR,
-such components will be related to themselves
-by a relation constructed according to their type,
-from the basic components provided by the KLR.
-Because the KLRs are by definition compatible
-with the memory model's basic operations,
-such theorems will be relatively straightforward to prove,
-as long as the constructions under consideration
-do not access the values and memory states in exotic ways.
-In addition,
-because the parametricity theorems
-and the properties of components
-are expressed in terms of a unified relational language,
-it will be possible to mechanize these proofs
-to some extent.
-
-}
-
+\begin{table*} % tbl:passes Passes of Composable Compcert %{{{
+  \footnotesize
+  \begin{tabular}{lllp{.55\textwidth}}
+    \hline
+    Language/Pass & Outgoing & Incoming & Description \\
+    \hline
+    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ &
+      A simpler version of CompCert C
+      where expressions contain no side-effects. \\
+    \emph{Eqn.}~(\ref{eqn:clight}) & $\mathcal{C}[\kw{injp}]^*$ & $\mathcal{C}[\kw{injp}]^*$ &
+      \emph{Clight properties} \\
+    \kw{SimplLocals} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+      Pulling non-adressable scalar local variables out of memory. \\
+    \kw{Cshmgen} & \kw{id} & \kw{id} &
+      Simplification of control structures;
+      explication of type-dependent computations. \\
+    \hline
+    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Low-level structured language. \\
+    \kw{Cminorgen} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+      Stack allocation of local variables whose address is taken;
+      simplification of switch statements. \\
+    \hline
+    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Low-level structured language,
+      with explicit stack allocation of certain local variables. \\
+    \kw{Selection} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+      Recognition of operators and addressing modes. \\
+    \hline
+    \textbf{Cminorsel} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Like Cminor, with machine-specific operators and addressing modes. \\
+    \kw{RTLgen} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+      Construction of the CFG, 3-address code generation. \\
+    \hline
+    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Register transfer language
+      (3-address code, control-flow graph, infinitely many pseudo-registers). \\
+    \kw{Tailcall} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+      Recognition of tail calls. \\
+    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ &
+      Postorder renumbering of the CFG. \\
+    \emph{Eqn.}~(\ref{eqn:rtl}) & $\mathcal{C}[\kw{inj}]$ & $\mathcal{C}[\kw{inj}]$ &
+      \emph{RTL properties} \\
+    \kw{Allocation} & \kw{alloc} & \kw{alloc} &
+      Register allocation \\
+    \hline
+    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ &
+      Location transfer language
+      (3-address code, control-flow graph of basic blocks,
+      finitely many physical registers, infinitely many stack slots). \\
+    \kw{Linearize} & \kw{id} & \kw{id} &
+      Linearization of the CFG \\
+    \hline
+    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ &
+      Like LTL, but the CFG is replaced by
+      a linear list of instructions with explicit branches and labels \\
+    \kw{CleanupLabels} & \kw{id} & \kw{id} &
+      Removal of unreferenced labels. \\
+    \kw{Debugvar} & \kw{id} & \kw{id} &
+      Synthesis of debugging information. \\
+    \kw{Stacking} & \kw{stacking} & \kw{stacking} &
+      Laying out the activation records \\
+    \hline
+    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ &
+      Like Linear, with a more concrete view of the activation record \\
+    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} &
+      Emission of assembly code \\
+    \hline
+    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ &
+      Assembly language for x86 machines \\
+    \hline
+  \end{tabular}
+  \caption{%
+    Languages and essential passes of CompCert
+    (descriptions from Compcert's documentation).}
+  \label{tbl:passes}
+\end{table*}
 %}}}
 
 %}}}
 
-\subsection{Kripke Logical Relations} %{{{
-
-\begin{figure} % fig:cklr-def (Definition of CKLRs) {{{
-  \begin{gather*}
-    w \leadsto w \\
-    w \leadsto w' \wedge w' \leadsto w'' \Rightarrow w \leadsto w'' \\
-    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f
-  \end{gather*}
-  \begin{align*}
-      \kw{Mem.alloc} :
-        &\Vdash R^\kw{mem} \rightarrow {=} \rightarrow {=} \rightarrow
-        \Diamond (R^\kw{mem} \times R^\kw{block})
-      \\
-      \kw{Mem.free} :
-        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptrrange} \rightarrow
-        \kw{option}^\le(\Diamond R^\kw{mem})
-      \\
-      \kw{Mem.load} :
-        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow
-        \kw{option}^\le(R^\kw{val})
-      \\
-      \kw{Mem.store} :
-        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow R^\kw{val} \rightarrow
-        \kw{option}^\le(\Diamond R^\kw{mem})
-      \\
-      \kw{Mem.perm} :
-        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow {\subseteq}
-  \end{align*}
-  \caption{Axioms for CKLRs}
-  \label{fig:cklr-def}
-\end{figure}
-%}}}
+\subsection{Kripke Logical Relations} \label{sec:compcert:cklr} %{{{
 
 Memory extensions and injections
 are useful for simulations
@@ -2945,6 +2967,37 @@ defined by the rules:
 We say that $R$ is a \emph{CompCert Kripke logical relation}
 if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
 \end{definition}
+%}}}
+
+\begin{figure} % fig:cklr-def (Definition of CKLRs) {{{
+  \begin{gather*}
+    w \leadsto w \\
+    w \leadsto w' \wedge w' \leadsto w'' \Rightarrow w \leadsto w'' \\
+    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f
+  \end{gather*}
+  \begin{align*}
+      \kw{Mem.alloc} :
+        &\Vdash R^\kw{mem} \rightarrow {=} \rightarrow {=} \rightarrow
+        \Diamond (R^\kw{mem} \times R^\kw{block})
+      \\
+      \kw{Mem.free} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptrrange} \rightarrow
+        \kw{option}^\le(\Diamond R^\kw{mem})
+      \\
+      \kw{Mem.load} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow
+        \kw{option}^\le(R^\kw{val})
+      \\
+      \kw{Mem.store} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow R^\kw{val} \rightarrow
+        \kw{option}^\le(\Diamond R^\kw{mem})
+      \\
+      \kw{Mem.perm} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow {\subseteq}
+  \end{align*}
+  \caption{Axioms for CKLRs}
+  \label{fig:cklr-def}
+\end{figure}
 %}}}
 
 The $R^\kw{mem}$ component is given direcly.
@@ -3051,8 +3104,8 @@ In addition, the CKLR \kw{inj} and \kw{ext}
 satisfy the following composition properties.
 
 \begin{lemma}[Composition properties of CKLRs]
-Consider $R, S, T$ arbitraty CompCert Kripke logical relations.
-The composition of CKLRs satisfies the followinf properties.
+Consider $R, S, T$ arbitrary CompCert Kripke logical relations.
+The composition of CKLRs satisfies the following properties.
 \begin{gather*}
   (R ; S) ; T \equiv R ; (S ; T) \\
   \kw{inj} ; \kw{inj} \equiv
@@ -3081,13 +3134,13 @@ in the compiler's overall simulation convention.
 
 For each language interface
 $\mathcal{X} \in \{ \mathcal{C}, \mathcal{L}, \mathcal{M}, \mathcal{A} \}$,
-a CompCert Kripke logical relation
+a CKLR
 $R = \langle W, {\leadsto}, f, R^\kw{mem} \rangle$ can be promoted to
 a simulation convention
 $\mathcal{X}[R] : \mathcal{X} \Leftrightarrow \mathcal{X}$.
 For example
 we define $\mathcal{C}[R] : \mathcal{C} \Leftrightarrow \mathcal{C}$
-in the following way:
+as follows:
 \[
     \mathcal{C}[R] := \langle
       W, \:
@@ -3095,8 +3148,10 @@ in the following way:
       \Diamond (R^\kw{val} \times R^\kw{mem})
     \rangle \,.
 \]
-Then,
-because the semantics of CompCert languages
+Such operators should preserve composition,
+in the sense that $\mathcal{X}[R ; S] = \mathcal{X}[R] \cdot \mathcal{X}[S]$.
+
+Because the semantics of CompCert languages
 are expected to be well-behaved with respect to
 invariance properties of the memory model,
 we can prove for each language of CompCert
@@ -3108,7 +3163,7 @@ a parametricity theorem of the form:
       \llbracket p \rrbracket \,.
 \]
 Since both sides of the relation are identical,
-the simulations further be iterated
+the simulations can be iterated
 to obtain similar properties in terms of $\mathcal{X}[R]^*$.
 
 In particular,
@@ -3118,112 +3173,62 @@ which will be useful to derive our final correctness theorem:
     \forall R \,.\,
       \kw{Clight} \llbracket p \rrbracket
         \le_{\mathcal{C}[R]^* \Rightarrow \mathcal{C}[R]^*}
-      \kw{Clight} \llbracket p \rrbracket \\
+      \kw{Clight} \llbracket p \rrbracket
+      \label{eqn:clight}
+      \\
     \forall R \,.\,
       \kw{RTL} \llbracket p \rrbracket
         \le_{\mathcal{C}[R] \Rightarrow \mathcal{C}[R]}
       \kw{RTL} \llbracket p \rrbracket
+      \label{eqn:rtl}
 \end{gather}
 
 %}}}
 
-\subsection{Compiler Passes} %{{{
+\subsection{Compiler Correctness} %{{{
 
-[Describe additional simulation conventions
-used by specific passes.]
+Following the approach outlined in \S\ref{sec:compcert:overview},
+and referring to Table~\ref{tbl:passes},
+the overall simulation convention for the whole compiler
+can be given as:
+\[
+  \mathbb{R}_\kw{CompCert} : \mathcal{C} \Leftrightarrow \mathcal{A} :=
+    \mathcal{C}[\kw{injp}]^* \cdot
+    \mathcal{C}[\kw{inj}] \cdot
+    \kw{alloc} \cdot
+    \kw{stacking} \cdot
+    \kw{asmgen} \,.
+\]
+To verify that the passes indeed compose to
+estblish correctness with respect to the simulation convention
+$\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}$,
+it suffices to show that
+the incoming and outgoing simulations can be reconciled,
+or more precisely:
+\[
+    \mathcal{C}[\kw{injp}]^* \cdot
+    \mathcal{C}[\kw{injp}] \cdots
+    \mathcal{C}[\kw{ext}] \cdot
+    \mathcal{C}[\kw{inj}]
+    \: \sqsubseteq \:
+    \mathbb{R}_\kw{CompCert}
+    \: \sqsubseteq \:
+    \mathcal{C}[\kw{injp}]^* \cdot
+    \mathcal{C}[\kw{inj}] \cdots
+    \mathcal{C}[\kw{ext}] \cdot
+    \mathcal{C}[\kw{inj}] 
+\]
+This follows from Lemma~X etc.
+so that we can conclude:
+\[
+    \forall p_s \,.\,
+      \kw{CompCert}(p_s) = p_t \Rightarrow
+      \kw{Clight} \llbracket p_s \rrbracket
+      \sqsubseteq_{\mathbb{R}_\kw{CompCert}}
+      \kw{Asm} \llbracket p_t \rrbracket \,.
+\]
 
-\begin{table*} % tbl:passes Passes of Composable Compcert %{{{
-  \footnotesize
-  \begin{tabular}{lllp{.55\textwidth}}
-    \hline
-    Language/Pass & Outgoing & Incoming & Description \\
-    \hline
-    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ &
-      A simpler version of CompCert C
-      where expressions contain no side-effects. \\
-    -- & $\mathcal{C}[\kw{injp}]^*$ & $\mathcal{C}[\kw{injp}]^*$ &
-      \emph{Clight properties} \\
-    \kw{SimplLocals} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
-      Pulling non-adressable scalar local variables out of memory. \\
-    \kw{Cshmgen} & \kw{id} & \kw{id} &
-      Simplification of control structures;
-      explication of type-dependent computations. \\
-    \hline
-    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ &
-      Low-level structured language. \\
-    \kw{Cminorgen} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
-      Stack allocation of local variables whose address is taken;
-      simplification of switch statements. \\
-    \hline
-    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ &
-      Low-level structured language,
-      with explicit stack allocation of certain local variables. \\
-    \kw{Selection} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
-      Recognition of operators and addressing modes. \\
-    \hline
-    \textbf{Cminorsel} & $\mathcal{C}$ & $\mathcal{C}$ &
-      Like Cminor, with machine-specific operators and addressing modes. \\
-    \kw{RTLgen} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
-      Construction of the CFG, 3-address code generation. \\
-    \hline
-    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ &
-      Register transfer language
-      (3-address code, control-flow graph, infinitely many pseudo-registers). \\
-    \kw{Tailcall} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
-      Recognition of tail calls. \\
-    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ &
-      Postorder renumbering of the CFG. \\
-    -- & $\mathcal{C}[\kw{inj}]$ & $\mathcal{C}[\kw{inj}]$ & \emph{RTL properties} \\
-    \kw{Allocation} & \kw{alloc} & \kw{alloc} &
-      Register allocation \\
-    \hline
-    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ &
-      Location transfer language
-      (3-address code, control-flow graph of basic blocks,
-      finitely many physical registers, infinitely many stack slots). \\
-    \kw{Linearize} & \kw{id} & \kw{id} &
-      Linearization of the CFG \\
-    \hline
-    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ &
-      Like LTL, but the CFG is replaced by
-      a linear list of instructions with explicit branches and labels \\
-    \kw{CleanupLabels} & \kw{id} & \kw{id} &
-      Removal of unreferenced labels. \\
-    \kw{Debugvar} & \kw{id} & \kw{id} &
-      Synthesis of debugging information. \\
-    \kw{Stacking} & \kw{stacking} & \kw{stacking} &
-      Laying out the activation records \\
-    \hline
-    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ &
-      Like Linear, with a more concrete view of the activation record \\
-    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} &
-      Emission of assembly code \\
-    \hline
-    \textbf{Asm} & \kw{\bf li\_asm} & \kw{\bf li\_asm} &
-      Assembly language for x86 machines \\
-    \hline
-  \end{tabular}
-  \caption{%
-    Languages and essential passes of CompCert
-    (descriptions from Compcert's documentation).}
-  \label{tbl:passes}
-\end{table*}
-%}}}
 
-Table~\ref{tbl:passes} shows the passes of Composable Compcert,
-together with the calling conventions for external calls and module interaction
-used at each pass.
-The calling conventions for each pass are chosen for convenience:
-they reflect most closely the way the proof was written
-in Compcert and CompCertX,
-rather than a particularly useful or meaningful theorem for that pass.
-In particular,
-note that for most passes
-the calling convention used for external calls is different from
-that used for the module's outer interface,
-preventing horizontal compositionality.
-This section explains how the passes can nonetheless be composed
-and how a satisfactory theorem can be derived for the whole compiler.
 
 %}}}
 
@@ -3240,6 +3245,10 @@ and how a satisfactory theorem can be derived for the whole compiler.
   We use (semi-)Kleene algebra a lot,
   embed them into a legit one (so that we have a zero on the right),
   and use Pous' tactics.
+\item
+  Limitation:
+  we model linking as in CompCompCert,
+  but do not yet verify a form of linking as specified in SepCompCert
 \end{itemize}
 
 %}}}
