@@ -1627,7 +1627,7 @@ $\kw{ret} \circ f : A \rightarrow \mathcal{I}_{M,N}(B)$.
 
 %}}}
 
-\subsection{Interaction} \label{sec:monad:int} %{{{
+\subsection{Interaction [DEFS PROB WRONG]} \label{sec:monad:int} %{{{
 
 The interaction primitive
 $\mathbf{I}_{M,N} : M \rightarrow \mathcal{I}_{M,N}(N)$
@@ -1660,7 +1660,7 @@ whereas the second one denotes the value returned by $\mathbf{I}$.
 %which can be used to resume the evaluation of $x$
 %on a subsequent input $n \in N$:
 %\[
-%    \kw{next}(\kw{interact}(m) \bind f) = \kw{ret}(i_2(m, f)) \,.
+%    \kw{next}(\mathbf{I}(m) \bind f) = \kw{ret}(i_2(m, f)) \,.
 %\]
 %
 %\begin{definition}[Silent unfolding]
@@ -1700,76 +1700,159 @@ the value will be used as an input to resume to evaluation of $x$.
 This corresponds to the composition of strategies
 discussed in \S\ref{sec:}.
 
-Note that $x[f]$ may introduce silent divergence;
-for instance:
-\[
-    \kw{interact}^\infty(*) [\kw{ret}] = \{ \Delta \} \,,
-\]
-even though neither $\kw{interact}^\infty(*)$
-nor $\kw{ret}$ silently diverge on their own.
-To formulate the definition of $x[f]$,
-we will use an interactive transition system
-based on $\kw{next}$,
-over states of type $\mathcal{I}_{M,N}(A) + A$.
-A state $i_1(\hat{x})$ denotes that
-the evaluation of $x$ is still active,
-with $\hat{x}$ the remaining suffix of its behavior.
-A state $i_2(v)$ denotes that
-$x$ has terminated with the result $v$.
+%Note that $x[f]$ may introduce silent divergence;
+%for instance:
+%\[
+%    \mathbf{I}^\infty(*) [\kw{ret}] = \{ \Delta \} \,,
+%\]
+%even though neither $\mathbf{I}^\infty(*)$
+%nor $\kw{ret}$ silently diverge on their own.
+%To formulate the definition of $x[f]$,
+%we will use an interactive transition system
+%based on $\kw{next}$,
+%over states of type $\mathcal{I}_{M,N}(A) + A$.
+%A state $i_1(\hat{x})$ denotes that
+%the evaluation of $x$ is still active,
+%with $\hat{x}$ the remaining suffix of its behavior.
+%A state $i_2(v)$ denotes that
+%$x$ has terminated with the result $v$.
 
-\begin{definition}[Substitution]
-For a type $A$ and
+The definition of $x[f]$ below is similar to that of $x \bind f$.
+To detect emergent silent divergence,
+we follow an approach similar to that used in $f^\infty$.
+
+\begin{definition}[Substitution] %{{{
+For a type $A$,
 an interactive continuation $f : M \rightarrow \mathcal{I}_{P,Q}(N)$,
-we define
-$\vec{f}_A : \mathcal{I}_{M,N}(A) + A \rightarrow
- \mathcal{I}_{P,Q}(\mathcal{I}_{M,N}(A) + A)$
-as the interactive transition system:
-\begin{align*}
-  \vec{f}_A(s) := i_1^{-1}(s) \bind \kw{next} \bind
-      [i_2, (m, k) \mapsto f(m) \bind n \mapsto \kw{ret}(i_1(k(n)))]
-%        (&i_1^{-1} \bind i_2) \\ {} \oplus
-%        (&i_2^{-1} \bind (m, k) \mapsto f(m) \bind k \bind i_1)
-\end{align*}
-Then for a behavior $x : \mathcal{I}_{M,N}(A)$,
-the \emph{substitution} $x[f] : \mathcal{I}_{P,Q}(A)$ is defined as:
+and a trace $t \in \mathcal{T}_{M,N}(A)$,
+the set $t[f] \in \mathcal{T}_{P,Q}(A)$
+is defined recursively as:
+\begin{gather*}
+  v[f] = v \qquad
+  \Delta[f] = \Delta \qquad
+  \lightning[f] = \lightning \qquad
+  m[f] = f(m) \bind \mathbf{0} \\
+  mnt[f] = f(m) \bind
+    r \mapsto \{ s \mid r = n \wedge s \in t[f] \}
+\end{gather*}
+In addition, for an interactive behavior $x \in \mathcal{I}_{M,N}(A)$,
+we define the behavior $x[f]_\Delta$ as:
 \[
-    x[f] := \kw{ret}(i_1(x)) \bind \vec{f}_A^\infty \bind i_2^{-1} \,,
+    x[f]_\Delta :=
+    \begin{cases}
+      \{ \Delta \} & \mbox{if }
+      \exists \, (m_i, n_i)_{i \in \mathbb{N}} \,.\,
+      \forall i \,.\,
+        m_0 n_0 \cdots m_i \in x \wedge
+        n_i \in f(m_i) \\
+      \bot & \mbox{otherwise.}
+    \end{cases}
+\]
+Then the interactive substitution
+$x[f] \in \mathcal{I}_{P,Q}(A)$ is:
+\[
+    x[f] := \bigcup_{t \in x} t[f] \cup x[f]_\Delta \,,
 \]
 and for $g : A \rightarrow \mathcal{I}_{M,N}(B)$,
-the \emph{interactive composition}
-$g \odot f : A \rightarrow \mathcal{I}_{P,Q}(B)$ is defined as:
+the interactive composition
+$g \odot f : A \rightarrow \mathcal{I}_{P,Q}(B)$
+is defined by:
 \[
-    (g \odot f)(a) := g(a) [f] \,.
+    (g \odot f)(a) := g(a)[f] \,.
 \]
 \end{definition}
+%}}}
+
+%  \quad
+%  \AxiomC{}
+%  \UnaryInfC{$t \in (\lightning \bind f)$}
+%  \DisplayProof
+%  \quad
+%  \AxiomC{}
+%  \UnaryInfC{$m \in (m \bind f)$}
+%  \DisplayProof
+%  \\[1ex]
+%  \AxiomC{$t \in f(v)$}
+%  \UnaryInfC{$t \in (v \bind f)$}
+%  \DisplayProof
+%  \quad
+%  \AxiomC{$s \in (t \bind f)$}
+%  \UnaryInfC{$mns \in (mnt \bind f)$}
+%  \DisplayProof
+%\end{gather*}
+%
+%
+%we define
+%$\vec{f}_A : \mathcal{I}_{M,N}(A) + A \rightarrow
+% \mathcal{I}_{P,Q}(\mathcal{I}_{M,N}(A) + A)$
+%as the interactive transition system:
+%\begin{align*}
+%  \vec{f}_A(s) := i_1^{-1}(s) \bind \kw{next} \bind
+%      [i_2, (m, k) \mapsto f(m) \bind n \mapsto \kw{ret}(i_1(k(n)))]
+%%        (&i_1^{-1} \bind i_2) \\ {} \oplus
+%%        (&i_2^{-1} \bind (m, k) \mapsto f(m) \bind k \bind i_1)
+%\end{align*}
+%Then for a behavior $x : \mathcal{I}_{M,N}(A)$,
+%the \emph{substitution} $x[f] : \mathcal{I}_{P,Q}(A)$ is defined as:
+%\[
+%    x[f] := \kw{ret}(i_1(x)) \bind \vec{f}_A^\infty \bind i_2^{-1} \,,
+%\]
+%and for $g : A \rightarrow \mathcal{I}_{M,N}(B)$,
+%the \emph{interactive composition}
+%$g \odot f : A \rightarrow \mathcal{I}_{P,Q}(B)$ is defined as:
+%\[
+%    (g \odot f)(a) := g(a) [f] \,.
+%\]
+%\end{definition}
 
 Substitution and interactive composition
 enjoy the following properties:
 \begin{align*}
-  x[\kw{interact}] &= x &
-  \kw{interact}(m)[f] &= f(m) &
+  x[\mathbf{I}] &= x &
+  \mathbf{I}(m)[f] &= f(m) &
   x[g \odot f] &= x[g][f] \\
-  g \odot \kw{interact} &= g &
-  \kw{interact} \odot f &= f &
+  g \odot \mathbf{I} &= g &
+  \mathbf{I} \odot f &= f &
   h \odot (g \odot f) &= (h \odot g) \odot f
 \end{align*}
-
 In addition,
 similarly to the way
 the Kleene composition $f \cdot g$ can be iterated as $f^\infty$,
 we can let a behavior interact with itself
-by iterating the interactive composition $f \odot g$ as $f^\oast$.
-For $f : M \rightarrow \mathcal{I}_{M,N}(N)$,
-The transition system used to defined $f^\oast$
-uses states of type $(N \rightarrow \mathcal{I}_{M,N}(N)$
+by iterating the interactive composition $f \odot g$ as $f^\circledcirc$.
 
 \begin{definition}[Interactive iteration]
-[A bit more involved because we need to keep a stack of continuations.
-Maybe define in terms of traces if that's more transparent.]
+The finite interactive iterations
+of $f : M \rightarrow \mathcal{I}_{M,N}(N)$
+are:
+\[
+    \begin{array}{rl}
+      f^{(0)} &:= \mathbf{I} \\
+      f^{(n+1)} &:= f^{(n)} \odot f
+    \end{array}
+    \qquad
+    f^\oast := \bigoplus_n f^{(n)} \,,
+\]
+and we define
+$f_{(\Delta)} : M \rightarrow \mathcal{I}_{M,N}(N)$
+as:
+\[
+    f_{(\Delta)}(a) :=
+    \begin{cases}
+      \{ \Delta \} &\mbox{if }
+        \exists \, (m_i)_{i \in \mathbb{N}} \,.\,
+        m_0 = a \wedge
+        \forall \, i \in \mathbb{N} \,.\,
+        f(m_i) \ni m_{i+1} \\
+      \bot &\mbox{otherwise}
+    \end{cases}
+\]
+Then the infinite interactive iteraction of $f$ is
+$f^\circledcirc : M \rightarrow \mathcal{I}_{M,N}(N)$, defined as:
+\[
+    f^\circledcirc := (f \oplus f_{(\Delta)})^\oast \,.
+\]
 \end{definition}
-
-[Rename $\kw{interact}$ as $\mathbf{I}$
-given that it is the identity for $\odot$?]
 
 %}}}
 
@@ -1979,7 +2062,7 @@ with respect to abstraction and refinement:
      \mathcal{I}^\le_{R_M,R_N}(R_Y)) \rightarrow
     (\Vdash \mathcal{I}^\le_{R_M,R_N}(R_X) \rightarrow
      \mathcal{I}^\le_{R_M,R_N}(R_Y)) \\
-  \kw{interact} &:
+  \mathbf{I} &:
     (\Vdash (\Diamond R_M) \rightarrow
      \mathcal{I}^\le_{R_M,R_N}(R_N)) \\
   \kw{next} &:
@@ -2186,7 +2269,7 @@ defined as follows:
     \begin{cases}
       \top & \mbox{if } \kw{stuck}(s) \\
       {\rightarrow}(s) \sqcup
-      (X(s) \bind \kw{interact} \bind Y(s)) & \mbox{otherwise,}
+      (X(s) \bind \mathbf{I} \bind Y(s)) & \mbox{otherwise,}
    \end{cases}
 \]
 The overall external behavior of $L$
@@ -2425,13 +2508,13 @@ defined as:
 The commutativity of $\bullet$ trivially follows from that of $\oplus$,
 and associativity can be derived from properties of $\oplus$ and $\oast$.
 The empty behavior $\mathbf{0}$ and
-the ``pass-through'' behavior $\kw{interact}$
+the ``pass-through'' behavior $\mathbf{I}$
 are both identities for $\bullet$.
 In addition,
 the following approximations that can be useful for proofs:
 \[
     \sigma_1 \odot \sigma_2 \quad \sqsubseteq \quad
-    \sigma_1 \odot (\sigma_2 \oplus \kw{interact}) \quad \sqsubseteq \quad
+    \sigma_1 \odot (\sigma_2 \oplus \mathbf{I}) \quad \sqsubseteq \quad
     \sigma_1 \bullet \sigma_2 \,.
 \]
 
