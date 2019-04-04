@@ -2833,7 +2833,7 @@ in the sense that
 performing similar operations on related arguments
 yields related results.
 
-\subsubsection{Definition}
+\subsubsection{Definition} %{{{
 
 We formalize this idea by defining
 a notion of Kripke logical relations over the CompCert memory model,
@@ -2952,7 +2952,9 @@ in the sense that:
 However,
 this is not necessarily the case for $R^\kw{mem}$.
 
-\subsubsection{Extensions}
+%}}}
+
+\subsubsection{Extensions} %{{{
 
 The simplest CompCert KLR corresponds to memory extensions.
 It uses a trivial Kripke frame and injection mapping:
@@ -2965,7 +2967,9 @@ is equivalent to $\kw{Val.lessdef}$,
 which is the relation on runtime values that
 CompCert uses in conjunction with \kw{Mem.extends}.
 
-\subsubsection{Injections}
+%}}}
+
+\subsubsection{Injections} %{{{
 
 In the same vein,
 we can reify memory injections as the CompCert KLR:
@@ -2987,14 +2991,9 @@ which asserts that for all block identifiers $b, b'$ and offsets $\delta$
 such that $f(b) = (b', \delta)$,
 then $g(b) = (b', \delta)$ as well.
 
-\subsubsection{External call requirements}
+%}}}
 
-The requirements on external calls
-relating the contents of the initial and final memory states
-can also be put in the form of a CKLR:
-...
-
-\subsubsection{Composition}
+\subsubsection{Composition} %{{{
 
 Given
 $R = \langle W_R, {\leadsto}_R, f_R, R^\kw{mem} \rangle$ and
@@ -3031,8 +3030,95 @@ The composition of CKLRs satisfies the following properties.
 These properties will be used to obtain the overall
 compositional correctness proof for CompCert
 after composing our updated compilation passes.
-Note however that the CKLR $\kw{injp}$
-does not enjoy similar composition properties.
+
+%}}}
+
+\subsubsection{Footprint Preservation}
+
+In the correctness proof of the passes of CompCert
+which use a memory injection as part of their simulation relation,
+the semantics of external calls is expected to preserve that injection,
+so that the simulation relation can be reestablished
+after external calls.
+In addition,
+external calls are expected to only modify
+the parts of the source and target memories
+that are within the injection's footprint,
+which is to say that their addresses are
+related by the injection mapping,
+and are granted non-empty permissions
+in both memory states.
+
+For instance,
+in the \kw{Stacking} pass,
+the target memory's stack frames
+are extended with spilling locations.
+These locations are used in the target program
+to keep track of temporary values,
+which in the source program are kept
+in a local environment separate from the memory state.
+The spilling locations are not part of
+the injection footprint
+because they are unallocated in the source memory,
+and their preservation across external calls
+is essential to the correctness of \kw{Stacking}.
+
+This expectation is reasonable because
+external calls
+should behave uniformly between the source and target executions.
+In particular,
+an external function acting on the memory state
+should not synthesize block identifiers and pointers,
+but can only follow pointers passed as arguments
+or fetched from the memory itself.
+If it were to access a spilling location in this way in the target execution,
+the corresponding source pointer would have to be
+related to the target pointer by \kw{Val.inject},
+and consequently would either be undefined
+or invalid (point to a location without permissions),
+so that the source program would go wrong.
+
+Because the CKLR framework is rich enough to express
+temporal properties such as the preservation of injection footprints,
+this argument can be made precise as a \emph{parametricity} property
+(\S\ref{sec:compcert:param}).
+For now,
+we show how to encode this requirement as a CKLR.
+
+\begin{definition}
+The components of the CompCert Kripke logical relation:
+\[ \kw{injp} :=
+  \langle
+    W \times \kw{mem} \times \kw{mem},
+    \leadsto_\kw{injp}, \pi_1, R_\kw{injp}^\kw{mem}
+  \rangle \]
+are defined as follows.
+For the injection mappings $f, f'$ and
+the memory states $m_1, m_2, m_1', m_2'$,
+the relation $(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$
+holds when the following conditions are satisfied:
+\begin{itemize}
+\item $f \subseteq f'$, and any new mappings in $f'$
+  must be between newly allocated blocks in $m_1'$ and $m_2'$;
+\item any blocks of $m_1$ unmapped by $f$
+  must remain unchanged in $m_2$;
+\item any locations in $m_2$ unrelated by $f$
+  to valid locations of $m_1$ must remain unchanged in $m_2'$;
+\item within allocated blocks of $m_1$,
+  the permissions assigned to any offset may not increase in $m_1'$
+  (this helps ensure that $\leadsto_\kw{meminj}$ is transitive).
+\end{itemize}
+The relation $R_\kw{injp}^\kw{mem}$ is defined by the rule:
+\[
+  \AxiomC{$m_1 \ifr{f \Vdash \kw{Mem.inject}} m_2$}
+  \UnaryInfC{$m_1 \ifr{(f, m_1, m_2) \Vdash R_\kw{injp}^\kw{mem}} m_2$}
+  \DisplayProof
+\]
+\end{definition}
+
+Note that the CKLR $\kw{injp}$
+does not enjoy composition properties
+similar to those of $\kw{ext}$ and $\kw{inj}$.
 Instead,
 we use the iterated simulation convention $\mathcal{C}[\kw{injp}]^*$
 to absorb instances of $\kw{injp}$ in the domain convention.
@@ -3043,7 +3129,7 @@ in the compiler's overall simulation convention.
 
 %}}}
 
-\subsection{Relational Parametricity} %{{{
+\subsection{Relational Parametricity} \label{sec:compcert:param} %{{{
 
 For each language interface
 $\mathcal{X} \in \{ \mathcal{C}, \mathcal{L}, \mathcal{M}, \mathcal{A} \}$,
@@ -3061,7 +3147,7 @@ as follows:
       \Diamond (R^\kw{val} \times R^\kw{mem})
     \rangle \,.
 \]
-Such operators should preserve composition,
+Such operators preserve composition
 in the sense that $\mathcal{X}[R ; S] = \mathcal{X}[R] \cdot \mathcal{X}[S]$.
 
 Because the semantics of CompCert languages
