@@ -1391,7 +1391,7 @@ treating silent divergence as a specific behavior.
         ${\sqcup}, {\oplus}$ & $\bot, \mathbf{0}$ & $*$ & $\infty$ \\
       Interaction &
         $x[f]$ & $g \odot f$ & $\mathbf{I}$ &
-        ${\sqcup}, {\oplus}$ & $\bot, \mathbf{0}$ & $\oast$ & $\circledcirc$ \\
+        ${\sqcup}, {\oplus}$ & $\bot, \mathbf{0}$ & & \\
       \hline
     \end{tabular}
   \end{center}
@@ -1902,13 +1902,10 @@ Strategies inherit the algebraic structures
 of the interaction monad,
 so that for example
 given $\sigma : A \Rightarrow B$ and $\tau : B \Rightarrow C$,
-their composition can be written as $\tau \odot \sigma$,
+their composition can be written as $\tau \odot \sigma$, and
 given $\sigma, \tau : A \Rightarrow B$,
 their least upper bound
-can be written $\sigma \oplus \tau$,
-and $\sigma : A \Rightarrow A$
-can be made to nondeterministically interact with itself
-as $\sigma^\circledcirc$.
+can be written $\sigma \oplus \tau$.
 
 In addition,
 refinement and abstraction can also be lifted to strategies.
@@ -2427,17 +2424,53 @@ to interpret its external calls.
 In addition,
 to model cross-module interactions in low-level programs,
 we define the symmetric,
-\emph{horizontal composition}
+\emph{horizontal} composition
+$\sigma_1 \bullet \sigma_2$
 of
 $\sigma_1 : A \Rightarrow A$ and
 $\sigma_2 : A \Rightarrow A$,
 which allows $\sigma_1$ and $\sigma_2$
 to interact with one another
 in a mutually recursive fashion.
+We will proceed first by computing their union $\sigma_1 \oplus \sigma_2$,
+then resolving their recursive calls
+through a unary operator $\sigma^\circledcirc$,
+which nondeterministically feeds the external calls of $\sigma$
+back to itself.
+
+To define $\sigma^\circledcirc$,
+we use a transition system which will keep track,
+on one hand, of the currently active behavior, and
+on the other, of a stack of suspended continuations ready to be resumed.
+Whenever the active behavior performs an external call,
+we may instead suspend it and instantiate a new copy of $\sigma$.
+When the active behavior returns,
+we will resume the next continuation on the stack.
+This corresponds to the step relation:
+\begin{align*}
+   \kw{step}(s, k) :=
+ \:  &\mu(s) \bind m \mapsto \mathbf{I}(m)
+               \bind n \mapsto \kw{ret}(\delta_{mn}(s), k) \\ \sqcup
+ \:  &\mu(s) \bind m \mapsto \kw{ret}(\sigma(m),
+                        \kw{cons}(n \mapsto \delta_{mn}(s), k)) \\ \sqcup
+ \:  &\rho(s) \bind n \mapsto
+      \kw{cons}^{-1}(k) \bind (k_0, k') \mapsto
+      \kw{ret}(k_0(n), k')
+\end{align*}
 
 \begin{definition}[Horizontal composition]
-For an elementary game $A$,
-the \emph{horizontal composition} of the interactive behaviors
+For an elementary game $A$
+and for a strategy $\sigma : A \Rightarrow A$,
+the recursive calls of $\sigma$ can be nondeterministically resolved as:
+\[
+\sigma^\circledcirc(m) :=
+  \kw{ret}(\mathbf{I}(m), \kw{nil}) \bind 
+      \kw{step}^\infty \bind
+   (s, k) \mapsto
+       \kw{nil}^{-1}(k) \bind - \mapsto
+       \rho(s)
+\]
+The \emph{horizontal composition} of the interactive behaviors
 $\sigma_1, \sigma_2 : A \Rightarrow A$
 is the interactive behavior
 $\sigma_1 \bullet \sigma_2 : A \Rightarrow A$
@@ -2449,7 +2482,7 @@ defined as:
 \end{definition}
 
 The commutativity of $\bullet$ follows from that of $\oplus$,
-and associativity can be derived from properties of $\oplus$ and $\oast$.
+and associativity can be derived from properties of $\oplus$ and $\circledcirc$.
 The behaviors $\mathbf{0}$ and $\mathbf{I}$
 are both identities for $\bullet$.
 
