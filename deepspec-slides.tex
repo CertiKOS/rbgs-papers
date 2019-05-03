@@ -1,6 +1,8 @@
 \documentclass{beamer}
 \usepackage{stmaryrd}
 \usepackage{galois}
+\usepackage{bussproofs}
+\newcommand{\bind}{\gg\!\!=}
 
 \AtBeginSection[]
 {
@@ -11,13 +13,41 @@
 
 \begin{document}
 
-\section{Background}
+\section{Introduction}
 
-\begin{frame}{DeepSpec glue} %{{{
+\begin{frame}{Goal} %{{{
+
+Tension:
+\begin{itemize}
+\item
+  To make verification tractable,
+  we need semantic models that are
+  specialized to the task at hand.
+\item 
+  To link verified artefacts together and
+  build large-scale certified systems,
+  we need compatible semantic models.
+\end{itemize}
+\vfill
+
+Our hope:
+\begin{itemize}
+\item
+  To build a general-purpose, compositional
+  semantic model supporting large-scale reasoning
+  about heterogenous systems.
+\item
+  To enable linking disparate verification projects
+  by making sure more specialized semantics
+  can be embedded into ours.
+\end{itemize}
+\vfill
+
 \end{frame}
 %}}}
 
-\begin{frame} %{Building Certified Systems} %{{{
+\begin{frame}{Building Certified Systems} %{{{
+\small
 \begin{center}
   \fbox{%
     system description $\quad p \in P
@@ -53,102 +83,277 @@
 \end{frame}
 %}}}
 
-\begin{frame}{Candidates} %{{{
-\begin{center}
-  \begin{tabular}{lcccc}
-                 & V & H & Abstraction & \ldots \\
-    CompCert LTS & $\bullet$ &   & &  \\
-    CAL & $\bullet$ & & $\bullet$ & \\
-    Interaction Semantics & $\bullet$ & $\bullet$ & & \\
-    I-Trees & $\bullet$ & $\bullet$ & ? & \\
-    R-B Game Semantics & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ \\
-  \end{tabular}
-\end{center}
-\end{frame}
-%}}}
+%\begin{frame}{Candidates} %{{{
+%\begin{center}
+%  \begin{tabular}{lcccc}
+%                 & V & H & Abstraction & \ldots \\
+%    CompCert LTS & $\bullet$ &   & &  \\
+%    CAL & $\bullet$ & & $\bullet$ & \\
+%    Interaction Semantics & $\bullet$ & $\bullet$ & & \\
+%    I-Trees & $\bullet$ & $\bullet$ & ? & \\
+%    R-B Game Semantics & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ \\
+%  \end{tabular}
+%\end{center}
+%\end{frame}
+%%}}}
 
 \begin{frame}{Game Semantics} %{{{
+Basic idea:
 \begin{center}
   \begin{tabular}{lcc}
   \hline
    & Types & Terms \\
   \hline
   Denotational semantics & Objects & Morphisms \\
-  Traditional & Domains & Continuous functions \\
-  Game semantics & Games & Strategies \\
+  \hspace{1em} Traditional & Domains & Continuous functions \\
+  \hspace{1em} Game semantics & Games & Strategies \\
   \hline
   \end{tabular}
 \end{center}
 
-Game semantics are usually formulated as trace semantics,
-but with a strong polarization between actions
-of the system and actions of the environment.
-
-The operational aspects
-mean that game semantics can characterize
-the interactive behavior of program components
-more precisely than
-usual domain-theoretic approaches.
+\vfill
+Game semantics:
+\begin{itemize}
+\item
+  are usually formulated as trace semantics,
+  but with a strong polarization between actions
+  of the system and actions of the environment;
+\item
+  can characterize
+  the interactive behavior of program components
+  more precisely than
+  usual domain-theoretic approaches,
+  thanks to a strong operational flavor.
+\end{itemize}
+\vfill
 \end{frame}
 %}}}
 
 \section{Refinement-Based Game Semantics}
 
+\begin{frame}{Games} %{{{
+
+We use games derived from very simple
+\emph{elementary games},
+which consist of
+one \emph{environment question} followed by
+one \emph{system answer}.
+For C-style CompCert open modules,
+questions of the form $f(\vec{v})@m$, and
+answers consist of a return value and final memory state $v'@m'$.
+\vfill
+
+We will focus in particular on games of the form $!A \multimap B$,
+where $A = (M, N)$ and $B = (Q, R)$ are elementary games,
+so that the interaction will take the form:
+\[
+    q \, \mathbf{m} \, n \, \mathbf{m} \, n \cdots \mathbf{m} \, n \, \mathbf{r}
+\]
+In the CompCert context,
+the game $B$ specifies the form of incoming calls and corresponding returns,
+and the game $A$ specifies the form of external calls and returns.
+\vfill
+
+\end{frame}
+%}}}
+
+\begin{frame}{Strategies} %{{{
+
+Following the usual approach,
+we encode strategies as prefix-closed sets of traces.
+More specifically,
+for now our strategies are:
+\begin{itemize}
+\item \emph{Alternating:}
+  system and environment play every other move;
+\item \emph{Non-deterministic:}
+  a strategy may allow multiple system behaviors,
+  this induces a refinement lattice;
+\item \emph{Receptive:}
+  stragies do not restrict the environment
+  but only specify the behavior of the system.
+\end{itemize}
+Because of the simplicity of the games we consider,
+the traditional \emph{innocence} and \emph{well-bracketing} conditions
+will also be satisfied.
+\vfill
+
+Concretely, we encode strategies as Kleisli morphisms
+$Q \rightarrow \mathcal{I}_{M,N}(R)$ for the
+\emph{interaction monad} described thereafter,
+which allows a computation to perform output-input pairs.
+\vfill
+
+\end{frame}
+%}}}
+
+\begin{frame}{Traces} %{{{
+
+For system moves $m \in M$ and environment moves $n \in N$
+we will consider traces of the form:
+\[
+    s, t \in
+    \mathcal{T}_{M,N}(A) ::=
+    m \mid mnt \mid v \mid \Delta \mid \lightning \,,
+\]
+ordered by reflexivity plus the rules:
+\[
+  t \sqsubseteq \lightning , \quad
+  m \sqsubseteq mnt ,
+  \quad
+  \AxiomC{$s \sqsubseteq t$}
+  \UnaryInfC{$mns \sqsubseteq mnt$}
+  \DisplayProof
+\]
+
+The special actions are:
+\begin{itemize}
+\item Traces may terminate with a return value $v \in A$;
+\item Silent divergence is represented by $\Delta$;
+\item Undefined behaviors are represented by $\lightning$.
+\end{itemize}
+
+\end{frame}
+%}}}
+
 \begin{frame}{Sequential Compositionality} %{{{
+
+The terminating outcomes $v$ enable sequential compositionality:
+we define the \emph{interaction monad},
+whose elements:
+\[ x \in \mathcal{I}_{M,N}(A) \]
+are prefix-closed sets of traces, so that:
+\[ x \subseteq \mathcal{T}_{M,N}(A) \,, \quad
+   t \in x \wedge s \sqsubseteq t \Rightarrow s \in x \,. \]
+The monad's unit is $\eta(v) = \{ v \}$ and
+the binding operation is defined trace-wise:
+$(x \bind f) = \bigcup_{t \in x} (t \bind f)$ with
+\begin{gather*}
+  \Delta \in (\Delta \bind f)
+  \qquad
+  t \in (\lightning \bind f)
+  \qquad
+  m \in (m \bind f)
+  \\[1ex]
+  \AxiomC{$t \in f(v)$}
+  \UnaryInfC{$t \in (v \bind f)$}
+  \DisplayProof
+  \quad
+  \AxiomC{$s \in (t \bind f)$}
+  \UnaryInfC{$mns \in (mnt \bind f)$}
+  \DisplayProof
+\end{gather*}
+
 \end{frame}
 %}}}
 
-\begin{frame}{Nondeterminism} %{{{
-\end{frame}
-%}}}
+\begin{frame}{Non-deterministic iteration} %{{{
 
-\begin{frame}{Silent Divergence} %{{{
+Since unions and intersections preserve prefix closure,
+they induce a complete lattice on $\mathcal{I}_{M,N}(A)$
+with respect to trace containement.
+
+This allows us to define a notion of Kleene star
+on Kleisli morphisms of the form $f : A \rightarrow \mathcal{I}_{M,N}(A)$:
+\[
+  \begin{array}{r@{\:}l}
+    f^0(a) &:= \eta(a) \\
+    f^{n+1}(a) &:= f^n(a) \bind f
+  \end{array}
+  \qquad
+  f^*(a) := \bigcup_n f^n(a) \,.
+\]
+
+We say that $f$ diverges silently at $a$
+if there is an infinite sequence $(a_i)_{i \in \mathbb{N}}$
+such $f(a_i) \supseteq \eta(a_{i+1})$ for all $i \in \mathbb{N}$,
+and we define:
+\begin{align*}
+f_\Delta(a) &:= \begin{cases}
+  \{\Delta\} & \mbox{if } f \mbox{ diverges at } a \\
+  \varnothing & \mbox{otherwise}
+\end{cases} \\
+f^\omega(a) &:= f^*(a) \bind f_\Delta \\
+f^\infty(a) &:= f^*(a) \cup f^\omega(a)
+\end{align*}
+
 \end{frame}
 %}}}
 
 \begin{frame}{Interaction} %{{{
+For interaction,
+we introduce the primitive $\mathbf{I} : M \rightarrow \mathcal{I}_{M,N}(N)$,
+defined by $\mathbf{I}(m) := \{ m, mnn \}$.
+Interaction introduces a new form of composition:
+for $f : M \rightarrow \mathcal{I}_{P,Q}(N)$ and $x : \mathcal{I}_{M,N}(A)$,
+we define
+$x[f] : \mathcal{I}_{P,Q}(A)$,
+which substitutes $f$ for the output-input pairs of $x$.
+\vfill
+
+This can be extended to the interactive composition
+$g \odot f : A \rightarrow \mathcal{P,Q}(B)$ of the Kleisli morphisms
+$f : M \rightarrow \mathcal{I}_{P,Q}(N)$ and
+$g : A \rightarrow \mathcal{I}_{M,N}(B)$,
+defined as:
+\[ (g \odot f)(a) = g(a)[f] \]
+
+Interactive substitution and composition satisfy the properties:
+\begin{align*}
+  x[\mathbf{I}] &= x &
+  \mathbf{I}(m)[f] &= f(m) &
+  x[g \odot f] &= x[g][f] \\
+  g \odot \mathbf{I} &= g &
+  \mathbf{I} \odot f &= f &
+  h \odot (g \odot f) &= (h \odot g) \odot f
+\end{align*}
+
 \end{frame}
 %}}}
 
-\begin{frame}{Abstraction} %{{{
+\begin{frame}{Horizontal composition} %{{{
+$\alpha \odot \beta$ corresponds to vertical composition in CertiKOS:
+external calls of $\alpha$ are handled by the underlay $\beta$.
+To define horizontal composition we need to iterate $\odot$.
+\vfill
+
+In the same way the sequential composition $\cdot$ (derived from $\bind$)
+is iterated as $-^\infty$,
+we define $f^\circledcirc$ as the iteration of $\cdot$,
+so that morally:
+\[
+    f^\circledcirc = f \odot f \odot \cdots
+\]
+Then the horizontal composition of $\alpha$ and $\beta$
+can be defined as:
+\[ \alpha \bullet \beta := (\alpha \cup \beta)^\circledcirc \]
+\vfill
+
 \end{frame}
 %}}}
 
-\section{CompCert}
+\begin{frame}{Summary} %{{{
 
-\begin{frame}{Semantics of Compilation Units} %{{{
+  \begin{center}
+    \begin{tabular}{lccccccc}
+      \hline
+      Category & Appl. & Comp. & Unit & Join & Zero & Iteration \\
+      \hline
+      Functions & $f(x)$ & $f \circ g$ & $\mathsf{id}$ & & \\
+      Monad &
+        $x \bind f$ & $g \cdot f$ & $\eta$ &
+        $\cup$ & $\varnothing$ & ${*}, {\infty}$ \\
+      Interaction &
+        $x[f]$ & $g \odot f$ & $\mathbf{I}$ &
+        $\cup$ & $\varnothing$ & $\circledcirc$ \\
+      \hline
+    \end{tabular}
+  \end{center}
+
 \end{frame}
 %}}}
 
-\begin{frame}{Challenges for Compositionality} %{{{
-\end{frame}
-%}}}
-
-\begin{frame}{Kripke Logical Relations} %{{{
-\end{frame}
-%}}}
-
-\begin{frame}{Refinement Convention Algebra} %{{{
-\end{frame}
-%}}}
-
-\begin{frame}{Compiler Correctness} %{{{
-\end{frame}
-%}}}
-
-\section{Conclusion}
-
-\begin{frame}{Role within DeepSpec} %{{{
-Embed everything into (some version of) RBGS for interoperability.
-
-Monad interface can probably be defined on interaction trees.
-\end{frame}
-%}}}
-
-\begin{frame}{Future Work} %{{{
-More complex games, concurrency, state.
-\end{frame}
-%}}}
+\section{Challenges}
 
 \end{document}
 
