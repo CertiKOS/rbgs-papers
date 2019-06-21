@@ -1,0 +1,391 @@
+\documentclass{beamer}
+\usepackage{stmaryrd}
+\usepackage{galois}
+\usepackage{bussproofs}
+\newcommand{\bind}{\gg\!\!=}
+
+% Macros {{{
+\newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
+\newcommand{\ifr}[1]{\ [{#1}]\ }
+\newcommand{\ifrw}[2]{\ [{#1}]_{#2}\ }
+
+\newcommand{\EC}{\kw{C}}
+\newcommand{\simrel}{\kw{simrel}}
+%}}}
+
+\AtBeginSection[]
+{
+   \begin{frame}
+        \tableofcontents[currentsection]
+   \end{frame}
+}
+
+\begin{document}
+
+\section{Introduction} %{{{
+
+\begin{frame}{Refinement-based game semantics} %{{{
+[A prospective ``glue'' for end-to-end verification]
+\end{frame}
+%}}}
+
+\begin{frame}{Challenges with CompCert} %{{{
+[Why CompCert is key component,
+what it takes to
+make it a ((certified component) compiler) not a
+(certified (component compiler))]
+\end{frame}
+%}}}
+
+\begin{frame}{Our approach} %{{{
+Compared to Compositional CompCert,
+our version uses:
+\begin{itemize}
+\item \emph{games} to specify
+  the form of the interaction
+  for each language;
+\item \emph{simulation conventions} to
+  establish a correpondance between the
+  interactions of the source and target languages.
+\end{itemize}
+
+\vspace{1ex}
+We use a \emph{logical relations} approach
+to construct the conventions:
+\begin{itemize}
+\item \emph{CompCert KLRs} generalize memory injections and extensions;
+\item \emph{parametricity theorems}
+  establish properties of languages;
+\item A simulation convention algebra
+  can be used to reconcile the simulation conventions for
+  incoming and external calls.
+\end{itemize}
+\end{frame}
+%}}}
+
+%}}}
+
+\section{Transition systems} %{{{
+
+\begin{frame}{Games} %{{{
+A game $A = \langle M_A^Q, M_A^A \rangle$ specifies:
+\begin{itemize}
+\item a set $M_A^Q$ of \emph{questions} (function invocations), and
+\item a set $M_A^A$ of \emph{answers} (corresponding returns).
+\end{itemize}
+
+\vfill
+For example, the game $\mathcal{C}$ has:
+\begin{itemize}
+\item questions of the form $m \in M_\mathcal{C}^Q ::= f/\sigma(\vec{v})@m$;
+\item answers of the form $n \in M_\mathcal{C}^A ::= v'@m'$.
+\end{itemize}
+
+\vfill
+A component of type $A \Rightarrow B$
+will accept incoming calls according to the game $B$ and
+may perform external calls according to the game $A$.
+For instance,
+Clight components have type
+$\mathcal{C} \Rightarrow \mathcal{C}$.
+\end{frame}
+%}}}
+
+\begin{frame}{Game examples} %{{{
+The games used in our development are:
+\begin{center}
+  \footnotesize
+  \begin{tabular}{cllp{.48\textwidth}}
+    \hline
+    Name & Questions & Answers & Description \\
+    \hline
+    $\mathcal{C}$ & $(\kw{id}, \kw{sg}, \vec{v}, m)$ & $(v', m')$ &
+      C-style function calls (Clight--RTL) \\
+    $\mathcal{L}$ & $(\kw{id}, \kw{sg}, \kw{ls}, m)$ & $(\kw{ls}', m')$ &
+      Arguments passed in abstract locations (LTL, Linear) \\
+    $\mathcal{M}$ & $(\kw{id}, \kw{sp},\kw{ra},\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Arguments passed through in-memory stack (Mach) \\
+    $\mathcal{A}$ & $(\kw{rs}, m)$ & $(\kw{rs}', m')$ &
+      Assembly-style control transfers (Asm) \\
+    \hline
+  \end{tabular}
+\end{center}
+\end{frame}
+%}}}
+
+\begin{frame}{Transition systems} %{{{
+A small-step transition system of type $A \Rightarrow B$
+is given by a tuple
+$L := \langle S, \rightarrow, I, X, Y, F \rangle$:
+\begin{itemize}
+\item $S$ is a set of states
+\item ${\rightarrow} \subseteq S \times S$ is a transition relation;
+\item $I \subseteq M_B^Q \times S$ specifies initial states;
+\item $X \subseteq S \times M_A^Q$ identifies external calls;
+\item $Y \subseteq S \times M_A^A \times S$ resumes the execution;
+\item $F \subseteq S \times M_B^A$ specifies final states.
+\end{itemize}
+
+\vspace{1em}
+This is similar to Compositional CompCert;
+transition systems specify the behavior
+of a single activation.
+\end{frame}
+%}}}
+
+%}}}
+
+\section{Simulations} %{{{
+
+\begin{frame}{Simulation conventions} %{{{
+To relate interactions which happen in terms of different games,
+we introduce \emph{simulation conventions}.
+
+\vspace{1em}
+For the source and target games $A_1$ and $A_2$,
+a simulation convention
+$\mathbb{R} = \langle W, R^Q, R^A \rangle$
+specifies:
+\begin{itemize}
+\item a set of \emph{worlds} $W$;
+\item a $W$-indexed relation
+$R^Q \subseteq W \times M_{A_1}^Q \times M_{A_2}^Q$;
+\item a $W$-indexed relation
+$R^A \subseteq W \times M_{A_1}^A \times M_{A_2}^A$.
+\end{itemize}
+
+\vspace{1em}
+We write $\mathbb{R} : A_1 \Leftrightarrow A_2$.
+\end{frame}
+%}}}
+
+\begin{frame}{Simulations} %{{{
+CompCert's forward and backward simulations are modified to
+take these changes into account.
+
+\vspace{1em}
+Simulations are parametrized by simulation conventions
+for incoming and external calls.
+For the transition systems $L_1 : A_1 \Rightarrow B_1$ and
+$L_2 : A_2 \Rightarrow B_2$,
+we will use the conventions $\mathbb{R}_A : A_1 \Leftrightarrow A_2$
+and $\mathbb{R}_B : B_1 \Leftrightarrow B_2$ and write:
+\[
+    L_1 \le_{\mathbb{R}_A \Rightarrow \mathbb{R}_B} L_2
+\]
+
+The simulations add the following conditions:
+\begin{itemize}
+\item If the initial questions were related at a world $w \in W_B$,
+  then the final answers must be related at that same world.
+\item For each external call,
+  there exists a world $v \in W_A$ that relates
+  the source and target questions.
+  The environment's answers must be realted at that world
+  for the simulation to resume.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Constructions}
+[Composition and Kleene star for simulation conventions.]
+\end{frame}
+
+%}}}
+
+\section{CompCert KLRs}
+
+\begin{frame}{Logical relations and CompCert}
+CompCert's memory model
+is the algebraic structure at the core of
+its language semantics.
+
+\vspace{1em}
+CompCert's memory extensions and injection
+can be understood as logical relations:
+elementary operations are compatible with them,
+and we can systematically build up more complex relations
+and prove larger relational properties,
+up to and including simulation diagrams.
+
+\vspace{1em}
+Injections additionally use a set of worlds (\texttt{meminj}),
+and an accessibility relation (\texttt{inject\_incr})
+to make sure pointers are related consistently throughout
+the memory.
+We generalize from there
+to \emph{CompCert KLRs}.
+\end{frame}
+
+\begin{frame}{Example: Memory model operations}
+  \begin{align*}
+      \kw{Mem.alloc} :
+        &\Vdash R^\kw{mem} \rightarrow {=} \rightarrow {=} \rightarrow
+        \Diamond (R^\kw{mem} \times R^\kw{block})
+      \\
+      \kw{Mem.free} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptrrange} \rightarrow
+        \kw{option}^\le(\Diamond R^\kw{mem})
+      \\
+      \kw{Mem.load} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow
+        \kw{option}^\le(R^\kw{val})
+      \\
+      \kw{Mem.store} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow R^\kw{val} \rightarrow
+        \kw{option}^\le(\Diamond R^\kw{mem})
+      \\
+      \kw{Mem.perm} :
+        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow {\subseteq}
+  \end{align*}
+\end{frame}
+
+\begin{frame}{Relational parametricity}
+From CKLRs, we can derive simulation conventions
+for games such as $\mathcal{C}$.
+
+\vspace{1em}
+For example
+we define $\mathcal{C}[R] : \mathcal{C} \Leftrightarrow \mathcal{C}$
+as follows:
+\[
+    \mathcal{C}[R] := \langle
+      W, \:
+      ({=} \times {=} \times {R^\kw{val}}^* \times R^\kw{mem}), \:
+      \Diamond (R^\kw{val} \times R^\kw{mem})
+    \rangle \,.
+\]
+\end{frame}
+
+\section{Compiler Correctness}
+
+\begin{frame}{Notable CKLRs}
+The CKLRs used in our development are:
+\begin{itemize}
+  \item \textbf{ext}: memory extensions (uses a trivial set of worlds)
+  \item \textbf{inj}: memory injections (\texttt{meminj},
+    \texttt{Mem.inject}, etc.)
+  \item \textbf{injp}: injections + CompCert's external call requirements
+\end{itemize}
+
+\vspace{1ex}
+They satisfy the following properties:
+\[
+  \mathcal{C}[\kw{inj}] \cdot \mathcal{C}[\kw{inj}] \equiv
+  \mathcal{C}[\kw{ext}] \cdot \mathcal{C}[\kw{inj}] \equiv
+  \mathcal{C}[\kw{inj}] \cdot \mathcal{C}[\kw{ext}] \equiv
+  \mathcal{C}[\kw{inj}] \,.
+\]
+
+Using this infrastructure,
+we do not need extensive changes to the existing CompCert proofs:
+although individual passes are not symmetric in terms of their
+requirements vs. guarantees,
+we will be able to exploit languages properties
+to reconcile them at the scale of the whole compiler.
+\end{frame}
+
+\begin{frame}{Passes}
+\begin{center}
+  \tiny
+  \begin{tabular}{lllp{.55\textwidth}}
+    \hline
+    Language/Pass & Outgoing & Incoming & Description \\
+    \hline
+    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ &
+      A simpler version of CompCert C;
+      expressions have no side-effects. \\
+    \emph{Eqn.}~(\ref{eqn:clight}) & $\mathcal{C}[\kw{injp}]^*$ & $\mathcal{C}[\kw{injp}]^*$ &
+      \emph{Clight properties} \\
+    \kw{SimplLocals} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+      Pulling non-adressable scalar local variables out of memory. \\
+    \kw{Cshmgen} & \kw{id} & \kw{id} &
+      Simplification of control structures;
+      explication of type-dependent computations. \\
+    \hline
+    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Low-level structured language. \\
+    \kw{Cminorgen} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+      Stack allocation of local variables whose address is taken. \\
+    \hline
+    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Low-level structured language,
+      with explicit stack allocation of certain local variables. \\
+    \kw{Selection} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+      Recognition of operators and addressing modes. \\
+    \hline
+    \textbf{Cminorsel} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Like Cminor, with machine-specific operators and addressing modes. \\
+    \kw{RTLgen} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+      Construction of the CFG, 3-address code generation. \\
+    \hline
+    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ &
+      Register transfer language. \\
+    \kw{Tailcall} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+      Recognition of tail calls. \\
+    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ &
+      Postorder renumbering of the CFG. \\
+    \emph{Eqn.}~(\ref{eqn:rtl}) & $\mathcal{C}[\kw{inj}]$ & $\mathcal{C}[\kw{inj}]$ &
+      \emph{RTL properties} \\
+    \kw{Allocation} & \kw{alloc} & \kw{alloc} &
+      Register allocation \\
+    \hline
+    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ &
+      Location transfer language. \\
+    \kw{Linearize} & \kw{id} & \kw{id} &
+      Linearization of the CFG \\
+    \hline
+    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ &
+      Like LTL, but the CFG is replaced by
+      a linear list of instructions \\
+    \kw{CleanupLabels} & \kw{id} & \kw{id} &
+      Removal of unreferenced labels. \\
+    \kw{Debugvar} & \kw{id} & \kw{id} &
+      Synthesis of debugging information. \\
+    \kw{Stacking} & \kw{stacking} & \kw{stacking} &
+      Laying out the activation records \\
+    \hline
+    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ &
+      Like Linear, with a more concrete view of the activation record \\
+    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} &
+      Emission of assembly code \\
+    \hline
+    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ &
+      Assembly language for x86 machines \\
+    \hline
+  \end{tabular}
+\end{center}
+\end{frame}
+
+\begin{frame}{Correctness theorem}
+the overall simulation convention for the whole compiler
+can be given as:
+\[
+  \mathbb{R}_\kw{CompCert} : \mathcal{C} \Leftrightarrow \mathcal{A} :=
+    \mathcal{C}[\kw{injp}]^* \cdot
+    \mathcal{C}[\kw{inj}] \cdot
+    \kw{alloc} \cdot
+    \kw{stacking} \cdot
+    \kw{asmgen} \,.
+\]
+
+From the relational parametricity of Clight and RTL
+and the properties outlined above we can show
+that the composition of passes is compatible with
+$\mathbb{R}_\kw{CompCert}$ on both sides and
+conclude that if
+$\kw{CompCert}(p_s) = p_t$
+we have:
+\[
+      \kw{Clight} \llbracket p_s \rrbracket
+      \le_{\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}}
+      \kw{Asm} \llbracket p_t \rrbracket \,.
+\]
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Conclusion}
+\end{frame}
+
+\end{document}
