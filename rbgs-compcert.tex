@@ -443,7 +443,7 @@ To state a compositional correctness property for a C-to-assembly compiler
 such as CompCert,
 we will need to formulate the correspondance between them,
 as a concretization function $\gamma$
-explaining how a C call is realized at the assembly level.
+explaining how a C behavior is realized at the assembly level.
 Correctness can then be stated as:
 \[ \llbracket C(p) \rrbracket_t \sqsubseteq
    \gamma(\llbracket p \rrbracket_s) \,, \]
@@ -463,11 +463,14 @@ and is a formalization of the C \emph{calling convention}.
 % preamble {{{
 
 Game semantics is a form of denotational semantics which
-incoroporates some operational aspects.
-Each type in the language
-is interpreted as a two-player game,
-which corresponds the interaction
-between a program component of this type
+incorporates some operational aspects.
+An early success of this approach was
+the formulation of the first satisfactory, fully abstract models
+of the programming language PCF \cite{pcfajm,pcfho}.
+
+Types are interpreted as two-player games,
+which correspond the interaction
+between a program component of the given type
 (the player \kw{P}, for \emph{proponent})
 and its execution context
 (the player \kw{O}, for \emph{opponent}).
@@ -492,7 +495,7 @@ in the context of heterogenous systems \cite{cspgs}.
 
 %}}}
 
-\subsubsection{Games} %{{{
+\subsubsection{Games} \label{sec:mainideas:gs:games} %{{{
 
 A game is usually defined by giving a set of moves $M$
 that players can choose from,
@@ -569,7 +572,7 @@ contained the plays:
 
 Strategies are usually subject to a number
 of well-formedness constraints beyond prefix closure.
-Commonly used contraints include the following:
+Commonly used contraints include the following \cite{gamesem99}:
 \begin{description}
 \item[Receptivity]
   requires that all possible behaviors of the environment
@@ -597,10 +600,10 @@ Commonly used contraints include the following:
   private state across
   successive but independent queries.
 \end{description}
-Game semantics of PCF \cite{pcfajm,pcfho,gamesem99}
-impose all of these constraints,
+The game semantics of PCF
+imposed all of these constraints,
 and subsequent work was able to model additional language features
-by relaxing a combination of them.
+by relaxing combinations of them.
 Following \cite{gsnondet},
 we will relax the determinism constraint in order
 to model specifications permitting
@@ -615,7 +618,8 @@ will always be satisfied.
 
 \subsubsection{Compositionality} \label{sec:mainideas:gs:comp} %{{{
 
-While the game $\mathcal{C}$ used as an example above
+While the game $\mathcal{C}$
+presented in \S\ref{sec:mainideas:gs:games}
 is extremely simple,
 the expressive power of game semantics
 comes from the way in which complex games can be derived from simple ones,
@@ -653,7 +657,7 @@ are reversed.
 In our context,
 the game will always start
 with a move of $B$ played by the environment,
-but the player may initiate the game $A$.
+but the system may subsequently initiate the game $A$.
 For instance, a strategy $\sigma$
 for the game $\mathcal{C} \multimap \mathcal{C}$
 may include plays of the form:
@@ -862,7 +866,7 @@ of CompCert languages.
 \begin{definition}
 For a set $W$,
 a \emph{Kripke logical relation} is
-family of logical relations $(R_w)_{w \in W}$.
+a family of logical relations $(R_w)_{w \in W}$.
 We write $R : \mathcal{R}_W(S_1, S_2)$
 for a Kripke logical relation between structures $S_1$ and $S_2$,
 and define:
@@ -879,7 +883,7 @@ whose contents are addressed by an integer
 Between the states of the source and target programs,
 a block may be dropped, added, or
 mapped at a given offset within a larger block.
-These transformation of the memory structure
+These transformations of the memory structure
 are specified by partial functions of type:
 \[
   \kw{meminj} := \kw{block} \rightharpoonup \kw{block} \times \mathbb{Z} \,,
@@ -888,6 +892,10 @@ The simulation relations of CompCert,
 and the component relations that they are built from,
 are often parametrized by such a partial function $f : \kw{meminj}$,
 which we call an \emph{injection mapping}.
+An entry $f(b) = (b', o)$
+means that the source memory block with identifier $b$
+is mapped into the target memory block with identifier $b'$
+at offset $o$.
 
 For example,
 CompCert represents pointers as pairs $(b, o)$, where
@@ -1005,6 +1013,8 @@ as a Kripke frame,
 we can express it concisely and compositionally
 in our relational framework.
 For instance,
+using the relator $\mathcal{P}^\le$ defined in
+Fig.~\ref{fig:relators},
 the simulation diagram shown above can be written as:
 \[
   \alpha \ifr{\Vdash R \rightarrow \mathcal{P}^\le(\Diamond R)} \beta \,.
@@ -1191,7 +1201,7 @@ the special move $\Delta$.
 We consider forms of abstractions where
 the abstract and concrete interactions have the same structure,
 but use different representations for their questions and answers.
-The correspondance is be specified
+The correspondance is specified
 using Kripke logical relations,
 so that we can ensure that questions and answers are related consistently.
 Once a concretization relation has been specified
@@ -1433,11 +1443,14 @@ analogous to a typed Kleene algebra \cite{tka}.
 
 \subsection{Iteration} \label{sec:monad:iter} %{{{
 
+% TODO: use f^\omega = f^* f_\Delta presentation
+
 A Kleisli morphism $f : A \rightarrow \mathcal{I}_{M,N}(A)$
 can be iterated as follows.
-We start by defining
-the $n$-fold sequential composition of $f$
-and the associated notion of Kleene star as:
+We define
+$f^n, f^* : A \rightarrow \mathcal{I}_{M,N}(A)$,
+respectively the $n$-fold sequential composition of $f$
+and the associated notion of Kleene star, as:
 \[
   \begin{array}{rl}
     f^0(a) &:= \kw{ret}(a) \\
@@ -1572,10 +1585,9 @@ we define the interactive substitution
 $x[f] \in \mathcal{I}_{P,Q}(A)$ as:
 \[
     x[f] \: :=
-      \kw{ret}(x) \bind
       (s \mapsto \mu(s) \bind
        m \mapsto f(m) \bind
-       n \mapsto \kw{ret}(\delta_{mn}(s)))^\infty \bind
+       n \mapsto \kw{ret}(\delta_{mn}(s)))^\infty(x) \bind
       \rho \,.
 \]
 Additionally, for
@@ -2094,7 +2106,7 @@ but to ensure the preservation of silent divergence
 this can only happen for finitely many consecutive target transitions.
 This is enforced by indexing the simulation relation
 over a well-founded order,
-and requiring that the index decrease
+and requiring the index to decrease
 whenever an empty source transition sequence is used.
 
 In our setting,
@@ -2211,7 +2223,7 @@ backward simulations are not easily amenable to
 meta-theoretical analysis
 where they can appear both as hypotheses and conclusions.
 By embedding simulations into our game framework,
-we will be able to conduct large-scale reasoning
+we will be able to conduct this type of reasoning
 in a more convenient setting.
 
 \begin{lemma}[Soundness of backward simulations]
@@ -2255,8 +2267,8 @@ which nondeterministically feeds the external calls of $\sigma$
 back to itself.
 
 To define $\sigma^\circledcirc$,
-we use a transition system which keeps track,
-of the currently active behavior, and
+we use a transition system which keeps track of
+the currently active behavior, and
 of a stack of suspended continuations.
 When the active behavior performs an external call,
 we may instead suspend it and instantiate a new copy of $\sigma$.
@@ -2377,7 +2389,7 @@ employs a fixed interface $\mathcal{C}$,
 and \emph{structured injections} define a refinement convention
 $\mathbb{S} : \mathcal{C} \Leftrightarrow \mathcal{C}$.
 A theorem similar to (\ref{eqn:correctness}) is proved for each pass,
-and structured injections are show to compose
+and structured injections are shown to compose
 ($\mathbb{S} \cdot \mathbb{S} \equiv \mathbb{S}$),
 so that a theorem can be derived for the whole compiler.
 
@@ -2576,7 +2588,7 @@ depending on how
 the memory states of their source and target languages are related
 by their correctness proofs:
 \begin{itemize}
-\item \emph{Equalty} is used when the memory states
+\item \emph{Equality} is used when the memory states
   in the source and target execution remain identical,
   for instance when the differences between
   the source and target programs are mostly a matter of syntax,
@@ -3004,7 +3016,7 @@ can be given as:
     \kw{asmgen} \,.
 \]
 To verify that the passes indeed compose to
-estblish correctness with respect to the simulation convention
+establish correctness with respect to the simulation convention
 $\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}$,
 it suffices to show that
 the incoming and outgoing simulations can be reconciled,
@@ -3028,7 +3040,7 @@ so that we can conclude:
     \forall p_s \,.\,
       \kw{CompCert}(p_s) = p_t \Rightarrow
       \kw{Clight} \llbracket p_s \rrbracket
-      \le{\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}}
+      \le_{\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}}
       \kw{Asm} \llbracket p_t \rrbracket \,.
 \]
 
@@ -3057,7 +3069,7 @@ In particular,
 while much of this work initially
 targeted sequential programming languages,
 investigations of concurrent game models
-have been paritcularly fruitful.
+have been particularly fruitful.
 
 More low-level applications of games have also been proposed,
 for instance see the work on interface theories
