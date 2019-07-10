@@ -722,6 +722,261 @@ the subsequent behavior of the system.
 
 %}}}
 
+\subsection{The CompCert C compiler}
+
+\begin{figure} % fig:compcerts {{{
+  \begin{tabular}{lr}
+    \hline
+    Variant & Semantic model \\
+    \hline
+    CompCert \cite{compcert}, SepCompCert \cite{sepcompcert} &
+      $\epsilon : \mathcal{E} \rightarrow \mathcal{C} \vdash
+       \mathcal{E} \rightarrow \mathcal{N}$ \\
+    CompCertX/CertiKOS \cite{popl15} &
+      $\epsilon : \mathcal{E} \rightarrow \mathcal{C} \vdash
+       \mathcal{E} \rightarrow \mathcal{C}$ \\
+    Compositional CompCert \cite{compcompcert} &
+      $\mathcal{C} \rightarrow \mathcal{C}$ \\
+    Ramananandro et al. \cite{cpp15} &
+      $\mathcal{E} \times \mathcal{C} \rightarrow \mathcal{C}$ \\
+    This work & $A \rightarrow B$ \\
+    \hline
+  \end{tabular}
+  \caption{Taxonomy of CompCert extensions in terms of games.}
+  \label{fig:compcerts}
+\end{figure}
+%}}}
+
+\subsubsection{Approaches to compositionality} %{{{
+
+The conceptual framework of game semantics
+can be used to classify previous work
+on extending the semantic model of CompCert,
+as shown in Fig.~\ref{fig:compcerts}.
+
+In the original CompCert,
+programs are invoked without any parameters
+and return a single machine integer denoting their exit status
+($\mathcal{N}$).
+During their execution,
+their interaction with the environment
+is captured as a trace of events from a limited set,
+each event having an output and input component ($\mathcal{E}$).
+In addition,
+CompCert accounts for external calls
+in a limited way:
+the entire semantics is parametrized by
+the behavior $\epsilon$ of external functions,%
+\footnote{$\epsilon$ is called \kw{external\_functions\_sem} in the code of CompCert}
+which is expected to be deterministic
+and satisfy a number of healthiness requirements
+with respect to the memory transformations
+used in CompCert's correctness proof.
+
+This is generalized slightly in CompCertX \cite{popl15},
+where program invocations specify
+the function to be invoked,
+values for its arguments,
+as well as the initial state of the memory,
+and terminations carry
+the function's return value and final memory state
+($\mathcal{C}$).
+This allows CompCertX and its correctness theorem
+to be used in the layer-based verification of
+the operating system kernel CertiKOS:
+once CompCertX has been used to
+analyze and verify the code of a given abstraction layer,
+that code can be used as the new $\epsilon$
+when a higher-level module is verified in turn.
+This enabled the verification of CertiKOS ---
+an artifact of significant size ---
+at the level of assembly code,
+by integrating CompCert as part of its proof of correctness.
+However,
+this approach does not support two-way invocations between components,
+and in addition
+it requres the healthiness requirements on $\epsilon$
+to be esablished before
+more code can be built on top of it.
+
+A more comprehensive form of compositionality
+is provided by
+the semantic model of \cite{cpp15},
+and especially by
+the work on Compositional CompCert \cite{compcompcert}.
+In the former,
+the existing event trace infrastructure of CompCert
+is augmented to include external calls as a type of events.
+In Compositional CompCert,
+the labelled transition systems and the associated
+event trace infrastructure are replaced by
+\emph{interaction semantics}.
+Interaction semantics is an operational game semantics
+where the interactions between a component and its environment
+are identified by additional predicates on program states and
+captured in terms of C function calls as previously described.
+
+Beyond this technical difference,
+the two approaches are distinguished by
+how they handle refinement.
+The function calls and returns described by $\mathcal{C}$
+include memory states,
+which are not identically preserved by compilation;
+this makes it difficult to directly compare the behaviors
+of the source and target programs.
+In \cite{cpp15},
+this is handled by strengthening the memory transformations
+used by the compiler into bijective mappings;
+such mappings can then be applied to the entire execution trace
+to estblish refinement.
+However, several passes of CompCert are challenging
+to fit into this framework.
+By contrast,
+Compositional CompCert
+embraces a more general relational approach,
+with a clear distinction between the role of the system
+and that of the environment:
+given executions of the source and target programs,
+the system guarantees that outputs are related
+under the assumption that the environment has provided related inputs.
+However,
+Compositional CompCert
+[stays at the level of simulations and LTS and
+does not define a trace semantics]
+
+\subsubsection{Operational semantics}
+
+Our approach is closest to that of Compositional CompCert,
+however we extend the model in several important ways.
+In particular,
+while interaction semantics
+only accounts for interactions of the form
+described above as the game $\mathcal{C}$,
+we generalize this to a typed setting,
+where the form of incoming and outgoing calls and returns
+are specified by an \emph{elementary game}
+with a similarly simple structure;
+therefore,
+a transition system $L$ is assigned a type $L : E \rightarrow F$,
+where $E, F$ are elementary games.
+We define and choose suitable games
+for all intermediate languages,
+as summarized in Tbl.~\ref{tbl:games}.
+The semantics of our source language Clight
+is expressed in terms of the game $\mathcal{C} \rightarrow \mathcal{C}$,
+whereas the semantics of the target language Asm
+is expressed in terms of the game $\mathcal{A} \rightarrow \mathcal{A}$.
+
+This is important for two reasons.
+First,
+from a practical standpoint
+defining an accurate model of
+assembly-level control transfers
+[necessary for formal verification involving
+system code that doesn't fit the C calling convention,
+like cswitch]
+
+Second,
+from a philosophical standpoint,
+embracing the difference between the interfaces of
+the source and target languages
+represents a significant departure from established practice.
+Existing work goes great lengths
+to ensure that the source and target semantics
+are expressed in the same semantic domain.
+Indeed,
+the success of CompCert itself
+relies in part in its use of a sufficiently flexible
+but uniform memory model,
+capable both of modeling the C standard accurately,
+but also to give a fairly reasonable account
+of assembly-level mechanics.
+Later work such as \cite{compcompcert,cpp15}
+follows this precedent and uses
+a uniform interface for open modules,
+and treats source and target calls
+as essentially the same,
+and ensuring that any differences introduced by the compiler
+are absorbed by a semantic framework
+defined \emph{modulo} memory transformations.
+
+By breaking with this approach,
+we are led to introduce a notion of \emph{simulation convention},
+which generalizes the usual concept of calling convention
+and expresses the correspondance between
+source- and target-level interactions.
+While this may seem like an additional source of complexity,
+the ensuing gain in expressivity
+actually allows us to side-step a number of issues
+that have plagued previous work on CompCert compositionality.
+
+\subsubsection{Simulations}
+
+A simulation convention $\mathbb{R} : E_1 \Leftrightarrow E_2$
+expresses the correspondance between
+the source-level elementary game $E_1$ and
+the target-level elementary game $E_2$.
+Hence,
+a simulation between
+a source-level transition system $L_1 : E_1 \rightarrow F_1$ and
+a target-level transition system $L_2 : E_2 \rightarrow F_2$ 
+is assigned a type $\mathbb{R}_E \rightarrow \mathbb{R}_F$,
+where
+$\mathbb{R}_E : E_1 \Leftrightarrow E_2$ and
+$\mathbb{R}_F : F_1 \Leftrightarrow F_2$.
+We write:
+\[
+  L_1 \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L_2 \qquad
+  \begin{tikzpicture}[baseline,scale=0.7]
+    \node (A1) at (-1,  1) {$A_1$};
+    \node (A2) at (-1, -1) {$A_2$};
+    \node (B1) at ( 1,  1) {$B_1$};
+    \node (B2) at ( 1, -1) {$B_2$};
+    \draw (A1) edge[->] node[auto] {$L_1$} (B1);
+    \draw (A2) edge[->] node[auto,swap] {$L_2$} (B2);
+    \draw (A1) edge[<->, double] node[auto,swap] {$\mathbb{R}_A$} (A2);
+    \draw (B1) edge[<->, double] node[auto] {$\mathbb{R}_B$} (B2);
+  \end{tikzpicture}
+\]
+
+Simulations compose as expected:
+we can define the identity simulation convention
+$\mathbbm{1}_E : E \Leftrightarrow E$,
+which is such that $L \le_{\mathbbm{1}_E \rightarrow \mathbbm{1}_F} L$
+for all transition systems $L : E \rightarrow F$,
+and define the composite simulation convention
+$\mathbb{R} \circ \mathbb{S} : A_1 \Leftrightarrow A_3$ for
+$\mathbb{R} : A_1 \Leftrightarrow A_2$ and
+$\mathbb{S} : A_2 \Leftrightarrow A_3$,
+which describes the type of a composite simulation:
+\[
+  \AxiomC{$L_1 \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L_2$}
+  \AxiomC{$L_2 \le_{\mathbb{S}_A \rightarrow \mathbb{S}_B} L_3$}
+  \BinaryInfC{$L_1 \le_{\mathbb{R}_A \circ \mathbb{S}_A \rightarrow \mathbb{R}_B \circ \mathbb{S}_B} L_3$}
+  \DisplayProof
+  \qquad
+  \begin{tikzpicture}[baseline,scale=0.7]
+    \node (A1) at (-1,  2) {$A_1$};
+    \node (A2) at (-1,  0) {$A_2$};
+    \node (A3) at (-1, -2) {$A_3$};
+    \node (B1) at ( 1,  2) {$B_1$};
+    \node (B2) at ( 1,  0) {$B_2$};
+    \node (B3) at ( 1, -2) {$B_3$};
+    \draw (A1) edge[->] node[auto] {$L_1$} (B1);
+    \draw (A2) edge[->] node[auto,swap] {$L_2$} (B2);
+    \draw (A3) edge[->] node[auto,swap] {$L_3$} (B3);
+    \draw (A1) edge[<->, double] node[auto,swap] {$\mathbb{R}_A$} (A2);
+    \draw (B1) edge[<->, double] node[auto] {$\mathbb{R}_B$} (B2);
+    \draw (A2) edge[<->, double] node[auto,swap] {$\mathbb{S}_A$} (A3);
+    \draw (B2) edge[<->, double] node[auto] {$\mathbb{S}_B$} (B3);
+  \end{tikzpicture}
+\]
+In addition,
+simulation conventions of a given type
+are equipped with a notion of refinement $\preceq$,
+and for ``endo-conventions'' of type $\mathbb{R} : G \Leftrightarrow G$,
+a corresponding notion of Kleene star $\mathbb{R}^*$.
+
 \subsection{Logical relations} %{{{
 
 Logical relations are structure-preserving relations,

@@ -15,6 +15,7 @@ all: lwcc.pdf slides.pdf rbgs-compcert.pdf
 clean:
 	$(RM) $(patsubst %,lwcc.%,$(CRUFT))
 	$(RM) $(patsubst %,slides.%,$(CRUFT))
+	$(RM) $(patsubst %,rbgs-compcert.%,$(CRUFT))
 
 lwcc.aux: intro.tex ideas.tex rbgs.tex modsem.tex cklr.tex
 lwcc.pdf: lwcc.bbl
