@@ -12,6 +12,9 @@ all: lwcc.pdf slides.pdf rbgs-compcert.pdf
 %.pdf: %.tex %.aux
 	pdflatex $*
 
+%.html: %.mdwn
+	markdown $< > $@
+
 clean:
 	$(RM) $(patsubst %,lwcc.%,$(CRUFT))
 	$(RM) $(patsubst %,slides.%,$(CRUFT))
