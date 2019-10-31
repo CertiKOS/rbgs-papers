@@ -15,6 +15,7 @@
 \usepackage{calc}
 \usepackage{bbm}
 \usepackage{soul}
+\usepackage[leftbars]{changebar}
 % }}}
 
 % Parameters {{{
@@ -1432,9 +1433,67 @@ concisely and legibly as:
 
 %}}}
 
-\section{Open Modules for CompCert} \label{sec:compcert} %{{{
+\cbstart
+\section{Operational Semantics} \label{sec:compcert} %{{{
 
-\subsection{The CompCert Memory Model} \label{sec:compcert:mm} %{{{
+This section describes the semantic model used by CompCertO.
+First, in \S\S\ref{sec:sem:mm}--\ref{sec:sem:closed},
+we review the techniques used in CompCert
+to formalize the semantics of the various languages involved:
+they are defined using labelled transition systems
+operating over states are constructed around
+a common memory model.
+Then starting with \S\ref{sec:sem:li},
+we describe our extensions to these techniques
+to account for \emph{open modules}
+and model the building process more closely.
+
+\subsection{Overview / problem statement} %{{{
+
+The semantics of CompCert languages
+are constructed around a simple notion of process behavior.
+By \emph{process} we mean a self-contained computation,
+the behavior of which can more or less be characterized by
+the possible sequences of system calls performed.
+Several steps are involved to go
+from a source program to an executing process,
+which are modeled by CompCert language semantics
+with varying degrees of sophistication and accuracy.
+
+In practice,
+for a C program to be executed,
+its translation units must first be compiled to object code.
+Then,
+the compiled object files must be linked together
+into an executable binary file.
+Finally, the system loads the binary into memory,
+and some bootstrap runtime code
+is used to set up the process state
+and invoke to program's \kw{main} function.
+
+Since CompCert is a compiler from C to assembly,
+but does not include an assembler or linker,
+the model used for verification accounts for
+some of these aspects in simplified ways.
+The lowest-level objects ever considered
+are CompCert Asm programs.
+The operation of the linker is approximated by
+merging programs seen as sets of global definitions.
+The remainder of the process is encoded
+as part of the definition of language semantics:
+first,
+a symbol table is created laying out
+the program's code and static data
+into the runtime address space;
+then,
+an initial state is prepared
+to emulate the usual invocation of a C program's
+\kw{main} function at the end of the loading mechanism.
+
+%}}}
+\cbend
+
+\subsection{The CompCert Memory Model} \label{sec:sem:mm} %{{{
 
 \begin{figure} % fig:mm (The CompCert memory model) {{{
   \footnotesize
@@ -1529,6 +1588,106 @@ the values stored in various registers.
 
 %}}}
 
+\cbstart
+\subsection{Closed Semantics} \label{sec:sem:closed} %{{{
+
+The language semantics in CompCert are
+given as labelled transition systems (LTS).
+They model the initial invocation of the \kw{main()} function
+and describe a program's behavior in terms of
+sequences of observable events.
+An event $e \in \mathbb{E}$ denotes an interaction between
+the program and its environment;
+possible events include system call invocations
+and accesses to volatile variables.
+
+Schematically, a CompCert LTS
+is a tuple
+$L = \langle S, I, {\rightarrow}, F \rangle$
+consisting of
+a set of states $S$,
+a subset $I \subseteq S$ of initial states,
+a labeled transition relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
+and a set
+$F \subseteq S \times \kw{int}$
+of final states associated with integer results.
+A transition $s \stackrel{t}{\rightarrow} s'$
+indicates that the state $s$ may transition to state $s'$
+through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
+The possible behaviors of CompCert LTS fall into four categories:
+\begin{itemize}
+\item An execution reaching a final state exhibits
+    \emph{terminating} behavior.
+    For example,
+    the following execution generates
+    the event trace $t_1 t_2 \cdots t_{n-1}$
+    and terminates with exit status $r$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \mathrel{F} r \,.
+    \]
+\item An execution reaching
+    an infinite sequence of silent transitions
+    is said to be \emph{silently diverging}.
+    The following execution silently diverges after
+    generating the event trace $t_1 t_2 \cdots t_{n-1}$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \stackrel{\epsilon}{\rightarrow}
+          s_{n+1} \stackrel{\epsilon}{\rightarrow}
+          \cdots
+    \]
+\item By contrast,
+    infinite executions which keep interacting
+    are said to exhibit \emph{reactive} behavior.
+    The following execution
+    exhibits reactive behavior if and only if
+    $\forall i \, \exists j \,.\, i \le j \wedge t_j \ne \epsilon$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          s_3 \stackrel{t_3}{\rightarrow}
+          \cdots
+    \]
+\item Finally, an execution which reaches a stuck state
+    is said to \emph{go wrong}. It will have the shape:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \,,
+    \]
+    with $s_n$ such that there is no $t, s'$ for which
+    $s_n \stackrel{t}{\rightarrow} s'$.
+    This is interpreted as an \emph{undefined behavior}:
+    it can be refined by any behavior
+    admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
+\end{itemize}
+
+This approach is appropriate to describe the closed processes
+resulting from compiling, linking and loading complete C programs.
+As such, it does not make any attempt to model
+function calls across components.
+
+To compute this behavior
+language semantics must rely on a parameter $\chi$
+which give the semantics of the runtime functions
+relied on by the compiler,
+as well as any other library functions
+invoked by the user program.
+Language semantics must also model
+the way in which C programs are loaded
+and their \kw{main} function is invoked.
+
+
+%}}}
+\cbend
+
 \subsection{Language Interfaces} \label{sec:compcert:li} %{{{
 
 \begin{table*} % tbl:li Language interfaces {{{
@@ -1575,27 +1734,10 @@ the values of registers and the state of the memory.
 
 %}}}
 
-\subsection{Operational Semantics} %{{{
+\subsection{Open Semantics} %{{{
 \label{sec:modsem:def}
 
-In the original CompCert,
-a labeled transition system is given as
-a set of states $S$,
-a subset $I \subseteq S$ of initial states,
-a labeled transition relation
-${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
-and a set
-$F \subseteq S \times \kw{int}$
-of final states associated with integer results.
-CompCert LTS support a notion of interaction with the environment
-in the form of event traces:
-a transition $s \stackrel{t}{\rightarrow} s'$,
-indicates that the state $s$ may transition to state $s'$
-through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
-Following Compositional CompCert,
-we replace this facility with
-an explicit treatment of incoming and outgoing calls
-at the level of transition systems.
+\cbdelete
 
 \begin{definition}[Small-step semantics]
 Given two elementary games $E, F$,
@@ -1666,6 +1808,24 @@ the behavior of a state for which there are no rules is undefined.
 %\end{align*}
 
 %}}}
+
+\cbstart
+\subsection{Horizontal Composition} \label{sec:sem:linker} %{{{
+
+[Describe horizontal composition]
+
+%}}}
+
+\subsection{Loaders} \label{sec:sem:loader} %{{{
+
+[Describe loaders for the various language interfaces]
+
+%}}}
+
+%}}}
+
+\section{Correctness Properties} \label{sec:corr} %{{{
+\cbend
 
 \subsection{Simulations} \label{sec:modsem:sim} %{{{
 \label{sec:modsem:ref}
@@ -2031,7 +2191,50 @@ can be reconciled.
 
 %}}}
 
-\subsection{CompCert Kripke Logical Relations} \label{sec:compcert:cklr} %{{{
+\cbstart
+\subsection{Linking} \label{sec:corr:linker} %{{{
+
+[Lemma here: correctness of syntactic assembly linking
+vs. composition of open semantics]
+
+%}}}
+
+\subsection{Loading} \label{sec:corr:loader} %{{{
+
+[Lemma here:
+the loaders for our various languages
+are compatible with the simulation conventions
+of the corresponding passes]
+
+%}}}
+
+\subsection{Whole-Program Compilation} \label{sec:corr:wp} %{{{
+
+[Theorem here: from the lemmas above
+we can recover the correctness proof of
+the compiler for whole programs]
+
+%}}}
+
+\subsection{Separate Compilation} \label{sec:corr:sep} %{{{
+
+[Lemma here: monotonicity of semantic composition]
+
+Problem:
+the types of our passes are not symmetric,
+hence they do not support horizontal composition!
+
+Solution:
+use some simulation algebra magic
+to prove a symmetric open-sem correctness theorem
+for the whole compiler.
+
+%}}}
+\cbend
+
+%}}}
+
+\section{CompCert Kripke Logical Relations} \label{sec:compcert:cklr} %{{{
 
 Memory extensions and injections
 are useful for simulations
@@ -2042,7 +2245,7 @@ in the sense that
 performing similar operations on related arguments
 yields related results.
 
-\subsubsection{Definition} %{{{
+\subsection{Definition} %{{{
 
 We formalize this idea by defining
 a notion of Kripke logical relations over the CompCert memory model,
@@ -2149,7 +2352,7 @@ this is not usually the case for $R^\kw{mem}$.
 
 %}}}
 
-\subsubsection{Extensions} %{{{
+\subsection{Extensions} %{{{
 
 The simplest CompCert KLR corresponds to memory extensions.
 It uses a trivial Kripke frame and injection mapping:
@@ -2164,7 +2367,7 @@ CompCert uses in conjunction with \kw{Mem.extends}.
 
 %}}}
 
-\subsubsection{Injections} %{{{
+\subsection{Injections} %{{{
 
 In the same vein,
 we can reify memory injections as the CompCert KLR:
@@ -2188,7 +2391,7 @@ then $g(b) = (b', \delta)$ as well.
 
 %}}}
 
-\subsubsection{Footprint Preservation} %{{{
+\subsection{Footprint Preservation} %{{{
 
 Passes which use a memory injection as part of their simulation relation
 expect external calls to preserve that injection.
@@ -2270,7 +2473,7 @@ The relation $R_\kw{injp}^\kw{mem}$ is defined by the rule:
 
 %}}}
 
-\subsubsection{Relational Parametricity} \label{sec:compcert:param} %{{{
+\subsection{Relational Parametricity} \label{sec:compcert:param} %{{{
 
 For each language interface
 $\mathcal{X} \in \{ \mathcal{C}, \mathcal{L}, \mathcal{M}, \mathcal{A} \}$,
@@ -2336,7 +2539,13 @@ composition properties:
 
 %}}}
 
-\subsection{Compiler Correctness} %{{{
+\section{Compositional Compiler Correctness} %{{{
+
+\cbstart{}
+[Replace the following with the new approach
+allowing to preserve the overall simulation convention
+as we compose passes one by one]
+\cbend
 
 Following the approach outlined in \S\ref{sec:compcert:overview},
 and referring to Table~\ref{tbl:passes},
@@ -2381,15 +2590,7 @@ so that we can conclude:
 
 %}}}
 
-The work presented in this section has been fully implemented
-in the Coq proof assistant,
-and we have modified and proved the CompCert correctness theorem
-in the way outlined above.
-In the following section,
-we outline how this work may be used
-in the larger context of compositional verification.
-
-%}}}
+\cbdelete
 
 \section{Refinement-Based Game Semantics} \label{sec:gamesem} %{{{
 
@@ -2983,6 +3184,8 @@ This concludes the outline of our refinement-based game semantics.
 We believe the approach presented here can be applied to a larger class
 of game models and intend to investigate its applications
 and properties further in future work.
+
+%}}}
 
 \section{Related and Future Work} %{{{
 
