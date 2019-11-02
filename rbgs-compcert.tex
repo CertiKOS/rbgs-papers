@@ -1539,11 +1539,11 @@ is modeled by:
 \]
 where $C$ is the CompCert compiler,
 $+$ denotes CompCert's linking operator for \kw{Asm} programs, and
-$\kw{Asm(-)}$ maps an assembly program to its semantics,
+$\kw{Asm[-]}$ maps an assembly program to its semantics,
 in terms of the kind of labelled transition system
 defined in \S\ref{sec:sem:closed}.
 Note that the loading process is encoded
-as part of the definition of the $\kw{Asm}(-)$ language semantics,
+as part of the definition of the $\kw{Asm}[-]$ language semantics,
 which involves the construction of a global environment
 laying out the program's code and static data
 into the runtime address space,
@@ -1578,6 +1578,104 @@ allowing the desired behavior to be specified as:
 and the correctness of CompCert
 as a separate compiler
 to be stated as $L_\kw{src} \sqsubseteq L_\kw{tgt}$.
+
+%}}}
+
+\subsection{Closed Semantics} \label{sec:sem:closed} %{{{
+
+The language semantics in CompCert are
+given as labelled transition systems (LTS).
+They model the initial invocation of the \kw{main()} function
+and describe a program's behavior in terms of
+sequences of observable events.
+An event $e \in \mathbb{E}$ denotes an interaction between
+the program and its environment;
+possible events include system call invocations
+and accesses to volatile variables.
+
+Schematically, a CompCert LTS
+is a tuple
+$L = \langle S, I, {\rightarrow}, F \rangle$
+consisting of
+a set of states $S$,
+a subset $I \subseteq S$ of initial states,
+a labeled transition relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
+and a set
+$F \subseteq S \times \kw{int}$
+of final states associated with integer results.
+A transition $s \stackrel{t}{\rightarrow} s'$
+indicates that the state $s$ may transition to state $s'$
+through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
+The possible behaviors of CompCert LTS fall into four categories:
+\begin{itemize}
+\item An execution reaching a final state exhibits
+    \emph{terminating} behavior.
+    For example,
+    the following execution generates
+    the event trace $t_1 t_2 \cdots t_{n-1}$
+    and terminates with exit status $r$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \mathrel{F} r \,.
+    \]
+\item An execution reaching
+    an infinite sequence of silent transitions
+    is said to be \emph{silently diverging}.
+    The following execution silently diverges after
+    generating the event trace $t_1 t_2 \cdots t_{n-1}$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \stackrel{\epsilon}{\rightarrow}
+          s_{n+1} \stackrel{\epsilon}{\rightarrow}
+          \cdots
+    \]
+\item By contrast,
+    infinite executions which keep interacting
+    are said to exhibit \emph{reactive} behavior.
+    The following execution
+    exhibits reactive behavior if and only if
+    $\forall i \, \exists j \,.\, i \le j \wedge t_j \ne \epsilon$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          s_3 \stackrel{t_3}{\rightarrow}
+          \cdots
+    \]
+\item Finally, an execution which reaches a stuck state
+    is said to \emph{go wrong}. It will have the shape:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \,,
+    \]
+    with $s_n$ such that there is no $t, s'$ for which
+    $s_n \stackrel{t}{\rightarrow} s'$.
+    This is interpreted as an \emph{undefined behavior}:
+    it can be refined by any behavior
+    admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
+\end{itemize}
+
+This approach is appropriate to describe the closed processes
+resulting from compiling, linking and loading complete C programs.
+As such, it does not make any attempt to model
+function calls across components.
+
+To compute this behavior
+language semantics must rely on a parameter $\chi$
+which give the semantics of the runtime functions
+relied on by the compiler,
+as well as any other library functions
+invoked by the user program.
+Language semantics must also model
+the way in which C programs are loaded
+and their \kw{main} function is invoked.
+
 
 %}}}
 \cbend
@@ -1677,107 +1775,7 @@ the values stored in various registers.
 
 %}}}
 
-\cbstart
-\subsection{Closed Semantics} \label{sec:sem:closed} %{{{
-
-The language semantics in CompCert are
-given as labelled transition systems (LTS).
-They model the initial invocation of the \kw{main()} function
-and describe a program's behavior in terms of
-sequences of observable events.
-An event $e \in \mathbb{E}$ denotes an interaction between
-the program and its environment;
-possible events include system call invocations
-and accesses to volatile variables.
-
-Schematically, a CompCert LTS
-is a tuple
-$L = \langle S, I, {\rightarrow}, F \rangle$
-consisting of
-a set of states $S$,
-a subset $I \subseteq S$ of initial states,
-a labeled transition relation
-${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
-and a set
-$F \subseteq S \times \kw{int}$
-of final states associated with integer results.
-A transition $s \stackrel{t}{\rightarrow} s'$
-indicates that the state $s$ may transition to state $s'$
-through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
-The possible behaviors of CompCert LTS fall into four categories:
-\begin{itemize}
-\item An execution reaching a final state exhibits
-    \emph{terminating} behavior.
-    For example,
-    the following execution generates
-    the event trace $t_1 t_2 \cdots t_{n-1}$
-    and terminates with exit status $r$:
-    \[
-        I \ni s_1 \stackrel{t_1}{\rightarrow}
-          s_2 \stackrel{t_2}{\rightarrow}
-          \cdots \stackrel{t_{n-1}}{\rightarrow}
-          s_n \mathrel{F} r \,.
-    \]
-\item An execution reaching
-    an infinite sequence of silent transitions
-    is said to be \emph{silently diverging}.
-    The following execution silently diverges after
-    generating the event trace $t_1 t_2 \cdots t_{n-1}$:
-    \[
-        I \ni s_1 \stackrel{t_1}{\rightarrow}
-          s_2 \stackrel{t_2}{\rightarrow}
-          \cdots \stackrel{t_{n-1}}{\rightarrow}
-          s_n \stackrel{\epsilon}{\rightarrow}
-          s_{n+1} \stackrel{\epsilon}{\rightarrow}
-          \cdots
-    \]
-\item By contrast,
-    infinite executions which keep interacting
-    are said to exhibit \emph{reactive} behavior.
-    The following execution
-    exhibits reactive behavior if and only if
-    $\forall i \, \exists j \,.\, i \le j \wedge t_j \ne \epsilon$:
-    \[
-        I \ni s_1 \stackrel{t_1}{\rightarrow}
-          s_2 \stackrel{t_2}{\rightarrow}
-          s_3 \stackrel{t_3}{\rightarrow}
-          \cdots
-    \]
-\item Finally, an execution which reaches a stuck state
-    is said to \emph{go wrong}. It will have the shape:
-    \[
-        I \ni s_1 \stackrel{t_1}{\rightarrow}
-          s_2 \stackrel{t_2}{\rightarrow}
-          \cdots \stackrel{t_{n-1}}{\rightarrow}
-          s_n \,,
-    \]
-    with $s_n$ such that there is no $t, s'$ for which
-    $s_n \stackrel{t}{\rightarrow} s'$.
-    This is interpreted as an \emph{undefined behavior}:
-    it can be refined by any behavior
-    admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
-\end{itemize}
-
-This approach is appropriate to describe the closed processes
-resulting from compiling, linking and loading complete C programs.
-As such, it does not make any attempt to model
-function calls across components.
-
-To compute this behavior
-language semantics must rely on a parameter $\chi$
-which give the semantics of the runtime functions
-relied on by the compiler,
-as well as any other library functions
-invoked by the user program.
-Language semantics must also model
-the way in which C programs are loaded
-and their \kw{main} function is invoked.
-
-
-%}}}
-
 \subsection{Open Semantics} \label{sec:sem:open} %{{{
-\cbend
 
 \paragraph{Language Interfaces} %{{{
 
