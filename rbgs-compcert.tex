@@ -1,4 +1,4 @@
-\documentclass[acmsmall,timestamp,review,anonymous]{acmart}
+\documentclass[sigplan,10pt,review,anonymous]{acmart}
 
 % Packages {{{
 \usepackage{hyperref}
@@ -394,6 +394,7 @@ $\llbracket p_1 + p_2 \rrbracket =
 
 \subsubsection{Monotonicity} %{{{
 
+\cbstart
 Once a component has been shown to conform to a given specification,
 we want to abstract it as a ``black box''
 so that further reasoning can be done in terms of
@@ -411,6 +412,7 @@ satisfies a specification $\sigma$.
 Once we verify $p_1$ against its own specification
 $\sigma_1 \sqsubseteq \llbracket p_1 \rrbracket$,
 by the monotonicity of ${\oplus}$ means it is sufficient to show that
+\cbend
 $\sigma \sqsubseteq \sigma_1 \oplus \llbracket p_2 \rrbracket$:
 \[
    \sigma \:\sqsubseteq\:
@@ -429,6 +431,7 @@ between a component and its environment.
 To relate abstraction layers we need to give
 an explicit account of how their formulations of the interaction
 correspond to one another.
+\cbstart
 In this work we address this by defining a heterogenous version
 of the refinement relation
 ${\sqsubseteq_\mathbb{R}} \subset
@@ -438,6 +441,7 @@ the more concrete one $\mathbb{D}^\natural$, where
 $\mathbb{R}$ specifies a correspondance between
 the two levels of abstraction
 (a \emph{simulation convention}, see \S\ref{sec:modesem:sim}).
+\cbend
 
 %In related work we show that for a sufficiently general
 %semantic domain, the simulation convention $\mathbb{R}$
@@ -474,6 +478,7 @@ interactions simply consist in branching to an address
 outside the current module with
 a certain register state.
 
+\cbstart
 In that context,
 the correpondance between the source and target semantic domains
 depends on the \emph{calling convention} used by the compiler.
@@ -486,6 +491,7 @@ $p$ is the source program, $C(p)$ the compiler's output,
 $\llbracket - \rrbracket_s$ gives the semantics of the source language,
 $\llbracket - \rrbracket_t$ gives the semantics of the target language,
 and $\mathbb{R}$ formalizes the C calling convention.
+\cbend
 
 %}}}
 
@@ -1448,16 +1454,16 @@ we describe our extensions to these techniques
 to account for \emph{open modules}
 and model the building process more closely.
 
-\subsection{Overview / problem statement} %{{{
+\subsection{Introduction} %{{{
 
 The semantics of CompCert languages
 are constructed around a simple notion of process behavior.
-By \emph{process} we mean a self-contained computation,
-the behavior of which can more or less be characterized by
-the possible sequences of system calls performed.
+By \emph{process}, we mean a self-contained computation
+which can be characterized by
+the possible sequences of system calls it performs.
 Several steps are involved to go
-from a source program to an executing process,
-which are modeled by CompCert language semantics
+from a source program to an executing process;
+these steps are modeled by CompCert
 with varying degrees of sophistication and accuracy.
 
 In practice,
@@ -1471,24 +1477,107 @@ and some bootstrap runtime code
 is used to set up the process state
 and invoke to program's \kw{main} function.
 
+\begin{figure} % fig:process {{{
+    \begin{tikzpicture}[scale=1.5]
+        \node (Mb) at (1.5, 0) {
+            \parbox{22ex}{
+                \centering
+                Executing in-memory process image
+            }
+	};
+        \tt
+        \node (Ms) at (1.5, 1) {whole-program.s};
+        \node (M1c) at (0, 3) {M1.c};
+        \node (M2c) at (1, 3) {M2.c};
+        \node (etc) at (2, 3) {\ldots};
+        \node (Mnc) at (3, 3) {M$n$.c};
+        \node (M1s) at (0, 2) {M1.s};
+        \node (M2s) at (1, 2) {M2.s};
+        \node (ets) at (2, 2) {\ldots};
+        \node (Mns) at (3, 2) {M$n$.s};
+        \draw (M1c) edge[->] (M1s);
+        \draw (M2c) edge[->] (M2s);
+        \draw (Mnc) edge[->] (Mns);
+        \draw (M1s) edge[->] (Ms);
+        \draw (M2s) edge[->] (Ms);
+        \draw (Mns) edge[->] (Ms);
+        \draw (Ms) edge[->] (Mb);
+        \rm
+        \node at (-1.3, 2.5) {Compilation};
+        \node at (-1.3, 1.5) {Linking};
+        \node at (-1.3, 0.5) {Loading};
+        \tt
+        \node (Mc) at (1.5, 4) {whole-program.c};
+        \draw (M1c) edge[->,dotted] (Mc);
+        \draw (M2c) edge[->,dotted] (Mc);
+        \draw (Mnc) edge[->,dotted] (Mc);
+    \end{tikzpicture}
+    \caption{CompCert's approximation of the C toolchain}
+    \label{fig:process}
+\end{figure}
+%}}}
+
 Since CompCert is a compiler from C to assembly,
 but does not include an assembler or linker,
 the model used for verification accounts for
-some of these aspects in simplified ways.
-The lowest-level objects ever considered
-are CompCert Asm programs.
+some of these aspects in ithe simplified way
+depicted in Fig.~\ref{fig:process}.
+The lowest-level objects considered
+are CompCert \kw{Asm} programs.
 The operation of the linker is approximated by
-merging programs seen as sets of global definitions.
-The remainder of the process is encoded
-as part of the definition of language semantics:
-first,
-a symbol table is created laying out
-the program's code and static data
-into the runtime address space;
-then,
-an initial state is prepared
-to emulate the usual invocation of a C program's
-\kw{main} function at the end of the loading mechanism.
+merging programs, seen as sets of global definitions.
+Hence the compilation, linking and execution
+of a program composed of the translation units
+\texttt{M1.c}, \texttt{M2.c}, \ldots \texttt{M$n$.c},
+is modeled by:
+\[
+    L_\kw{tgt} :=
+    \kw{Asm}[C(\texttt{M1.c}) +
+             C(\texttt{M2.c}) +
+             \cdots +
+             C(\texttt{M$n$.c})] \,,
+\]
+where $C$ is the CompCert compiler,
+$+$ denotes CompCert's linking operator for \kw{Asm} programs, and
+$\kw{Asm(-)}$ maps an assembly program to its semantics,
+in terms of the kind of labelled transition system
+defined in \S\ref{sec:sem:closed}.
+Note that the loading process is encoded
+as part of the definition of the $\kw{Asm}(-)$ language semantics,
+which involves the construction of a global environment
+laying out the program's code and static data
+into the runtime address space,
+and performing the usual invocation of a C program's
+\kw{main} function.
+
+To formulate compiler correctness,
+we must also specify the expected behavior of the target program
+in terms of the semantics of the source program.
+To this end,
+CompCert defines a linking operator
+and a whole-program semantics $\kw{Clight}(-)$
+for source programs as well,%
+\footnote{
+  Although CompCert features a frontend for a richer version
+  of the C language,
+  the simplified intermediate dialect \kw{Clight}
+  is usually used as the source language
+  when using CompCert to build certified artifacts.
+  In particular it is the target language of the
+  \texttt{clightgen} utility which
+  produces Coq code for a C program's AST,
+  which the user can the prove to be correct
+  wither manually or with tools such as the VST program logic
+  \cite{vst}.
+}
+allowing the desired behavior to be specified as:
+\[
+    L_\kw{src} :=
+    \kw{Clight}[\texttt{M1.c} + \texttt{M2.c} + \cdots + \texttt{Mn.c}] \,,
+\]
+and the correctness of CompCert
+as a separate compiler
+to be stated as $L_\kw{src} \sqsubseteq L_\kw{tgt}$.
 
 %}}}
 \cbend
@@ -1686,9 +1775,11 @@ and their \kw{main} function is invoked.
 
 
 %}}}
+
+\subsection{Open Semantics} \label{sec:sem:open} %{{{
 \cbend
 
-\subsection{Language Interfaces} \label{sec:compcert:li} %{{{
+\paragraph{Language Interfaces} %{{{
 
 \begin{table*} % tbl:li Language interfaces {{{
   \begin{tabular}{clll}
@@ -1734,8 +1825,7 @@ the values of registers and the state of the memory.
 
 %}}}
 
-\subsection{Open Semantics} %{{{
-\label{sec:modsem:def}
+\paragraph{Transition Systems} %{{{
 
 \cbdelete
 
