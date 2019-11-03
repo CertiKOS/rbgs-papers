@@ -15,6 +15,7 @@
 \usepackage{calc}
 \usepackage{bbm}
 \usepackage{soul}
+\usepackage{booktabs}
 \usepackage[leftbars]{changebar}
 % }}}
 
@@ -1478,7 +1479,7 @@ is used to set up the process state
 and invoke to program's \kw{main} function.
 
 \begin{figure} % fig:process {{{
-    \begin{tikzpicture}[scale=1.5]
+    \begin{tikzpicture}[scale=1.25]
         \node (Mb) at (1.5, 0) {Running process};
         \tt
         \node (Ms) at (1.5, 1) {whole-program.s};
@@ -1649,74 +1650,43 @@ The possible behaviors of CompCert LTS fall into four categories:
           \cdots \stackrel{t_{n-1}}{\rightarrow}
           s_n \,,
     \]
-    with $s_n$ such that there is no $t, s'$ for which
+    where there is no $t, s'$ such that
     $s_n \stackrel{t}{\rightarrow} s'$.
     This is interpreted as an \emph{undefined behavior}:
     it can be refined by any behavior
     admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
 \end{itemize}
 
-This approach is appropriate to describe the closed processes
-resulting from compiling, linking and loading complete C programs.
-As such, it does not make any attempt to model
-function calls across components.
+The model outlined above
+makes no attempt to model interactions across components,
+and is only ever used to
+describe the behavior of whole programs.
+This simplifies the model significantly but
+makes it challenging to describe or reason about
+compilation units in isolation.
+More generally,
+the compiler's correctness property
+described in \S\ref{sec:sem:overview}
+only considers uses which follow
+the pattern approximated in Fig.~\ref{fig:process}.
 
-To compute this behavior
-language semantics must rely on a parameter $\chi$
-which give the semantics of the runtime functions
-relied on by the compiler,
-as well as any other library functions
-invoked by the user program.
-Language semantics must also model
-the way in which C programs are loaded
-and their \kw{main} function is invoked.
-
+To formulate a more fine-grained and flexible
+version of the correctness theorem of CompCert,
+we need an account of
+the behavior of individual translation units.
+The model presented in \S\ref{sec:sem:open}
+achives this by recoding control transfers
+to and from the modeled system explicitly.
+These control transfer will need to expose more information
+about the internal structure of program states;
+in the following section we review the design of
+CompCert's memory model,
+which all program states are constructed from.
 
 %}}}
 \cbend
 
 \subsection{The CompCert Memory Model} \label{sec:sem:mm} %{{{
-
-\begin{figure} % fig:mm (The CompCert memory model) {{{
-  \footnotesize
-  \begin{gather*}
-    v : \kw{val} ::=
-      \kw{Vundef} \alt
-      \kw{Vint}(n) \alt
-      \kw{Vlong}(n) \alt
-      \kw{Vfloat}(x) \alt
-      \kw{Vsingle}(x) \alt
-      \kw{Vptr}(b, o)
-    \\
-    (b, o) : \kw{ptr} :=
-      \kw{block} \times \mathbb{Z}
-    \\
-    (b, l, h) : \kw{ptrrange} :=
-      \kw{block} \times \mathbb{Z} \times \mathbb{Z}
-  \end{gather*}
-  \begin{align*}
-    \kw{Mem.alloc} &:
-      \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
-      \kw{mem} \times \kw{block}
-    \\
-    \kw{Mem.free} &:
-      \kw{mem} \rightarrow
-      \kw{ptrrange} \rightarrow
-      \kw{option}(\kw{mem})
-    \\
-    \kw{Mem.load} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{option}(\kw{val})
-    \\
-    \kw{Mem.store} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{mem})
-    \\
-    \kw{Mem.perm} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
-  \end{align*}
-  \caption{Outline of the CompCert memory model}
-  \label{fig:mm}
-\end{figure}
-%}}}
 
 The CompCert memory model \cite{compcertmmv2}
 is the core algebraic structure
@@ -1768,13 +1738,69 @@ for lower-level languages,
 the additional component will mainly contain
 the values stored in various registers.
 
+\begin{figure} % fig:mm (The CompCert memory model) {{{
+  %\footnotesize
+  \begin{gather*}
+        v : \kw{val} ::= 
+          \kw{Vundef} \alt
+          \kw{Vint}(n) \alt
+          \kw{Vlong}(n) \alt \\
+         \qquad \kw{Vfloat}(x) \alt
+          \kw{Vsingle}(x) \alt
+          \kw{Vptr}(b, o)
+    \\
+    (b, o) : \kw{ptr} :=
+      \kw{block} \times \mathbb{Z}
+    \\
+    (b, l, h) : \kw{ptrrange} :=
+      \kw{block} \times \mathbb{Z} \times \mathbb{Z}
+  \end{gather*}
+  \begin{align*}
+    \kw{Mem.alloc} &:
+      \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
+      \kw{mem} \times \kw{block}
+    \\
+    \kw{Mem.free} &:
+      \kw{mem} \rightarrow
+      \kw{ptrrange} \rightarrow
+      \kw{option}(\kw{mem})
+    \\
+    \kw{Mem.load} &:
+      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{option}(\kw{val})
+    \\
+    \kw{Mem.store} &:
+      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{mem})
+    \\
+    \kw{Mem.perm} &:
+      \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
+  \end{align*}
+  \caption{Outline of the CompCert memory model}
+  \label{fig:mm}
+\end{figure}
 %}}}
 
+%}}}
+
+\cbstart
 \subsection{Open Semantics} \label{sec:sem:open} %{{{
+
+[XXX: somewhere else]
+To compute this behavior
+language semantics must rely on a parameter $\chi$
+which give the semantics of the runtime functions
+relied on by the compiler,
+as well as any other library functions
+invoked by the user program.
+Language semantics must also model
+the way in which C programs are loaded
+and their \kw{main} function is invoked.
+\cbend
 
 \paragraph{Language Interfaces} %{{{
 
-\begin{table*} % tbl:li Language interfaces {{{
+
+
+\begin{table}[t] % tbl:li Language interfaces {{{
   \begin{tabular}{clll}
     \hline
     Name & Questions & Answers & Description \\
@@ -1789,9 +1815,17 @@ the values stored in various registers.
       Assembly-style control transfers (Asm) \\
     \hline
   \end{tabular}
-  \caption{Language interfaces for the various languages of CompCert.}
+  \begin{gather*}
+      \kw{sg} : \kw{signature} ; \:
+      m : \kw{mem} ; \: v : \kw{val} ; \: \vec{v} : \kw{val}^* \\
+      \kw{ls} : \kw{loc} \rightarrow \kw{val} ; \:
+      \kw{rs} : \kw{reg} \rightarrow \kw{val} ; \:
+      \kw{sp}, \kw{ra} : \kw{val}
+  \end{gather*}
+
+  \caption{Language interfaces used in CompCertO}
   \label{tbl:li}
-\end{table*}
+\end{table}
 %}}}
 
 The elementary games we use to model
