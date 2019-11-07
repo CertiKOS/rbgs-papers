@@ -1782,7 +1782,6 @@ the values stored in various registers.
 %}}}
 
 \cbstart
-\subsection{Open Semantics} \label{sec:sem:open} %{{{
 
 [XXX: somewhere else]
 To compute this behavior
@@ -1794,97 +1793,166 @@ invoked by the user program.
 Language semantics must also model
 the way in which C programs are loaded
 and their \kw{main} function is invoked.
-\cbend
 
-\paragraph{Language Interfaces} %{{{
+\subsection{Language Interfaces} \label{sec:sem:li} %{{{
 
-
+The memory model also plays a central role
+when describing interactions between program components.
+In CompCert languages,
+the memory state captures all global state.
+Therefore,
+under a game-theoretic approach to component semantics,
+short of modelling memory accesses explicitly as moves
+the memory state must be passed back-and-forth
+alongside all control transfers.
 
 \begin{table}[t] % tbl:li Language interfaces {{{
   \begin{tabular}{clll}
     \hline
-    Name & Questions & Answers & Description \\
+    Name & Question & Answer & Description \\
     \hline
     $\mathcal{C}$ & $f[\kw{sg}](\vec{v})@m$ & $v'@m'$ &
-      C-style function calls (Clight--RTL) \\
+      C calls \\
     $\mathcal{L}$ & $f[\kw{sg}](\kw{ls})@m$ & $\kw{ls}'@m'$ &
-      Arguments passed in abstract locations (LTL, Linear) \\
+      Abstract locations \\
     $\mathcal{M}$ & $f(\kw{sp},\kw{ra},\kw{rs})@m$ & $\kw{rs}'@m'$ &
-      Arguments passed through in-memory stack (Mach) \\
+      Machine registers \\
     $\mathcal{A}$ & $\kw{rs}@m$ & $\kw{rs}'@m'$ &
-      Assembly-style control transfers (Asm) \\
+      Arch-specific \\
     \hline
   \end{tabular}
-  \begin{gather*}
-      \kw{sg} : \kw{signature} ; \:
-      m : \kw{mem} ; \: v : \kw{val} ; \: \vec{v} : \kw{val}^* \\
-      \kw{ls} : \kw{loc} \rightarrow \kw{val} ; \:
-      \kw{rs} : \kw{reg} \rightarrow \kw{val} ; \:
-      \kw{sp}, \kw{ra} : \kw{val}
-  \end{gather*}
-
+%  \begin{gather*}
+%      \kw{sg} : \kw{signature} ; \:
+%      m : \kw{mem} ; \: v : \kw{val} ; \: \vec{v} : \kw{val}^* \\
+%      \kw{ls} : \kw{loc} \rightarrow \kw{val} ; \:
+%      \kw{rs} : \kw{reg} \rightarrow \kw{val} ; \:
+%      \kw{sp}, \kw{ra} : \kw{val}
+%  \end{gather*}
   \caption{Language interfaces used in CompCertO}
   \label{tbl:li}
 \end{table}
 %}}}
 
-The elementary games we use to model
-the cross-module interactions of CompCert languages
+More specifically,
+our models of cross-module interactions in CompCert languages
 are shown in Table~\ref{tbl:li}.
-Moves correspond to control transfers
-between a module and its environment:
-questions correspond to function invocations;
-answers return control to the caller.
+We call each one a \emph{language interface}.
+Questions correspond to function invocations,
+whereas answers return control to the caller.
+Each line defines an elementary game
+which can be used to describe how a given component
+will interact with its environment.
+Formally,
+a language interface is defined as follows.
 
-At the source level ($\mathcal{C}$),
+\begin{definition}
+A \emph{language interface} is a tuple
+$A = \langle M_A^\kw{Q}, M_A^\kw{A} \rangle$, where
+$M_A^\kw{Q}$ is a set of \emph{questions} and
+$M_A^\kw{A}$ is a set of \emph{answers}.
+\end{definition}
+
+At the source level (language interface $\mathcal{C}$),
 questions consist of
-the name and signature of the function being invoked,
-the values of its arguments,
-and the state of the memory at the point of entry;
+the address of the function being invoked
+($f : \kw{val}$)
+as well as its signature
+($\kw{sg} : \kw{signature}$),
+the values of its arguments
+($\vec{v} : \kw{val}^*$),
+and the state of the memory at the point of entry
+($m : \kw{mem}$);
 answers
 consist of the function's return value
 and the state of the memory at the point of exit.
+In these terms,
+a Clight component describes a strategy for the game
+$\mathcal{C} \rightarrow \mathcal{C}$.
+The component is activated by an incoming $\mathcal{C}$ question
+in the right-hand side $\mathcal{C}$ game,
+and eventually expected to produce a $\mathcal{C}$ answer.
+Conversely,
+it may perform external calls by
+asking questions in the left-hand side $\mathcal{C}$ game,
+which will be answered by the environment.
+
 This language interface is used for Clight and
-for the majority of CompCert's intermediate languages.
-Once we reach Asm ($\mathcal{A}$),
-queries and replies simply specify
-the values of registers and the state of the memory.
+for the majority of CompCert's intermediate languages,
+including the RTL language which is used to perform
+most of the compiler's optimizations.
+As the backend moves towards lower-level languages,
+this is reflected in the language interfaces used:
+function arguments are first mapped into
+abstract locations alongside local temporary variables
+($\mathcal{L}$, used by the LTL and Linear languages).
+These locations are eventually split between
+in-memory stack slots and a fixed number of machine registers
+($\mathcal{M}$, used by the Mach language).
+Finally, the target assembly language Asm
+consolidates the stack pointer, program counter,
+and return address into their own machine registers,
+which is reflected in its interface $\mathcal{A}$.
 
 %}}}
 
-\paragraph{Transition Systems} %{{{
+\subsection{Open Semantics} \label{sec:sem:open} %{{{
+
+Having described the control transfer interfaces
+used in the languages of CompCert,
+we show how the closed semantics
+described in \S\ref{sec:sem:closed}
+is adapted in CompCertO
+to account for cross-component interactions.
+
+Compared with the original,
+our transition system model
+is parametrized by
+incoming and outgoing language interfaces,
+and it specifies the behavior of program components
+by defining a strategies for the corresponding game.
+\cbend
 
 \cbdelete
 
-\begin{definition}[Small-step semantics]
-Given two elementary games $E, F$,
-a \emph{small-step semantics} for $E \rightarrow F$
+\begin{definition}[Open semantics]
+For an \emph{incoming} language interface $B$
+and an \emph{outgoing} language interface $A$,
+an \emph{open semantics for $A \rightarrow B$}
 is a tuple $L = \langle S, \rightarrow, I, X, Y, F \rangle$.
-${\rightarrow} \subseteq S \times S$ is a \emph{transition relation} on
-the set of states $S$.
+The relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$ is
+a \emph{transition relation} on the set of states $S$.
 The handling of incoming calls is specified by
-$I \subseteq M_F^\kw{Q} \times S$, which
+$I \subseteq M_B^\kw{Q} \times S$, which
 assigns a set of \emph{initial states} to each question of $B$, and by
-$F \subseteq S \times M_F^\kw{A}$,
+$F \subseteq S \times M_B^\kw{A}$,
 which designates \emph{final states} together with corresponding answers.
 External calls are specified by
-$X \subseteq S \times M_E^\kw{Q}$,
+$X \subseteq S \times M_A^\kw{Q}$,
 which identifies \emph{interacting states} together with
 a corresponding question of $A$ directed to the environment, and
-$Y \subseteq S \times M_E^\kw{A} \times S$,
+$Y \subseteq S \times M_A^\kw{A} \times S$,
 which is used to select a \emph{resumption state}
 based on the outcome of the external call
 after the environment returns.
-We write $L : E \rightarrow F$ to indicate that
-$L$ is a small-step semantics for the game $E \rightarrow F$.
+We write $L : A \rightarrow B$ to indicate that
+$L$ is a small-step semantics for the game $A \rightarrow B$.
 \end{definition}
 
+[XXX: remove?]
 Note that as
 in CompCert, the absence of any transition (``getting stuck'')
 denotes an undefined behavior.
 This convention fits the context of
 language semantics defined through inductive sets of rules:
 the behavior of a state for which there are no rules is undefined.
+
+[we need to figure out exactly:
+1. how to articulate this vs. \S\ref{sec:sem:closed};
+2. how formal we want to be in each section;
+3. how much we want to stick to the Coq code;
+Also,
+update the definition above to talk about events.]
 
 %For a small-step semantics
 %$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : \kw{semantics}(A,B)$,
@@ -1927,15 +1995,64 @@ the behavior of a state for which there are no rules is undefined.
 %}}}
 
 \cbstart
+\subsection{Language Semantics}
+
 \subsection{Horizontal Composition} \label{sec:sem:linker} %{{{
 
-[Describe horizontal composition]
+\begin{figure} % fig:hcomp {{{
+    \begin{gather*}
+        \AxiomC{$q \in \kw{dom}(L_i)$}
+        \AxiomC{$q \mathrel{I_i} s$}
+        \BinaryInfC{$q \mathrel{I} [(i, s) :: \kw{nil}]$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s \stackrel{t}{\rightarrow}_i s'$}
+        \UnaryInfC{$
+            [(i, s) :: k]
+            \stackrel{t}{\rightarrow}
+            [(i, s') :: k]$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s \mathrel{X_i} q$}
+        \AxiomC{$q \in \kw{dom}(L_j)$}
+        \AxiomC{$q \mathrel{I_j} s'$}
+        \TrinaryInfC{$
+            [(i, s) :: k]
+            \stackrel{\epsilon}{\rightarrow}
+            [(j, s') :: (i, s) :: k]$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s' \mathrel{F_j} r$}
+        \AxiomC{$(s, r, s'') \in Y_i$}
+        \BinaryInfC{$
+            [(j, s') :: (i, s) :: k]
+            \stackrel{\epsilon}{\rightarrow}
+            [(i, s'') :: k]$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s \mathrel{X_i} q$}
+        \AxiomC{$\forall j \,.\, q \notin \kw{dom}(L_j)$}
+        \BinaryInfC{$[(i, s) :: k] \mathrel{X} q$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$(s, r, s') \in Y_i$}
+        \UnaryInfC{$([(i, s) :: k], r, [(i, s') :: k]) \in Y$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s \mathrel{F_i} r$}
+        \UnaryInfC{$[(i, s) :: \kw{nil}] \mathrel{F} r$}
+        \DisplayProof
+    \end{gather*}
+    \caption{Horizontal composition of open semantics}
+    \label{fig:hcomp}
+\end{figure}
+%}}}
 
 %}}}
 
 \subsection{Loaders} \label{sec:sem:loader} %{{{
 
-[Describe loaders for the various language interfaces]
+[Describe loaders for the various language interfaces?]
 
 %}}}
 
