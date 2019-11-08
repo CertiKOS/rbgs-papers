@@ -2278,9 +2278,9 @@ $L_1, L_1' : A_1 \rightarrow A_1$ and
 $L_2, L_2' : A_2 \rightarrow A_2$,
 the following propery holds:
 \[
-    \AxiomC{$L_1 \le_\mathbb{R} L_2$}
-    \AxiomC{$L_1' \le_\mathbb{R} L_2'$}
-    \BinaryInfC{$L_1 \oplus L_1' \le_\mathbb{R} L_2 \oplus L_2'$}
+    \AxiomC{$L_1 \le_{\mathbb{R} \rightarrow \mathbb{R}} L_2$}
+    \AxiomC{$L_1' \le_{\mathbb{R} \rightarrow \mathbb{R}} L_2'$}
+    \BinaryInfC{$L_1 \oplus L_1' \le_{\mathbb{R} \rightarrow \mathbb{R}} L_2 \oplus L_2'$}
     \DisplayProof
 \]
 \begin{proof}
@@ -2514,6 +2514,9 @@ the overall proof size for these passes slightly \emph{decreases}.
 
 \subsection{The \kw{Stacking} pass} %{{{
 
+The \kw{Stacking} pass is the most intricate pass of CompCert,
+and a major source of the complexity of related work.
+
 %}}}
 
 \subsection{The \kw{Asmgen} pass} %{{{
@@ -2522,52 +2525,21 @@ the overall proof size for these passes slightly \emph{decreases}.
 
 \subsection{Composing passes} %{{{
 
-[HERE, define composition of simulation conventions
-and composition of forward simulations.
-Conclude that this is not good enough,
-but we're gonna use properties of languages to glue
-things back together. Enters CKLR.]
+Having described the passes of CompCertO
+and the types of their simulation proofs in terms of
+simulation conventions,
+we move on to the problem of composing successive passes
+to obtain a certified compiler.
+To this end,
+we first define the composition of simulation conventions.
 
-\begin{definition}[Constructions on simulation conventions] %{{{
-Given two simulation conventions
-$\mathbb{R}, \mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
-we say that
-$\mathbb{R}$ refines $\mathbb{S}$ and write
-$\mathbb{R} \preceq \mathbb{S}$
-when the following holds for all $w, m_1, m_2$:
-\[
-      m_1 \ifr{w \Vdash R^\kw{Q}} m_2 \Rightarrow
-      \exists \, v \,.\,
-        m_1 \ifr{v \Vdash S^\kw{Q}} m_2 \wedge
-        \forall \, n_1 \, n_2 \,.\,
-          n_1 \ifr{v \Vdash S^\kw{A}} n_2 \Rightarrow
-          n_1 \ifr{w \Vdash R^\kw{A}} n_2
-\]
-The least upper bound of $\mathbb{R}$ and $\mathbb{S}$
-is defined as
-$
-    \mathbb{R} \curlyvee \mathbb{S} :=
-      \langle
-        W_R + W_S,
-        R^\kw{Q} + S^\kw{Q},
-        R^\kw{A} + S^\kw{A}
-      \rangle
-$,
-where for $R \in \mathcal{R}_{W_R}(X,Y)$
-and $S \in \mathcal{R}_{W_S}(X,Y)$,
-the Kripke logical relation $R + S$ is defined as:
-\[
-    (R + S)_w =
-    \begin{cases}
-      R_u & \mbox{if } w = i_1(u) \\
-      S_v & \mbox{if } w = i_2(v) \,.
-    \end{cases}
-\]
-Given
-$\mathbb{R} : A^\flat \Leftrightarrow A^\natural$ and
-$\mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
-the composite convention
-$\mathbb{R} \cdot \mathbb{S} : A^\flat \Leftrightarrow A^\sharp$ is defined as:
+\begin{definition}[Composition of simulation conventions] %{{{
+Given the language interfaces $A^\sharp, A^\natural, A^\flat$
+and the simulation conventions
+$\mathbb{R} : A^\sharp \Leftrightarrow A^\natural$ and
+$\mathbb{S} : A^\natural \Leftrightarrow A^\flat$,
+the composite simulation convention
+$\mathbb{R} \cdot \mathbb{S} : A^\sharp \Leftrightarrow A^\flat$ is defined as:
 \[
     \mathbb{R} \cdot \mathbb{S} :=
       \langle
@@ -2576,71 +2548,76 @@ $\mathbb{R} \cdot \mathbb{S} : A^\flat \Leftrightarrow A^\sharp$ is defined as:
         R^\kw{A} \cdot S^\kw{A}
       \rangle \,.
 \]
-Finally,
-for $\mathbb{R} : A \Leftrightarrow A$,
-we define the $n$-fold composition
-$\mathbb{R}^n := \mathbb{R} \cdot \mathbb{R} \cdots \mathbb{R}$,
-and
-$
-    \mathbb{R}^* :=
-      \bigcurlyvee_{n \in \mathbb{N}} \mathbb{R}^n
-$.
 \end{definition}
 %}}}
 
-\begin{lemma} \label{lemma:kleenesim} %{{{
-Consider the strategies
-$\sigma^\natural : A^\natural \Rightarrow B^\natural$,
-$\sigma^\sharp : A^\sharp \Rightarrow B^\sharp$ and
-the refinement conventions
-$\mathbb{R}, \mathbb{R}' : A^\natural \Leftrightarrow A^\sharp$ and
-$\mathbb{S}, \mathbb{S}' : B^\natural \Leftrightarrow B^\sharp$.
-The following properties hold:
+This allows us to formulate the following composition property
+of forward simulations.
+
+\begin{theorem}[Composition of simulations] \label{thm:simcomp} %{{{
+Consider the transition systems
+$L^\sharp : A^\sharp \rightarrow B^\sharp$,
+$L^\natural : A^\natural \rightarrow B^\natural$,
+$L^\flat : A^\flat \rightarrow B^\flat$,
+and the simulation conventions
+$\mathbb{R}_A : A^\sharp \Leftrightarrow A^\natural$,
+$\mathbb{R}_B : B^\sharp \Leftrightarrow B^\natural$,
+$\mathbb{S}_A : A^\natural \Leftrightarrow A^\flat$, and
+$\mathbb{S}_B : B^\natural \Leftrightarrow B^\flat$.
+The following property holds:
 \[
-  \AxiomC{$\mathbb{R}' \preceq \mathbb{R}$}
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R}' \Rightarrow \mathbb{S}'} \sigma^\sharp$}
-  \AxiomC{$\mathbb{S} \preceq \mathbb{S}'$}
-  \TrinaryInfC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\sharp$}
-  \DisplayProof
-  \qquad
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\sharp$}
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}'} \sigma^\sharp$}
-  \BinaryInfC{$\sigma^\natural
-     \le_{\mathbb{R} \Rightarrow \mathbb{S} \curlyvee \mathbb{S}'} \sigma^\sharp$}
+  \AxiomC{$L^\sharp \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L^\natural$}
+  \AxiomC{$L^\natural \le_{\mathbb{S}_A \rightarrow \mathbb{S}_B} L^\flat$}
+  \BinaryInfC{
+    $L^\sharp \le_{\mathbb{R}_A \cdot \mathbb{S}_A \rightarrow
+                   \mathbb{R}_B \cdot \mathbb{S}_B} L^\flat$}
   \DisplayProof
 \]
-For the strategies
-$\sigma^\flat : A^\flat \Rightarrow B^\flat$,
-$\sigma^\natural : A^\natural \Rightarrow B^\natural$,
-$\sigma^\sharp : A^\sharp \Rightarrow B^\sharp$ and
-the refinement conventions
-$\mathbb{R} : A^\flat \Leftrightarrow A^\natural$,
-$\mathbb{R}' : A^\natural \Leftrightarrow A^\sharp$, and
-$\mathbb{S} : B^\flat \Leftrightarrow B^\natural$,
-$\mathbb{S}' : B^\natural \Leftrightarrow B^\sharp$,
-the following property holds:
-\[
-  \AxiomC{$\sigma^\flat \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\natural$}
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R}' \Rightarrow \mathbb{S}'} \sigma^\sharp$}
-  \BinaryInfC{$\sigma^\flat
-    \le_{\mathbb{R} \cdot \mathbb{R}' \Rightarrow \mathbb{S} \cdot \mathbb{S}'}
-    \sigma^\sharp$}
-  \DisplayProof
-\]
-Finally,
-for
-$\sigma, \tau : A \Rightarrow B$
-and for
-$\mathbb{R} : A \Leftrightarrow A$ and
-$\mathbb{S} : B \Leftrightarrow B$,
-the following property holds:
-\[
-  \AxiomC{$\sigma \le_{\mathbb{R} \Rightarrow \mathbb{S}} \tau$}
-  \UnaryInfC{$\sigma \le_{\mathbb{R}^* \Rightarrow \mathbb{S}^*} \tau$}
-  \DisplayProof
-\]
-\end{lemma}
+\end{theorem}
 %}}}
+
+Using this theorem,
+we can compose the successive passes of CompCertO
+to obtain a simulation for the overall compiler.
+However,
+there are two limitations to this approach:
+\begin{itemize}
+\item
+  Because injection passes use different simulation conventions
+  for their incoming and outgoing calls,
+  they break horizontal compositionality in the sense that
+  Thm.~\ref{thm:simlinking} cannot be used
+  on the resulting simulation properties;
+  indeed,
+  the outgoing relationship
+  between the external calls of one component
+  which are established by the simulation theorem
+  cannot be used to satisfy the
+  incoming relationship which the simulation relies on
+  for another component,
+  because these relationships are different.
+  This propagates to the simulation property
+  obtained from composing all of the compiler's passes.
+\item
+  Another issue with the compilers' simulation convention
+  is that it is very specific to the exact sequence of passes
+  used by CompCertO.
+  This means that a slightly different version of the compiler,
+  or even the same version of the compiler used with different
+  optimization passes,
+  would correspond to a different, incompatible
+  correctness property.
+\end{itemize}
+
+We will address these issues by developing a richer
+\emph{simulation convention algebra}
+and relying on the properties
+of \kw{Clight} and \kw{RTL} to reconcile the incoming and outgoing
+conventions injection passes.
+We start with a more in-depth investigation,
+in the next section,
+of the relational structure of CompCert
+and its language semantics.
 
 %}}}
 
@@ -2997,6 +2974,120 @@ so that we can conclude:
       \le_{\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}}
       \kw{Asm} \llbracket p_t \rrbracket \,.
 \]
+
+\begin{definition}[Constructions on simulation conventions] %{{{
+Given two simulation conventions
+$\mathbb{R}, \mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
+we say that
+$\mathbb{R}$ refines $\mathbb{S}$ and write
+$\mathbb{R} \preceq \mathbb{S}$
+when the following holds for all $w, m_1, m_2$:
+\[
+      m_1 \ifr{w \Vdash R^\kw{Q}} m_2 \Rightarrow
+      \exists \, v \,.\,
+        m_1 \ifr{v \Vdash S^\kw{Q}} m_2 \wedge
+        \forall \, n_1 \, n_2 \,.\,
+          n_1 \ifr{v \Vdash S^\kw{A}} n_2 \Rightarrow
+          n_1 \ifr{w \Vdash R^\kw{A}} n_2
+\]
+The least upper bound of $\mathbb{R}$ and $\mathbb{S}$
+is defined as
+$
+    \mathbb{R} \curlyvee \mathbb{S} :=
+      \langle
+        W_R + W_S,
+        R^\kw{Q} + S^\kw{Q},
+        R^\kw{A} + S^\kw{A}
+      \rangle
+$,
+where for $R \in \mathcal{R}_{W_R}(X,Y)$
+and $S \in \mathcal{R}_{W_S}(X,Y)$,
+the Kripke logical relation $R + S$ is defined as:
+\[
+    (R + S)_w =
+    \begin{cases}
+      R_u & \mbox{if } w = i_1(u) \\
+      S_v & \mbox{if } w = i_2(v) \,.
+    \end{cases}
+\]
+Given
+$\mathbb{R} : A^\flat \Leftrightarrow A^\natural$ and
+$\mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
+the composite convention
+$\mathbb{R} \cdot \mathbb{S} : A^\flat \Leftrightarrow A^\sharp$ is defined as:
+\[
+    \mathbb{R} \cdot \mathbb{S} :=
+      \langle
+        W_R \times W_S, \:
+        R^\kw{Q} \cdot S^\kw{Q}, \:
+        R^\kw{A} \cdot S^\kw{A}
+      \rangle \,.
+\]
+Finally,
+for $\mathbb{R} : A \Leftrightarrow A$,
+we define the $n$-fold composition
+$\mathbb{R}^n := \mathbb{R} \cdot \mathbb{R} \cdots \mathbb{R}$,
+and
+$
+    \mathbb{R}^* :=
+      \bigcurlyvee_{n \in \mathbb{N}} \mathbb{R}^n
+$.
+\end{definition}
+%}}}
+
+\begin{lemma} \label{lemma:kleenesim} %{{{
+Consider the strategies
+$\sigma^\natural : A^\natural \Rightarrow B^\natural$,
+$\sigma^\sharp : A^\sharp \Rightarrow B^\sharp$ and
+the refinement conventions
+$\mathbb{R}, \mathbb{R}' : A^\natural \Leftrightarrow A^\sharp$ and
+$\mathbb{S}, \mathbb{S}' : B^\natural \Leftrightarrow B^\sharp$.
+The following properties hold:
+\[
+  \AxiomC{$\mathbb{R}' \preceq \mathbb{R}$}
+  \AxiomC{$\sigma^\natural \le_{\mathbb{R}' \Rightarrow \mathbb{S}'} \sigma^\sharp$}
+  \AxiomC{$\mathbb{S} \preceq \mathbb{S}'$}
+  \TrinaryInfC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\sharp$}
+  \DisplayProof
+  \qquad
+  \AxiomC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\sharp$}
+  \AxiomC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}'} \sigma^\sharp$}
+  \BinaryInfC{$\sigma^\natural
+     \le_{\mathbb{R} \Rightarrow \mathbb{S} \curlyvee \mathbb{S}'} \sigma^\sharp$}
+  \DisplayProof
+\]
+For the strategies
+$\sigma^\flat : A^\flat \Rightarrow B^\flat$,
+$\sigma^\natural : A^\natural \Rightarrow B^\natural$,
+$\sigma^\sharp : A^\sharp \Rightarrow B^\sharp$ and
+the refinement conventions
+$\mathbb{R} : A^\flat \Leftrightarrow A^\natural$,
+$\mathbb{R}' : A^\natural \Leftrightarrow A^\sharp$, and
+$\mathbb{S} : B^\flat \Leftrightarrow B^\natural$,
+$\mathbb{S}' : B^\natural \Leftrightarrow B^\sharp$,
+the following property holds:
+\[
+  \AxiomC{$\sigma^\flat \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\natural$}
+  \AxiomC{$\sigma^\natural \le_{\mathbb{R}' \Rightarrow \mathbb{S}'} \sigma^\sharp$}
+  \BinaryInfC{$\sigma^\flat
+    \le_{\mathbb{R} \cdot \mathbb{R}' \Rightarrow \mathbb{S} \cdot \mathbb{S}'}
+    \sigma^\sharp$}
+  \DisplayProof
+\]
+Finally,
+for
+$\sigma, \tau : A \Rightarrow B$
+and for
+$\mathbb{R} : A \Leftrightarrow A$ and
+$\mathbb{S} : B \Leftrightarrow B$,
+the following property holds:
+\[
+  \AxiomC{$\sigma \le_{\mathbb{R} \Rightarrow \mathbb{S}} \tau$}
+  \UnaryInfC{$\sigma \le_{\mathbb{R}^* \Rightarrow \mathbb{S}^*} \tau$}
+  \DisplayProof
+\]
+\end{lemma}
+%}}}
 
 %}}}
 
