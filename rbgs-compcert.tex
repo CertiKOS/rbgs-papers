@@ -2299,11 +2299,11 @@ to be refined component by component.
 
 \subsection{Loaders} \label{sec:sem:loader} %{{{
 
-XXX: Here, describe how loaders for various language
+XXX: Here, could describe how loaders for various language
 interfaces can be defined.
-Loades turn an open semantics such as
+Loaders turn an open semantics such as
 $L : \mathcal{C} \rightarrow \mathcal{C}$
-into the whole-program semantics
+into a closed whole-program semantics of type
 $\kw{load}(L) : \mathbf{1} \rightarrow \mathcal{W}$.
 
 Problem: the definitions of loaders involve
@@ -2316,46 +2316,7 @@ which so far I have left out of the semantic model.
 
 \section{Compiler passes} \label{sec:corr} %{{{
 
-\subsection{Compiler Passes} %{{{
-
-The passes of CompCert fall into three categories
-depending on how
-the memory states of their source and target languages are related
-by their correctness proofs:
-\begin{itemize}
-\item \emph{Equality} is used when the memory states
-  in the source and target execution remain identical,
-  for instance when the differences between
-  the source and target programs are mostly a matter of syntax,
-  but they execute in the same way.
-\item \emph{Memory extensions} are somewhat less constrained:
-  the target memory is allowed to contain values that are
-  \emph{more defined} than that of the source memory,
-  and to have less restrictive permissions,
-  so that all operations succeeding on the source memory
-  will succeed on the target memory as well.
-  However,
-  the two memory states must share the same overall structure.
-\item \emph{Memory injection} relations
-  allow the structures of the source and target memories
-  to differ, as specified by an injection mapping
-  (see Example~\ref{ex:meminj}).
-\end{itemize}
-
-Table~\ref{tbl:passes} shows
-the intermediate languages and compilation passes
-used in our version of CompCert,
-together with the respective
-language interfaces and
-simulation conventions
-that are used for each one.
-In the remainder of this section,
-we will explain how these simulation conventions are constructed
-and how the compiler's overall incoming and outgoing conventions
-can be reconciled.
-
 \begin{table*} % tbl:passes Passes of Composable CompCert %{{{
-  \footnotesize
   \begin{tabular}{lllp{.55\textwidth}}
     \hline
     Language/Pass & Outgoing & Incoming & Description \\
@@ -2366,18 +2327,22 @@ can be reconciled.
       Pull non-adressable local variables out of memory \\
     \kw{Cshmgen} & \kw{id} & \kw{id} &
       Simplify control structures and type-dependent computations \\
+    \hline
     \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ &
       Low-level structured language \\
     \kw{Cminorgen} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
       Stack allocation of local variables whose address is taken \\
+    \hline
     \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ &
       Low-level structured language; stack allocation of locals \\
     \kw{Selection} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
       Recognition of operators and addressing modes \\
+    \hline
     \textbf{Cminorsel} & $\mathcal{C}$ & $\mathcal{C}$ &
       Like Cminor, with machine-specific operators \\
     \kw{RTLgen} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
       Construction of the CFG, 3-address code generation \\
+    \hline
     \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ &
       Register transfer language \\
     \kw{Tailcall} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
@@ -2396,12 +2361,14 @@ can be reconciled.
       Removal of unused static globals \\
     \kw{Allocation} & \kw{alloc} & \kw{alloc} &
       Register allocation \\
+    \hline
     \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ &
       Location transfer language \\
     \kw{Tunneling} & $\mathcal{L}[\kw{ext}]$ & $\mathcal{L}[\kw{ext}]$ &
       Branch tunneling \\
     \kw{Linearize} & \kw{id} & \kw{id} &
       Linearization of the CFG \\
+    \hline
     \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ &
       Like LTL, but the CFG is replaced by a linear list of instructions \\
     \kw{CleanupLabels} & \kw{id} & \kw{id} &
@@ -2410,10 +2377,12 @@ can be reconciled.
       Synthesis of debugging information \\
     \kw{Stacking} & \kw{stacking} & \kw{stacking} &
       Laying out the activation records \\
+    \hline
     \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ &
       Like Linear, with a more concrete view of the activation record \\
     \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} &
       Emission of assembly code \\
+    \hline
     \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ &
       Assembly language for x86 machines \\
     \hline
@@ -2424,6 +2393,130 @@ can be reconciled.
   \label{tbl:passes}
 \end{table*}
 %}}}
+
+We have explained how the semantic model of CompCert
+can be generalized to account for cross-component interaction,
+and accordingly defined the semantic model used by CompCertO.
+In this section,
+we describe how the simulation proofs of
+the various passes of CompCert
+can be adapted to fit this model.
+Owing to the flexibility of our typed relational model,
+this adaptation is much easier than
+in previous work such as Compositional CompCert.
+
+The passes of CompCertO are summarized in Table~\ref{tbl:passes}.
+They are grouped by their source language.
+All but the last pass listed under a given language
+use it as their target language as well;
+the last pass uses the next language as its target.
+
+Each pass is assigned an incoming and outgoing simulation convention,
+which is largely determined by the simulation relation
+used in the corresponding proof.
+For passes whose source and target languages
+used the same language interface,
+this is determined in particular by the way memory states are related.
+For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
+we construct more specific simulation conventions
+which express the correspondance between
+the higher-level and lower-level representations
+of function calls and returns.
+
+%\subsection{Overview} %{{{
+%
+%[Drop/redistribute this?]
+%
+%The passes of CompCert fall into three categories
+%depending on how
+%the memory states of their source and target languages are related
+%by their correctness proofs:
+%\begin{itemize}
+%\item \emph{Equality} is used when the memory states
+%  in the source and target execution remain identical,
+%  for instance when the differences between
+%  the source and target programs are mostly a matter of syntax,
+%  but they execute in the same way.
+%\item \emph{Memory extensions} are somewhat less constrained:
+%  the target memory is allowed to contain values that are
+%  \emph{more defined} than that of the source memory,
+%  and to have less restrictive permissions,
+%  so that all operations succeeding on the source memory
+%  will succeed on the target memory as well.
+%  However,
+%  the two memory states must share the same overall structure.
+%\item \emph{Memory injection} relations
+%  allow the structures of the source and target memories
+%  to differ, as specified by an injection mapping
+%  (see Example~\ref{ex:meminj}).
+%\end{itemize}
+%
+%Table~\ref{tbl:passes} shows
+%the intermediate languages and compilation passes
+%used in our version of CompCert,
+%together with the respective
+%language interfaces and
+%simulation conventions
+%that are used for each one.
+%In the remainder of this section,
+%we will explain how these simulation conventions are constructed
+%and how the compiler's overall incoming and outgoing conventions
+%can be reconciled.
+%
+%%}}}
+
+\subsection{Identity passes} \label{sec:pass:id} %{{{
+
+The simplest passes of CompCert
+use a simulation relation which
+restricts the source and target
+memory states and values to be identical.
+For the passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
+\kw{CleanupLabels} and \kw{Debugvar},
+we can use the identity simulation convention
+defined below.
+
+\begin{definition}
+The \emph{identity simulation convention} for
+a language interface $A$ is:
+\[
+    \kw{id}_A : A \Leftrightarrow A := \langle \{*\}, {=}, {=} \rangle \,.
+\]
+We abbreviate it as $\kw{id}$ when $A$ can be deduced
+from context.
+\end{definition}
+
+The simulation proofs for these passes
+require very few changes.
+The simulation properties for
+the interaction and resumption predicates
+added to our extended model
+can be proved in a single line of proof script.
+In fact,
+because of various simplifications we perform
+to the overall CompCert theories
+regarding the management of symbol tables and global environments,
+the overall proof size for these passes slightly \emph{decreases}.
+
+%}}}
+
+\subsection{Extension passes} %{{{
+
+%}}}
+
+\subsection{Injection passes} %{{{
+
+%}}}
+
+\subsection{The \kw{Allocation} pass} %{{{
+
+%}}}
+
+\subsection{The \kw{Stacking} pass} %{{{
+
+%}}}
+
+\subsection{The \kw{Asmgen} pass} %{{{
 
 %}}}
 
