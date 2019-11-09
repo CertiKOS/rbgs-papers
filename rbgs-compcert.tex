@@ -1284,7 +1284,7 @@ and define:
 \begin{example}[CompCert memory injections] \label{ex:meminj} %{{{
 The memory model of CompCert divides the memory into blocks,
 whose contents are addressed by an integer
-(see \S\ref{sec:compcert:mm}).
+(see \S\ref{sec:sem:mm}).
 Between the states of the source and target programs,
 a block may be dropped, added, or
 mapped at a given offset within a larger block.
@@ -1717,6 +1717,10 @@ represents an undefined value;
 the simulation relations used by CompCert
 usually allow $\kw{Vundef}$
 to be refined into a more concrete value.
+We will write the refinement relation on values as:
+\[
+    {\sqsubseteq} := \{(\kw{Vundef}, v), (v, v) \mid v \in \kw{val}\}
+\]
 
 The memory model is shared by all of the languages in CompCert.
 The states used to define their semantics consist of
@@ -2323,48 +2327,48 @@ which so far I have left out of the semantic model.
     \hline
     \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ &
       A simpler version of CompCert C \\
-    \kw{SimplLocals} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ &
       Pull non-adressable local variables out of memory \\
     \kw{Cshmgen} & \kw{id} & \kw{id} &
       Simplify control structures and type-dependent computations \\
     \hline
     \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ &
       Low-level structured language \\
-    \kw{Cminorgen} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ &
       Stack allocation of local variables whose address is taken \\
     \hline
     \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ &
       Low-level structured language; stack allocation of locals \\
-    \kw{Selection} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+    \kw{Selection} & $\kw{ext}$ & $\kw{ext}$ &
       Recognition of operators and addressing modes \\
     \hline
     \textbf{Cminorsel} & $\mathcal{C}$ & $\mathcal{C}$ &
       Like Cminor, with machine-specific operators \\
-    \kw{RTLgen} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ &
       Construction of the CFG, 3-address code generation \\
     \hline
     \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ &
       Register transfer language \\
-    \kw{Tailcall} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+    \kw{Tailcall} & $\kw{ext}$ & $\kw{ext}$ &
       Recognition of tail calls \\
-    \st{Inlining} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+    \st{Inlining} & $\kw{injp}$ & $\kw{inj}$ &
       Function inlining \\
     \kw{Renumber} & $\kw{id}$ & $\kw{id}$ &
       Postorder renumbering of the CFG \\
-    \st{Constprop} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+    \st{Constprop} & $\kw{ext}$ & $\kw{ext}$ &
       Constant propagation \\
-    \st{CSE} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+    \st{CSE} & $\kw{ext}$ & $\kw{ext}$ &
       Common subexpression elimination \\
-    \st{Deadcode} & $\mathcal{C}[\kw{ext}]$ & $\mathcal{C}[\kw{ext}]$ &
+    \st{Deadcode} & $\kw{ext}$ & $\kw{ext}$ &
       Redundancy elimination \\
-    \st{Unusedglob} & $\mathcal{C}[\kw{injp}]$ & $\mathcal{C}[\kw{inj}]$ &
+    \st{Unusedglob} & $\kw{injp}$ & $\kw{inj}$ &
       Removal of unused static globals \\
     \kw{Allocation} & \kw{alloc} & \kw{alloc} &
       Register allocation \\
     \hline
     \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ &
       Location transfer language \\
-    \kw{Tunneling} & $\mathcal{L}[\kw{ext}]$ & $\mathcal{L}[\kw{ext}]$ &
+    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ &
       Branch tunneling \\
     \kw{Linearize} & \kw{id} & \kw{id} &
       Linearization of the CFG \\
@@ -2502,13 +2506,141 @@ the overall proof size for these passes slightly \emph{decreases}.
 
 \subsection{Extension passes} %{{{
 
+For passes where strict equality is too restrictive,
+but where the source and target programs
+use identical memory layouts,
+CompCert uses the \emph{memory extension} relation.
+Memory extension allows the values
+stored in the target memory state to refine
+the corresponding values stored in the source memory;
+the target memory state can also
+provide more permissions than the source memory,
+and in particular blocks may be allocated with
+a broader range of addresses in the target memory
+than in the source.
+
+We write $\subseteq$ for the memory extension relation.
+The relation can be extended to questions and answers,
+so that for example $\mathcal{C}$ extension passes
+conform to the simulation convention defined as:
+\[
+    \kw{ext}_\mathcal{C} :=
+        \langle \{*\}, {\subseteq}, {\subseteq} \rangle
+        : \mathcal{C} \Leftrightarrow \mathcal{C} \,,
+\]
+where the $\subseteq$ relations on $\mathcal{C}$
+moves are defined by the rules:
+\begin{gather*}
+    \AxiomC{$\vec{v}_1 \mathrel{\vec{\sqsubseteq}} \vec{v}_2$}
+    \AxiomC{$m_1 \subseteq m_2$}
+    \BinaryInfC{$f[sg](\vec{v}_1)@m_1 \subseteq f[sg](\vec{v}_2)@m_2$}
+    \DisplayProof
+    \\[1ex]
+    \AxiomC{$v_1' \sqsubseteq v_2'$}
+    \AxiomC{$m_1' \subseteq m_2'$}
+    \BinaryInfC{$v_1'@m_1' \subseteq v_2'@m_2'$}
+    \DisplayProof
+\end{gather*}
+The simulation convention $\kw{ext}_\mathcal{L}$
+used by the $\kw{Tunneling}$ proof
+is defined in a similar way.
+
+Extension passes are not much more difficult to update
+than identity passes.
+In particular,
+at external calls the exsiting proofs
+only require the environment to maintain the extension relation
+on memory states.
+
 %}}}
 
 \subsection{Injection passes} %{{{
 
+Although more flexible than equality,
+extensions are insufficient
+for passes which alter the block structure of the memory.
+For these passes,
+CompCert uses \emph{memory injections}.
+As discussed in the context of Ex.~\ref{ex:meminj},
+injection relations $\hookrightarrow$
+are parametrized by an \emph{injection mapping}
+of type
+$\kw{meminj} :=
+\kw{block} \rightharpoonup \kw{block} \times \mathbb{Z}$,
+which specifies a correspondance between
+the addresses of the source and target memory.
+The injection relation on values
+modifies the refinement relation
+by requiring that all pointers be transformed
+according the the injection mapping.
+The injection relation on memory states
+requires that corresponding addresses
+hold related values.
+
+Injection passes are more complex than
+identity and extension passes,
+because ...
+
+[Figure explaining the changes at external calls]
+
 %}}}
 
 \subsection{The \kw{Allocation} pass} %{{{
+
+The \kw{Alloc} pass from \kw{RTL} to \kw{LTL}
+uses a memory extension,
+but in addition
+it is the first pass to modify the external interface of function calls.
+
+\kw{LTL} includes a notion of \emph{abstract locations},
+meant to represent the eventual stack slots and machine registers
+used at the assembly level.
+The values of abstract locations are stored in a \emph{location map},
+which complements the memory state and is likewise
+is passed across components through
+the questions and answers of the language interface $\mathcal{L}$.
+
+Up to \kw{RTL},
+arguments are passed as standalone values,
+but in \kw{LTL}
+they are mapped to abstract locations
+depending on the function's signature.
+The compiler also expects the values of
+locations designated as \emph{callee-save}
+to be preserved by function calls.
+This is codified in the $\kw{alloc}$
+simulation convention, defined as follows:
+\begin{gather*}
+  \kw{alloc} := \langle
+      \kw{signature} \times \kw{locmap}, \:
+      R_\kw{alloc}^\kw{Q}, \:
+      R_\kw{alloc}^\kw{A} \rangle
+  \\[1ex]
+  \AxiomC{$\vec{v} \mathrel{\vec{\sqsubseteq}} \kw{args}(sg, ls)$}
+  \AxiomC{$m_1 \sqsubseteq m_2$}
+  \BinaryInfC{$
+      (sg, rs) \Vdash
+      f[sg](\vec{v})@m_1
+      \mathrel{R_\kw{alloc}^\kw{Q}}
+      f[sg](ls)@m_2$}
+  \DisplayProof
+  \\[1ex]
+  \AxiomC{$v' \sqsubseteq \kw{retval}(sg, ls')$}
+  \AxiomC{$ls \equiv_\kw{CS} ls'$}
+  \AxiomC{$m_1' \sqsubseteq m_2'$}
+  \TrinaryInfC{$
+      (sg, ls) \Vdash
+      v'@m_1'
+      \mathrel{R_\kw{alloc}^\kw{A}}
+      ls'@m_2'$}
+  \DisplayProof
+\end{gather*}
+where $\kw{args}(sg, ls)$ extracts the values of arguments
+stored in the location map $ls$ given a function call signature $sg$,
+$\kw{retval}(sg, ls)$ likewise extracts the
+values returned by the function call, and
+$\equiv_\kw{CS}$ relates location maps whose contents agree
+on callee-save locations.
 
 %}}}
 
