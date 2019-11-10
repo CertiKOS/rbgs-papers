@@ -2558,32 +2558,86 @@ on memory states.
 
 \subsection{Injection passes} %{{{
 
-Although more flexible than equality,
-extensions are insufficient
-for passes which alter the block structure of the memory.
-For these passes,
-CompCert uses \emph{memory injections}.
-As discussed in the context of Ex.~\ref{ex:meminj},
+Passes which alter the block structure of the memory
+use \emph{memory injections}.
+As discussed in Example~\ref{ex:meminj},
 injection relations $\hookrightarrow$
 are parametrized by an \emph{injection mapping}
 of type
 $\kw{meminj} :=
 \kw{block} \rightharpoonup \kw{block} \times \mathbb{Z}$,
 which specifies a correspondance between
-the addresses of the source and target memory.
-The injection relation on values
-modifies the refinement relation
-by requiring that all pointers be transformed
+source and target memory addresses.
+The relation on values
+allows refinement but also requires
+all pointers to be transformed
 according the the injection mapping.
-The injection relation on memory states
+The relation on memory states
 requires that corresponding addresses
 hold related values.
 
-Injection passes are more complex than
-identity and extension passes,
-because ...
+Extending injections to the questions and answers of $\mathcal{C}$,
+we obtain the following simulation convention:
+\begin{gather*}
+    \kw{inj} := \langle
+      \kw{meminj},
+      {\hookrightarrow},
+      {\hookrightarrow}
+    \rangle : \mathcal{C} \Leftrightarrow \mathcal{C}
+    \\[1ex]
+    \AxiomC{$f \Vdash \vec{v}_1 \hookrightarrow \vec{v}_2$}
+    \AxiomC{$f \Vdash m_1 \hookrightarrow m_2$}
+    \BinaryInfC{$f \Vdash
+      f[\mathit{sg}](\vec{v}_1)@m_1
+      \hookrightarrow
+      f[\mathit{sg}](\vec{v}_2)@m_2$}
+    \DisplayProof
+    \\[1ex]
+    \AxiomC{$f \subseteq f'$}
+    \AxiomC{$f' \Vdash v_1' \hookrightarrow v_2'$}
+    \AxiomC{$f' \Vdash m_1' \hookrightarrow m_2'$}
+    \TrinaryInfC{$f \Vdash v_1'@m_1' \hookrightarrow v_2'@m_2'$}
+    \DisplayProof
+\end{gather*}
+Note that new memory blocks
+which have been allocated in both executions
+can be related by the extended injection $f'$.
 
-[Figure explaining the changes at external calls]
+The convention \kw{inj} can be used for incoming calls,
+but unfortunately it insufficient for outgoing calls.
+Passes which use a memory injection as part of their simulation relation
+not only expect external calls to preserve that injection,
+but also restrict changes to the source and target memory states
+to regions that are within the injection's footprint:
+addresses that are
+related by the injection mapping,
+and are granted non-empty permissions
+in both memory states.
+
+For instance,
+in the \kw{SimplLocals} pass,
+source memory blocks which correspond to local variables
+whose address is not taken
+are removed from the target memory state.
+The corresponding values are instead stored
+as temporaries in the target function's local environment,
+and the correspondance between the two
+is enforced by the simulation relation.
+The \kw{SimplLocals} proof depends on the fact that
+external calls do not modify the source memory blocks
+corresponding to such variables
+in order to reestablish this correspondance
+after external calls return.
+
+This expectation is reasonable because
+external calls
+should behave uniformly between the source and target executions.
+An external function acting on the memory state
+should not forge block identifiers and pointers,
+but can only follow pointers passed as arguments
+or fetched from the memory itself
+(as explained in \S\ref{sec:cklr},
+this is a form of parametricity).
 
 %}}}
 
@@ -3083,6 +3137,14 @@ in the sense that
 performing similar operations on related arguments
 yields related results.
 
+The memory operations are used as the building blocks
+of more complex constructions,
+which in turn satisfy similar relational properties.
+Ultimately,
+this applies to the complete language semantics
+and translates to properties such as the ones
+summarized in Thm.~\ref{thm:lprops}.
+
 \subsection{Definition} %{{{
 
 We formalize this idea by defining
@@ -3094,31 +3156,31 @@ more complex relations can also be defined,
 and this will make relational parametricity theorems
 particularly useful.
 
-\begin{definition}[CompCert Kripke logical relation] \label{def:cklr} %{{{
-Consider a tuple $R = (W, \leadsto, f, R^\kw{mem})$,
+\begin{definition}[CompCert Kripke Logical Relation] \label{def:cklr} %{{{
+For a tuple $R = (W, \leadsto, f, R^\kw{mem})$,
 where
 $\langle W, \leadsto \rangle$ is a Kripke frame,
 $f : W \rightarrow \kw{meminj}$
 associates an injection mapping to each world, and
 $R^\kw{mem} : \mathcal{R}_{W}(\kw{mem})$
-is a Kripke relation on memory states.
-We introduce the Kripke relations
+is a Kripke relation on memory states,
+the Kripke relations
 $R^\kw{ptr} : \mathcal{R}_W(\kw{ptr})$ and
 $R^\kw{ptrrange} : \mathcal{R}_W(\kw{ptrrange})$
-defined by the rules:
-\[
+are defined by the rules:
+\begin{gather*}
   \AxiomC{$f_w(b) = (b', \delta)$}
   \UnaryInfC{$(b, o) \ifr{w \Vdash R^\kw{ptr}} (b', o + \delta)$}
   \DisplayProof
-  \qquad
+  \\[1ex]
   \AxiomC{$(b_1, l_1) \ifr{w \Vdash R^\kw{ptr}} (b_2, l_2)$}
   \AxiomC{$h_1 - l_1 = h_2 - l_2$}
   \BinaryInfC{$(b_1, l_1, h_1) \ifr{w \Vdash R^\kw{ptrrange}} (b_2, l_2, h_2)$}
   \DisplayProof
-\]
+\end{gather*}
 and the Kripke relation
 $R^\kw{val} : \mathcal{R}_W(\kw{val})$
-defined by the rules:
+is defined by the rules:
 \begin{gather*}
   \forall \, v : \kw{val} \,.\,
     \kw{Vundef} \ifr{\Vdash R^\kw{val}} v \qquad
@@ -3133,10 +3195,9 @@ if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
 %}}}
 
 \begin{figure} % fig:cklr-def (Definition of CKLRs) {{{
-  \footnotesize
   \begin{gather*}
     {\leadsto} \mbox{ is reflexive and transitive} \\
-    f \ifr{(\leadsto) \rightarrow \kw{inject\_incr}} f
+    w \leadsto w' \Rightarrow f(w) \subseteq f(w')
   \end{gather*}
   \begin{align*}
       \kw{Mem.alloc} :
@@ -3230,46 +3291,6 @@ then $g(b) = (b', \delta)$ as well.
 %}}}
 
 \subsection{Footprint Preservation} %{{{
-
-Passes which use a memory injection as part of their simulation relation
-expect external calls to preserve that injection.
-In addition,
-external calls are expected to only modify
-the parts of the source and target memories
-that are within the injection's footprint:
-addresses that are
-related by the injection mapping,
-and are granted non-empty permissions
-in both memory states.
-
-For instance,
-in the \kw{Stacking} pass,
-the target memory's stack frames
-are extended with spilling locations.
-These locations are used in the target program
-to keep track of temporary values,
-which in the source program are kept
-in a local environment separate from the memory state.
-The spilling locations are not part of
-the injection footprint
-because they are unallocated in the source memory;
-their preservation across external calls
-is essential to the correctness of \kw{Stacking}.
-
-This expectation is reasonable because
-external calls
-should behave uniformly between the source and target executions.
-In particular,
-an external function acting on the memory state
-should not synthesize block identifiers and pointers,
-but can only follow pointers passed as arguments
-or fetched from the memory itself.
-If it were to access a spilling location in this way in the target execution,
-the corresponding source pointer would have to be
-related to the target pointer by \kw{Val.inject},
-and consequently would either be undefined
-or invalid (point to a location without permissions),
-so that the source program would go wrong.
 
 Because the CKLR framework is rich enough to express
 temporal properties such as the preservation of injection footprints,
