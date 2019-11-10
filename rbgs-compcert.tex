@@ -2327,6 +2327,7 @@ which so far I have left out of the semantic model.
     \hline
     \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ &
       A simpler version of CompCert C \\
+    \emph{Thm.~\ref{thm:lprops}} & $(\kw{ext} + \kw{injp})^*$ & $(\kw{ext} + \kw{injp})^*$ & \\
     \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ &
       Pull non-adressable local variables out of memory \\
     \kw{Cshmgen} & \kw{id} & \kw{id} &
@@ -2363,6 +2364,7 @@ which so far I have left out of the semantic model.
       Redundancy elimination \\
     \st{Unusedglob} & $\kw{injp}$ & $\kw{inj}$ &
       Removal of unused static globals \\
+    \emph{Thm.~\ref{thm:lprops}} & $\kw{inj}$ & $\kw{inj}$ & \\
     \kw{Allocation} & \kw{alloc} & \kw{alloc} &
       Register allocation \\
     \hline
@@ -2911,7 +2913,7 @@ With composition and refinement,
 we can start outlining some of the properties
 of the simulation conventions used by the passes of CompCertO.
 
-\begin{theorem}
+\begin{theorem} \label{thm:extinj}
 The following property holds:
 \[
   \kw{ext} \cdot \kw{inj} \equiv
@@ -2968,7 +2970,12 @@ where:
 \end{definition}
 %}}}
 
-\begin{theorem}[Addition and Kleene iteration of simulations] %{{{
+These constructions allows us to generalize the compiler's
+outgoing simulation convention to
+$(\kw{ext} + \kw{injp})^* \cdot \mathbb{C}^\flat$.
+The following theorem will also be useful.
+
+\begin{theorem}[Addition and Kleene iteration of simulations] \label{thm:simk} %{{{
 The following properties hold:
 \[
   \AxiomC{$\forall i \,.\,
@@ -2988,24 +2995,84 @@ in \texttt{common/CallconvAlgebra.v}.
 \end{theorem}
 %}}}
 
-These constructions allows us to generalize the compiler's
-outgoing simulation convention compiler to
-$(\kw{ext} + \kw{injp})^* \cdot \mathbb{C}^\flat$.
+%}}}
+
+\subsection{Language Properties} %{{{
+
+We have simplified both the incoming and outgoing conventions
+use by the whole-compiler simulation,
+but they remain distinct and incomparable.
+To reconcile them,
+we will use the following properties
+of \kw{Clight} and \kw{RTL}.
+
+\begin{theorem} \label{thm:lprops} %{{{
+These simulations hold
+for all programs:
+\begin{gather*}
+\forall \, p \,.\,
+  \kw{Clight}(p)
+  \le_{(\kw{ext} + \kw{injp})^* \rightarrow (\kw{ext} + \kw{injp})^*}
+  \kw{Clight}(p) \\
+\forall \, p \,.\,
+  \kw{RTL}(p)
+  \le_{\kw{inj} \rightarrow \kw{inj}}
+  \kw{RTL}(p)
+\end{gather*}
+\begin{proof}
+Use Thm~\ref{thm:simk},
+and our demonstration in \S\ref{sec:cklr} that
+\kw{Clight} and \kw{RTL} programs self-simulate under
+$\kw{ext}$, $\kw{inj}$ and $\kw{injp}$.
+\end{proof}
+\end{theorem}
+%}}}
+
+By introducing these self-simulations
+at strategic points in the overall composition of passes
+shown in Table~\ref{tbl:passes},
+we can finally establish the following correctness theorem.
+
+\begin{theorem}[Compositional Correctness of CompCertO] %{{{
+For a \kw{Clight} program $p^\sharp$
+and an \kw{Asm} program $p^\flat$ such that
+$\kw{CompCert}(p^\sharp) = p^\flat$,
+the following simulation holds:
+\[
+    \kw{Clight}(p^\sharp) \le_{\mathbb{C} \rightarrow \mathbb{C}}
+    \kw{Asm}(p^\flat) \,,
+\]
+where $\mathbb{C}$ is the simulation convention defined as:
+\[
+    \mathbb{C} := (\kw{ext} + \kw{injp})^* \cdot \kw{inj} \cdot
+      \mathbb{C}^\flat
+%      \kw{alloc} \cdot
+%      \kw{ext}_\mathcal{L} \cdot
+%      \kw{stacking} \cdot
+%      \kw{asmgen} \,.
+\]
+\begin{proof}
+Use Thm.~\ref{thm:simcomp} to compose
+the correctness proofs of the compiler passes and
+self-simulations shown in Table~\ref{tbl:passes}.
+By properties of the Kleene star,
+the outgoing simulation convention of each of the
+passes \kw{SimplLocals}--\kw{Unusedglob}
+can be folded into $(\kw{ext} + \kw{injp})^*$
+to obtain the overall outgoing convention $\mathbb{C}$.
+Likewise, by Thm.~\ref{thm:extinj},
+their incoming simulation conventions
+can be folded into $\kw{inj}$
+to obtain the overall incoming convention $\mathbb{C}$.
+\end{proof}
+\end{theorem}
+%%}}}
 
 %}}}
 
-\subsection{Compositional Theorem}
-
-With these simplifications,
-outgoing calls of one component
-are shown to be related by $(\kw{ext} + \kw{injp})^*$,
-but this cannot be used to satisfy
-another component's assumption
-that incoming calls ought to be related by $\kw{inj}$.
-
 %}}}
 
-\section{CompCert Kripke Logical Relations} \label{sec:compcert:cklr} %{{{
+\section{CompCert Kripke Logical Relations} \label{sec:cklr} %{{{
 
 Memory extensions and injections
 are useful for simulations
@@ -3307,55 +3374,6 @@ composition properties:
 \]
 
 %}}}
-
-%}}}
-
-\section{Compositional Compiler Correctness} %{{{
-
-[Replace the following with the new approach
-allowing to preserve the overall simulation convention
-as we compose passes one by one]
-
-Following the approach outlined in \S\ref{sec:compcert:overview},
-and referring to Table~\ref{tbl:passes},
-the overall simulation convention for the whole compiler
-can be given as:
-\[
-  \mathbb{R}_\kw{CompCert} : \mathcal{C} \Leftrightarrow \mathcal{A} :=
-    \mathcal{C}[\kw{injp}]^* \cdot
-    \mathcal{C}[\kw{inj}] \cdot
-    \kw{alloc} \cdot
-    \kw{stacking} \cdot
-    \kw{asmgen} \,.
-\]
-To verify that the passes indeed compose to
-establish correctness with respect to the simulation convention
-$\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}$,
-it suffices to show that
-the incoming and outgoing simulations can be reconciled,
-or more precisely:
-\[
-    \mathcal{C}[\kw{injp}]^* \cdot
-    \mathcal{C}[\kw{injp}] \cdots
-    \mathcal{C}[\kw{ext}] \cdot
-    \mathcal{C}[\kw{inj}]
-    \: \preceq \:
-    \mathbb{R}_\kw{CompCert}
-    \: \preceq \:
-    \mathcal{C}[\kw{injp}]^* \cdot
-    \mathcal{C}[\kw{inj}] \cdots
-    \mathcal{C}[\kw{ext}] \cdot
-    \mathcal{C}[\kw{inj}] 
-\]
-This follows from the properties outlined above,
-so that we can conclude:
-\[
-    \forall p_s \,.\,
-      \kw{CompCert}(p_s) = p_t \Rightarrow
-      \kw{Clight} \llbracket p_s \rrbracket
-      \le_{\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}}
-      \kw{Asm} \llbracket p_t \rrbracket \,.
-\]
 
 %}}}
 
