@@ -31,8 +31,8 @@
 %\newtheorem{lemma}{Lemma}
 
 \newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
-\newcommand{\ifr}[1]{\ [{#1}]\ }
-\newcommand{\ifrw}[2]{\ [{#1}]_{#2}\ }
+\newcommand{\ifr}[1]{\mathrel{[{#1}]}}
+\newcommand{\ifrw}[2]{\mathrel{[{#2} \Vdash {#1}]}}
 \newcommand{\alt}{\ |\ } % use \mid instead
 \newcommand{\bind}{\gg\!\!=}
 
@@ -2318,9 +2318,9 @@ which so far I have left out of the semantic model.
 
 %}}}
 
-\section{Compiler passes} \label{sec:corr} %{{{
+\section{Compiler passes} \label{sec:passes} %{{{
 
-\begin{table*} % tbl:passes Passes of Composable CompCert %{{{
+\begin{table*} % tbl:passes Passes of CompCertO %{{{
   \begin{tabular}{lllp{.55\textwidth}}
     \hline
     Language/Pass & Outgoing & Incoming & Description \\
@@ -2392,7 +2392,7 @@ which so far I have left out of the semantic model.
     \hline
   \end{tabular}
   \caption{%
-    Languages and essential passes of CompCert
+    Languages and passes of CompCertO
     (descriptions from CompCert's documentation).}
   \label{tbl:passes}
 \end{table*}
@@ -2653,17 +2653,133 @@ and a major source of the complexity of related work.
 
 \subsection{The \kw{Asmgen} pass} %{{{
 
+\kw{Asm} introduces explicit
+program counter, stack pointer and return address registers.
+The \kw{Asmgen} pass from \kw{Mach} to \kw{Asm}
+uses the following simluation convention:
+\begin{gather*}
+  \kw{asmgen} := \langle \kw{val} \times \kw{val},
+    R_\kw{asmgen}^\kw{Q}, R_\kw{asmgen}^\kw{A} \rangle
+  \\[1ex]
+  \AxiomC{$\mathit{rs}_1 \uplus
+    [\kw{sp} := \mathit{sp}, \kw{ra} := \mathit{ra}, \kw{pc} := f]
+    \sqsubseteq \mathit{rs}_2$}
+  \AxiomC{$m_1 \sqsubseteq m_2$}
+  \BinaryInfC{
+    $(\mathit{sp}, \mathit{ra}) \Vdash
+     f(\mathit{sp}, \mathit{ra}, \mathit{rs}_1)@m_1
+     \mathrel{R_\kw{asmgen}^\kw{Q}}
+     \mathit{rs}_2@m_2$}
+  \DisplayProof
+  \\[1ex]
+  \AxiomC{$
+    \mathit{rs}_1' \uplus [\kw{sp} := \mathit{sp}, \kw{pc} := \mathit{ra}]
+    \sqsubseteq \mathit{rs}_2'$}
+  \AxiomC{$m_1' \sqsubseteq m_2'$}
+  \BinaryInfC{$
+    (\mathit{sp}, \mathit{ra}) \Vdash \mathit{rs}_1'@m_1'
+    \mathrel{R_\kw{asmgen}^\kw{A}}
+    \mathit{rs}_2'@m_2'$}
+  \DisplayProof
+\end{gather*}
+
+This concludes our summary of the passes of CompCertO
+and the conventions we have been able to use
+to characterize their simulation proofs.
+
+%}}}
+
+%}}}
+
+\section{Simulation Algebra} \label{sec:simalg} %{{{
+
+We have described in \S\ref{sec:passes}
+the passes of CompCertO
+and the types of their simulation proofs.
+In this section,
+we show how they can be combined to establish
+a satisfactory simulation theorem
+for the whole compiler.
+
+%\[
+%  \begin{array}{cc}
+%    \AxiomC{$L \le_{\kw{id}_A \rightarrow \kw{id}_B} L$}
+%    \DisplayProof
+%    &
+%    \AxiomC{$L^\sharp \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L^\natural$}
+%    \AxiomC{$L^\natural \le_{\mathbb{S}_A \rightarrow \mathbb{S}_B} L^\flat$}
+%    \BinaryInfC{$
+%      L^\sharp \le_{\mathbb{R}_A \cdot \mathbb{S}_A \rightarrow
+%                    \mathbb{R}_B \cdot \mathbb{S}_B} L^\flat$}
+%    \DisplayProof
+%    \\
+%    \AxiomC{$L_1 \le_{\mathbb{R} \rightarrow \mathbf{0}} L_2$}
+%    \DisplayProof
+%    &
+%    \math
+%
+
+\subsection{Convention Refinement} %{{{
+
+The core of our simulation algebra is
+a notion of refinement for simulation conventions.
+The refinement relation $\mathbb{R} \sqsubseteq \mathbb{S}$
+captures the idea that the convention $\mathbb{R}$
+is more general than the convention $\mathbb{S}$,
+so that any simulation accepting $\mathbb{R}$ as its
+incoming convention will accept $\mathbb{S}$ as well.
+
+\begin{definition}[Simulation convention refinement] %{{{
+Given two simulation conventions
+$\mathbb{R}, \mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
+we say that
+$\mathbb{R}$ refines $\mathbb{S}$ and write
+$\mathbb{R} \sqsubseteq \mathbb{S}$
+when the following holds:
+\[
+    \begin{array}{r@{}c@{\:\Rightarrow\:}c@{}c@{}l}
+      \forall w \,.\, m_1 \, m_2 \,.\, &
+      m_1 \ifr{w \Vdash R^\kw{Q}} m_2 &
+      \exists \, v \,.\, &
+      m_1 \ifr{v \Vdash S^\kw{Q}} m_2 &
+      \: \wedge \\
+      \forall \, n_1 \, n_2 \,.\, &
+      n_1 \ifr{v \Vdash S^\kw{A}} n_2 &
+      &
+      n_1 \ifr{w \Vdash R^\kw{A}} n_2 & \,.
+    \end{array}
+\]
+We write $\mathbb{R} \equiv \mathbb{S}$ when both
+$\mathbb{R} \sqsubseteq \mathbb{S}$ and
+$\mathbb{S} \sqsubseteq \mathbb{R}$.
+\end{definition}
+%}}}
+
+The following theorem states the relationship between
+simulation convention refinement and forward simulations.
+
+\begin{theorem} %{{{
+For
+$\mathbb{R}' \sqsubseteq \mathbb{R} : A_1 \Leftrightarrow A_2$ and
+$\mathbb{S} \sqsubseteq \mathbb{S}' : B_1 \Leftrightarrow B_2$,
+the following holds for all
+$L_1 : A_1 \rightarrow B_1$ and $L_2 : A_2 \rightarrow B_2$:
+\[
+      L_1 \le_{\mathbb{R} \rightarrow \mathbb{S}} L_2 \Rightarrow
+      L_1 \le_{\mathbb{R}' \rightarrow \mathbb{S}'} L_2 \,.
+\]
+\begin{proof}
+See \texttt{open\_fsim\_ccref} in \texttt{CallconvAlgebra.v}.
+\end{proof}
+\end{theorem}
+%}}}
+
 %}}}
 
 \subsection{Composing passes} %{{{
 
-Having described the passes of CompCertO
-and the types of their simulation proofs in terms of
-simulation conventions,
-we move on to the problem of composing successive passes
-to obtain a certified compiler.
-To this end,
-we first define the composition of simulation conventions.
+The most basic way to combine simulation proofs
+is notion of vertical composition outlined below.
 
 \begin{definition}[Composition of simulation conventions] %{{{
 Given the language interfaces $A^\sharp, A^\natural, A^\flat$
@@ -2683,11 +2799,8 @@ $\mathbb{R} \cdot \mathbb{S} : A^\sharp \Leftrightarrow A^\flat$ is defined as:
 \end{definition}
 %}}}
 
-This allows us to formulate the following composition property
-of forward simulations.
-
 \begin{theorem}[Composition of simulations] \label{thm:simcomp} %{{{
-Consider the transition systems
+For the transition systems
 $L^\sharp : A^\sharp \rightarrow B^\sharp$,
 $L^\natural : A^\natural \rightarrow B^\natural$,
 $L^\flat : A^\flat \rightarrow B^\flat$,
@@ -2695,8 +2808,8 @@ and the simulation conventions
 $\mathbb{R}_A : A^\sharp \Leftrightarrow A^\natural$,
 $\mathbb{R}_B : B^\sharp \Leftrightarrow B^\natural$,
 $\mathbb{S}_A : A^\natural \Leftrightarrow A^\flat$, and
-$\mathbb{S}_B : B^\natural \Leftrightarrow B^\flat$.
-The following property holds:
+$\mathbb{S}_B : B^\natural \Leftrightarrow B^\flat$,
+the following holds:
 \[
   \AxiomC{$L^\sharp \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L^\natural$}
   \AxiomC{$L^\natural \le_{\mathbb{S}_A \rightarrow \mathbb{S}_B} L^\flat$}
@@ -2705,53 +2818,190 @@ The following property holds:
                    \mathbb{R}_B \cdot \mathbb{S}_B} L^\flat$}
   \DisplayProof
 \]
+\begin{proof}
+\texttt{compose\_open\_fsim} in \texttt{common/Smallstep.v}.
+\end{proof}
 \end{theorem}
 %}}}
 
-Using this theorem,
-we can compose the successive passes of CompCertO
-to obtain a simulation for the overall compiler.
-However,
-there are two limitations to this approach:
-\begin{itemize}
-\item
-  Because injection passes use different simulation conventions
-  for their incoming and outgoing calls,
-  they break horizontal compositionality in the sense that
-  Thm.~\ref{thm:simlinking} cannot be used
-  on the resulting simulation properties;
-  indeed,
-  the outgoing relationship
-  between the external calls of one component
-  which are established by the simulation theorem
-  cannot be used to satisfy the
-  incoming relationship which the simulation relies on
-  for another component,
-  because these relationships are different.
-  This propagates to the simulation property
-  obtained from composing all of the compiler's passes.
-\item
-  Another issue with the compilers' simulation convention
-  is that it is very specific to the exact sequence of passes
-  used by CompCertO.
-  This means that a slightly different version of the compiler,
-  or even the same version of the compiler used with different
-  optimization passes,
-  would correspond to a different, incompatible
-  correctness property.
-\end{itemize}
+\begin{theorem} % assoc, id, monot {{{
+For
+$\mathbb{R} : A_1 \Leftrightarrow A_2$,
+$\mathbb{S} : A_2 \Leftrightarrow A_3$,
+$\mathbb{T} : A_3 \Leftrightarrow A_4$,
+the following properties hold:
+\begin{gather*}
+  {\cdot} \ifr{{\sqsubseteq} \times {\sqsubseteq} \rightarrow
+               {\sqsubseteq}} {\cdot}
+  \\
+  (\mathbb{R} \cdot \mathbb{S}) \cdot \mathbb{T} \equiv
+    \mathbb{R} \cdot (\mathbb{S} \cdot \mathbb{T})
+  \\
+  \mathbb{R} \cdot \kw{id} \equiv
+  \kw{id} \cdot \mathbb{R} \equiv
+  \mathbb{R}
+\end{gather*}
+\end{theorem}
+%}}}
 
-We will address these issues by developing a richer
-\emph{simulation convention algebra}
-and relying on the properties
-of \kw{Clight} and \kw{RTL} to reconcile the incoming and outgoing
-conventions injection passes.
-We start with a more in-depth investigation,
-in the next section,
-of the relational structure of CompCert
-and its language semantics.
+Using the constructions presented so far,
+we can define the simulation convention:
+\[
+    \mathbb{C}^\flat :=
+      \kw{alloc} \cdot
+      \kw{ext}_\mathcal{L} \cdot
+      \kw{stacking} \cdot
+      \kw{asmgen} \,,
+\]
+and compose the passes \kw{Allocation}--\kw{Asmgen}
+to get a simulation of type
+$\mathbb{C}^\flat \rightarrow \mathbb{C}^\flat$.
+
+%
+%Using this theorem,
+%we can compose the successive passes of CompCertO
+%to obtain a simulation for the overall compiler.
+%However,
+%the simulation convention used in the resulting theorem
+%
+%there are two limitations to this approach:
+%\begin{itemize}
+%\item
+%  Because injection passes use different simulation conventions
+%  for their incoming and outgoing calls,
+%  they break horizontal compositionality in the sense that
+%  Thm.~\ref{thm:simlinking} cannot be used
+%  on the resulting simulation properties;
+%  indeed,
+%  the outgoing relationship
+%  between the external calls of one component
+%  which are established by the simulation theorem
+%  cannot be used to satisfy the
+%  incoming relationship which the simulation relies on
+%  for another component,
+%  because these relationships are different.
+%  This propagates to the simulation property
+%  obtained from composing all of the compiler's passes.
+%\item
+%  Another issue with the compilers' simulation convention
+%  is that it is very specific to the exact sequence of passes
+%  used by CompCertO.
+%  This means that a slightly different version of the compiler,
+%  or even the same version of the compiler used with different
+%  optimization passes,
+%  would correspond to a different, incompatible
+%  correctness property.
+%\end{itemize}
+%
+%We will address these issues by developing a richer
+%\emph{simulation convention algebra}
+%and relying on the properties
+%of \kw{Clight} and \kw{RTL} to reconcile the incoming and outgoing
+%conventions injection passes.
+%We start with a more in-depth investigation,
+%in the next section,
+%of the relational structure of CompCert
+%and its language semantics.
 
 %}}}
+
+\subsection{CompCertO conventions} %{{{
+
+With composition and refinement,
+we can start outlining some of the properties
+of the simulation conventions used by the passes of CompCertO.
+
+\begin{theorem}
+The following property holds:
+\[
+  \kw{ext} \cdot \kw{inj} \equiv
+  \kw{inj} \cdot \kw{ext} \equiv
+  \kw{inj} \cdot \kw{inj} \equiv
+  \kw{inj}
+\]
+\begin{proof}
+\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj},
+found under \texttt{cklr/}.
+\end{proof}
+\end{theorem}
+
+These properties make it possible to ``condense''
+the whole compiler's incoming convention
+into $\kw{inj} \cdot \mathbb{C}^\flat$,
+but unfortunately the \kw{injp} convention
+does not compose with \kw{ext} and itself in the same way.
+To obtain a similar effect,
+we construct a Kleene algebra on simulation conventions.
+
+%}}}
+
+\subsection{Kleene Algebra} %{{{
+
+\begin{definition} %{{{
+Consider $(\mathbb{R}_i)_{i \in I}$
+a family of conventions
+with
+$\mathbb{R}_i = \langle W_i, R_i^\kw{Q}, R_i^\kw{A} \rangle
+  : A_1 \Leftrightarrow A_2$
+for all $i \in I$.
+The least upper bound
+can be defined as
+$\sum_{i \in I} \mathbb{R}_i := \langle W, R^\kw{Q}, R^\kw{A} \rangle$
+where:
+\[
+  W := \sum_{i \in I} W_i  \qquad
+  \begin{array}{l}
+  (i, w) \Vdash R^\kw{Q} \: = \: w \Vdash R_i^\kw{Q} \\[1ex]
+  (i, w) \Vdash R^\kw{A} \: = \: w \Vdash R_i^\kw{A} \,.
+  \end{array}
+\]
+We will write $\mathbb{R}_1 + \cdots + \mathbb{R}_n$
+for the finitary case $\sum_{i=1}^n \mathbb{R}_i$.
+Then for $\mathbb{R} : A_1 \Leftrightarrow A_2$,
+we define
+$\mathbb{R}^* := \sum_{n \in \mathbb{N}} \mathbb{R}^n$,
+where:
+\[
+  \mathbb{R}^0 := \kw{id} \qquad
+  \mathbb{R}^{n+1} := \mathbb{R}^n \cdot \mathbb{R} \,.
+\]
+\end{definition}
+%}}}
+
+\begin{theorem}[Addition and Kleene iteration of simulations] %{{{
+The following properties hold:
+\[
+  \AxiomC{$\forall i \,.\,
+    L_1 \le_{\mathbb{R} \rightarrow \mathbb{S}_i} L_2$}
+  \UnaryInfC{$
+    L_1 \le_{\mathbb{R} \rightarrow \sum_i \mathbb{S}_i} L_2$}
+  \DisplayProof
+  \quad
+  \AxiomC{$L \le_{\mathbb{R} \rightarrow \mathbb{S}} L$}
+  \UnaryInfC{$L \le_{\mathbb{R}^* \rightarrow \mathbb{S}^*} L$}
+  \DisplayProof
+\]
+\begin{proof}
+See \texttt{cc\_star\_fsim} and the preceding definitions
+in \texttt{common/CallconvAlgebra.v}.
+\end{proof}
+\end{theorem}
+%}}}
+
+These constructions allows us to generalize the compiler's
+outgoing simulation convention compiler to
+$(\kw{ext} + \kw{injp})^* \cdot \mathbb{C}^\flat$.
+
+%}}}
+
+\subsection{Compositional Theorem}
+
+With these simplifications,
+outgoing calls of one component
+are shown to be related by $(\kw{ext} + \kw{injp})^*$,
+but this cannot be used to satisfy
+another component's assumption
+that incoming calls ought to be related by $\kw{inj}$.
 
 %}}}
 
@@ -3106,120 +3356,6 @@ so that we can conclude:
       \le_{\mathbb{R}_\kw{CompCert} \Rightarrow \mathbb{R}_\kw{CompCert}}
       \kw{Asm} \llbracket p_t \rrbracket \,.
 \]
-
-\begin{definition}[Constructions on simulation conventions] %{{{
-Given two simulation conventions
-$\mathbb{R}, \mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
-we say that
-$\mathbb{R}$ refines $\mathbb{S}$ and write
-$\mathbb{R} \preceq \mathbb{S}$
-when the following holds for all $w, m_1, m_2$:
-\[
-      m_1 \ifr{w \Vdash R^\kw{Q}} m_2 \Rightarrow
-      \exists \, v \,.\,
-        m_1 \ifr{v \Vdash S^\kw{Q}} m_2 \wedge
-        \forall \, n_1 \, n_2 \,.\,
-          n_1 \ifr{v \Vdash S^\kw{A}} n_2 \Rightarrow
-          n_1 \ifr{w \Vdash R^\kw{A}} n_2
-\]
-The least upper bound of $\mathbb{R}$ and $\mathbb{S}$
-is defined as
-$
-    \mathbb{R} \curlyvee \mathbb{S} :=
-      \langle
-        W_R + W_S,
-        R^\kw{Q} + S^\kw{Q},
-        R^\kw{A} + S^\kw{A}
-      \rangle
-$,
-where for $R \in \mathcal{R}_{W_R}(X,Y)$
-and $S \in \mathcal{R}_{W_S}(X,Y)$,
-the Kripke logical relation $R + S$ is defined as:
-\[
-    (R + S)_w =
-    \begin{cases}
-      R_u & \mbox{if } w = i_1(u) \\
-      S_v & \mbox{if } w = i_2(v) \,.
-    \end{cases}
-\]
-Given
-$\mathbb{R} : A^\flat \Leftrightarrow A^\natural$ and
-$\mathbb{S} : A^\natural \Leftrightarrow A^\sharp$,
-the composite convention
-$\mathbb{R} \cdot \mathbb{S} : A^\flat \Leftrightarrow A^\sharp$ is defined as:
-\[
-    \mathbb{R} \cdot \mathbb{S} :=
-      \langle
-        W_R \times W_S, \:
-        R^\kw{Q} \cdot S^\kw{Q}, \:
-        R^\kw{A} \cdot S^\kw{A}
-      \rangle \,.
-\]
-Finally,
-for $\mathbb{R} : A \Leftrightarrow A$,
-we define the $n$-fold composition
-$\mathbb{R}^n := \mathbb{R} \cdot \mathbb{R} \cdots \mathbb{R}$,
-and
-$
-    \mathbb{R}^* :=
-      \bigcurlyvee_{n \in \mathbb{N}} \mathbb{R}^n
-$.
-\end{definition}
-%}}}
-
-\begin{lemma} \label{lemma:kleenesim} %{{{
-Consider the strategies
-$\sigma^\natural : A^\natural \Rightarrow B^\natural$,
-$\sigma^\sharp : A^\sharp \Rightarrow B^\sharp$ and
-the refinement conventions
-$\mathbb{R}, \mathbb{R}' : A^\natural \Leftrightarrow A^\sharp$ and
-$\mathbb{S}, \mathbb{S}' : B^\natural \Leftrightarrow B^\sharp$.
-The following properties hold:
-\[
-  \AxiomC{$\mathbb{R}' \preceq \mathbb{R}$}
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R}' \Rightarrow \mathbb{S}'} \sigma^\sharp$}
-  \AxiomC{$\mathbb{S} \preceq \mathbb{S}'$}
-  \TrinaryInfC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\sharp$}
-  \DisplayProof
-  \qquad
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\sharp$}
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R} \Rightarrow \mathbb{S}'} \sigma^\sharp$}
-  \BinaryInfC{$\sigma^\natural
-     \le_{\mathbb{R} \Rightarrow \mathbb{S} \curlyvee \mathbb{S}'} \sigma^\sharp$}
-  \DisplayProof
-\]
-For the strategies
-$\sigma^\flat : A^\flat \Rightarrow B^\flat$,
-$\sigma^\natural : A^\natural \Rightarrow B^\natural$,
-$\sigma^\sharp : A^\sharp \Rightarrow B^\sharp$ and
-the refinement conventions
-$\mathbb{R} : A^\flat \Leftrightarrow A^\natural$,
-$\mathbb{R}' : A^\natural \Leftrightarrow A^\sharp$, and
-$\mathbb{S} : B^\flat \Leftrightarrow B^\natural$,
-$\mathbb{S}' : B^\natural \Leftrightarrow B^\sharp$,
-the following property holds:
-\[
-  \AxiomC{$\sigma^\flat \le_{\mathbb{R} \Rightarrow \mathbb{S}} \sigma^\natural$}
-  \AxiomC{$\sigma^\natural \le_{\mathbb{R}' \Rightarrow \mathbb{S}'} \sigma^\sharp$}
-  \BinaryInfC{$\sigma^\flat
-    \le_{\mathbb{R} \cdot \mathbb{R}' \Rightarrow \mathbb{S} \cdot \mathbb{S}'}
-    \sigma^\sharp$}
-  \DisplayProof
-\]
-Finally,
-for
-$\sigma, \tau : A \Rightarrow B$
-and for
-$\mathbb{R} : A \Leftrightarrow A$ and
-$\mathbb{S} : B \Leftrightarrow B$,
-the following property holds:
-\[
-  \AxiomC{$\sigma \le_{\mathbb{R} \Rightarrow \mathbb{S}} \tau$}
-  \UnaryInfC{$\sigma \le_{\mathbb{R}^* \Rightarrow \mathbb{S}^*} \tau$}
-  \DisplayProof
-\]
-\end{lemma}
-%}}}
 
 %}}}
 
