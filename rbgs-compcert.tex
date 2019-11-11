@@ -2527,7 +2527,7 @@ on memory states.
 
 %}}}
 
-\subsection{Injection passes} %{{{
+\subsection{Injection passes} \label{sec:pass:inj} %{{{
 
 Passes which alter the block structure of the memory
 use \emph{memory injections}.
@@ -2827,7 +2827,7 @@ uses the following simluation convention:
 \end{gather*}
 
 This concludes our summary of the passes of CompCertO
-and the conventions we have been able to use
+and the simulation conventions we have used
 to characterize their simulation proofs.
 
 %}}}
@@ -3236,12 +3236,8 @@ summarized in Thm.~\ref{thm:lprops}.
 
 We formalize this idea by defining
 a notion of Kripke logical relations over the CompCert memory model,
-closed under composition, and which
-admits memory extensions and injections as particular instances.
-As we will see,
-more complex relations can also be defined,
-and this will make relational parametricity theorems
-particularly useful.
+which admits memory extensions and injections
+as particular instances.
 
 \begin{definition}[CompCert Kripke Logical Relation] \label{def:cklr} %{{{
 For a tuple $R = (W, \leadsto, f, R^\kw{mem})$,
@@ -3271,10 +3267,9 @@ is defined by the rules:
 \begin{gather*}
   \forall \, v : \kw{val} \,.\,
     \kw{Vundef} \ifr{\Vdash R^\kw{val}} v \qquad
-  \kw{Vptr} : {}
-    [\Vdash R^\kw{ptr} \rightarrow R^\kw{val}] \\
+  \kw{Vptr} : {\Vdash R^\kw{ptr} \rightarrow R^\kw{val}} \\
   \kw{Vint}, \kw{Vlong}, \kw{Vfloat}, \kw{Vsingle} :
-    [\Vdash {=} \rightarrow R^\kw{val}] \,.
+    {\Vdash {=} \rightarrow R^\kw{val}} \,.
 \end{gather*}
 We say that $R$ is a \emph{CompCert Kripke logical relation}
 if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
@@ -3311,6 +3306,9 @@ if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
 \end{figure}
 %}}}
 
+[HERE: say more about the CKLR axioms,
+esp. remind about the modal relators]
+
 The $R^\kw{mem}$ component is given direcly.
 We expect $R^\kw{ptr}$ to be functional
 (each source pointer has at most one corresponding target pointer),
@@ -3327,159 +3325,109 @@ and $\kw{Vundef}$ to act as a bottom element for $R^\kw{val}$.
 Definition~\ref{def:cklr} follows from these conditions.
 
 Note that $w \Vdash R^\kw{val}$
-is equivalent to $\kw{Val.inject}(f_w)$
-as defined in CompCert.
+is equivalent to $f_w \Vdash {\hookrightarrow}$.
 Furthermore, the relational property associated to $f$,
 together with the definitions of
 derived relations such as $R^\kw{ptr}$ and $R^\kw{val}$,
 ensure that these relations are monotonic in $w$.
-However,
-this is not usually the case for $R^\kw{mem}$.
+This is not necessary for $R^\kw{mem}$,
+which is the central component driving world transitions,
+as witnessed by the uses of $\Diamond$ in Fig.~\ref{fig:cklr-def}.
+But this means that any surrounding state
+constructed from pointers and runtime values
+will be able to ``follow along'' when
+world transitions do occur.
 
 %}}}
 
-\subsection{Extensions} %{{{
+\subsection{Simulation Conventions} %{{{
 
-The simplest CompCert KLR corresponds to memory extensions.
-It uses a trivial Kripke frame and injection mapping:
-\[
-  \kw{ext} :=
-    \langle \{*\}, \{(*,*)\}, * \mapsto (b \mapsto b), \kw{Mem.extends} \rangle
-\]
-Note that $\kw{ext}^\kw{val} = \kw{Val.inject}(b \mapsto b)$
-is equivalent to $\kw{Val.lessdef}$,
-which is the relation on runtime values that
-CompCert uses in conjunction with \kw{Mem.extends}.
-
-%}}}
-
-\subsection{Injections} %{{{
-
-In the same vein,
-we can reify memory injections as the CompCert KLR:
-\[
-  \kw{inj} :=
+The simulation conventions \kw{ext}, \kw{inj} and \kw{injp}
+can be derived uniformly from corresponding CKLRs.
+Indeed, we can define:
+\begin{align*}
+  R_\kw{ext} &:= 
+    \langle \{*\}, \{(*,*)\}, * \mapsto (b \mapsto b), {\subseteq} \rangle
+  \\
+  R_\kw{inj} &:=
+    \langle \kw{meminj}, {\subseteq}, f \mapsto f, {\hookrightarrow} \rangle
+  \\
+  R_\kw{injp} &:=
     \langle
-      \kw{meminj},
-      {\subseteq}, %\kw{inject\_incr},
-      f \mapsto f,
-      \kw{Mem.inject}
-    \rangle
+      \kw{meminj} \times \kw{mem} \times \kw{mem},
+      \leadsto_\kw{injp}, \pi_1, R_\kw{injp}^\kw{mem}
+    \rangle \,.
+\end{align*}
+The relation $\leadsto_\kw{injp}$
+coincides with $\kw{P}$ from \S\ref{sec:pass:inj}:
+\[
+  \AxiomC{$\kw{P}(f, m_1, m_2, f', m_1', m_2')$}
+  \UnaryInfC{$(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$}
+  \DisplayProof
 \]
-Here the type \kw{meminj} is used directly
-as the KLR's worlds.
-The accessibility relation $f \subseteq g$
-is the inclusion of partial functions,
-called $\kw{inject\_incr}$ in CompCert,
-which asserts that for all block identifiers $b, b'$ and offsets $\delta$
-such that $f(b) = (b', \delta)$,
-then $g(b) = (b', \delta)$ as well.
-
-%}}}
-
-\subsection{Footprint Preservation} %{{{
-
-Because the CKLR framework is rich enough to express
-temporal properties such as the preservation of injection footprints,
-this argument can be made precise as a \emph{parametricity} property
-(\S\ref{sec:compcert:param}).
-For now,
-we show how to encode this requirement as a CKLR.
-
-\begin{definition}
-The components of the CompCert Kripke logical relation:
-\[ \kw{injp} :=
-  \langle
-    W \times \kw{mem} \times \kw{mem},
-    \leadsto_\kw{injp}, \pi_1, R_\kw{injp}^\kw{mem}
-  \rangle \]
-are defined as follows.
-For the injection mappings $f, f'$ and
-the memory states $m_1, m_2, m_1', m_2'$,
-the relation $(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$
-holds when the following conditions are satisfied:
-\begin{itemize}
-\item $f \subseteq f'$, and any new mappings in $f'$
-  must be between newly allocated blocks in $m_1'$ and $m_2'$;
-\item any blocks of $m_1$ unmapped by $f$
-  must remain unchanged in $m_2$;
-\item any locations in $m_2$ unrelated by $f$
-  to valid locations of $m_1$ must remain unchanged in $m_2'$;
-\item within allocated blocks of $m_1$,
-  the permissions assigned to any offset may not increase in $m_1'$
-  (this helps ensure that $\leadsto_\kw{meminj}$ is transitive).
-\end{itemize}
 The relation $R_\kw{injp}^\kw{mem}$ is defined by the rule:
 \[
   \AxiomC{$m_1 \ifr{f \Vdash \kw{Mem.inject}} m_2$}
   \UnaryInfC{$m_1 \ifr{(f, m_1, m_2) \Vdash R_\kw{injp}^\kw{mem}} m_2$}
   \DisplayProof
 \]
-\end{definition}
 
-%}}}
-
-\subsection{Relational Parametricity} \label{sec:compcert:param} %{{{
-
-For each language interface
-$\mathcal{X} \in \{ \mathcal{C}, \mathcal{L}, \mathcal{M}, \mathcal{A} \}$,
-a CKLR
+Moreover, any CKLR
 $R = \langle W, {\leadsto}, f, R^\kw{mem} \rangle$ can be promoted to
 a simulation convention
-$\mathcal{X}[R] : \mathcal{X} \Leftrightarrow \mathcal{X}$.
-For example
-we define $\mathcal{C}[R] : \mathcal{C} \Leftrightarrow \mathcal{C}$
+$\mathcal{C}[R] : \mathcal{C} \Leftrightarrow \mathcal{C}$
 as follows:
 \[
     \mathcal{C}[R] := \langle
       W, \:
-      ({=} \times {=} \times {R^\kw{val}}^* \times R^\kw{mem}), \:
+      ({=} \times {=} \times \vec{R}^\kw{val} \times R^\kw{mem}), \:
       \Diamond (R^\kw{val} \times R^\kw{mem})
     \rangle \,.
 \]
-Such operators preserve composition
-in the sense that $\mathcal{X}[R ; S] = \mathcal{X}[R] \cdot \mathcal{X}[S]$.
 
-Because the semantics of CompCert languages
-are expected to be well-behaved with respect to
-invariance properties of the memory model,
-we can prove for each language of CompCert
-a parametricity theorem of the form
-$
-    \forall R \,.\,
-      \llbracket p \rrbracket
-        \le_{\mathcal{X}[R] \Rightarrow \mathcal{X}[R]}
-      \llbracket p \rrbracket
-$.
-Since both sides of the relation are identical,
-the simulations can be iterated
-to obtain similar properties in terms of $\mathcal{X}[R]^*$.
+The following theorem
+establishes the correspondance between \kw{ext}, \kw{inj}, \kw{injp}
+and the simulation conventions derived from their CKLR counterparts.
 
-In particular,
-we use this approach to establish the following properties,
-which will be useful to derive our final correctness theorem:
-\begin{gather}
+\begin{theorem}[Simulation conventions and CKLRs]
+\[
+    \mathcal{C}[R_\kw{ext}] \equiv \kw{ext} \qquad
+    \mathcal{C}[R_\kw{inj}] \equiv \kw{inj} \qquad
+    \mathcal{C}[R_\kw{injp}] \equiv \kw{injp}
+\]
+\begin{proof}
+See the Coq libraries \texttt{cklr/Extends.v}, \texttt{Inject.v}, \\
+\texttt{InjectFootprint.v} and \texttt{CKLRAlgebra.v}.
+\end{proof}
+\end{theorem}
+
+Furthermore,
+since the semantics of CompCert languages
+are built out of the operations of the memory model,
+they are well-behaved with respect to CKLRs and
+we can prove the following parametricity
+needed in the proof of Thm.~\ref{thm:lprops}.
+
+\begin{theorem}[Relational parametricity of $\kw{Clight}$ and $\kw{RTL}$]
+The following properties hold for all programs:
+\begin{gather*}
     \forall R \,.\,
       \kw{Clight} \llbracket p \rrbracket
-        \le_{\mathcal{C}[R]^* \Rightarrow \mathcal{C}[R]^*}
+        \le_{\mathcal{C}[R] \rightarrow \mathcal{C}[R]}
       \kw{Clight} \llbracket p \rrbracket
       \label{eqn:clight}
       \\
     \forall R \,.\,
       \kw{RTL} \llbracket p \rrbracket
-        \le_{\mathcal{C}[R] \Rightarrow \mathcal{C}[R]}
+        \le_{\mathcal{C}[R] \rightarrow \mathcal{C}[R]}
       \kw{RTL} \llbracket p \rrbracket
       \label{eqn:rtl}
-\end{gather}
-In addition,
-the CKLRs defined above satisfy the following
-composition properties:
-\[
-  \mathcal{C}[\kw{inj}] \cdot \mathcal{C}[\kw{inj}] \equiv
-  \mathcal{C}[\kw{ext}] \cdot \mathcal{C}[\kw{inj}] \equiv
-  \mathcal{C}[\kw{inj}] \cdot \mathcal{C}[\kw{ext}] \equiv
-  \mathcal{C}[\kw{inj}] \,.
-\]
+\end{gather*}
+\begin{proof}
+See \texttt{*/*rel.v} in the Coq development,
+in particular \texttt{cklr/Clightrel.v} and \texttt{cklr/RTLrel.v}.
+\end{proof}
+\end{theorem}
 
 %}}}
 
