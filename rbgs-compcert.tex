@@ -1434,42 +1434,38 @@ concisely and legibly as:
 
 %}}}
 
+\newpage
 \section{Operational Semantics} \label{sec:compcert} %{{{
 
-This section describes the semantic model used by CompCertO.
-First, in \S\S\ref{sec:sem:mm}--\ref{sec:sem:closed},
+This section describes CompCertO's semantic infrastructure.
+In \S\ref{sec:sem:overview}--\ref{sec:sem:mm},
 we review the techniques used in CompCert
-to formalize the semantics of the various languages involved:
-they are defined using labelled transition systems
-operating over states are constructed around
-a common memory model.
-Then starting with \S\ref{sec:sem:li},
-we describe our extensions to these techniques
-to account for \emph{open modules}
-and model the building process more closely.
+to formalize the semantics of the various languages involved,
+then starting with \S\ref{sec:sem:open}
+we describe the extensions we use
+to model the behavior of \emph{open} programs.
 
-\subsection{Introduction} \label{sec:sem:intro} %{{{
+\subsection{Overview} \label{sec:sem:overview} %{{{
 
 The semantics of CompCert languages
 are constructed around a simple notion of process behavior.
 By \emph{process}, we mean a self-contained computation
 which can be characterized by
-the possible sequences of system calls it performs.
-Several steps are involved to go
-from a source program to an executing process;
-these steps are modeled by CompCert
-with varying degrees of sophistication and accuracy.
+the sequence of system calls it performs.
+%Several steps are involved to go
+%from a source program to an executing process;
+%these steps are modeled by CompCert
+%with varying degrees of sophistication and accuracy.
 
 In practice,
 for a C program to be executed,
 its translation units must first be compiled to object code.
 Then,
 the compiled object files must be linked together
-into an executable binary file.
-Finally, the system loads the binary into memory,
-and some bootstrap runtime code
-is used to set up the process state
-and invoke to program's \kw{main} function.
+into an executable binary.
+Finally, the system loads the executable into memory
+where bootstrap code sets up the process state
+and invokes the program's \texttt{main} function.
 
 \begin{figure} % fig:process {{{
     \begin{tikzpicture}[scale=1.25]
@@ -1506,46 +1502,41 @@ and invoke to program's \kw{main} function.
 \end{figure}
 %}}}
 
-Since CompCert is a compiler from C to assembly,
-but does not include an assembler or linker,
-the model used for verification accounts for
-some of these aspects in ithe simplified way
+%Since CompCert is a compiler from C to assembly,
+%but does not include an assembler or linker,
+The model used for verifying CompCert accounts for
+some of these aspects in the simplified way
 depicted in Fig.~\ref{fig:process}.
-The lowest-level objects considered
-are CompCert \kw{Asm} programs.
-The operation of the linker is approximated by
+%The lowest-level objects considered
+%are CompCert \kw{Asm} programs.
+Linking is approximated by
 merging programs, seen as sets of global definitions.
-Hence the compilation, linking and execution
-of a program composed of the translation units
-\texttt{M1.c}, \texttt{M2.c}, \ldots \texttt{M$n$.c},
-is modeled by:
+The execution
+of a program composed of the units
+\texttt{M1.c}, \ldots, \texttt{M$n$.c},
+is modeled as:
 \[
     L_\kw{tgt} :=
-    \kw{Asm}[C(\texttt{M1.c}) +
-             C(\texttt{M2.c}) +
+    \kw{Asm}(C(\texttt{M1.c}) +
              \cdots +
-             C(\texttt{M$n$.c})] \,,
+             C(\texttt{M$n$.c})) \,,
 \]
 where $C$ is the CompCert compiler,
 $+$ denotes CompCert's linking operator for \kw{Asm} programs, and
-$\kw{Asm[-]}$ maps an assembly program to its semantics,
-in terms of the kind of labelled transition system
-defined in \S\ref{sec:sem:closed}.
+$\kw{Asm}(-)$ maps an assembly program to its semantics.
 Note that the loading process is encoded
-as part of the definition of the $\kw{Asm}[-]$ language semantics,
-which involves the construction of a global environment
+as part of the definition of $\kw{Asm}$,
+which constructs a global environment
 laying out the program's code and static data
 into the runtime address space,
-and performing the usual invocation of a C program's
-\kw{main} function.
+and models the conventional invocation of \texttt{main}.
 
 To formulate compiler correctness,
-we must also specify the expected behavior of the target program
-in terms of the semantics of the source program.
+we must also specify the behavior of the source program.
 To this end,
 CompCert defines a linking operator
-and a whole-program semantics $\kw{Clight}(-)$
-for source programs as well,%
+and semantics
+for the language $\kw{Clight}$,%
 \footnote{
   Although CompCert features a frontend for a richer version
   of the C language,
@@ -1562,25 +1553,23 @@ for source programs as well,%
 allowing the desired behavior to be specified as:
 \[
     L_\kw{src} :=
-    \kw{Clight}[\texttt{M1.c} + \texttt{M2.c} + \cdots + \texttt{Mn.c}] \,,
+    \kw{Clight}(\texttt{M1.c} + \cdots + \texttt{Mn.c}) \,,
 \]
-and the correctness of CompCert
-as a separate compiler
+and correctness of CompCert
+%as a separate compiler
 to be stated as $L_\kw{src} \sqsubseteq L_\kw{tgt}$.
 
 %}}}
 
-\subsection{Closed Semantics} \label{sec:sem:closed} %{{{
+\subsection{Transition Systems} \label{sec:sem:closed} %{{{
 
 The language semantics in CompCert are
-given as labelled transition systems (LTS).
-They model the initial invocation of the \kw{main()} function
-and describe a program's behavior in terms of
+given as labelled transition systems (LTS),
+%They model the initial invocation of the \kw{main()} function
+which characterize a program's behavior in terms of
 sequences of observable events.
-An event $e \in \mathbb{E}$ denotes an interaction between
-the program and its environment;
-possible events include system call invocations
-and accesses to volatile variables.
+An event $e \in \mathbb{E}$ may denote
+a system call or a volatile access.
 
 Schematically, a CompCert LTS
 is a tuple
@@ -1592,18 +1581,18 @@ a labeled transition relation
 ${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
 and a set
 $F \subseteq S \times \kw{int}$
-of final states associated with integer results.
+of final states associated with an exit status.
 A transition $s \stackrel{t}{\rightarrow} s'$
 indicates that the state $s$ may transition to state $s'$
-through an interaction recorded as the event trace $t \in \mathbb{E}^*$.
+through an interaction $t \in \mathbb{E}^*$.
 The possible behaviors of CompCert LTS fall into four categories:
 \begin{itemize}
-\item An execution reaching a final state exhibits
-    \emph{terminating} behavior.
+\item An execution reaching a final state is said to
+    \emph{terminate}.
     For example,
     the following execution generates
     the event trace $t_1 t_2 \cdots t_{n-1}$
-    and terminates with exit status $r$:
+    and terminates with status $r$:
     \[
         I \ni s_1 \stackrel{t_1}{\rightarrow}
           s_2 \stackrel{t_2}{\rightarrow}
@@ -1611,10 +1600,10 @@ The possible behaviors of CompCert LTS fall into four categories:
           s_n \mathrel{F} r \,.
     \]
 \item An execution reaching
-    an infinite sequence of silent transitions
-    is said to be \emph{silently diverging}.
-    The following execution silently diverges after
-    generating the event trace $t_1 t_2 \cdots t_{n-1}$:
+    an infinite sequence of $\epsilon$ transitions
+    is said to \emph{silently diverge}.
+    The following execution diverges after
+    generating the trace $t_1 t_2 \cdots t_{n-1}$:
     \[
         I \ni s_1 \stackrel{t_1}{\rightarrow}
           s_2 \stackrel{t_2}{\rightarrow}
@@ -1627,7 +1616,7 @@ The possible behaviors of CompCert LTS fall into four categories:
     infinite executions which keep interacting
     are said to exhibit \emph{reactive} behavior.
     The following execution
-    exhibits reactive behavior if and only if
+    is reactive if and only if
     $\forall i \, \exists j \,.\, i \le j \wedge t_j \ne \epsilon$:
     \[
         I \ni s_1 \stackrel{t_1}{\rightarrow}
@@ -1643,43 +1632,90 @@ The possible behaviors of CompCert LTS fall into four categories:
           \cdots \stackrel{t_{n-1}}{\rightarrow}
           s_n \,,
     \]
-    where there is no $t, s'$ such that
+    with no $t, s'$ such that
     $s_n \stackrel{t}{\rightarrow} s'$.
-    This is interpreted as an \emph{undefined behavior}:
-    it can be refined by any behavior
+    This models \emph{undefined behavior}
+    and can be refined by any behavior
     admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
 \end{itemize}
 
-The model outlined above
-makes no attempt to model interactions across components,
-and is only ever used to
-describe the behavior of whole programs.
-This makes it challenging to reason about
-the behavior of individual compilation units,
-although there have been successful attempts in this direction
-\cite{sepcompcert,gilhurslatest}.
-In any case,
-the compiler's correctness property
-as described in \S\ref{sec:sem:intro}
-only considers uses which follow
-the pattern approximated in Fig.~\ref{fig:process}.
+%The model outlined above
+%makes no attempt to model interactions across components,
+%and is only ever used to
+%describe the behavior of whole programs.
+%This makes it challenging to reason about
+%the behavior of individual compilation units,
+%although there have been successful attempts in this direction
+%\cite{sepcompcert,gilhurslatest}.
+%In any case,
+%the compiler's correctness property
+%as described in \S\ref{sec:sem:intro}
+%only considers uses which follow
+%the pattern approximated in Fig.~\ref{fig:process}.
+%
+%To formulate a more fine-grained and flexible
+%version of the correctness theorem of CompCert,
+%we need an account of
+%the behavior of individual translation units.
+%The model presented in \S\ref{sec:sem:open}
+%achives this by recoding control transfers
+%to and from the modeled system explicitly.
+%These control transfer will need to expose more information
+%about the internal structure of program states;
+%in the following section we review the design of
+%CompCert's memory model,
+%which all program states are constructed from.
 
-To formulate a more fine-grained and flexible
-version of the correctness theorem of CompCert,
-we need an account of
-the behavior of individual translation units.
-The model presented in \S\ref{sec:sem:open}
-achives this by recoding control transfers
-to and from the modeled system explicitly.
-These control transfer will need to expose more information
-about the internal structure of program states;
-in the following section we review the design of
-CompCert's memory model,
-which all program states are constructed from.
+The construction of states in CompCert language semantics
+follow common patterns.
+In particular,
+all languages build them around
+the same notion of \emph{memory state}.
 
 %}}}
 
 \subsection{The CompCert Memory Model} \label{sec:sem:mm} %{{{
+
+\begin{figure} % fig:mm (The CompCert memory model) {{{
+  \begin{align*}
+    v \in \kw{val} ::= {} &
+          \kw{undef} \alt
+          \kw{int}(n) \alt
+          \kw{long}(n) \alt \\ &
+          \kw{float}(x) \alt
+          \kw{single}(x) \alt
+          \kw{ptr}(b, o)
+  \end{align*}
+  \begin{align*}
+    (b, o) &\in \kw{ptr} =
+      \kw{block} \times \mathbb{Z}
+    \\
+    (b, l, h) &\in \kw{ptrrange} =
+      \kw{block} \times \mathbb{Z} \times \mathbb{Z}
+  \end{align*}
+  \begin{align*}
+    \kw{alloc} &:
+      \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
+      \kw{mem} \times \kw{block}
+    \\
+    \kw{free} &:
+      \kw{mem} \rightarrow
+      \kw{ptrrange} \rightarrow
+      \kw{option}(\kw{mem})
+    \\
+    \kw{load} &:
+      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{option}(\kw{val})
+    \\
+    \kw{store} &:
+      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{mem})
+    \\
+    \kw{perm} &:
+      \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
+  \end{align*}
+  \caption{Outline of the CompCert memory model}
+  \label{fig:mm}
+\end{figure}
+%}}}
 
 The CompCert memory model \cite{compcertmmv2}
 is the core algebraic structure
@@ -1689,148 +1725,55 @@ are shown in Fig.~\ref{fig:mm}.
 The idealized version presented here
 involves
 the type of memory states \kw{mem},
-the types of pointers \kw{ptr} and address ranges \kw{ptrrange}, and
-the type of runtime values \kw{val}.
+the type of runtime values \kw{val}, and
+the types of pointers \kw{ptr} and address ranges \kw{ptrrange}.
 To keep our exposition concise and clear,
-we will gloss over the technical details
-associated with the encoding of offsets
-as concrete binary integers,
-and the associated modular arithmetic and overflow constraints.
+we gloss over the technical details
+associated with modular arithmetic and overflow constraints.
 
 The memory is organized into a finite number of \emph{blocks}.
-Each memory block has a unique identifier ($b : \kw{block}$)
-represented as a positive integer,
-and is equipped with its own independent linear address space.
-Block identifiers and offsets are often manipulated together,
-as a pair $p = (b, o) : \kw{ptr} = \kw{block} \times \mathbb{Z}$.
-New blocks are created by the primitive $\kw{Mem.alloc}$,
-with prescribed boundaries for their usable offsets.
+Each memory block has a unique identifier $b \in \kw{block}$
+%represented as a positive integer,
+and is equipped with its own linear address space.
+Block identifiers and offsets are often manipulated together
+as pointers $p = (b, o) \in \kw{ptr} = \kw{block} \times \mathbb{Z}$.
+New blocks are created with prescribed boundaries
+using the primitive $\kw{alloc}$.
 
-A runtime value ($v : \kw{val}$) can be stored at
-a given address using the primitive \kw{Mem.store},
-and retreived using the primitive \kw{Mem.load}.
-Values can be integers (\kw{Vint}, \kw{Vlong}) and
-floating point numbers (\kw{Vfloat}, \kw{Vsingle})
+A runtime value $v \in \kw{val}$ can be stored at
+a given address using the primitive \kw{store},
+and retreived using the primitive \kw{load}.
+Values can be integers (\kw{int}, \kw{long}) and
+floating point numbers (\kw{float}, \kw{single})
 of different sizes,
-as well as pointers (\kw{Vptr}).
-The special value \kw{Vundef}
+as well as pointers (\kw{ptr}).
+The special value \kw{undef}
 represents an undefined value;
-the simulation relations used by CompCert
-usually allow $\kw{Vundef}$
+simulation relations
+often allow $\kw{undef}$
 to be refined into a more concrete value.
-We will write the refinement relation on values as:
+We write value refinement as:
 \[
-    {\sqsubseteq} := \{(\kw{Vundef}, v), (v, v) \mid v \in \kw{val}\}
+    {\sqsubseteq} := \{(\kw{undef}, v), (v, v) \mid v \in \kw{val}\} \,.
 \]
 
 The memory model is shared by all of the languages in CompCert.
-The states used to define their semantics consist of
-a memory component $m : \kw{mem}$,
-together with language-specific components
-containing additional run-time values ($\kw{val}$).
-For higher-level languages,
-the language-specific component may consist of
-a control stack with local environments for each activation;
-for lower-level languages,
-the additional component will mainly contain
-the values stored in various registers.
-
-\begin{figure} % fig:mm (The CompCert memory model) {{{
-  %\footnotesize
-  \begin{gather*}
-        v : \kw{val} ::= 
-          \kw{Vundef} \alt
-          \kw{Vint}(n) \alt
-          \kw{Vlong}(n) \alt \\
-         \qquad \kw{Vfloat}(x) \alt
-          \kw{Vsingle}(x) \alt
-          \kw{Vptr}(b, o)
-    \\
-    (b, o) : \kw{ptr} :=
-      \kw{block} \times \mathbb{Z}
-    \\
-    (b, l, h) : \kw{ptrrange} :=
-      \kw{block} \times \mathbb{Z} \times \mathbb{Z}
-  \end{gather*}
-  \begin{align*}
-    \kw{Mem.alloc} &:
-      \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
-      \kw{mem} \times \kw{block}
-    \\
-    \kw{Mem.free} &:
-      \kw{mem} \rightarrow
-      \kw{ptrrange} \rightarrow
-      \kw{option}(\kw{mem})
-    \\
-    \kw{Mem.load} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{option}(\kw{val})
-    \\
-    \kw{Mem.store} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{mem})
-    \\
-    \kw{Mem.perm} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
-  \end{align*}
-  \caption{Outline of the CompCert memory model}
-  \label{fig:mm}
-\end{figure}
-%}}}
+States always consist of
+a memory component $m \in \kw{mem}$,
+alongside language-specific components
+which may contain additional values ($\kw{val}$).
 
 %}}}
 
-[XXX: somewhere else]
-To compute this behavior
-language semantics must rely on a parameter $\chi$
-which give the semantics of the runtime functions
-relied on by the compiler,
-as well as any other library functions
-invoked by the user program.
-Language semantics must also model
-the way in which C programs are loaded
-and their \kw{main} function is invoked.
+\subsection{Open Semantics} \label{sec:sem:open} %{{{
 
-\subsection{Language Interfaces} \label{sec:sem:li} %{{{
-
-The memory model also plays a central role
-when describing interactions between program components.
-In CompCert languages,
-the memory state captures all global state.
-Therefore,
-under a game-theoretic approach to component semantics,
-short of modelling memory accesses explicitly as moves,
-the memory state must be passed back-and-forth
+The memory model will also play a central role
+when describing interactions between program units.
+Under our approach to component semantics,
+the memory state is passed back-and-forth
 alongside all control transfers.
 
-\begin{table}[t] % tbl:li Language interfaces {{{
-  \begin{tabular}{clll}
-    \hline
-    Name & Question & Answer & Description \\
-    \hline
-    $\mathcal{C}$ & $f[\kw{sg}](\vec{v})@m$ & $v'@m'$ &
-      C calls \\
-    $\mathcal{L}$ & $f[\kw{sg}](\kw{ls})@m$ & $\kw{ls}'@m'$ &
-      Abstract locations \\
-    $\mathcal{M}$ & $f(\kw{sp},\kw{ra},\kw{rs})@m$ & $\kw{rs}'@m'$ &
-      Machine registers \\
-    $\mathcal{A}$ & $\kw{rs}@m$ & $\kw{rs}'@m'$ &
-      Arch-specific \\
-    $\mathbf{1}$ & n/a & n/a &
-      Empty interface \\
-    $\mathcal{W}$ & * & $r$ &
-      Whole-program \\
-    \hline
-  \end{tabular}
-%  \begin{gather*}
-%      \kw{sg} : \kw{signature} ; \:
-%      m : \kw{mem} ; \: v : \kw{val} ; \: \vec{v} : \kw{val}^* \\
-%      \kw{ls} : \kw{loc} \rightarrow \kw{val} ; \:
-%      \kw{rs} : \kw{reg} \rightarrow \kw{val} ; \:
-%      \kw{sp}, \kw{ra} : \kw{val}
-%  \end{gather*}
-  \caption{Language interfaces used in CompCertO}
-  \label{tbl:li}
-\end{table}
-%}}}
+\paragraph{Language Interfaces} %{{{
 
 More specifically,
 our models of cross-module interactions in CompCert languages
@@ -1848,16 +1791,16 @@ $M_A^\kw{Q}$ is a set of \emph{questions} and
 $M_A^\kw{A}$ is a set of \emph{answers}.
 \end{definition}
 
-At the source level (language interface $\mathcal{C}$),
+At the source level ($\mathcal{C}$),
 questions consist of
-the address of the function being invoked
-($f : \kw{val}$)
-as well as its signature
-($\kw{sg} : \kw{signature}$),
+the address of the function invoked
+($\mathit{vf} \in \kw{val}$),
+its signature
+($\mathit{sg} \in \kw{signature}$),
 the values of its arguments
-($\vec{v} : \kw{val}^*$),
+($\vec{v} \in \kw{val}^*$),
 and the state of the memory at the point of entry
-($m : \kw{mem}$);
+($m \in \kw{mem}$);
 answers
 consist of the function's return value
 and the state of the memory at the point of exit.
@@ -1865,26 +1808,26 @@ In these terms,
 a Clight component describes a strategy for the game
 $\mathcal{C} \rightarrow \mathcal{C}$.
 The component is activated by an incoming $\mathcal{C}$ question
-in the right-hand side $\mathcal{C}$ game,
-and eventually expected to produce a $\mathcal{C}$ answer.
-Conversely,
+in the right-hand side game,
+where it is expected to produce a $\mathcal{C}$ answer.
+In the meantime,
 it may perform external calls by
-asking questions in the left-hand side $\mathcal{C}$ game,
-which will be answered by the environment.
+asking questions and expecting answers
+in the left-hand side $\mathcal{C}$ game.
 
-This language interface is used for Clight and
+This language interface is used for \kw{Clight} and
 for the majority of CompCert's intermediate languages,
-including the RTL language which is used to perform
+including \kw{RTL} which is used to perform
 most of the compiler's optimizations.
-As the backend moves towards lower-level languages,
+As we move towards lower-level languages,
 this is reflected in the language interfaces used:
 function arguments are first mapped into
 abstract locations alongside local temporary variables
-($\mathcal{L}$, used by the LTL and Linear languages).
+($\mathcal{L}$, used by the \kw{LTL} and \kw{Linear}).
 These locations are eventually split between
 in-memory stack slots and a fixed number of machine registers
-($\mathcal{M}$, used by the Mach language).
-Finally, the target assembly language Asm
+($\mathcal{M}$, used by \kw{Mach}).
+Finally, the target assembly language \kw{Asm}
 consolidates the stack pointer, program counter,
 and return address into their own machine registers,
 which is reflected in its interface $\mathcal{A}$.
@@ -1897,7 +1840,7 @@ and the answers $r \in \kw{int}$
 give the exit status of a process.
 Hence the original CompCert semantics described in
 \S\ref{sec:sem:closed}
-can be seen as defining strategies for the game
+can be seen to define strategies for
 $\mathbf{1} \rightarrow \mathcal{W}$:
 the process can only be started in a single way,
 may not perform external calls,
@@ -1905,12 +1848,38 @@ and indicates an exit status upon termination.
 
 %}}}
 
-\subsection{Open Semantics} \label{sec:sem:open} %{{{
+\begin{table} % tbl:li Language interfaces {{{
+  \begin{tabular}{clll}
+    \hline
+    Name & Question & Answer & Description \\
+    \hline
+    $\mathcal{C}$ &
+      $\mathit{vf}[\mathit{sg}](\vec{v})@m$ & $v'@m'$ &
+      C calls \\
+    $\mathcal{L}$ &
+      $\mathit{vf}[\mathit{sg}](\mathit{ls})@m$ & $\mathit{ls}'@m'$ &
+      Abstract locations \\
+    $\mathcal{M}$ &
+      $\mathit{vf}(\mathit{sp},\mathit{ra},\mathit{rs})@m$ & $\mathit{rs}'@m'$ &
+      Machine registers \\
+    $\mathcal{A}$ &
+      $\mathit{rs}@m$ & $\mathit{rs}'@m'$ &
+      Arch-specific \\
+    $\mathbf{1}$ & n/a & n/a &
+      Empty interface \\
+    $\mathcal{W}$ & * & $r$ &
+      Whole-program \\
+    \hline
+  \end{tabular}
+  \caption{Language interfaces used in CompCertO}
+  \label{tbl:li}
+\end{table}
+%}}}
 
-Having described the control transfer interfaces
-used in the languages of CompCert,
-we show how the closed semantics
-described in \S\ref{sec:sem:closed}
+\paragraph{Transition Systems} %{{{
+
+Now we describe how the semantic model of
+\S\ref{sec:sem:closed}
 is generalized in CompCertO
 to account for cross-component interactions.
 
@@ -1945,12 +1914,12 @@ with interactions over the game $A$
 as a new source of observable actions.
 The main reason for treating
 events $e \in \mathbb{E}$ and
-interactions $qr \in M_A^\kw{Q} \times M_A^\kw{A}$
+external calls $qr \in M_A^\kw{Q} \times M_A^\kw{A}$
 differently is that
 while events are expected to be the same
 between the source and target programs,
-the form of interactions varies significantly
-and a correpondance between source and target interactions
+the form of external calls varies significantly
+and the calling convention they follow
 must be defined explicitly.
 
 %For a small-step semantics
@@ -1993,25 +1962,32 @@ must be defined explicitly.
 
 %}}}
 
-\subsection{Language Semantics} %{{{
-
-[Give example definitions for Clight and/or Asm here?]
-
 %}}}
 
-\subsection{Simulation Conventions} \label{sec:sem:simconv} %{{{
+\subsection{Refinement} \label{sec:sem:ref} %{{{
+
+The correctness of CompCert is proved as a
+\emph{forward simulation}%
+\footnote{In this usage, \emph{forward} pertains to
+  the compilation process,
+  rather than the execution of programs.}
+between the transition semantics of the source and target programs.
+The forward simulation is then used to prove a \emph{backward} simulation,
+which are proved to be sound with respect to trace containement.
+We have updated forward and backward simulations to
+operate in the context of CompCertO's semantic model.
+In this section we present forward simulations,
+which will be used as our preferred notion of refinement
+in the remainder of the paper.
 
 To establish the correctness of the compiler
-at the level of open components,
-we will need to relate the behavior of the source component
-$p_1$,
-expressed as a transition system
+in terms of our per-component semantics,
+we need to relate the behavior of the source component
 $\kw{Clight}(p_1) : \mathcal{C} \rightarrow \mathcal{C}$,
-and the behavior of the target program $p_2$,
-expressed as
+and the behavior of the target program
 $\kw{Asm}(p_2) : \mathcal{A} \rightarrow \mathcal{A}$.
-Since the interactions of these two LTS
-are expressed in terms of different language interfaces,
+Since these two LTS
+use different language interfaces,
 they can only be compared once a correspondance between
 C and assembly calls has been defined.
 This is the role of simulation conventions.
@@ -2020,185 +1996,195 @@ This is the role of simulation conventions.
 A \emph{simulation convention} between the elementary games
 $A_1 = \langle M_{A_1}^\kw{Q}, M_{A_1}^\kw{A} \rangle$ and
 $A_2 = \langle M_{A_2}^\kw{Q}, M_{A_2}^\kw{A} \rangle$
-is as a tuple $\mathbb{R} = \langle W, R^\kw{Q}, R^\kw{A} \rangle$
-with $R^\kw{Q} \in \mathcal{R}_W(M_{A_1}^\kw{Q}, M_{A_2}^\kw{Q})$
-and $R^\kw{A} \in \mathcal{R}_W(M_{A_1}^\kw{A}, M_{A_2}^\kw{A})$.
+is as a tuple $\mathbb{R} = \langle W, \mathbb{R}^\kw{Q}, \mathbb{R}^\kw{A} \rangle$
+with $\mathbb{R}^\kw{Q} \in \mathcal{R}_W(M_{A_1}^\kw{Q}, M_{A_2}^\kw{Q})$
+and $\mathbb{R}^\kw{A} \in \mathcal{R}_W(M_{A_1}^\kw{A}, M_{A_2}^\kw{A})$.
 We will write $\mathbb{R} : A_1 \Leftrightarrow A_2$.
 \end{definition}
 %}}}
 
-The set of worlds $W$ is used to
-make sure that questions on one hand,
-and answers on the other hand,
-are related consistently.
-For instance,
-in CompCertO's overall simulation convention
-$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$,
-the registers used to store a function's return value
-may depend on the signature $\kw{sg}$ used for the call.
-As another example,
-when an injection pass makes an external call,
-we need to make sure the call's final memory states
-are related by the same memory injection that was used
-for the initial states (or a successor, see \S\ref{sec:corr:inj}).
-
+\begin{definition} % Identity simulation convention {{{
+The \emph{identity simulation convention} for
+a language interface $A$ is
+$\kw{id}_A := \langle \{*\}, {=}, {=} \rangle : A \Leftrightarrow A$.
+We abbreviate it as $\kw{id}$ when $A$ can be deduced
+from context.
+\end{definition}
 %}}}
 
-\subsection{Simulations} \label{sec:sem:simconv} %{{{
-\label{sec:modsem:ref}
+%The set of worlds $W$ is used to
+%make sure that questions on one hand,
+%and answers on the other hand,
+%are related consistently.
+%For instance,
+%in CompCertO's overall simulation convention
+%$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$,
+%the registers used to store a function's return value
+%may depend on the signature $\kw{sg}$ used for the call.
+%As another example,
+%when an injection pass makes an external call,
+%we need to make sure the call's final memory states
+%are related by the same memory injection that was used
+%for the initial states (or a successor, see \S\ref{sec:corr:inj}).
 
-The correctness of CompCert is established in terms of
-\emph{backward simulations}%
-\footnote{In this usage, \emph{backward} pertains to
-  the compilation process,
-  rather than the execution of programs.}
-between the small-step semantics of the source and target programs,
-which are then shown to be sound with respect to trace containement.
-In this section,
-we define these notions in our updated context.
-
-A backward simulation asserts that any transition in the target program
-has a corresponding transition sequence in the source program.
-The source transition sequence may be empty,
+A forward simulation asserts that any transition in the source program
+has a corresponding transition sequence in the target.
+The sequence may be empty,
 but to ensure the preservation of silent divergence
-this can only happen for finitely many consecutive target transitions.
+this can only happen for finitely many consecutive source transitions.
 This is enforced by indexing the simulation relation
 over a well-founded order,
 and requiring the index to decrease
-whenever an empty source transition sequence is used.
+whenever an empty transition sequence is used.
 
-A simulation between the small-step semantics
-$L_1 : A_1 \rightarrow B_1$ and
-$L_2 : A_2 \rightarrow B_2$ will
-operate in the context of the refinement conventions
-$\mathbb{C}_A : A_1 \Leftrightarrow A_2$ and
-$\mathbb{C}_B : B_1 \Leftrightarrow B_2$.
-When relating sets of states,
-we will want to make sure that
-each \emph{target} state has a corresponding \emph{source} state,
-but the source program may allow additional behaviors
-that are not realized in the target program.
-However, to take into account the convention that
-empty sets of states correspond to undefined behaviors,
-when the source set is empty,
-no restrictions are placed on the target state.
+%A simulation between the small-step semantics
+%$L_1 : A_1 \rightarrow B_1$ and
+%$L_2 : A_2 \rightarrow B_2$ will
+%operate in the context of the refinement conventions
+%$\mathbb{C}_A : A_1 \Leftrightarrow A_2$ and
+%$\mathbb{C}_B : B_1 \Leftrightarrow B_2$.
+%When relating sets of states,
+%we will want to make sure that
+%each \emph{target} state has a corresponding \emph{source} state,
+%but the source program may allow additional behaviors
+%that are not realized in the target program.
+%However, to take into account the convention that
+%empty sets of states correspond to undefined behaviors,
+%when the source set is empty,
+%no restrictions are placed on the target state.
+%
+%\begin{definition}[Backward simulation between sets of states]
+%We say that $R : \mathcal{R}(S_1, S_2)$ is a
+%\emph{backward simulation relation
+%  between the sets $Q_1 \subseteq S_1$ and  $Q_2 \subseteq S_2$}
+%if the following conditions hold:
+%\begin{enumerate}
+%\item
+%  If $Q_1$ is non-empty,
+%  then $Q_2$ is non-empty as well.
+%\item
+%  If $Q_1$ is non-empty,
+%  then for all $s_2 \in Q_2$,
+%  there exists $s_1 \in Q_1$
+%  such that $(s_1, s_2) \in R$.
+%\end{enumerate}
+%We will write $Q_1 \ge_R Q_2$.
+%\end{definition}
+%
+%A state $s$ \emph{goes wrong}
+%if it is neither an interaction nor a final state,
+%and if there is no transition $s \stackrel{t}{\rightarrow} s'$;
+%a state $s$ is \emph{safe}
+%if no state that goes wrong is reachable from $s$
+%by the relation $\stackrel{\epsilon}{\rightarrow}$.
+%Safe states will be denoted using the predicate $\kw{safe}(s)$.
+%We can now define backward simulations.
 
-\begin{definition}[Backward simulation between sets of states]
-We say that $R : \mathcal{R}(S_1, S_2)$ is a
-\emph{backward simulation relation
-  between the sets $Q_1 \subseteq S_1$ and  $Q_2 \subseteq S_2$}
-if the following conditions hold:
-\begin{enumerate}
-\item
-  If $Q_1$ is non-empty,
-  then $Q_2$ is non-empty as well.
-\item
-  If $Q_1$ is non-empty,
-  then for all $s_2 \in Q_2$,
-  there exists $s_1 \in Q_1$
-  such that $(s_1, s_2) \in R$.
-\end{enumerate}
-We will write $Q_1 \ge_R Q_2$.
-\end{definition}
-
-A state $s$ \emph{goes wrong}
-if it is neither an interaction nor a final state,
-and if there is no transition $s \stackrel{t}{\rightarrow} s'$;
-a state $s$ is \emph{safe}
-if no state that goes wrong is reachable from $s$
-by the relation $\stackrel{\epsilon}{\rightarrow}$.
-Safe states will be denoted using the predicate $\kw{safe}(s)$.
-We can now define backward simulations.
-[XXX: do forward simulations instead?]
-
-\begin{definition}[Backward simulation]
+\begin{definition}[Forward simulation]
 Given
 two simulation conventions
 $\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
 $\mathbb{R}_B : B_1 \Leftrightarrow B_2$,
 and given
-$L_1 : A_1 \rightarrow A_1$ and
-$L_2 : B_2 \rightarrow B_2$
-two labeled transition systems for the corresponding games,
-a \emph{backward simulation} between $L_1$ and $L_2$
-consists in a
+$L_1 : A_1 \rightarrow B_1$ and
+$L_2 : A_2 \rightarrow B_2$,
+a \emph{forward simulation} between $L_1$ and $L_2$
+consists of a
 well-founded relation $(I, <)$
 together with a family of relations
 $(R_i : \mathcal{R}_{W_B}(S_1, S_2))_{i \in I}$
 satisfying the following properties:
 \begin{description}
 \item[Initial states]
-  For all $w_B, q_1, q_2$ such that
-  $q_1 \ifr{w_B \Vdash \mathbb{R}_B^\kw{Q}} q_2$,
-  the condition $I_1(q_1) \ge_{\exists i . w_B \Vdash R_i} I_2(q_2)$ holds.
-\item[Progress]
-  For all $w_B, s_1, s_2$ such that $s_1 \ifr{w_B \Vdash R_i} s_2$
-  with $s_1$ a safe state,
-  $s_2$ does not go wrong.
+  For all related questions
+  $w_B \Vdash q_1 \mathrel{\mathbb{R}_B^\kw{Q}} q_2$
+  with $q_1 \mathrel{I_1} s_1$,
+  there exist $i, s_2$ such that $q_2 \mathrel{I_2} s_2$ and
+  $w_B \Vdash s_1 \mathrel{R_i} s_2$.
 \item[Simulation]
-  For all $w_B, s_1, s_2$ such that $s_1 \ifr{w \Vdash R_i} s_2$
-  with $s_1$ a safe state, if $s_2 \stackrel{t}{\rightarrow} s_2'$,
-  then there exists $i' \in I$ and $s_1' \in S_1$
-  such that $s_1' \ifr{w_B \Vdash R_{i'}} s_2'$ and
+  For all related states $w_B \Vdash s_1 \mathrel{R_i} s_2$
+  and for any transition $s_1 \stackrel{t}{\rightarrow} s_1'$,
+  there exists $i' \in I$ and $s_2' \in S_2$
+  such that $w_B \Vdash s_1' \mathrel{R_{i'}} s_2'$ and
   such that 
-    $s_1 \stackrel{t}{\rightarrow^+} s_1'$, or
-    $s_1 \stackrel{t}{\rightarrow^*} s_1' \:\wedge\: i' < i$.
+    $s_2 \mathrel{\stackrel{t}{\rightarrow}{\!\!}^+} s_2'$, or
+    $s_2 \mathrel{\stackrel{t}{\rightarrow}{\!\!}^*} s_2' \:\wedge\: i' < i$.
 \item[External calls]
-  For all $s_1 \ifr{w_B \Vdash R_i} s_2$
-  with $s_1$ a safe state, and
-  for any question $m_2 \in M_{A_2}^\kw{Q}$
-  such that $s_2 \mathrel{X_2} m_2$,
-  there exist $w_A \in W_A$ and a question $m_1 \in M_{A_1}^\kw{Q}$
-  such that $m_1 \ifr{w_A \Vdash \mathbb{R}_A^\kw{Q}} m_2$.
-  In addition, for a corresponding pair of related answers
-  $n_1 \ifr{w_A \Vdash \mathbb{R}_A^\kw{A}} n_2$,
-  the condition $Y_1(s_1, n_1) \ge_{\exists i . w_A \Vdash R_i} Y_2(s_2, n_2)$ holds.
+  For all related states $w_B \Vdash s_1 \mathrel{R_i} s_2$
+  and for any question $m_1 \in M_{A_1}^\kw{Q}$
+  such that $s_1 \mathrel{X_1} m_1$,
+  there exist $w_A \in W_A$ and a question $m_2 \in M_{A_2}^\kw{Q}$
+  such that $w_A \Vdash m_1 \mathrel{\mathbb{R}_A^\kw{Q}} m_2$.
+  Furthermore, for a corresponding pair of related answers
+  $w_A \Vdash n_1 \mathrel{\mathbb{R}_A^\kw{A}} n_2$
+  and a state $s_1' \in S_1$ such that $(s_1, n_1, s_1') \in Y_1$,
+  there exists a state $s_2' \in S_2$ such that
+  $(s_2, n_2, s_2') \in Y_2$.
 \item[Final states]
-  For all $s_1 \ifr{w_B \Vdash R_i} s_2$
-  with $s_1$ a safe state, and
-  for any answer $r_2 \in M_{B_2}^\kw{A}$
-  such that $s_2 \mathrel{F_2} r_2$,
-  there exists a state $s_1'$ silently reachable from $s_1$ and
-  an answer $r_1 \in M_{B_1}^\kw{A}$ such that
-  $s_1' \mathrel{F_1} r_1$ and $r_1 \ifr{w_B \Vdash \mathbb{R}_B^\kw{A}} r_2$.
+  For all related states $w_B \Vdash s_1 \mathrel{R_i} s_2$
+  and for any answer $r_1 \in M_{B_1}^\kw{A}$
+  such that $s_1 \mathrel{F_1} r_1$,
+  there exists an answer $r_2 \in M_{B_2}^\kw{A}$ such that
+  $s_2 \mathrel{F_2} r_2$ and $w_B \Vdash r_1 \mathrel{\mathbb{R}_B^\kw{A}} r_2$.
 \end{description}
-We will write $L_1 \ge_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L_2$.
+We will write $L_1 \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} L_2$.
 \end{definition}
 
 %}}}
 
 \subsection{Horizontal Composition} \label{sec:sem:linker} %{{{
 
-XXX: the definition of horizontal composition involves
-the domains of components,
-which so far I haven't addressed in the semantics model.
+[XXX: We need to update our LTS definition to include $D$.]
 
 The interaction of a set of components
 can be modelled by the following operator.
 
+\begin{definition}[Horizontal composition] \label{def:hcomp} %{{{
+For two transition systems $L_1, L_2 : A \rightarrow A$
+with
+$L_i = \langle S_i, {\rightarrow}_i, D_i, I_i, X_i, Y_i, F_i \rangle$,
+the \emph{horizontal composition} of $L_1$ and $L_2$
+is defined as:
+\[
+    L_1 \oplus L_2 :=
+    \langle
+      (S_1 + S_2)^*, {\rightarrow}, (D_1 \cup D_2), I, X, Y, F
+    \rangle
+\]
+where the components $\rightarrow$, $I$, $X$, $Y$, $F$
+are defined inductively by 
+the rules showen in Fig.~\ref{fig:hcomp}.
+\end{definition}
+%}}}
+
 \begin{figure} % fig:hcomp {{{
+    \footnotesize
     \begin{gather*}
-        \AxiomC{$q \in \kw{dom}(L_i)$}
+        \AxiomC{$q \in D_i$}
         \AxiomC{$q \mathrel{I_i} s$}
         \BinaryInfC{$q \mathrel{I} [(i, s) :: \kw{nil}]$}
         \DisplayProof
-        \\[1ex]
+        \quad
         \AxiomC{$s \stackrel{t}{\rightarrow}_i s'$}
         \UnaryInfC{$
             [(i, s) :: k]
             \stackrel{t}{\rightarrow}
             [(i, s') :: k]$}
         \DisplayProof
+        \quad
+        \AxiomC{$s \mathrel{F_i} r$}
+        \UnaryInfC{$[(i, s) :: \kw{nil}] \mathrel{F} r$}
+        \DisplayProof
         \\[1ex]
         \AxiomC{$s \mathrel{X_i} q$}
-        \AxiomC{$q \in \kw{dom}(L_j)$}
+        \AxiomC{$q \in D_j$}
         \AxiomC{$q \mathrel{I_j} s'$}
         \TrinaryInfC{$
             [(i, s) :: k]
             \stackrel{\epsilon}{\rightarrow}
             [(j, s') :: (i, s) :: k]$}
         \DisplayProof
-        \\[1ex]
+        \quad
         \AxiomC{$s' \mathrel{F_j} r$}
         \AxiomC{$(s, r, s'') \in Y_i$}
         \BinaryInfC{$
@@ -2208,16 +2194,12 @@ can be modelled by the following operator.
         \DisplayProof
         \\[1ex]
         \AxiomC{$s \mathrel{X_i} q$}
-        \AxiomC{$\forall j \,.\, q \notin \kw{dom}(L_j)$}
+        \AxiomC{$\forall j \,.\, q \notin D_j$}
         \BinaryInfC{$[(i, s) :: k] \mathrel{X} q$}
         \DisplayProof
-        \\[1ex]
+        \qquad
         \AxiomC{$(s, r, s') \in Y_i$}
         \UnaryInfC{$([(i, s) :: k], r, [(i, s') :: k]) \in Y$}
-        \DisplayProof
-        \\[1ex]
-        \AxiomC{$s \mathrel{F_i} r$}
-        \UnaryInfC{$[(i, s) :: \kw{nil}] \mathrel{F} r$}
         \DisplayProof
     \end{gather*}
     \caption{Horizontal composition of open semantics}
@@ -2225,28 +2207,9 @@ can be modelled by the following operator.
 \end{figure}
 %}}}
 
-\begin{definition}[Horizontal composition] \label{def:hcomp} %{{{
-For a language interface $A$
-and two transition systems $L_1, L_2 : A \rightarrow A$
-with
-$L_i = \langle S_i, {\rightarrow}_i, I_i, X_i, Y_i, F_i \rangle$,
-the \emph{horizontal composition} of $L_1$ and $L_2$
-is defined by:
-\begin{align*}
-    L_1 \oplus L_2 &:= \langle S^*, {\rightarrow}, I, X, Y, F \rangle \\
-    S &:= \sum_{i \in I} S_i
-\end{align*}
-where the components $\rightarrow$, $I$, $X$, $Y$, $F$
-are defined inductively by 
-the rules showen in Fig.~\ref{fig:hcomp}.
-\end{definition}
-%}}}
-
-The horizontal composition operator
-allows us to describe the semantics of a
-multi-component program
-as the composition of the semantics
-of its individual components.
+The horizontal composition operator and its properties below
+allows us to decompose the verification of a complex program
+into the verification of its individual parts.
 In particular,
 since we are interested in using CompCertO
 to establish the correctness of assembly programs,
@@ -2272,7 +2235,7 @@ Once the semantics of the \kw{Asm} program we wish to verify
 has been separated into its constituent components,
 we can verify each one independently.
 This is enabled by the following property,
-namely the preservation of simulation by
+namely the preservation of simulations by
 horizontal composition.
 
 \begin{theorem} \label{thm:simlinking} %{{{
@@ -2371,17 +2334,6 @@ which so far I have left out of the semantic model.
 \end{table}
 %}}}
 
-We have explained how the semantic model of CompCert
-can be generalized to account for cross-component interaction,
-and accordingly defined the semantic model used by CompCertO.
-In this section,
-we describe how the simulation proofs of
-the various passes of CompCert
-can be adapted to fit this model.
-Owing to the flexibility of our typed relational model,
-this adaptation is much easier than
-in previous work such as Compositional CompCert.
-
 The passes of CompCertO are summarized in Table~\ref{tbl:passes}.
 They are grouped by their source language.
 All but the last pass listed under a given language
@@ -2392,105 +2344,43 @@ Each pass is assigned an incoming and outgoing simulation convention,
 which is largely determined by the simulation relation
 used in the corresponding proof.
 For passes whose source and target languages
-used the same language interface,
-this is determined in particular by the way memory states are related.
+use the same language interface,
+the simulation convention follows the memory transformation
+used in the existing proof,
+and largely translates the existing requirements
+CompCert places on the semantics of external functions.
 For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
 we construct more specific simulation conventions
 which express the correspondance between
 the higher-level and lower-level representations
 of function calls and returns.
 
-%\subsection{Overview} %{{{
-%
-%[Drop/redistribute this?]
-%
-%The passes of CompCert fall into three categories
-%depending on how
-%the memory states of their source and target languages are related
-%by their correctness proofs:
-%\begin{itemize}
-%\item \emph{Equality} is used when the memory states
-%  in the source and target execution remain identical,
-%  for instance when the differences between
-%  the source and target programs are mostly a matter of syntax,
-%  but they execute in the same way.
-%\item \emph{Memory extensions} are somewhat less constrained:
-%  the target memory is allowed to contain values that are
-%  \emph{more defined} than that of the source memory,
-%  and to have less restrictive permissions,
-%  so that all operations succeeding on the source memory
-%  will succeed on the target memory as well.
-%  However,
-%  the two memory states must share the same overall structure.
-%\item \emph{Memory injection} relations
-%  allow the structures of the source and target memories
-%  to differ, as specified by an injection mapping
-%  (see Example~\ref{ex:meminj}).
-%\end{itemize}
-%
-%Table~\ref{tbl:passes} shows
-%the intermediate languages and compilation passes
-%used in our version of CompCert,
-%together with the respective
-%language interfaces and
-%simulation conventions
-%that are used for each one.
-%In the remainder of this section,
-%we will explain how these simulation conventions are constructed
-%and how the compiler's overall incoming and outgoing conventions
-%can be reconciled.
-%
-%%}}}
-
 \subsection{Identity passes} \label{sec:pass:id} %{{{
 
-The simplest passes of CompCert
-use a simulation relation which
-restricts the source and target
-memory states and values to be identical.
-For the passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
+The identity convention $\kw{id}$ is sufficient for
+the passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
 \kw{CleanupLabels} and \kw{Debugvar},
-we can use the identity simulation convention
-defined below.
-
-\begin{definition}
-The \emph{identity simulation convention} for
-a language interface $A$ is:
-\[
-    \kw{id}_A : A \Leftrightarrow A := \langle \{*\}, {=}, {=} \rangle \,.
-\]
-We abbreviate it as $\kw{id}$ when $A$ can be deduced
-from context.
-\end{definition}
-
+which restrict the source and target
+memory states and values to be identical.
 The simulation proofs for these passes
 require very few changes.
-The simulation properties for
-the interaction and resumption predicates
-added to our extended model
-can be proved in a single line of proof script.
-In fact,
-because of various simplifications we perform
-to the overall CompCert theories
-regarding the management of symbol tables and global environments,
-the overall proof size for these passes slightly \emph{decreases}.
 
 %}}}
 
 \subsection{Extension passes} %{{{
 
 For passes where strict equality is too restrictive,
-but where the source and target programs
+but the source and target programs
 use identical memory layouts,
 CompCert uses the \emph{memory extension} relation.
 Memory extension allows the values
 stored in the target memory state to refine
-the corresponding values stored in the source memory;
-the target memory state can also
-provide more permissions than the source memory,
-and in particular blocks may be allocated with
-a broader range of addresses in the target memory
-than in the source.
+the values stored in the source memory at the same location.
+%the target memory state can also
+%provide more permissions than the source memory,
+%and in particular blocks may be allocated with
+%a broader range of addresses in the target memory
+%than in the source memory.
 
 We write $\subseteq$ for the memory extension relation.
 The relation can be extended to questions and answers,
@@ -2498,23 +2388,29 @@ so that for example $\mathcal{C}$ extension passes
 conform to the simulation convention defined as:
 \[
     \kw{ext}_\mathcal{C} :=
-        \langle \{*\}, {\subseteq}, {\subseteq} \rangle
-        : \mathcal{C} \Leftrightarrow \mathcal{C} \,,
+      \langle \{*\},
+        {\subseteq_\mathcal{C}^\kw{Q}},
+        {\subseteq_\mathcal{C}^\kw{Q}}
+      \rangle
+      : \mathcal{C} \Leftrightarrow \mathcal{C} \,,
 \]
 where the $\subseteq$ relations on $\mathcal{C}$
 moves are defined by the rules:
 \begin{gather*}
-    \AxiomC{$\vec{v}_1 \mathrel{\vec{\sqsubseteq}} \vec{v}_2$}
+    \AxiomC{$\mathit{vf_1} \sqsubseteq \mathit{vf_2}$}
+    \AxiomC{$\vec{v}_1 \sqsubseteq \vec{v}_2$}
     \AxiomC{$m_1 \subseteq m_2$}
-    \BinaryInfC{$f[sg](\vec{v}_1)@m_1 \subseteq f[sg](\vec{v}_2)@m_2$}
+    \TrinaryInfC{$\mathit{vf_1}[\mathit{sg}](\vec{v}_1)@m_1
+      \subseteq_\mathcal{C}^\kw{Q}
+      \mathit{vf_2}[\mathit{sg}](\vec{v}_2)@m_2$}
     \DisplayProof
     \\[1ex]
     \AxiomC{$v_1' \sqsubseteq v_2'$}
     \AxiomC{$m_1' \subseteq m_2'$}
-    \BinaryInfC{$v_1'@m_1' \subseteq v_2'@m_2'$}
+    \BinaryInfC{$v_1'@m_1' \subseteq_\mathcal{C}^\kw{A} v_2'@m_2'$}
     \DisplayProof
 \end{gather*}
-The simulation convention $\kw{ext}_\mathcal{L}$
+The simulation convention $\kw{ext}_{\!\mathcal{L}}$
 used by the $\kw{Tunneling}$ proof
 is defined in a similar way.
 
@@ -2523,7 +2419,7 @@ than identity passes.
 In particular,
 at external calls the exsiting proofs
 only require the environment to maintain the extension relation
-on memory states.
+on the memory states and returned values.
 
 %}}}
 
@@ -2549,36 +2445,39 @@ hold related values.
 
 Extending injections to the questions and answers of $\mathcal{C}$,
 we obtain the following simulation convention:
-\begin{gather*}
+\[
     \kw{inj} := \langle
       \kw{meminj},
       {\hookrightarrow},
       {\hookrightarrow}
     \rangle : \mathcal{C} \Leftrightarrow \mathcal{C}
-    \\[1ex]
-    \AxiomC{$\iota \Vdash \vec{v}_1 \hookrightarrow \vec{v}_2$}
-    \AxiomC{$\iota \Vdash m_1 \hookrightarrow m_2$}
-    \BinaryInfC{$\iota \Vdash
-      f[\mathit{sg}](\vec{v}_1)@m_1
+\]
+\[
+    \AxiomC{$f \Vdash \mathit{vf_1} \hookrightarrow \mathit{vf_2}$}
+    \AxiomC{$f \Vdash \vec{v}_1 \hookrightarrow \vec{v}_2$}
+    \AxiomC{$f \Vdash m_1 \hookrightarrow m_2$}
+    \TrinaryInfC{$f \Vdash
+      \mathit{vf_1}[\mathit{sg}](\vec{v}_1)@m_1
       \hookrightarrow
-      f[\mathit{sg}](\vec{v}_2)@m_2$}
+      \mathit{vf_2}[\mathit{sg}](\vec{v}_2)@m_2$}
     \DisplayProof
-    \\[1ex]
-    \AxiomC{$\iota \subseteq \iota'$}
-    \AxiomC{$\iota' \Vdash v_1' \hookrightarrow v_2'$}
-    \AxiomC{$\iota' \Vdash m_1' \hookrightarrow m_2'$}
-    \TrinaryInfC{$\iota \Vdash v_1'@m_1' \hookrightarrow v_2'@m_2'$}
+\]
+\[
+    \AxiomC{$f \subseteq f'$}
+    \AxiomC{$f' \Vdash v_1' \hookrightarrow v_2'$}
+    \AxiomC{$f' \Vdash m_1' \hookrightarrow m_2'$}
+    \TrinaryInfC{$f \Vdash v_1'@m_1' \hookrightarrow v_2'@m_2'$}
     \DisplayProof
-\end{gather*}
+\]
 Note that new memory blocks
 which have been allocated in both executions
 can be related by the extended injection $f'$.
 
 The convention \kw{inj} can be used for incoming calls,
-but unfortunately it insufficient for outgoing calls.
+but unfortunately it is insufficient for outgoing calls.
 For instance,
 in the \kw{SimplLocals} pass,
-local variables whose address is not taken
+local variables whose addresses are not taken
 are removed from the memory.
 The corresponding values are instead stored
 as temporaries in the target function's local environment,
@@ -2619,7 +2518,7 @@ after external calls return.
     Memory blocks to the right of the dashed line
     have been allocated during the call,
     which adds a new entry to the injection mapping.
-    The shaded areas must not be modified.
+    The shaded areas must not be modified by the call.
   }
   \label{fig:injp}
 \end{figure}
@@ -2628,18 +2527,18 @@ after external calls return.
 More generally,
 as depicted in Fig.~\ref{fig:injp},
 injection passes expect external calls
-to leave regions that are within the injection's footprint untouched.
+to leave regions outside of the injection's footprint untouched.
 This expectation is reasonable because
 external calls
 should behave uniformly between the source and target executions.
-An external function acting on the memory state
-should not forge block identifiers and pointers,
-but can only follow pointers passed as arguments
-or fetched from the memory itself
-(as explained in \S\ref{sec:cklr},
-this is a form of parametricity).
+%An external function acting on the memory state
+%should not forge block identifiers and pointers,
+%but can only follow pointers passed as arguments
+%or fetched from the memory itself
+%(as explained in \S\ref{sec:cklr},
+%this is a form of parametricity).
 The corresponding simulation convention
-can be formalized along the following lines:%
+can be formalized as:
 \begin{gather*}
   \kw{injp} :=
     \langle
@@ -2675,10 +2574,10 @@ expresses the constraints we have outlined.%
 
 \subsection{The \kw{Allocation} pass} %{{{
 
-The \kw{Alloc} pass from \kw{RTL} to \kw{LTL}
-uses a memory extension,
-but in addition
-it is the first pass to modify the external interface of function calls.
+The \kw{Allocation} pass from \kw{RTL} to \kw{LTL}
+uses memory extension;
+in addition,
+it is the first pass to modify the interface of function calls.
 
 \kw{LTL} includes a notion of \emph{abstract locations},
 meant to represent the eventual stack slots and machine registers
@@ -2734,14 +2633,14 @@ on callee-save locations.
 
 \subsection{The \kw{Stacking} pass} %{{{
 
-The \kw{Stacking} pass constructs
-the stack frames used by the final program
-by mapping the abstract stack locations used by \kw{Linear}
+The \kw{Stacking} pass
+consolidates information stored in
+\kw{Linear} abstract stack locations
 into the in-memory stack frames of \kw{Mach}.
 The simulation uses a memory injection,
 and involves maintaining separation properties
 ensuring that the source memory and
-the various new regions of stack frames
+the various regions of stack frames
 are mapped to disjoint areas of the target memory.
 
 With regards to the memory state,
@@ -2755,42 +2654,28 @@ the invariance properties of \kw{injp}
 are largely sufficient for the purposes of the proof.
 
 The exception to the rule pertains to argument passing.
-\kw{Stacking} translates reads from argument locations
-by using \kw{Mach}'s special instruction \kw{getparam},
+Reads from argument locations are translated
+using \kw{Mach}'s special instruction \kw{getparam},
 which accesses the caller's stack frame.
-Therefore,
-the \kw{stacking} simulation convention
+The argument passing mechanism has been a source of challenges
+in previous work like Compositional CompCert and CompCertX,
+however it is very straightforward to address
+in our relational, typed framework.
+The \kw{stacking} simulation convention
 asserts that the values of argument locations
-are indeed store into corresponding stack slots
-within the target memory.
-
-In previous work,
-where the $\mathcal{C}$ interface is uniformly used
-to describe the semantics of all languages,
-this has been a source of considerable challenges.
-[EXPAND]
-
-By contrast,
-in our typed, relational model,
-the argument-passing mechanism used by \kw{Stacking}
-is entirely straightforward to express:
-the \kw{stacking} simulation convention simply
+are indeed stored into corresponding stack slots
+within the target memory,
+and additionally
 requires that the region of the target memory
 used to store arguments within the caller's stack
 must be disjoint from the injection image of the source memory.
 
-This prevents us from having to modify the \kw{Stacking} proof
-in similarly extensive ways.
-\kw{Stacking} is the pass for which
-we modify the proof most extensively
-(largely to maintain the incoming invariants).
-Yet,
-while Compositional CompCert
-more than doubles the size of the \kw{Stacking} proof,
-and CompCertX [CHECK],
-our changes only increase it by $\approx 15\%$.
-
-[Keep some of that for an evaluation / related work section?]
+This makes the \kw{Stacking} pass
+much easier to update than in existing work.
+The modest increase in the size of the proof
+comes from the necessity to strenghten
+some invariants the proof keeps track of
+in order to satisfy the incoming simulation convention.
 
 %}}}
 
