@@ -104,12 +104,12 @@ from CPU designs to network protocols.
 These achievements remain discrete efforts, but
 there has been increasing interest in rendering them interoperable,
 as exemplified by the DeepSpec project.
-The ability to connect correctness proofs of components
+Connecting correctness proofs of components
 verified at various levels of abstraction
 would enable the construction of extremely reliable heterogenous systems
 through end-to-end verification.
 
-We propose that a successful synthesis of existing research on
+A successful synthesis of existing research on
 game semantics,
 refinement-based methods, and
 abstraction layers
@@ -163,9 +163,9 @@ Such achievements remain discrete efforts, but
 there has been increasing interest in rendering them interoperable,
 as exemplified by the DeepSpec project \cite{deepspec}.
 By using formal specifications as interfaces
-between the correctness proofs of various components ---
-showing that the requirements of one component
-are met by the guarantees of another ---
+between the correctness proofs of various components, %---
+%showing that the requirements of one component
+%are met by the guarantees of another ---
 the researchers in DeepSpec hope to
 verify composite systems
 operating over a wide range of abstraction layers.
@@ -203,7 +203,7 @@ the certified C compiler CompCert \cite{compcert}.
 The semantics of the various intermediate languages
 used by CompCert are formalized as transition systems,
 and the correctness of each pass is established
-as a self-contained simulation between
+as a simulation between
 the source and target programs for that pass.
 As the various passes are composed into a complete compiler,
 their correctness proofs are composed as well.
@@ -218,10 +218,10 @@ using it as a component in larger verification projects \cite{popl15},
 and refining its correctness theorem
 to model real-world compiler use
 in increasingly realistic detail
-\cite{qompcert,sepcompcert,compcompcert,compcerttso,compcertshm}.
+\cite{qompcert,sepcompcert,compcompcert,compcerttso,compcertshm,compcertm}.
 With each step,
 the user can gain more confidence in the reliability of CompCert:
-existing work testing the correctness of existing compilers
+existing work %testing the correctness of existing compilers
 has found fewer bugs in CompCert,
 compared to unverified alternatives \cite{csmith},
 and efforts to make CompCert's correctness theorem more realistic
@@ -241,8 +241,16 @@ to model the behavior of individual compilation units
 have come at the cost of a significant increase
 in the complexity of the proof,
 preventing their adoption.
+A different line of work
+extended the CompCert correctness theorem
+to model program linking \cite{sepcompcert}
+and component interaction \cite{compcertm}
+using more lightweight techniques,
+however in both of these cases
+the correctness theorem is still expressed in terms of
+the semantics of the complete linked program.
 This limits the applicability of CompCert
-to the construction of certified systems,
+for the construction of certified systems,
 so that for instance in the work on CertiKOS \cite{popl15,osdi16,ccal},
 adaptations have been necessary
 to interface the compiler with the rest of the development.
@@ -258,10 +266,9 @@ On the other hand,
 the diversity of paradigms used for specification and verification
 makes it difficult
 to interface projects using different approaches.
-
 These competing concerns
-suggest the need to identify a common,
-flexible semantic framework
+suggest the need to identify % a common,
+flexible semantic frameworks
 into which existing models could be embedded
 for integration purposes.
 To enable building certified systems
@@ -270,52 +277,58 @@ this framework should be equipped with
 a rich composition infrastructure
 and high-level principles for
 reasoning about composite systems.
-We propose that
-a successful synthesis of existing research
+
+We are investigating
+a synthesis of existing research
 on game semantics,
 refinement-based verification,
-and certified abstraction layers
+and certified abstraction layers,
+which we believe
 could provide a general framework
 for the construction of large-scale certified systems.
 We call this approach \emph{refinement-based game semantics}.
+Given the central role of compilers
+in the construction of modern computer systems,
+CompCert is a critical component
+to integrate to any such candidate theory.
+However,
+we have found that existing approaches
+to the compositional correctness of CompCert
+are insufficient for our purposes.
+In this paper,
+we present out own solution to this challenge.
 
 %}}}
 
 \subsection{Contributions} %{{{
 
-In this paper,
-we combine these ingredients into a single theory
-and use it to construct a
-compositional semantics for CompCert.
-Our approach builds on previous attempts
-but does not require significant changes
-to CompCert's simulation relations and correctness proofs:
-our framework is sufficiently expressive to
-characterize them, and
-sufficiently powerful to enable compositionality
-by strengthening them
-using properties of the languages involved.
-
-%
-%In \S\ref{sec:mainideas},
-%we examine from a more formal perspective
-%the principles enabling the construction
-%of large-scale certified systems,
-%and describe our high-level vision of
-%refinement-based game semantics.
-%In \S\ref{sec:monad},
-%we construct a semantic framework, formalized in the Coq proof assistant,
-%which augments a simple game model
-%with abstraction and refinement.
-%We demonstrate its applicability in \S\ref{sec:modsem}
-%by using it to formulate a compositional module semantics
-%for CompCert.
-%In \S\ref{sec:compcert},
-%we show that a high-level
-%\emph{calling convention algebra}
-%can be used to make the correctness theorem of CompCert
-%fully compositional,
-%with only minimal changes to the existing correctness proofs.
+More concretely,
+\begin{itemize}
+\item
+  We extend the semantic model of CompCert
+  to describe interactions between compilation units
+  in a compositional framework (\S\ref{sec:sem}).
+  Components are typed by \emph{language interfaces},
+  which describe the form of these interactions.
+  In addition,
+  \emph{simulation conventions}
+  can be used to establish a correspondance between interactions
+  across abstraction levels.
+\item
+  We update the language semantics and
+  the correctness proof of most passes of CompCert
+  to use our new model (\S\ref{sec:passes}).
+  Our relational approach and
+  our explicit treatment of simulation conventions
+  allows us to avoid common pitfalls
+  encountered in previous work.
+  However,
+  the overall simulation convention obtained
+  when the compiler's passes are composed naively
+  is not sutable for a compositional compiler.
+\item
+  Simulation algebra (\S\ref{sec:simalg}, \S\ref{sec:cklr})
+\end{itemize}
 
 %}}}
 
@@ -348,12 +361,11 @@ large-scale certified systems.
 \subsubsection{Specifications and refinement} %{{{
 
 System design starts with a set of requirements
-that constrain the behavior of the system to be constructed
+on the behavior of the system to be constructed
 (the specification).
-These requirements may not capture every detail
-of the behavior of the eventual system,
-but delineate a range of acceptable behaviors
-from the point of view of its environment.
+These requirements do not capture every detail
+of the eventual system,
+but delineate a range of acceptable behaviors.
 
 In refinement-based approaches,
 programs and specifications are interpreted in the same
@@ -387,7 +399,7 @@ ${+} : P \times P \rightarrow P$,
 then the semantic domain should be equipped with
 a corresponding operation
 ${\oplus} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$
-such that:
+such that
 $\llbracket p_1 + p_2 \rrbracket =
  \llbracket p_1 \rrbracket \oplus \llbracket p_2 \rrbracket$.
 
@@ -424,7 +436,7 @@ $\sigma \sqsubseteq \sigma_1 \oplus \llbracket p_2 \rrbracket$:
 
 \subsubsection{Abstraction} %{{{
 
-Large-scale systems operate across many layers of abstraction.
+Large-scale systems operate across multiple layers of abstraction.
 Each abstraction layer defines its own understanding of the interaction
 between a component and its environment.
 To relate abstraction layers we need to give
@@ -437,8 +449,7 @@ ${\sqsubseteq_\mathbb{R}} \subset
 the abstract domain $\mathbb{D}^\sharp$ and
 the more concrete one $\mathbb{D}^\natural$, where 
 $\mathbb{R}$ specifies a correspondance between
-the two levels of abstraction
-(a \emph{simulation convention}, see \S\ref{sec:modesem:sim}).
+the two levels of abstraction.
 
 %In related work we show that for a sufficiently general
 %semantic domain, the simulation convention $\mathbb{R}$
@@ -1435,7 +1446,7 @@ concisely and legibly as:
 %}}}
 
 \newpage
-\section{Operational Semantics} \label{sec:compcert} %{{{
+\section{Operational Semantics} \label{sec:sem} %{{{
 
 This section describes how we modify
 the semantic infrastructure in CompCert
