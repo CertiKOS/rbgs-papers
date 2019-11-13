@@ -520,18 +520,18 @@ Typically,
 types are interpreted as two-player games,
 which correspond to the interaction
 between a program component of the given type
-(the player \kw{P}, for \emph{proponent})
+(the system)
 and its execution context
-(the player \kw{O}, for \emph{opponent}).
+(the environment).
 The behavior of a term or component
-is then modeled as a strategy for \kw{P} in this game,
-which specifies the next move of the component
+is then modeled as a strategy for the system,
+which specifies its the next move
 for all relevant positions in the game.
 
 Positions are usually identified with sequences of moves,
-and strategies can be identified with the set of positions
+and strategies with sets of positions
 that a component can reach.
-In this sense,
+Under this representation,
 game semantics is similar to
 the trace semantics of process algebras.
 However, game semantics is distinguished
@@ -551,201 +551,85 @@ that players can choose from,
 as well as a specification of which
 sequences of moves are considered valid.
 For chess,
-moves will be taken in the set $(\{a, \ldots, h\} \times \{1, \ldots, 8\})^2$,
+moves are taken in the set $(\{a, \ldots, h\} \times \{1, \ldots, 8\})^2$,
 and a valid sequence of moves may look like:
 \[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{d7d5} \cdots \]
-As a more relevant example,
-the game $\mathcal{C}$ is defined in \S\ref{sec:compcert:li}
-to model the semantics of C compilation units,
-It describes the behavior of a single function call,
-so that its plays are of the form:
-\[ f[sg](\vec{v})@m \cdot \underline{v'@m'} \]
-The environment indicates
-which function $f$ should be invoked
-using what signature $sg$,
-and specifies the values $\vec{v}$ of the arguments
+Perhaps more relevant,
+the game $\mathcal{C}$ defined in \S\ref{sec:sem:open}
+describes the behavior of a C function call.
+Its plays are of the form:
+\[ \mathit{vf}[\mathit{sg}](\vec{v})@m \cdot \underline{v'@m'} \]
+The environment gives the address $\mathit{vf}$
+of the function to invoke,
+the values $\vec{v}$ of its arguments
 as well as the state $m$ of the memory
 at the time of invocation.
 When the function returns,
-the system replies with a move $v'@m'$,
-transferring control back to the environment
-with the return value $v'$
-and the updated memory state $m'$.
+the system replies with
+a return value $v'$
+and an updated memory state $m'$.
 For simplicity,
-we will omit signatures and memory states
+we omit signatures and memory states
 from examples given in this section.
 
 We will focus on two-player, alternating games
 where the environment and the system each contribute every other move.
 The environment plays first.
 When typesetting examples,
-we underline the moves of the second player
-(the system).
+we underline the moves of the system.
 
-Most game semantics
-include additional structure
-in the description of games.
-The set of moves is usually partitioned
-into proponent and opponent moves ($M = M^\kw{O} \uplus M^\kw{P}$),
-and into questions and answers ($M = M^\kw{Q} \uplus M^\kw{A}$).
-Game models for high-order languages are often more complex.
-
-%}}}
-
-\subsubsection{Strategies} \label{sec:mainideas:gs:strat} %{{{
-
-Following trace semantics of process calculi,
-traditional work on game semantics
-represents strategies as
-the set of positions that the player may reach.
-Hence,
-a strategy is a prefix-closed set of finite sequences of moves.
-For example,
-the strategy $\sigma$ used by
-the black player in the chess play above
-contained the plays:
-\[
-  \sigma \: = \: \{
-    e2e4, \quad
-    e2e4 \cdot \underline{c7c5}, \quad
-    e2e4 \cdot \underline{c7c5} \cdot c2c3, \quad
-    \ldots
-  \}
-\]
-
-Strategies are usually subject to a number
-of well-formedness constraints beyond prefix closure.
-Commonly used contraints include the following \cite{gamesem99}:
-\begin{description}
-\item[Receptivity]
-  requires that all possible behaviors of the environment
-  be included in the strategy,
-  so that if $s \in \sigma$ is an even-length play and
-  $m$ is an environment move such that $sm$ is a valid play of the game,
-  then $sm \in \sigma$ as well.
-\item[Determinism]
-  prevents the strategy from allowing
-  more than one observable behavior of the system at any given point,
-  so that if $s \in \sigma$ is an odd-length play,
-  then any moves $m, n$ of the system
-  such that $sm \in \sigma$ and $sn \in \sigma$
-  must be equal ($m = n$).
-\item[Well-bracketing]
-  only allows the most recently asked question
-  to be answered at any given point.
-  That is,
-  the game proceeds according to a strict stack discipline.
-\item[Innocence]
-  requires that the behavior of a strategy
-  only depends on the most recent move
-  as well as the chain of moves enabling it.
-  This means the strategy is not allowed to maintain
-  unobservable private state across
-  successive but independent queries.
-\end{description}
-The game semantics of PCF
-imposed all of these constraints,
-and subsequent work was able to model additional language features
-by relaxing combinations of them.
-%Following \cite{gsnondet},
-%we will relax the determinism constraint in order
-%to model specifications permitting
-%a range of implementation behaviors.
-The family of games we consider,
-and the representation we use for strategies,
-are restrictive enough that
-the well-bracketing and innocence constraints
-will always be satisfied.
+%Most game semantics
+%include additional structure
+%in the description of games.
+%The set of moves is usually partitioned
+%into proponent and opponent moves ($M = M^\kw{O} \uplus M^\kw{P}$),
+%and into questions and answers ($M = M^\kw{Q} \uplus M^\kw{A}$).
+%Game models for high-order languages are often more complex.
 
 %}}}
 
-\subsubsection{Compositionality} \label{sec:mainideas:gs:comp} %{{{
+\subsubsection{Type Structure} \label{sec:mainideas:gs:types} %{{{
 
 While the game $\mathcal{C}$
-presented in \S\ref{sec:mainideas:gs:games}
 is extremely simple,
 the expressive power of game semantics
 comes from the way in which complex games can be derived from simple ones,
 and used to interpret compound types.
-In the following we recall common constructions
-and demonstrate their use
-in our semantic model for C compilation units.
 
-For a game $E$,
-the game $!E$ consists of multiple copies of $E$,
-instantiated at the discretion of the environment.
 For example,
-the following is a play for the game $!\mathcal{C}$:
+in the game $A \times B$ used to interpret product types,
+the environment gets to choose whether to play
+an instance of $A$ or an instance of $B$.
+The game $A \rightarrow B$ usually consists of
+an instance of $B$ played in the usual way,
+together with instances of $A$
+where the roles of the players are reversed,
+started at the discretion of the system,
+and which correspond to
+the multiple accesses to the argument values
+allowed by most $\lambda$-calculi.
+
+We will focus on simple games of the form $A \rightarrow B$,
+where $A$ and $B$ follow the same pattern as $\mathcal{C}$,
+in that they each consist of a single environment question
+$q \in M^\kw{Q}$
+followed by a single system answer
+$r \in M^\kw{A}$.
+In this setting,
+the valid positions of $A \rightarrow B$ are
+sequences of the form:
 \[
-    \kw{pow}(3,2) \cdot
-    \underline{9} \cdot
-    \kw{pi}() \cdot
-    \underline{3.1416} \cdot
-    \kw{pow}(5,0) \cdot
-    \underline{1}
+  q \cdot \underline{m_1} \cdot n_1 \cdots
+          \underline{m_k} \cdot n_k \cdot \underline{r} \in
+  M_B^\kw{Q} ( {M_A^\kw{Q}} M_A^\kw{A} )^* {M_B^\kw{A}}
 \]
-Because $\mathcal{C}$ has a very simple structure
-and our strategies are alternating,
-in this example the different copies of $\mathcal{C}$
-will always be played in succession.
-However,
-in richer models multiple copies may proceed
-concurrently
-and be played in an interleaved manner.
-
-Another common construction is the game $E \multimap F$
-in which $E$ and $F$ are played side-by-side.
-In the game $E$ the roles of the system and the environment
-are reversed.
-In our context,
-the game will always start
-with a move of $F$ played by the environment,
-but the system may subsequently initiate the game $E$.
-For instance, a strategy $\sigma$
-for the game $\mathcal{C} \multimap \mathcal{C}$
-may include plays of the form:
-\[
-    \sigma \: \ni \:
-    \kw{pow}(3,2) \cdot
-    \underline{\kw{mult}(3,3)} \cdot
-    r \cdot
-    \underline{r}
-\]
-Here,
-the component's function $\kw{pow}$
-is invoked (in the right-hand side game),
-but instead of immediately returning a result,
-the component performs an external call to $\kw{mult}$.
-After the environment replies with the result $r$,
-the component answers the invocation of $\kw{pow}$
-with the same value.
-
-Two strategies
-$\phi : A \multimap B$ and
-$\gamma : B \multimap C$ can be composed
-to yield a strategy $\gamma \circ \phi : A \multimap C$
-which behaves like $\gamma$,
-but uses $\phi$ to fulfill any request made by $\gamma$
-in the middle game $B$.
-Any request of $\phi$ will in turn appear as
-an external request of the composite strategy $\gamma \circ \phi$.
-To build on our example,
-if a component implements $\kw{mult}$
-with the strategy:
-\[ \rho := \{ \kw{mult}(n,p) \cdot \underline{r} \mid r = n p \} \,, \]
-then the composition of $\sigma$ and $\rho$ will include the play:
-\[ \sigma \circ \rho \ni \kw{pow}(3,2) \cdot \underline{9} \]
-
-The constructions presented above can be used together
-to express the structure of various kinds of interactions.
-The type $!A \multimap B$ is traditionally used
-to model the behavior of a $\lambda$-term of type $A \rightarrow B$,
-which can access its argument multiple times.
-In our context,
-the game $\mathcal{C} \rightarrow \mathcal{C}$
-represents the way a C compilation unit behaves in response to
-an activation,
-with the ability to perform any number of external calls.
+and all of their prefixes.
+This describes a component responding to
+the initial call $q$ by
+performing a series of external calls $m_1, \ldots, m_k$
+yielding the results $n_1, \ldots, n_k$,
+and finally returning from the top-level call
+with the result $r$.
 
 %}}}
 
@@ -1788,12 +1672,11 @@ alongside all control transfers.
 
 \paragraph{Language Interfaces} %{{{
 
-More specifically,
-our models of cross-module interactions in CompCert languages
+Our models of cross-module interactions in CompCert languages
 are shown in Table~\ref{tbl:li}.
 We call each one a \emph{language interface}.
-Questions correspond to function invocations,
-whereas answers return control to the caller.
+Questions correspond to function invocations
+and answers return control to the caller.
 Formally,
 a language interface is defined as follows.
 
