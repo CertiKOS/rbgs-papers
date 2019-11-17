@@ -2191,9 +2191,8 @@ injections as CompCert Kripke logical relations:
 The correspondance between $R^\kw{val}_\kw{inj}$ and
 the $\hookrightarrow$ relation for values is easily verified,
 as is the correspondance between
-$[b \mapsto (b, 0) \Vdash {\hookrightarrow}]$ and $\sqsubseteq$.
-For \kw{ext} and \kw{inj},
-the properties of Fig.~\ref{fig:cklr-def}
+$* \Vdash R^\kw{val}_\kw{ext}$ and $\sqsubseteq$.
+The properties of Fig.~\ref{fig:cklr-def}
 reduce to well-known properties of the memory model
 already proven in CompCert.
 See \texttt{cklr/Extends.v} and \texttt{cklr/Inject.v}
@@ -2203,81 +2202,45 @@ for details.
 
 %}}}
 
-\subsection{Simulation Conventions} %{{{
+\subsection{Parametricity} %{{{
 
-The simulation conventions \kw{ext}, \kw{inj} and \kw{injp}
-can be derived uniformly from corresponding CKLRs.
-Indeed, we can define:
+A CompCert Kripke logical relation $R = \langle W, {\leadsto}, f, R^\kw{mem} \rangle$
+can be promoted to a simulation convention
+$R_\mathcal{C} : \mathcal{C} \Leftrightarrow \mathcal{C}$
+as:
 \[
-  R_\kw{injp} :=
+  R_\mathcal{C} :=
     \langle
-      \kw{meminj} \times \kw{mem} \times \kw{mem},
-      \leadsto_\kw{injp}, \pi_1, R_\kw{injp}^\kw{mem}
-    \rangle \,.
-\]
-The relation $\leadsto_\kw{injp}$
-coincides with $\kw{P}$ from \S\ref{sec:pass:inj}:
-\[
-  \AxiomC{$\kw{P}(f, m_1, m_2, f', m_1', m_2')$}
-  \UnaryInfC{$(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$}
-  \DisplayProof
-\]
-The relation $R_\kw{injp}^\kw{mem}$ is defined by the rule:
-\[
-  \AxiomC{$m_1 \ifr{f \Vdash \kw{Mem.inject}} m_2$}
-  \UnaryInfC{$m_1 \ifr{(f, m_1, m_2) \Vdash R_\kw{injp}^\kw{mem}} m_2$}
-  \DisplayProof
-\]
-
-Moreover, any CKLR
-$R = \langle W, {\leadsto}, f, R^\kw{mem} \rangle$ can be promoted to
-a simulation convention
-$\mathcal{C}[R] : \mathcal{C} \Leftrightarrow \mathcal{C}$
-as follows:
-\[
-    \mathcal{C}[R] := \langle
       W, \:
-      ({=} \times {=} \times \vec{R}^\kw{val} \times R^\kw{mem}), \:
+      (R^\kw{val} \times {=} \times \vec{R}^\kw{val} \times R^\kw{mem}), \:
       \Diamond (R^\kw{val} \times R^\kw{mem})
-    \rangle \,.
+    \rangle \,,
 \]
-
-The following theorem
-establishes the correspondance between \kw{ext}, \kw{inj}, \kw{injp}
-and the simulation conventions derived from their CKLR counterparts.
-
-\begin{theorem}[Simulation conventions and CKLRs]
-\[
-    \mathcal{C}[R_\kw{ext}] \equiv \kw{ext} \qquad
-    \mathcal{C}[R_\kw{inj}] \equiv \kw{inj} \qquad
-    \mathcal{C}[R_\kw{injp}] \equiv \kw{injp}
-\]
-\begin{proof}
-See the Coq libraries \texttt{cklr/Extends.v}, \texttt{Inject.v}, \\
-\texttt{InjectFootprint.v} and \texttt{CKLRAlgebra.v}.
-\end{proof}
-\end{theorem}
+and similarly for other language interfaces.
+We will omit the subscript when it is clear from context
+that we need a simulation convention
+for a specific language interface.
 
 Furthermore,
 since the semantics of CompCert languages
 are built out of the operations of the memory model,
 they are well-behaved with respect to CKLRs and
-we can prove the following parametricity
-needed in the proof of Thm.~\ref{thm:lprops}.
+we can prove the following parametricity theorems.
 
-\begin{theorem}[Relational parametricity of $\kw{Clight}$ and $\kw{RTL}$]
+\begin{theorem}[Relational parametricity of $\kw{Clight}$ and $\kw{RTL}$] %{{{
+\label{thm:param}
 The following properties hold for all programs:
 \begin{gather*}
     \forall R \,.\,
-      \kw{Clight} \llbracket p \rrbracket
-        \le_{\mathcal{C}[R] \rightarrow \mathcal{C}[R]}
-      \kw{Clight} \llbracket p \rrbracket
+      \kw{Clight}(p)
+        \le_{R \rightarrow R}
+      \kw{Clight}(p)
       \label{eqn:clight}
       \\
     \forall R \,.\,
-      \kw{RTL} \llbracket p \rrbracket
-        \le_{\mathcal{C}[R] \rightarrow \mathcal{C}[R]}
-      \kw{RTL} \llbracket p \rrbracket
+      \kw{RTL}(p)
+        \le_{R \rightarrow R}
+      \kw{RTL}(p)
       \label{eqn:rtl}
 \end{gather*}
 \begin{proof}
@@ -2285,12 +2248,29 @@ See \texttt{*/*rel.v} in the Coq development,
 in particular \texttt{cklr/Clightrel.v} and \texttt{cklr/RTLrel.v}.
 \end{proof}
 \end{theorem}
+%}}}
 
 %}}}
 
 %}}}
 
 \section{Compiler passes} \label{sec:passes} %{{{
+
+The passes of CompCertO are summarized in Table~\ref{tbl:passes}.
+The incoming and outgoing simulation conventions
+are chosen based on the existing simulation relation
+used for each pass.
+%For passes whose source and target languages
+%use the same language interface,
+%this hinges in particular on the memory transformation
+%used by the proof.
+%and largely translates the existing requirements
+%CompCert places on the semantics of external functions.
+%For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
+%we construct more specific simulation conventions
+%which express the correspondance between
+%the higher-level and lower-level representations
+%of function calls and returns.
 
 \begin{table} % tbl:passes Passes of CompCertO %{{{
   \small
@@ -2350,22 +2330,6 @@ in particular \texttt{cklr/Clightrel.v} and \texttt{cklr/RTLrel.v}.
 \end{table}
 %}}}
 
-The passes of CompCertO are summarized in Table~\ref{tbl:passes}.
-The incoming and outgoing simulation conventions
-are chosen based on the existing simulation relation
-used for each pass.
-%For passes whose source and target languages
-%use the same language interface,
-%this hinges in particular on the memory transformation
-%used by the proof.
-%and largely translates the existing requirements
-%CompCert places on the semantics of external functions.
-%For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
-%we construct more specific simulation conventions
-%which express the correspondance between
-%the higher-level and lower-level representations
-%of function calls and returns.
-
 \subsection{Identity passes} \label{sec:pass:id} %{{{
 
 The passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
@@ -2380,92 +2344,27 @@ and require very few changes.
 
 \subsection{Extension passes} %{{{
 
-The relation can be generalized to the moves of $\mathcal{C}$
-to define the convention:
-\[
-    \kw{ext}_\mathcal{C} :=
-      \langle \{*\},
-        {\subseteq_\mathcal{C}^\kw{Q}},
-        {\subseteq_\mathcal{C}^\kw{Q}}
-      \rangle
-      : \mathcal{C} \Leftrightarrow \mathcal{C} \,,
-\]
-\[
-    \AxiomC{$\mathit{vf_1} \sqsubseteq \mathit{vf_2}$}
-    \AxiomC{$\vec{v}_1 \sqsubseteq \vec{v}_2$}
-    \AxiomC{$m_1 \subseteq m_2$}
-    \TrinaryInfC{$\mathit{vf_1}[\mathit{sg}](\vec{v}_1)@m_1
-      \subseteq_\mathcal{C}^\kw{Q}
-      \mathit{vf_2}[\mathit{sg}](\vec{v}_2)@m_2$}
-    \DisplayProof
-\]
-\[
-    \AxiomC{$v_1' \sqsubseteq v_2'$}
-    \AxiomC{$m_1' \subseteq m_2'$}
-    \BinaryInfC{$v_1'@m_1' \subseteq_\mathcal{C}^\kw{A} v_2'@m_2'$}
-    \DisplayProof
-\]
-
-The convention $\kw{ext}_{\!\mathcal{L}}$
-used by $\kw{Tunneling}$
-is defined in a similar way.
-The proofs of extension passes are not much more difficult to update
+Most of the remaining passes use memory extensions
+(\S\ref{sec:memext}).
+Their proofs are not much more difficult to update
 than those of identity passes.
+In particular,
+they do not feature complex invariants
+which must be preserved at call sites;
+it is enough for external calls to preserve
+the memory extension.
+As consequence,
+they can be assigned the type $\kw{ext} \rightarrow \kw{ext}$.
 
 %}}}
 
 \subsection{Injection passes} \label{sec:pass:inj} %{{{
 
 Passes which alter the block structure of the memory
-use \emph{memory injections}.
-As discussed in Example~\ref{ex:meminj},
-injection relations $\hookrightarrow$
-are parametrized by an \emph{injection mapping}
-of type
-$\kw{meminj} :=
-\kw{block} \rightharpoonup \kw{block} \times \mathbb{Z}$,
-which specifies a correspondance between
-source and target memory addresses.
-The relation on values
-allows refinement but also requires
-all pointers to be transformed
-according the the injection mapping.
-The relation on memory states
-requires that corresponding addresses
-hold related values.
-
-Extending injections to the questions and answers of $\mathcal{C}$,
-we obtain the following simulation convention:
-\[
-    \kw{inj} := \langle
-      \kw{meminj},
-      {\hookrightarrow},
-      {\hookrightarrow}
-    \rangle : \mathcal{C} \Leftrightarrow \mathcal{C}
-\]
-\[
-    \AxiomC{$f \Vdash \mathit{vf_1} \hookrightarrow \mathit{vf_2}$}
-    \AxiomC{$f \Vdash \vec{v}_1 \hookrightarrow \vec{v}_2$}
-    \AxiomC{$f \Vdash m_1 \hookrightarrow m_2$}
-    \TrinaryInfC{$f \Vdash
-      \mathit{vf_1}[\mathit{sg}](\vec{v}_1)@m_1
-      \hookrightarrow
-      \mathit{vf_2}[\mathit{sg}](\vec{v}_2)@m_2$}
-    \DisplayProof
-\]
-\[
-    \AxiomC{$f \subseteq f'$}
-    \AxiomC{$f' \Vdash v_1' \hookrightarrow v_2'$}
-    \AxiomC{$f' \Vdash m_1' \hookrightarrow m_2'$}
-    \TrinaryInfC{$f \Vdash v_1'@m_1' \hookrightarrow v_2'@m_2'$}
-    \DisplayProof
-\]
-Note that new memory blocks
-which have been allocated in both executions
-can be related by the extended injection $f'$.
-
+use \emph{memory injections} (\S\ref{sec:meminj}).
 The convention \kw{inj} can be used for incoming calls,
 but it is insufficient for outgoing calls.
+
 Consider the \kw{SimplLocals} pass,
 which removes local variables whose addresses are not taken
 from the memory.
@@ -2474,9 +2373,45 @@ as temporaries in the target function's local environment,
 and the correspondance between the two
 is enforced by the simulation relation.
 To maintain it,
-the \kw{SimplLocals} proof needs to know that
+we need to know that
 external calls do not modify
 the corresponding source memory blocks.
+
+More generally,
+as depicted in Fig.~\ref{fig:injp},
+injection passes expect external calls
+to leave regions outside of the injection's footprint untouched.
+This expectation is reasonable because
+external calls
+should behave uniformly between the source and target executions.
+%An external function acting on the memory state
+%should not forge block identifiers and pointers,
+%but can only follow pointers passed as arguments
+%or fetched from the memory itself
+%(as explained in \S\ref{sec:cklr},
+%this is a form of parametricity).
+These requirements can be formalized as the
+CompCert Kripke logical relation:
+\[
+  \kw{injp} :=
+    \langle
+      \kw{meminj} \times \kw{mem} \times \kw{mem}, \:
+      {\leadsto_\kw{injp}}, \:
+      \pi_1, \:
+      R^\kw{mem}_\kw{injp}
+    \rangle
+\]
+where $R^\kw{mem}_\kw{injp}$ is defined by the rule:
+\[
+  \AxiomC{$f \Vdash m_1 \hookrightarrow m_2$}
+  \UnaryInfC{$(f, m_1, m_2) \Vdash m_1 \mathrel{R^\kw{mem}_\kw{injp}} m_2$}
+  \DisplayProof
+\]
+and $(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$
+ensures that $f \subseteq f'$ and that the memory states
+satisfy the constraints we outlined.%
+\footnote{For details,
+  see \texttt{cc\_injp} in \texttt{common/LanguageInterface.v}.}
 
 \begin{figure} % fig:injp {{{
   \begin{tikzpicture}[scale=0.4,>=stealth]
@@ -2511,56 +2446,6 @@ the corresponding source memory blocks.
   \label{fig:injp}
 \end{figure}
 %}}}
-
-More generally,
-as depicted in Fig.~\ref{fig:injp},
-injection passes expect external calls
-to leave regions outside of the injection's footprint untouched.
-This expectation is reasonable because
-external calls
-should behave uniformly between the source and target executions.
-%An external function acting on the memory state
-%should not forge block identifiers and pointers,
-%but can only follow pointers passed as arguments
-%or fetched from the memory itself
-%(as explained in \S\ref{sec:cklr},
-%this is a form of parametricity).
-The corresponding simulation convention
-can be formalized as:
-\[
-  \kw{injp} :=
-    \langle
-      \kw{meminj} \times \kw{mem} \times \kw{mem}, \:
-      R_\kw{injp}^\kw{Q}, \:
-      R_\kw{injp}^\kw{A}
-    \rangle
-\]
-\[
-  \AxiomC{$f \Vdash \mathit{vf_1} \hookrightarrow \mathit{vf_2}$}
-  \AxiomC{$f \Vdash \vec{v}_1 \hookrightarrow \vec{v}_2$}
-  \AxiomC{$f \Vdash m_1 \hookrightarrow m_2$}
-  \TrinaryInfC{$(f, m_1, m_2) \Vdash
-    \mathit{vf_1}[\mathit{sg}](\vec{v}_1)@m_1
-    \mathrel{R_\kw{injp}^\kw{Q}}
-    \mathit{vf_2}[\mathit{sg}](\vec{v}_2)@m_2$}
-  \DisplayProof
-\]
-\[
-  \small
-  \AxiomC{$\kw{P}(f, m_1, m_2, f', m_1', m_2')$}
-  \AxiomC{$f' \Vdash v_1' \hookrightarrow v_2'$}
-  \AxiomC{$f' \Vdash m_1' \hookrightarrow m_2'$}
-  \TrinaryInfC{$(f, m_1, m_2) \Vdash
-    v_1'@m_1'
-    \mathrel{R_\kw{injp}^\kw{A}}
-    v_2'@m_2'$}
-  \DisplayProof
-\]
-where $\kw{P}(f, m_1, m_2, f', m_1', m_2')$
-ensures that $f \subseteq f'$ and that the memory states
-satisfy the constraints we have outlined.%
-\footnote{For details,
-  see \texttt{cc\_injp} in \texttt{common/LanguageInterface.v}.}
 
 %}}}
 
@@ -2602,6 +2487,7 @@ simulation convention, defined as follows:
       f[sg](ls)@m_2$}
   \DisplayProof
 \]
+\vspace{0.5ex}
 \[
   \AxiomC{$v' \sqsubseteq \kw{retval}(sg, ls')$}
   \AxiomC{$ls \equiv_\kw{CS} ls'$}
@@ -2991,7 +2877,7 @@ in \texttt{common/CallconvAlgebra.v}.
 
 %}}}
 
-\subsection{Language Properties} %{{{
+\subsection{Compiler Correctness} %{{{
 
 We have simplified both the incoming and outgoing conventions
 use by the whole-compiler simulation,
@@ -3014,10 +2900,7 @@ for all programs:
   \kw{RTL}(p)
 \end{gather*}
 \begin{proof}
-Use Thm~\ref{thm:simk},
-and our demonstration in \S\ref{sec:cklr} that
-\kw{Clight} and \kw{RTL} programs self-simulate under
-$\kw{ext}$, $\kw{inj}$ and $\kw{injp}$.
+Using Thm~\ref{thm:param} and \ref{thm:simk}.
 \end{proof}
 \end{theorem}
 %}}}
@@ -3028,13 +2911,13 @@ shown in Table~\ref{tbl:passes},
 we can finally establish the following correctness theorem.
 
 \begin{theorem}[Compositional Correctness of CompCertO] %{{{
-For a \kw{Clight} program $p^\sharp$
-and an \kw{Asm} program $p^\flat$ such that
-$\kw{CompCert}(p^\sharp) = p^\flat$,
+For a \kw{Clight} program $p$
+and an \kw{Asm} program $p'$ such that
+$\kw{CompCert}(p) = p'$,
 the following simulation holds:
 \[
-    \kw{Clight}(p^\sharp) \le_{\mathbb{C} \rightarrow \mathbb{C}}
-    \kw{Asm}(p^\flat) \,,
+    \kw{Clight}(p) \le_{\mathbb{C} \rightarrow \mathbb{C}}
+    \kw{Asm}(p') \,,
 \]
 where $\mathbb{C}$ is the simulation convention defined as:
 \[
@@ -3054,10 +2937,11 @@ the outgoing simulation convention of each of the
 passes \kw{SimplLocals}--\kw{Unusedglob}
 can be folded into $(\kw{ext} + \kw{injp})^*$
 to obtain the overall outgoing convention $\mathbb{C}$.
-Likewise, by Thm.~\ref{thm:extinj},
+Likewise, by Thm.~\ref{thm:extinj}
 their incoming simulation conventions
 can be folded into $\kw{inj}$
 to obtain the overall incoming convention $\mathbb{C}$.
+See also \texttt{driver/Compiler.v}.
 \end{proof}
 \end{theorem}
 %%}}}
