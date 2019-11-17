@@ -541,28 +541,27 @@ will be a relation $R$
 between their carrier sets,
 such that the corresponding operations of $S_1$ and $S_2$
 take related arguments to related results.
-We write $R : \mathcal{R}(S_1, S_2)$.
+We write $R \in \mathcal{R}(S_1, S_2)$.
 
 \begin{example}[Logical relation of monoids]
 \label{ex:monoid}
-A \emph{monoid} is a set $A$ equipped with
-an associative binary operation $\cdot$ and
-an identity element $\epsilon$.
-A \emph{logical relation of monoids} between
+A \emph{monoid} is a set with
+an associative operation and
+an identity element.
+A~\emph{logical relation of monoids} between
 a monoid $\langle A, \cdot_A, \epsilon_A \rangle$ and
 a monoid $\langle B, \cdot_B, \epsilon_B \rangle$
 is a relation $R \subseteq A \times B$
 such that:
 \[
-(u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B
-v')
+(u \ifr{R} u' \wedge v \ifr{R} v' \Rightarrow u \cdot_A v \ifr{R} u' \cdot_B v')
 \: \wedge \:
 \epsilon_A \ifr{R} \epsilon_B \,.
 \]
 \end{example}
 
 Logical relations between multisorted structures
-will include one relation for each sort,
+consist of one relation for each sort,
 between the corresponding carrier sets.
 In the case of structures which include type operators,
 we can associate to each base type $A$
@@ -626,11 +625,10 @@ will be guaranteed to be related in compatible ways.
 We use the following notation.
 
 \begin{definition} \label{def:klr} %{{{
-For a set $W$,
-a \emph{Kripke relation} is
+A \emph{Kripke} relation is
 a family of relations $(R_w)_{w \in W}$.
-We write $R : \mathcal{R}_W(S_1, S_2)$
-for a Kripke relation between structures $S_1$ and $S_2$.
+We write $R \in \mathcal{R}_W(S_1, S_2)$
+for a Kripke logical relation between structures $S_1$ and $S_2$.
 For $w \in W$ we write:
 \begin{align*}
     w &\Vdash x \mathrel{R} y \Leftrightarrow
@@ -642,6 +640,22 @@ For $w \in W$ we write:
 \end{align*}
 \end{definition}
 %}}}
+
+A logical relation $R \in \mathcal{R}(A, B)$
+can be promoted to a $W$-indexed Kripke logical relation $\lceil R \rceil$
+which ignores the index, so that $\lceil R \rceil_w := R$ for all $w \in W$.
+Likewise,
+a relator
+  $F : \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n) \rightarrow \mathcal{R}(A, B)$
+can be promoted to its Kripke version
+by pointwise extension over worlds:
+\begin{gather*}
+  \lceil F \rceil : \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n) \rightarrow \mathcal{R}_W(A, B) \\
+  \lceil F \rceil (R_1, \ldots, R_n)_w = F(R_{1,w}, \ldots, R_{n,w})
+\end{gather*}
+We will use $\lceil - \rceil$ implicitly
+when a relator appears in a context where
+a Kripke logical relation is expected.
 
 %}}}
 
@@ -873,7 +887,7 @@ $\mathbf{1} \twoheadrightarrow \mathcal{W}$.
 
 The correctness of CompCert is established as
 a simulation between the source and target programs.
-Since they use different language interfaces,
+Since they now use different language interfaces,
 we introduce a notion of \emph{simulation convention},
 which generalizes the usual concept of calling convention
 in expressing the correspondance between
@@ -1889,77 +1903,105 @@ which so far I have left out of the semantic model.
 
 %}}}
 
-\section{CompCert Kripke Logical Relations} \label{sec:cklr} %{{{
+\section{Logical Relations for CompCert} \label{sec:cklr} %{{{
 
-% new stuff {{{
+Language interfaces reveal the information
+associated with function calls and returns
+at different levels of abstraction.
+Simulation conventions will
+reveal corresponding aspects of the simulation relations
+used in CompCert's proofs.
 
-\begin{example}[CompCert memory injections] \label{ex:meminj} %{{{
-The memory model of CompCert divides the memory into blocks,
-whose contents are addressed by an integer
-(see \S\ref{sec:sem:mm}).
-Between the states of the source and target programs,
-a block may be dropped, added, or
+The states of CompCert languages all contain
+a memory state and surrounding runtime values.
+Likewise, simulation relations
+are constructed around \emph{memory transformations}
+and relate the surrounding components in ways that,
+in addition to reflecting any structural changes
+between to source and target language interfaces,
+are compatible with the chosen memory transformation.
+
+\subsection{Memory extensions} \label{sec:memext} %{{{
+
+For passes where strict equality is too restrictive,
+but the source and target programs
+use similar memory layouts,
+CompCert uses the \emph{memory extension} relation,
+which allows the values
+stored in the target memory state to refine
+the values stored in the source memory at the same location.
+%the target memory state can also
+%provide more permissions than the source memory,
+%and in particular blocks may be allocated with
+%a broader range of addresses in the target memory
+%than in the source memory.
+
+We write $m_1 \sqsubseteq m_2$ to signify that
+the source memory $m_1$ is extended by
+the target memory $m_2$,
+by analogy with
+the value refinement relation $v_1 \sqsubseteq v_2$
+introduced in $\S\ref{sec:sem:mm}$.
+Together,
+they
+constitute a logical relation for the memory model,
+in the sense that
+loads from memory states related by extension
+yield values related by refinement,
+writing values related by refinement
+preserves memory extension,
+and similarly for the remaining memory operations.
+
+%}}}
+
+\subsection{Memory injections} \label{sec:meminj} %{{{
+
+The most complex simulation relations of CompCert
+allow memory blocks to be dropped, added, or
 mapped at a given offset within a larger block.
 These transformations of the memory structure
 are specified by partial functions of type:
 \[
   \kw{meminj} := \kw{block} \rightharpoonup \kw{block} \times \mathbb{Z} \,,
 \]
-The simulation relations of CompCert,
-and the component relations that they are built from,
-are often parametrized by such a partial function $f : \kw{meminj}$,
-which we call an \emph{injection mapping}.
+We will call $f \in \kw{meminj}$
+an \emph{injection mapping}.
 An entry $f(b) = (b', o)$
 means that the source memory block with identifier $b$
-is mapped into the target memory block with identifier $b'$
+is mapped into the target block $b'$
 at offset $o$.
 
-For example,
-CompCert represents pointers as pairs $(b, o)$, where
-$b : \kw{block}$ designates a memory block, and
-$o : \mathbb{Z}$ specifies an offset within the block.
-The correspondance between source and target pointers
-depends on the injection mapping being used.
-To make sure pointers are related consistently
-with each other and with the memory states,
-in \S\ref{sec:compcert:mm}
-we model this correspondance as a $\kw{meminj}$-indexed
-Kripke logical relation $(R^\kw{ptr}_f)_{f : \kw{meminj}}$
-defined by:
-\[
-    (b_1, o_1) \ifr{f \Vdash R^\kw{ptr}} (b_2, o_2) \:\Leftrightarrow\:
-    f(b_1) = (b_2, o_2 - o_1) \,.
-\]
-\end{example}
+As with refinement and extension,
+an injection mapping determines both
+a relation on values and
+a relation on memory states,
+which work together
+as a logical relation for the CompCert memory model.
+The relation $f \Vdash v_1 \hookrightarrow v_2$
+allows $v_2$ to refine $v_1$,
+but also requires any pointer present in $v_1$ 
+to be transformed according to $f$.
+The relation $f \Vdash m_1 \hookrightarrow m_2$
+requires that the corresponding addresses of $m_1$ and $m_2$
+hold values that are related by $f \Vdash {\hookrightarrow}$.
+The injection mapping $f$ plays the role of a Kripke world,
+ensuring that the memory states and surrounding values
+are related consistently.
+
+Note that corresponding memory allocations
+in the source and target states cause $f$ to
+evolve into a more defined injection mapping $f \subseteq f'$
+relating the two newly allocated blocks.
+To handle this,
+we introduce the following constructions.
+
 %}}}
 
-\paragraph{Kripke relators}
+\subsection{Modal Kripke relators} %{{{
 
-A logical relation $R : \mathcal{R}(A, B)$
-can be promoted to a $W$-indexed Kripke logical relation $\lceil R \rceil$
-which ignores the index, so that $\lceil R \rceil_w = R$ for all $w \in W$.
-Likewise,
-a relator
-  $F : \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n) \rightarrow \mathcal{R}(A, B)$
-can be promoted to its Kripke version
-by pointwise extension over the set of possible worlds:
-\begin{gather*}
-  \lceil F \rceil : \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n) \rightarrow \mathcal{R}_W(A, B) \\
-  \lceil F \rceil (R_1, \ldots, R_n)_w = F(R_{1,w}, \ldots, R_{n,w})
-\end{gather*}
-We use $\lceil - \rceil$ implicitly
-when a relator appears in a context where
-a Kripke logical relation is expected.
-
-\paragraph{Modalities}
-
-Kripke logical relations
-can be used to ensure that the components of complex states
-are related consistently (at the same world).
-By adding structure to the set of worlds,
-we will be able to go one step further and
-specify how these worlds can evolve,
-for instance across time.
+By adding structure to sets of Kripke worlds,
+we will be able to
+specify how these worlds can evolve.
 
 \begin{definition} %{{{
 A \emph{Kripke frame} is a tuple
@@ -1981,22 +2023,14 @@ we define the Kripke relators $\Diamond$, $\Box$ as:
 \end{definition}
 %}}}
 
-Building on Example~\ref{ex:meminj},
-we continue to examine the ways in which
-some aspects of CompCert can be understood
-in terms of Kripke logical relations.
-
-\begin{example}[CompCert simulation diagrams] \label{ex:sim} %{{{
-Many simulation diagrams in CompCert
-involve a memory injection.
-We can make them more transparent by
-expressing them in the framework of Kripke logical relations.
-A simulation relation will be a Kripke logical relation
-$R \in \mathcal{R}_\kw{meminj}(A, B)$,
-which will relate two transition systems
+\begin{example}[Injection simulation diagrams] \label{ex:sim} %{{{
+Consider the simple transition systems
 $\alpha : A \rightarrow \mathcal{P}(A)$ and
-$\beta : B \rightarrow \mathcal{P}(B)$
-according to the diagram:
+$\beta : B \rightarrow \mathcal{P}(B)$.
+An injection-based simulation relation between them
+will be a Kripke relation
+$R \in \mathcal{R}_\kw{meminj}(A, B)$
+satisfying the property:
 \[
   \begin{tikzcd}
     s_1 \arrow[r, "\alpha"]
@@ -2020,10 +2054,10 @@ More precisely, this diagram represents the condition:
     \end{array}
 \end{equation}
 Here, the new states may be related according to
-a new memory injection $f'$,
+a new injection mapping $f'$,
 but in order to preserve existing relationships
-between source and target pointers,
-the new memory injection should include
+between any surrounding source and target pointers,
+the new mapping should include
 the original one ($f \subseteq f'$).
 
 This pattern is very common in CompCert
@@ -2036,45 +2070,41 @@ For instance,
 using the relator $\mathcal{P}^\le$ defined in
 Fig.~\ref{fig:relators},
 the condition (\ref{eqn:hairy-sim}) above can be expressed
-concisely and legibly as:
+as:
 \[
   \alpha \ifr{\Vdash R \rightarrow \mathcal{P}^\le(\Diamond R)} \beta \,.
 \]
 \end{example}
 %}}}
 
-
-
 %}}}
 
-Extensions and injections
-are compatible with memory operations
-in the sense that
-performing similar operations on related arguments
-yields related results;
-they are logical relations for the CompCert memory model.
-We formalize this idea as follows.
+\subsection{CompCert Kripke Logical Relations} %{{{
+
+We can now formalize the idea that
+extensions and injections
+constitute logical relations for the CompCert memory model.
 
 \begin{definition}[CompCert Kripke Logical Relation] \label{def:cklr} %{{{
 For a tuple $R = (W, \leadsto, f, R^\kw{mem})$,
 where
 $\langle W, \leadsto \rangle$ is a Kripke frame,
 $f : W \rightarrow \kw{meminj}$
-associates an injection mapping to each world, and
-$R^\kw{mem} : \mathcal{R}_{W}(\kw{mem})$
+associates an injection mapping to each world, and where
+$R^\kw{mem} \in \mathcal{R}_{W}(\kw{mem})$
 is a Kripke relation on memory states,
 the Kripke relations
-$R^\kw{ptr} : \mathcal{R}_W(\kw{ptr})$ and
-$R^\kw{ptrrange} : \mathcal{R}_W(\kw{ptrrange})$
+$R^\kw{ptr} \in \mathcal{R}_W(\kw{ptr})$ and
+$R^\kw{ptrrange} \in \mathcal{R}_W(\kw{ptrrange})$
 are defined by the rules:
 \begin{gather*}
   \AxiomC{$f_w(b) = (b', \delta)$}
-  \UnaryInfC{$(b, o) \ifr{w \Vdash R^\kw{ptr}} (b', o + \delta)$}
+  \UnaryInfC{$w \Vdash (b, o) \mathrel{R^\kw{ptr}} (b', o + \delta)$}
   \DisplayProof
   \\[1ex]
-  \AxiomC{$(b_1, l_1) \ifr{w \Vdash R^\kw{ptr}} (b_2, l_2)$}
+  \AxiomC{$w \Vdash (b_1, l_1) \mathrel{R^\kw{ptr}} (b_2, l_2)$}
   \AxiomC{$h_1 - l_1 = h_2 - l_2$}
-  \BinaryInfC{$(b_1, l_1, h_1) \ifr{w \Vdash R^\kw{ptrrange}} (b_2, l_2, h_2)$}
+  \BinaryInfC{$w \Vdash (b_1, l_1, h_1) \mathrel{R^\kw{ptrrange}} (b_2, l_2, h_2)$}
   \DisplayProof
 \end{gather*}
 and the Kripke relation
@@ -2082,9 +2112,9 @@ $R^\kw{val} : \mathcal{R}_W(\kw{val})$
 is defined by the rules:
 \begin{gather*}
   \forall \, v : \kw{val} \,.\,
-    \kw{Vundef} \ifr{\Vdash R^\kw{val}} v \qquad
-  \kw{Vptr} : {\Vdash R^\kw{ptr} \rightarrow R^\kw{val}} \\
-  \kw{Vint}, \kw{Vlong}, \kw{Vfloat}, \kw{Vsingle} :
+    \Vdash \kw{undef} \mathrel{R^\kw{val}} v \qquad
+  \kw{ptr} : {\Vdash R^\kw{ptr} \rightarrow R^\kw{val}} \\
+  \kw{int}, \kw{long}, \kw{float}, \kw{single} :
     {\Vdash {=} \rightarrow R^\kw{val}} \,.
 \end{gather*}
 We say that $R$ is a \emph{CompCert Kripke logical relation}
@@ -2098,23 +2128,23 @@ if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
     w \leadsto w' \Rightarrow f(w) \subseteq f(w')
   \end{gather*}
   \begin{align*}
-      \kw{Mem.alloc} :
+      \kw{alloc} :
         &\Vdash R^\kw{mem} \rightarrow {=} \rightarrow {=} \rightarrow
         \Diamond (R^\kw{mem} \times R^\kw{block})
       \\
-      \kw{Mem.free} :
+      \kw{free} :
         &\Vdash R^\kw{mem} \rightarrow R^\kw{ptrrange} \rightarrow
         \kw{option}^\le(\Diamond R^\kw{mem})
       \\
-      \kw{Mem.load} :
+      \kw{load} :
         &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow
         \kw{option}^\le(R^\kw{val})
       \\
-      \kw{Mem.store} :
+      \kw{store} :
         &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow R^\kw{val} \rightarrow
         \kw{option}^\le(\Diamond R^\kw{mem})
       \\
-      \kw{Mem.perm} :
+      \kw{perm} :
         &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow {\subseteq}
   \end{align*}
   \caption{Axioms for CKLRs}
@@ -2122,31 +2152,23 @@ if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
 \end{figure}
 %}}}
 
-[HERE: say more about the CKLR axioms,
-esp. remind about the modal relators]
-
-The $R^\kw{mem}$ component is given direcly.
-We expect $R^\kw{ptr}$ to be functional
-(each source pointer has at most one corresponding target pointer),
-and to satisfy the following shift-invariance property:
+We expect $R^\kw{ptr}$ to map
+each source pointer to at most one target pointer,
+and to satisfy the shift-invariance property:
 \[
-  \AxiomC{$(b_1, o_1) \ifr{R^\kw{ptr}_w} (b_2, o_2)$}
-  \UnaryInfC{$(b_1, o_1 + \delta) \ifr{R^\kw{ptr}_w} (b_2, o_2 + \delta)$}
+  \AxiomC{$w \Vdash (b_1, o_1) \mathrel{R^\kw{ptr}} (b_2, o_2)$}
+  \UnaryInfC{$w \Vdash (b_1, o_1 + \delta) \mathrel{R^\kw{ptr}} (b_2, o_2 + \delta)$}
   \DisplayProof
 \]
 Any such relation can be uniquely specified by
-an injection mapping such as $f$.
-We expect the remaining components to be consistent with $R^\kw{ptr}$
-and $\kw{Vundef}$ to act as a bottom element for $R^\kw{val}$.
-Definition~\ref{def:cklr} follows from these conditions.
-
-Note that $w \Vdash R^\kw{val}$
-is equivalent to $f_w \Vdash {\hookrightarrow}$.
-Furthermore, the relational property associated to $f$,
-together with the definitions of
-derived relations such as $R^\kw{ptr}$ and $R^\kw{val}$,
-ensure that these relations are monotonic in $w$.
-This is not necessary for $R^\kw{mem}$,
+the injection mapping $f$.
+The relation $R^\kw{mem}$ is given.
+We expect the other relations to be consistent with $R^\kw{ptr}$
+and $\kw{undef}$ to act as a least element for $R^\kw{val}$,
+which determines them completely.
+Furthermore, owing to the relational property associated with $f$,
+the derived relations are monotonic in $w$.
+This may not be the case for $R^\kw{mem}$,
 which is the central component driving world transitions,
 as witnessed by the uses of $\Diamond$ in Fig.~\ref{fig:cklr-def}.
 But this means that any surrounding state
@@ -2154,24 +2176,45 @@ constructed from pointers and runtime values
 will be able to ``follow along'' when
 world transitions do occur.
 
+\begin{theorem}
+The following definitions capture extensions and
+injections as CompCert Kripke logical relations:
+\begin{align*}
+  \kw{ext} &:=
+    \langle \{*\}, \: \{(*,*)\}, \: * \mapsto b \mapsto (b, 0), \:
+    {\sqsubseteq} \rangle
+  \\
+  \kw{inj} &:=
+    \langle \kw{meminj}, {\subseteq}, f \mapsto f, {\hookrightarrow} \rangle
+\end{align*}
+\begin{proof}
+The correspondance between $R^\kw{val}_\kw{inj}$ and
+the $\hookrightarrow$ relation for values is easily verified,
+as is the correspondance between
+$[b \mapsto (b, 0) \Vdash {\hookrightarrow}]$ and $\sqsubseteq$.
+For \kw{ext} and \kw{inj},
+the properties of Fig.~\ref{fig:cklr-def}
+reduce to well-known properties of the memory model
+already proven in CompCert.
+See \texttt{cklr/Extends.v} and \texttt{cklr/Inject.v}
+for details.
+\end{proof}
+\end{theorem}
+
+%}}}
+
 \subsection{Simulation Conventions} %{{{
 
 The simulation conventions \kw{ext}, \kw{inj} and \kw{injp}
 can be derived uniformly from corresponding CKLRs.
 Indeed, we can define:
-\begin{align*}
-  R_\kw{ext} &:=
-    \langle \{*\}, \{(*,*)\}, * \mapsto (b \mapsto b), {\subseteq} \rangle
-  \\
-  R_\kw{inj} &:=
-    \langle \kw{meminj}, {\subseteq}, f \mapsto f, {\hookrightarrow} \rangle
-  \\
-  R_\kw{injp} &:=
+\[
+  R_\kw{injp} :=
     \langle
       \kw{meminj} \times \kw{mem} \times \kw{mem},
       \leadsto_\kw{injp}, \pi_1, R_\kw{injp}^\kw{mem}
     \rangle \,.
-\end{align*}
+\]
 The relation $\leadsto_\kw{injp}$
 coincides with $\kw{P}$ from \S\ref{sec:pass:inj}:
 \[
@@ -2337,20 +2380,6 @@ and require very few changes.
 
 \subsection{Extension passes} %{{{
 
-For passes where strict equality is too restrictive,
-but the source and target programs
-use identical memory layouts,
-CompCert uses the \emph{memory extension} relation,
-which allows the values
-stored in the target memory state to refine
-the values stored in the source memory at the same location.
-%the target memory state can also
-%provide more permissions than the source memory,
-%and in particular blocks may be allocated with
-%a broader range of addresses in the target memory
-%than in the source memory.
-
-We write $\subseteq$ for memory extension.
 The relation can be generalized to the moves of $\mathcal{C}$
 to define the convention:
 \[
