@@ -22,6 +22,7 @@
 % Parameters {{{
 
 \hyphenation{Comp-Cert}
+\hyphenation{Comp-CertO}
 
 % }}}
 
@@ -336,7 +337,7 @@ More concretely,
 
 \section{Main Ideas} \label{sec:mainideas} %{{{
 
-\subsection{Principles for system construction} %{{{
+\subsection{Principles for system construction} \label{sec:principles} %{{{
 
 % preamble {{{
 
@@ -659,7 +660,7 @@ a Kripke logical relation is expected.
 
 %}}}
 
-\subsection{Game semantics} %{{{
+\subsection{Game semantics} \label{sec:gamesem} %{{{
 
 % preamble {{{
 
@@ -2080,7 +2081,7 @@ as:
 
 %}}}
 
-\subsection{CompCert Kripke Logical Relations} %{{{
+\subsection{CompCert Kripke Logical Relations} \label{sec:cklrdef} %{{{
 
 We can now formalize the idea that
 extensions and injections
@@ -2203,7 +2204,7 @@ for details.
 
 %}}}
 
-\subsection{Parametricity} %{{{
+\subsection{Parametricity} \label{sec:param} %{{{
 
 A CompCert Kripke logical relation $R = \langle W, {\leadsto}, f, R^\kw{mem} \rangle$
 can be promoted to a simulation convention
@@ -2911,7 +2912,7 @@ at strategic points in the overall composition of passes
 shown in Table~\ref{tbl:passes},
 we can finally establish the following correctness theorem.
 
-\begin{theorem}[Compositional Correctness of CompCertO] %{{{
+\begin{theorem}[Compositional Correctness of CompCertO] \label{thm:compc} %{{{
 For a \kw{Clight} program $p$
 and an \kw{Asm} program $p'$ such that
 $\kw{CompCert}(p) = p'$,
@@ -2949,9 +2950,137 @@ See also \texttt{driver/Compiler.v}.
 
 %}}}
 
+This concludes our exposition of the results obtained in CompCertO,
+our adaptation of CompCert following the principles laid out
+in \S\ref{sec:principles}.
+
 %}}}
 
-\section{Related and Future Work} %{{{
+\section{Evaluation} %{{{
+
+We evaluate our results along two dimensions:
+first,
+we describe how they can be used to carry out
+compositional compilation and verification;
+then,
+we discuss the complexity of our development
+and compare it with similar approaches.
+
+\subsection{Compositional compilation and verification} %{{{
+
+Referring back to Fig.~\ref{fig:process},
+consider the modules
+$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
+compiled and linked to
+$\mathtt{M1.s} \oplus \ldots \oplus \mathtt{Mn.s} = \mathtt{M.s}$,
+we can use
+Thms.~\ref{thm:asmlinking},
+\ref{thm:simlinking} and
+\ref{thm:compc}
+to establish the following separate compilation property:
+\begin{equation}
+  \label{eqn:sepcomp}
+  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
+  \sqsubseteq_\mathbb{C}
+  \kw{Asm}(\mathtt{M.s}) \,.
+\end{equation}
+That is,
+the linked \kw{Asm} program
+$\mathtt{M.s}$
+faithfully implements
+the horizontal composition of the source modules' behaviors,
+following the simulation convention $\mathbb{C}$.
+
+Additionally,
+suppose we wish to verify that the overall program
+satisfies a specification $\Sigma$,
+also expressed as a transition system
+for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
+We must first show that $\Sigma$ can be decomposed
+along the lines of the program's components:
+\[
+    \Sigma \: \sqsubseteq_\kw{id} \:
+    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
+\]
+Then for each module, we prove that
+$\Sigma_i \sqsubseteq_\kw{id} \kw{Clight}(\mathtt{Mi.c})$.
+This can be combined with Thm.~\ref{thm:simlinking} and Eqn.~\ref{eqn:sepcomp}
+to establish:
+\[
+    \Sigma \sqsubseteq_\mathbb{C} \kw{Asm}(\mathtt{M.s}) \,.
+\]
+
+Note that Eqn.~\ref{eqn:sepcomp} can be established
+as long as the property
+$\kw{Clight}(\mathtt{Mi.c}) \sqsubseteq_\mathbb{C}
+ \kw{Asm}(\mathtt{Mi.s})$
+holds independently for each module.
+It is possible for the different $\mathtt{Mi.s}$
+to be obtained by different compilers,
+as long as each one satisfies a correctness property
+following the simulation convention in Thm.~\ref{thm:compc}.
+Indeed this is the case of the versions of CompCertO
+obtained by enabling different optimization passes.
+
+Going one step further,
+as presented our framework supports linking
+with assembly modules in the following, limited sense.
+If some of the components $\mathtt{Mi.s}$
+are a hand-written and
+satisfy C-style specifications $\Sigma_i$,
+then we can prove on a case-by-case basis that
+$\Sigma_i \sqsubseteq_\mathbb{C} \kw{Asm}(\mathtt{Mi.s})$
+and proceed with the rest of the proof as before.
+In the case of assembly modules
+whose behavior cannot be described
+by the $\mathcal{C}$ language interface,
+it may still be possible to exploit the compiler's
+correctness theorem
+to characterize the behavior of the components
+compiled from C
+in an ad-hoc proof about the behavior of the linked
+assembly program.
+However, the framework we have presented
+does not provide a systematic way
+to represent or manipulate
+such a configuration.
+
+%}}}
+
+\subsection{Proof effort} %{{{
+
+\begin{table} % tbl:slocs {{{
+  \begin{tabular}{lr@{\:}r}
+    \hline
+    Component & SLOC & \\ %\multicolumn{2}{r}{SLOC} \\
+    \hline
+    Semantic framework (\S\ref{sec:sem}) & $+1079$ & ($20\%$) \\
+    Correctness proofs (\S\ref{sec:passes}) & $\approx$+600 & (5\%) \\
+    CKLR theory and instances (\S\ref{sec:cklrdef}) & $1{,}807$ & \\
+    \kw{Clight} and \kw{RTL} parametricity (\S\ref{sec:param}) & $2{,}702$ & \\
+    Simulation convention algebra (\S\ref{sec:simalg}) & $998$ & \\
+    \hline
+  \end{tabular}
+  \caption{Significant lines of code added in CompCertO}
+  \label{tbl:slocs}
+\end{table}
+%}}}
+
+To give a sense of the overall complexity of CompCertO,
+we list in Table~\ref{tbl:slocs}
+the increase in significant lines of code it introduces
+compared to CompCert v$3.5$.
+As discussed in \S\ref{sec:passes},
+our methodology comes with a very modest increase
+in the complexity of most passes.
+
+[Comment more and compare with others]
+
+%}}}
+
+%}}}
+
+\section{Related Work} \label{sec:rw} %{{{
 
 \subsection{CompCert extensions} %{{{
 
