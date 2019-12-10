@@ -690,18 +690,9 @@ can still form a lattice
 
 \section{Interaction monad} \label{sec:intmonad} %{{{
 
-In the following,
-we present a game semantics equipped with a notion of refinement,
-and which features both angelic and demonic nondeterminism.
-This framework is based on an \emph{interaction monad} $\mathcal{I}_E$
-modelling computations which can interact with their environment
-according to the elementary game $E$.
-We use this monad to build our strategy model for the
-arrow games $E \rightarrow F$,
-and show how to interpret the operational semantics
-and simulation conventions defined in \S\ref{sec:compcert}.
-We conclude by defining a notion of \emph{semantic linking}
-similar to the one used in Compositional CompCert.
+[XXX: rename to ``free specification monad'' or the like?
+We could talk of a \emph{specification monad} for
+a $\mathbf{Poset}$ monad which is also a distributive completion.]
 
 \subsection{Effect signatures} %{{{
 
@@ -716,7 +707,7 @@ together with a mapping $\kw{ar}$,
 which assigns to each $e \in E$ a set $\kw{ar}(e)$
 called the \emph{arity} of $e$.
 We will use the notation
-$E = \{ e_1 : \kw{ar}(e_1), e_2 : \kw{ar}(e_2), \ldots \}$
+$E = \{ e_1 : \kw{ar}(e_1), \: e_2 : \kw{ar}(e_2), \: \ldots \}$
 to describe effect signatures.
 \end{definition}
 
@@ -726,7 +717,7 @@ to subcomputations given for each $r \in \kw{ar}(e)$.
 In simple cases,
 the computation $e(x_r)_{r \in \kw{ar}(e)}$
 first triggers an effect $e$;
-the context then chooses $k$
+then the context chooses $r$
 and resumes the computation as $x_r$.
 For example,
 the following effect signature
@@ -791,6 +782,7 @@ but it is only a monoidal tensor in $\gcat$
 (where subsequent questions in the different $B_i$'s
 may interact with each other).
 
+\begin{color}{gray}
 We will interpret an effect signature $E$
 as a very simple game,
 consisting of
@@ -804,36 +796,39 @@ this corresponds to the arena specified by:
 \]
 The connection with
 effect algebras will become clear in \S\ref{sec:intmonad}.
+\end{color}
 
 %}}}
 
 \subsection{Definition} \label{sec:monad:def} %{{{
 
-First,
-we define the monad $\mathcal{I}_E(A)$
+We define the monad $\mathcal{I}_E(A)$
+\begin{color}{gray}
 at the heart of our game semantics.
+\end{color}
 To this end,
-we first define the sets of plays $P_A(V)$
-for the elementary game $A$ with return values in $V$.
-Plays already constitute a monad,
+we first define the sets of plays $\bar{P}_E(A)$
+for the effect signature $E$ with return values in $A$.
+Plays of this form already constitute a monad,
+\begin{color}{gray}
 however we emulate the approach taken in \cite{cspdnd}
 and take their \emph{completely distributive lattice completion}
 to obtain a strategy domain featuring dual nondeterminism.
+\end{color}
 
-When $\kw{P}$ is to play,
-it can either terminate with a return value $v \in A$,
-or make a move $m \in M_E^\kw{P}$ and pass control to $\kw{O}$,
+A computation can either terminate with a return value $v \in A$,
+or trigger an effect $e \in E$, passing control to the enviornment,
 which is then free to resume the computation with
-a move $n \in M_E^\kw{O}$ of its own,
+a move $r \in \kw{ar}(e)$ of its own,
 or to abandon the computation.
 Accordingly,
-the plays $s \in P_E(A)$
-for an elementary game $E$ and a return type $A$
+the plays $s \in \bar{P}_E(A)$
+for an effect signature $E$ and a return type $A$
 are defined inductively as:
 \[
-  s \in P_E(A) ::= v \mid \underline{m} \mid \underline{m} ns \,,
+  s \in \bar{P}_E(A) ::= v \mid \underline{m} \mid \underline{m} ns \,,
 \]
-where $v \in A$, $m \in M_E^\kw{P}$ and $n \in M_E^\kw{O}$.
+where $v \in A$, $m \in E$ and $n \in \kw{ar}(m)$.
 The prefix ordering
 ${\sqsubseteq} \subseteq P_E(A) \times P_E(A)$
 is a natural refinement relation on plays,
@@ -842,13 +837,14 @@ as the smallest relation satisfying:
 \[
   v \sqsubseteq v \,, \qquad
   \underline{m} \sqsubseteq \underline{m} \,, \qquad
-  \underline{m} \sqsubseteq \underline{m}t \,, \qquad
+  \underline{m} \sqsubseteq \underline{m} n t \,, \qquad
   \begin{prooftree}
     \hypo{s \sqsubseteq t}
-    \infer1{\underline{m}s \sqsubseteq \underline{m}t}
+    \infer1{\underline{m} n s \sqsubseteq \underline{m} n t}
   \end{prooftree} \,.
 \]
 
+\begin{color}{gray}
 With refinement in mind,
 the traditional construction of strategies
 as prefix-closed sets of plays
@@ -930,38 +926,23 @@ the free completely distributive lattice over a poset
 can be defined as the composition
 $\mathcal{U}(\mathcal{D}(A, {\le}), {\subseteq})$.
 We define our interaction monad as follows.
+\end{color}
 
 \begin{definition}
 The \emph{interaction monad}
-for an elementary game $E$
-maps the type $A$ to the type of \emph{interactive behaviors}
-$\mathcal{I}_E(A)$ where:
+for an effect signature $E$
+maps the set of values $A$
+to the poset of \emph{interactive behaviors}:
 \[
   \langle \mathcal{I}_E(A), {\sqsubseteq} \rangle :=
-    \mathcal{U}(\mathcal{S}_E(A)) \,.
+    \mathbf{FCD}(\bar{P}_E(A), {\sqsubseteq}) \,.
 \]
 \end{definition}
 
-In this construction,
-the \emph{inner} sets $S \in \mathcal{S}_E(A)$
-are similar to traditional strategies and
-can be interpreted in the usual way,
-noting however that their consistuent plays
-are the result of angelic choices
-no matter how and when these choices become observable.
-The \emph{outer} set records \emph{demonic} choices,
-and can be interpreted as follows:
-the presence in the outer set $x \in \mathcal{I}_E(A)$
-of an inner set $S \in x$
-indicates that the demon has a strategy
-to ensure that the outcome remains in $S$
-no matter what the angel does.
-It is natural for $x$ to be up-closed:
-if $S \subseteq T$ and the demon can make sure
-the outcome is contained in $S$,
-then the outcome will be contained in $T$ as well.
-
 \subsection{Operations}
+
+[XXX: update to use the abstract $\mathbf{FCD}$
+rather than a specific construction]
 
 \subsubsection{Termination}
 
