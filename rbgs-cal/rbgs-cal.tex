@@ -12,7 +12,7 @@
 \newcommand{\plays}[4]{{ {#1}_{{#2} \rightarrow {#3}}[{#4}] }}
 \newcommand{\pplays}[3]{\plays{\bar{P}}{#1}{#2}{#3}}
 \newcommand{\oplays}[3]{\plays{P}{#1}{#2}{#3}}
-\newcommand{\htr}[3]{{ \{{#1}\} {#2} \{{#3}\} }}
+\newcommand{\htr}[3]{{ {#1} \mathbbm{\{} {#2} \mathbbm{\}} {#3} }}
 
 %}}}
 
@@ -419,7 +419,7 @@ arbitrary, uninterpreted effects.
 
 %}}}
 
-\subsection{Effect signatures} %{{{
+\subsection{Effect signatures} \label{sec:bg:sig} %{{{
 
 The framework of \emph{algebraic effects}
 models computations as terms in an algebra
@@ -688,17 +688,55 @@ can still form a lattice
 
 %}}}
 
-\section{Interaction monad} \label{sec:intmonad} %{{{
+\section{The interaction specification monad} \label{sec:intmonad} %{{{
 
-[XXX: rename to ``free specification monad'' or the like?
-We could talk of a \emph{specification monad} for
-a $\mathbf{Poset}$ monad which is also a distributive completion.]
+We begin our formal development
+by defining the \emph{interaction specification monad},
+a variant of the free monad on an effect signature which
+incorporates dual nondeterminism.
+
+\subsection{Overview} %{{{
+
+Given an effect signature $E$,
+we construct a prefix-ordered set of plays $\bar{P}_E(A)$
+corresponding to the possible interactions between
+a computation with effects in $E$
+and its environment,
+including the computation's ultimate outcome in $A$.
+The interaction specification monad $\mathcal{I}_E(A)$ is then obtained
+as the free distributive completion of the poset $\bar{P}_E(A)$.
+
+For each effect $e \in E$,
+the interaction specification monad
+has a corresponding operation
+$\mathbf{I}_e \in \mathcal{I}_E(\kw{ar}(e))$,
+which triggers an effect and returns its outcome.
+Given a second effect signature $F$,
+a family $(f_e)_{e \in E}$ of computations
+$f_e : \mathcal{I}_F(\kw{ar}(e))$
+can be used to interpret the effects of $E$
+into the signature $F$.
+This is achieved by the \emph{substitution} operator:
+\[
+    x \in \mathcal{I}_E(A) \: \vdash \: x[f] \in \mathcal{I}_F(A) \,,
+\]
+which uses $f_e$ to interpret
+every occurence of the $e$ in the computation $x$.
+
+Effect signatures can seen to define
+particularly simple games,
+and a family $(f_e)_{e \in E}$ as described above
+can be interpreted as
+a certain kind of strategy for the game ${!E} \multimap F$.
+We use this approach to define
+a first category of games and strategy specifications,
+where $(\mathbf{I}_e)_{e \in E}$ is used as
+the identity morphism for $E$ and
+the substitution operator is used to define composition.
+
+%}}}
 
 \subsection{Effect signatures} %{{{
-
-In this work we focus on the the first aspect
-of the framework;
-signatures can be specified as follows.
 
 \begin{definition}
 An \emph{effect signature}
@@ -711,131 +749,141 @@ $E = \{ e_1 : \kw{ar}(e_1), \: e_2 : \kw{ar}(e_2), \: \ldots \}$
 to describe effect signatures.
 \end{definition}
 
-Terms are constructed by
-applying function symbols $e \in E$
-to subcomputations given for each $r \in \kw{ar}(e)$.
-In simple cases,
-the computation $e(x_r)_{r \in \kw{ar}(e)}$
-first triggers an effect $e$;
-then the context chooses $r$
-and resumes the computation as $x_r$.
-For example,
-the following effect signature
-models a very basic input/output facility:
+The most direct way to interpret an effect signature
+is the algebraic point of view,
+in which it induces a set of terms
+built out of the signature's operations,
+such as the example from \S\ref{sec:bg:sig}:
 \[
-  E_\kw{io} :=
-    \{ \kw{readbit} : \mathbbm{2}, \:
-       \kw{writebit}[n] : \mathbbm{1} \mid
-       n \in \mathbbm{2} \}
+    \kw{readbit}(
+      \kw{print}["\text{Hello}"](\kw{done}),
+      \kw{print}["\text{World}"](\kw{done}))
 \]
-A computation which writes a zero,
-reads one bit, echoes its complement
-and continues as the computation $k$
+The signature for the effects used in this term
 can be written as:
 \[
-  \kw{writebit}[0](
-    \kw{readbit}(
-      \kw{writebit}[1](k),
-      \kw{writebit}[0](k)))
+  E_\kw{io} :=
+  \{ \kw{readbit} : \mathbbm{2}, \:
+     \kw{print}[s] : \mathbbm{1}, \:
+     \kw{done} : \varnothing \mid
+     s \in \kw{string} \}
 \]
+
+An effect signature can also be used
+as decribing the interface of a monad $T$,
+where each effect $e \in E$ corresponds to
+a computation of type $T(\kw{ar}(e))$.
+Presented as a monadic expression of type $T(\varnothing)$,
+the example above corresponds to:
 \[
-  \begin{tikzpicture}
-    \node (W) at (0,0) {$\kw{writebit}[0]$};
-    \node (R) at (0,-1) {$\kw{readbit}$};
-    \node (W0) at (-1,-2) {$\kw{writebit}[1]$};
-    \node (W1) at (+1,-2) {$\kw{writebit}[0]$};
-    \node (K0) at (-1,-3) {$k$};
-    \node (K1) at (+1,-3) {$k$};
-    \path (W) edge (R);
-    \path (R) edge (W0);
-    \path (R) edge (W1);
-    \path (W0) edge (K0);
-    \path (W1) edge (K1);
-  \end{tikzpicture}
+  b \leftarrow \kw{readbit} \: ; \:
+  \kw{print}[s_b] \: ; \:
+  \kw{done}
 \]
-Note the similarity with strategy trees.
+where $s_0 = "\text{Hello}"$ and $s_1 = "\text{World}"$.
+Monads which offer this structure
+include the free monad on the signature $E$,
+which leaves effects entirely uninterpreted;
+roughly, its computations of type $A$
+correspond to terms over the signature
+$E \uplus \{ v : \varnothing \mid v \in A \}$.
+Another example is
+our interaction specification monad $\mathcal{I}_E$,
+which will extend the free monad
+to incorporate
+a completely distributive lattice structure.
 
-\begin{definition}
-We define the effect signature
-$\mathbf{1} := \varnothing$.
-For a family of effect signatures $(E_i)_{i \in I}$,
-we define:
-\[
-  \bigotimes_i E_i := \{ (i, e) : \kw{ar}(e) \mid i \in I, e \in E_i \}
-\]
-\end{definition}
-
-For example,
-the signature above can be decomposed as:
-\[
-    E_\kw{io} = \{ \kw{readbit} : \mathbbm{2} \} \otimes
-      \{ \kw{writebit}[n] : \mathbbm{1} \mid n \in \mathbbm{2} \}
-\]
-
-[Note somewhere:]
-This coincides with the cartesian product in $\gcat^i$
-(where there is only one top-level question
-so a strategy for $A \multimap \bigotimes_i B_i$
-is completely defined
-by specifying its behavior for each of the $B_i$),
-but it is only a monoidal tensor in $\gcat$
-(where subsequent questions in the different $B_i$'s
-may interact with each other).
-
-\begin{color}{gray}
-We will interpret an effect signature $E$
-as a very simple game,
-consisting of
-one question $m \in E$ from the environment followed by
-one answer $n \in \kw{ar}(e)$ from the system.
-In traditional terms,
+Finally,
+an effect signature can also be seen as
+a particularly simple \emph{game},
+consisting of a single question $m \in E$ from the opponent,
+followed by a single answer $n \in \kw{ar}(e)$ from the proponent.
+In traditional terms \cite{gamesem},
 this corresponds to the arena specified by:
 \[
     \star \vdash m \vdash n \qquad
       (m \in E, \: n \in \kw{ar}(m))
 \]
-The connection with
-effect algebras will become clear in \S\ref{sec:intmonad}.
-\end{color}
+Then the terms induced by the signature
+rougly correspond to well-bracketed \emph{strategies}
+for the game $!(E^\bot)$,
+in which the environment initiates successive
+instances of $E$ which it plays as the proponent,
+with the system as the opponent.
+Indeed, the abstract syntax tree of our example term
+can directly be read the strategy:
+\[
+  \begin{tikzpicture}
+    \node (W) at (0,0) {};
+    \node (R) at (0,-1) {$\kw{readbit}$};
+    \node (W0) at (-2,-2) {$\kw{print}["\text{Hello}"]$};
+    \node (W1) at (+2,-2) {$\kw{print}["\text{World}"]$};
+    \node (K0) at (-2,-3) {$\kw{done}$};
+    \node (K1) at (+2,-3) {$\kw{done}$};
+    \path (W) edge node[auto,swap] {$*$} (R);
+    \path (R) edge node[auto,swap] {0} (W0);
+    \path (R) edge node[auto] {1} (W1);
+    \path (W0) edge node[auto,swap] {$*$} (K0);
+    \path (W1) edge node[auto,swap] {$*$} (K1);
+  \end{tikzpicture}
+\]
+where we interpret edges
+as moves of the environment,
+and nodes as moves of the system.
+
+%Terms are constructed by
+%applying function symbols $e \in E$
+%to subcomputations given for each $r \in \kw{ar}(e)$.
+%In simple cases,
+%the computation $e(x_r)_{r \in \kw{ar}(e)}$
+%first triggers an effect $e$;
+%then the context chooses $r$
+%and resumes the computation as $x_r$.
+%For example,
+%the following effect signature
+%models a very basic input/output facility:
+%\[
+%  E_\kw{io} :=
+%    \{ \kw{readbit} : \mathbbm{2}, \:
+%       \kw{writebit}[n] : \mathbbm{1} \mid
+%       n \in \mathbbm{2} \}
+%\]
+%A computation which writes a zero,
+%reads one bit, echoes its complement
+%and continues as the computation $k$
+%can be written as:
+%\[
+%  \kw{writebit}[0](
+%    \kw{readbit}(
+%      \kw{writebit}[1](k),
+%      \kw{writebit}[0](k)))
+%\]
 
 %}}}
 
-\subsection{Definition} \label{sec:monad:def} %{{{
+\subsection{Plays} \label{sec:intm:plays} %{{{
 
-We define the monad $\mathcal{I}_E(A)$
-\begin{color}{gray}
-at the heart of our game semantics.
-\end{color}
-To this end,
-we first define the sets of plays $\bar{P}_E(A)$
-for the effect signature $E$ with return values in $A$.
-Plays of this form already constitute a monad,
-\begin{color}{gray}
-however we emulate the approach taken in \cite{cspdnd}
-and take their \emph{completely distributive lattice completion}
-to obtain a strategy domain featuring dual nondeterminism.
-\end{color}
+Building on these ideas,
+we now introduce the partially ordered sets of plays
+which we use to construct our specification monad.
 
-A computation can either terminate with a return value $v \in A$,
-or trigger an effect $e \in E$, passing control to the enviornment,
-which is then free to resume the computation with
-a move $r \in \kw{ar}(e)$ of its own,
-or to abandon the computation.
-Accordingly,
-the plays $s \in \bar{P}_E(A)$
-for an effect signature $E$ and a return type $A$
-are defined inductively as:
+\begin{definition}
+The set $\bar{P}_E(A)$ of \emph{interactions}
+for an effect signature $E$ and set of values $A$
+is defined inductively:
 \[
-  s \in \bar{P}_E(A) ::= v \mid \underline{m} \mid \underline{m} ns \,,
+  s \in \bar{P}_E(A) ::=
+    \underline{v} \mid
+    \underline{m} \mid
+    \underline{m} n s \,,
 \]
 where $v \in A$, $m \in E$ and $n \in \kw{ar}(m)$.
-The prefix ordering
-${\sqsubseteq} \subseteq P_E(A) \times P_E(A)$
-is a natural refinement relation on plays,
-and can be defined
+The set $\bar{P}_E(A)$ is ordered by the prefix relation
+${\sqsubseteq} \subseteq \bar{P}_E(A) \times \bar{P}_E(A)$,
+defined
 as the smallest relation satisfying:
 \[
-  v \sqsubseteq v \,, \qquad
+  \underline{v} \sqsubseteq \underline{v} \,, \qquad
   \underline{m} \sqsubseteq \underline{m} \,, \qquad
   \underline{m} \sqsubseteq \underline{m} n t \,, \qquad
   \begin{prooftree}
@@ -843,125 +891,149 @@ as the smallest relation satisfying:
     \infer1{\underline{m} n s \sqsubseteq \underline{m} n t}
   \end{prooftree} \,.
 \]
-
-\begin{color}{gray}
-With refinement in mind,
-the traditional construction of strategies
-as prefix-closed sets of plays
-can be understood as a lattice completion of the poset
-$\langle P_E(A), {\sqsubseteq} \rangle$,
-augmenting plays with angelic nondeterminism:
-the behavior of a component is characterized completely
-by having an angel range over all possible behaviors of the environment
-and collecting the resulting plays in a set.
-Prefix closure is a natural restriction because,
-if $s \sqsubseteq t$ and the play $t$ is a possible outcome,
-then the environment may also have stopped earlier,
-resulting in the outcome $s$ instead.
-Writing:
-\[
-  \mathcal{D}(A, {\le}) :=
-    \langle
-    \{ S \in \mathcal{P}(A) \mid
-        \forall x, y \in A \,.\,
-           x \le y \wedge y \in S \Rightarrow x \in S \},
-    {\subseteq}
-    \rangle
-\]
-for the set of down-closed subsets of $\langle A, {\le} \rangle$
-ordered by inclusion,
-this traditional construction can be given as
-$\mathcal{S}_E(A) :=
-\langle \mathcal{D}(P_E(A), {\sqsubseteq}), {\subseteq} \rangle$.
-
-Note that this point of view suggests a new interpretation
-of the determinism requirement usually placed on strategies
-mentioned in \S\ref{sec:mainideas:gs:strat}.
-Consider
-two plays $s\underline{m_1}$ and $s\underline{m_2}$
-differing only in the recorded behavior of the system
-($m_1 \neq m_2$).
-It is tempting to assume that
-a strategy containing both of them
-denotes the behavior of a non-deterministic system.
-However,
-under our interpretation,
-while the difference between $s\underline{m_1}$ and $s\underline{m_2}$
-manifests itself as the obervation of different system behaviors,
-these differences are still the result of \emph{angelic} choices,
-in other words they are the result of hidden choices made by the
-environment.
-
-In the model we have considered so far,
-the system itself is always deterministic.
-By excluding plays which differ only in their system component,
-we have not enforced the determinism of the system,
-but rather the \emph{determinacy} of the environment,
-in the sense that angelic choices should always be observable
-as distinct \kw{O}-moves.
-Consequently,
-an appropriate model of nondeterministic systems
-cannot be obtained simply by relaxing this requirement,
-and indeed in \cite{gsfnd} this approach
-prevents the modelling of unbounded nondeterminism.
-
-Instead,
-we adapt the approach used in \cite{augtyp}
-and use the \emph{free completely distributive lattice}
-over $\langle P_E(A), {\sqsubseteq} \rangle$
-to endow strategies with both angelic and demonic nondeterminism.
-Writing:
-\[
-  \mathcal{U}(A, {\le}) :=
-    \langle
-    \{ S \in \mathcal{P}(A) \mid
-        \forall x, y \in A \,.\,
-           x \le y \wedge x \in S \Rightarrow y \in S \},
-    {\supseteq}
-    \rangle
-\]
-for the set of up-closed subsets of $\langle A, {\le} \rangle$
-ordered by containement,
-the free completely distributive lattice over a poset
-can be defined as the composition
-$\mathcal{U}(\mathcal{D}(A, {\le}), {\subseteq})$.
-We define our interaction monad as follows.
-\end{color}
-
-\begin{definition}
-The \emph{interaction monad}
-for an effect signature $E$
-maps the set of values $A$
-to the poset of \emph{interactive behaviors}:
-\[
-  \langle \mathcal{I}_E(A), {\sqsubseteq} \rangle :=
-    \mathbf{FCD}(\bar{P}_E(A), {\sqsubseteq}) \,.
-\]
 \end{definition}
 
-\subsection{Operations}
+A play corresponds to a finite observation of
+an interaction between the system and the environment.
+At any point in such an interaction,
+the system can terminate the interaction with a given value ($v$),
+or it can trigger an effect $m \in E$ and
+wait to be resumed by
+an answer $n \in \kw{ar}(e)$ of the environment
+($\underline{m} n s$).
 
-[XXX: update to use the abstract $\mathbf{FCD}$
-rather than a specific construction]
+A play which concludes before
+the environment answers a query from the system ($\underline{m}$)
+denotes that no information has been observed after that point.
+It can be refined by a longer observation
+of an interaction which begin with the same sequence of
+questions and answers.
+{\color{gray} Comment on the granularity?}
 
-\subsubsection{Termination}
+%}}}
 
-The unit $\eta^E_A : A \rightarrow \mathcal{I}_E(A)$
-of the interaction monad
-assigns to a value $v \in A$ the computation
-which simply returns $v$ immediately.
-Because the environment is never in control,
-the system can ensure that the outcome is always
-the terminated play $v$.
-In other words,
-the demon has a strategy to ensure that the outcome is in $S$
-whenever $v \in S$:
+\subsection{Interaction specifications} %{{{
+
+We define our monad as the free distributive completion
+of the corresponding poset of plays.
+
+For the sake of conciseness and clarity,
+we will use the order embedding associated with $\mathbf{FCD}$
+implicitly,
+so that an element of a poset $s \in P$
+can also be regarded as an element of
+its completion $s \in \mathbf{FCD}(P)$.
+Likewise,
+for a completely distributive lattice $L$,
+we can implicitly
+extend a monotonic operator
+$f : P \rightarrow L$
+to the operator on the completion
+$f : \mathbf{FCD}(P) \rightarrow L$
+given by the universal property of $\mathbf{FCD}$.
+These conventions are at work
+in the following.
+
+\begin{definition} \label{def:intm} % Interaction specification monad {{{
+The \emph{interaction specification monad}
+for an effect signature $E$
+maps a set of values $A$
+to the free distributive completion
+of the corresponding set of plays:
 \[
-  \eta^E_A(v) :=
-    \{ S \in \mathcal{D}(P_E(A), {\sqsubseteq}) \mid v \in S \} \,.
+    \mathcal{I}_E(A) :=
+      \mathbf{FCD}(\bar{P}_E(A))
 \]
+An element $x \in \mathcal{I}_E(A)$ is called
+an \emph{interaction specification}.
 
-\subsubsection{Nondeterminism}
+The monad's action on a function $f : A \rightarrow B$
+applies $f$ to all values
+in an interaction specification's plays:
+\begin{align*}
+  \mathcal{I}_E(f)(\underline{v}) &:= \underline{f(v)} \\
+  \mathcal{I}_E(f)(\underline{m}) &:= \underline{m} \\
+  \mathcal{I}_E(f)(\underline{m} n s) &:=
+    \underline{m} n \, \mathcal{I}_E(f)(s) \,.
+\end{align*}
+The monad's unit
+$\eta^E_A : A \rightarrow \mathcal{I}_E(A)$
+is the embedding of a single play
+consiting only of the given value:
+\[
+    \eta^E_A(v) := \underline{v}
+\]
+Finally, the multiplication
+$\mu^E_A : \mathcal{I}_E(\mathcal{I}_E(A)) \rightarrow \mathcal{I}_E(A)$
+carries out the outer computation and
+sequences it with any computation it evaluates to:
+\begin{align*}
+  \mu^E_A(\underline{x}) &:= x \\
+  \mu^E_A(\underline{m}) &:= \underline{m} \\
+  \mu^E_A(\underline{m} n s) &:=
+    \underline{m} \sqcup \underline{m} n \, \mu^E_A(s) \,.
+\end{align*}
+
+\begin{proof} %{{{
+From the definitions above and
+the fact that $\mathbf{FCD}$ is itself a monad,
+it is straightforward to verify that
+for all functions $f : A \rightarrow B$,
+\[
+    \eta^E_B \circ f = \mathcal{I}_E(f) \circ \eta^E_A \,.
+\]
+By inductions on plays, we can also show that:
+\[
+    \mu^E_B \circ \mathcal{I}_E(\mathcal{I}_E(f)) =
+      \mathcal{I}_E(f) \circ \mu^E_A \,.
+\]
+This establishes that $\eta^E$ and $\mu^E$
+are natural transformations.
+By a similar approach,
+we can show for a set $X$ that:
+\begin{align*}
+  \mu^E_X \circ \mathcal{I}_E(\mu^E_X) &=
+    \mu^E_X \circ \mu^E_{\mathcal{I}_E(X)} \\
+  \mu^E_X \circ \mathcal{I}_E(\eta^E_X) &=
+    \mu^E_X \circ \eta^E_{\mathcal{I}_E(X)} \,,
+\end{align*}
+so that $\mathcal{I}_E$ is indeed a monad.
+\end{proof}
+%}}}
+\end{definition}
+%}}}
+
+As usual,
+the Kleisli extension of a function $f : A \rightarrow \mathcal{I}_E(B)$
+is the function $f^\dagger = \mu^E_B \circ \mathcal{I}_E(f)$.
+Given directly:
+\begin{align*}
+  f^\dagger(\underline{v}) &:= f(v) \\
+  f^\dagger(\underline{m}) &:= \underline{m} \\
+  f^\dagger(\underline{m} n s) &:=
+    \underline{m} \sqcup \underline{m} n f^\dagger(s)
+\end{align*}
+
+The most subtle aspect of Def.~\ref{def:intm}
+is the case for $\mu^E_A(\underline{m} n s)$,
+which needs to include $\underline{m}$
+to ensure the monotonicity of the underlying function
+used to define $\mu^E_A$.
+This is because the extension to $\mathbf{FCD}$
+of the function $s \mapsto \underline{m} n s$
+will map $\bot$ to $\bot$,
+with the consequence that
+$\underline{m} \nsqsubseteq \underline{m} n \bot = \bot$.
+Note in passing that
+the sequential composition of two computations
+retains the effects of the first computation
+even when the second computation is undefined.
+
+%}}}
+
+\begin{color}{gray}
+
+\subsection{Nondeterminism} %{{{
 
 The refinement lattice over $\mathcal{I}_E(A)$
 provides unbounded demonic choices
@@ -999,91 +1071,89 @@ and is equal to $\top$ when $P$ does not hold:
 \[ [P] \in \mathcal{I}_E(\{*\}) :=
     \bigsqcap \{ \eta(*) \mid P \} \]
 
-\subsubsection{Conventions}
+%}}}
 
-Because the lattice completion is itself a monad,
-many operations on interactive computations
-can be defined by specifying their action on plays.
-Individual plays $s \in P_E(A)$ can be monotonically promoted to
-interactive computations by the completion's unit as:
+\end{color}
+
+\subsubsection{Interactions}
+
+The effects of a signature $E$
+can be promoted to interaction specifications of $\mathcal{I}_E$
+as follows.
+
+\begin{definition}[Interaction primitive]
+For an effect signature $E$, a set $A$ and
+an operation $m \in E$,
+the interaction specification
+$\mathbf{I}^E_m \in \mathcal{I}_E(\kw{ar}(m))$
+is defined as:
 \[
-    {\uparrow \downarrow}(s) =
-      \{ S \in \mathcal{S}_E(A) \mid s \in S \}
+  \mathbf{I}^E_m :=
+    \bigsqcup_{n \in \kw{ar}(m)} \underline{m} n \underline{n}
 \]
-Furthermore,
-an monotonic operator $f : P_E(A) \rightarrow \mathcal{I}_E(B)$
-defined on plays can be extended to computations.
-For $x \in \mathcal{I}_E(A)$, we will write:
-\[
-  f(x) := \bigsqcap_{S \in x} \bigsqcup_{s \in S} f(s)
-\]
-When the result is unambiguous we will use both constructions
-implicitely.
-Note that the promoted operators
-distribute over arbitrary unions and intersections, so that
-$f(\bigsqcap X) = \bigsqcap_{x \in X} f(x)$ and
-$f(\bigsqcup X) = \bigsqcup_{x \in X} f(x)$.
-This means proofs involving operators defined on plays
-can often themselves be carried out at the level of plays.
-
-\subsubsection{Sequential composition}
-
-We start by defining the interaction monad's Kleisli extension
-of a continuation $f : A \rightarrow \mathcal{I}_E(B)$
-as an operator on traces
-$f^\dagger : P_E(A) \rightarrow \mathcal{I}_E(B)$:
-\[
-  f^\dagger(v) := f(v) \qquad
-  f^\dagger(\underline{m}) := \underline{m} \qquad
-  f^\dagger(\underline{m} n s) :=
-    \underline{m} \sqcup \underline{m} n f^\dagger(s) \,.
-\]
-The lattice completion is first used in the recursive case above
-to apply the function $t \mapsto \underline{m} n t$
-to the computation $f^\dagger(s)$,
-then used to extend $f^\dagger$ as a whole to the desired
-$f^\dagger : \mathcal{I}_E(A) \rightarrow \mathcal{I}_E(B)$.
-Following usual conventions, we will use the notations:
-\begin{align*}
-  v \leftarrow x ; M &:= (v \mapsto M)^\dagger(x) \\
-  x ; M &:= ({-} \mapsto M)^\dagger(x)
-\end{align*}
-
-\subsubsection{Interaction}
-
-Another elementary operation
-is the interaction primitive
-$\mathbf{I}_E : M_E^\kw{Q} \rightarrow \mathcal{I}_E(M_E^\kw{A})$.
-The computation $\mathbf{I}_E(m)$
-asks the question $m \in M_E^\kw{Q}$ to the environment
-and returns the corresponding answer.
-It can be defined as:
-\[
-    \mathbf{I}_E(m) := \underline{m} n n 
-\]
-Note that in the play $\underline{m} n n$,
+\end{definition}
+Note that in the play $\underline{m} n \underline{n}$,
 the first occurence of $n$ is the environment's answer,
-whereas the second occurence is the value returns by $\mathbf{I}_E(m)$.
+whereas the second occurence is the value returned by $\mathbf{I}^E_m$.
 
-\subsubsection{Interactive substitution}
-
-The interactions of a computation $x \in \mathcal{I}_E(A)$
-can be interpreted in terms of another elementary game
-by substituting for each one a behavior specified by
-the Kleisli morphism
-$f : M_E^\kw{Q} \rightarrow \mathcal{I}_F(M_E^\kw{A})$.
+The effects of a computation $x \in \mathcal{I}_E(A)$
+can be interpreted in terms of another effect signature $F$
+by specifying for each $m \in E$
+an interaction specification $f_m \in \mathcal{I}_F(\kw{ar}(m))$.
 The result is a computation $x[f] \in \mathcal{I}_F(A)$,
 which can be defined in terms of traces as follows:
-\[
-  v[f] := v \qquad
-  \underline{m}[f] := f(m) ; \bot \qquad
-  \underline{m}ns[f] := r \leftarrow f(m) ; \{r = n\} ; s[f]
-\]
-Note that $\mathbf{I}(m)[f] = f(m)$,
-$x[\mathbf{I}] = x$,
-and $x[m \mapsto f(m)[g]] = x[f][g]$.
+\begin{align*}
+  \underline{v}[f] &:= \underline{v} \\
+  \underline{m}[f] &:= f_m ; \bot \\
+  \underline{m}ns[f] &:= r \leftarrow f_m ; \{r = n\} ; s[f]
+\end{align*}
+[XXX proper definition]
+
+Note that $\mathbf{I}_m[f] = f_m$,
+$x[\mathbf{I}] = x$ (identity),
+and $x[f_m[g]]_{m\in E} = x[f][g]$ (composition).
+[XXX proper theorem,
+or delay until we define our category]
 
 %}}}
+
+\subsection{Products}
+
+Effect signatures can be combined in the following way.
+
+\begin{definition}
+We define the effect signature
+$\mathbf{1} := \varnothing$.
+For a family of effect signatures $(E_i)_{i \in I}$,
+we define:
+\[
+  \bigotimes_i E_i := \{ (i, e) : \kw{ar}(e) \mid i \in I, e \in E_i \}
+\]
+\end{definition}
+
+For example,
+the signature $E_\kw{io}$ above is equivalent
+to the following composite one:
+\[
+    \{ \kw{readbit} : \mathbbm{2} \} \otimes
+    \{ \kw{print}[s] : \mathbbm{1} \mid s \in \kw{string} \} \otimes
+    \{ \kw{done} : \varnothing \}
+\]
+
+
+
+\begin{color}{gray}
+[Note somewhere:]
+This coincides with the cartesian product in $\gcat^i$
+(where there is only one top-level question
+so a strategy for $A \multimap \bigotimes_i B_i$
+is completely defined
+by specifying its behavior for each of the $B_i$),
+but it is only a monoidal tensor in $\gcat$
+(where subsequent questions in the different $B_i$'s
+may interact with each other).
+\end{color}
+
 
 \subsection{Game semantics}
 
