@@ -1075,9 +1075,9 @@ and is equal to $\top$ when $P$ does not hold:
 
 \end{color}
 
-\subsubsection{Interactions}
+\subsubsection{Interactions} %{{{
 
-The effects of a signature $E$
+The operations of an effect signature $E$
 can be promoted to interaction specifications of $\mathcal{I}_E$
 as follows.
 
@@ -1091,29 +1091,162 @@ is defined as:
   \mathbf{I}^E_m :=
     \bigsqcup_{n \in \kw{ar}(m)} \underline{m} n \underline{n}
 \]
+If the context permits,
+we can write $\mathbf{I}^E_m$ simply as $m$.
 \end{definition}
 Note that in the play $\underline{m} n \underline{n}$,
 the first occurence of $n$ is the environment's answer,
 whereas the second occurence is the value returned by $\mathbf{I}^E_m$.
 
-The effects of a computation $x \in \mathcal{I}_E(A)$
-can be interpreted in terms of another effect signature $F$
-by specifying for each $m \in E$
-an interaction specification $f_m \in \mathcal{I}_F(\kw{ar}(m))$.
-The result is a computation $x[f] \in \mathcal{I}_F(A)$,
-which can be defined in terms of traces as follows:
-\begin{align*}
-  \underline{v}[f] &:= \underline{v} \\
-  \underline{m}[f] &:= f_m ; \bot \\
-  \underline{m}ns[f] &:= r \leftarrow f_m ; \{r = n\} ; s[f]
-\end{align*}
-[XXX proper definition]
+To model effect handling,
+we can use a family of interaction specifications
+$(f_m)_{m \in E}$
+to provide an interpretation $f_m \in \mathcal{I}_F(\kw{ar}(m))$
+of each effect $m \in E$
+in terms of another effect signature $F$.
+This allows us to transform an interaction specification
+$x \in \mathcal{I}_E(A)$ of $E$
+into an interaction specification
+$x[m := f_m]$ of $F$.
 
-Note that $\mathbf{I}_m[f] = f_m$,
-$x[\mathbf{I}] = x$ (identity),
-and $x[f_m[g]]_{m\in E} = x[f][g]$ (composition).
-[XXX proper theorem,
-or delay until we define our category]
+\begin{definition}[Interaction substitution]
+Given the effect signatures $E, F$ and the set $A$,
+for an interaction specification $x \in \mathcal{I}_E(A)$
+and a family $(f_m)_{m \in E}$ with $f_m \in \mathcal{I}_F(\kw{ar}(m))$,
+the \emph{interaction substitution} $x[m := f_m] \in \mathcal{I}_F(A)$
+is defined by:
+\begin{align*}
+  \underline{v}[m := f_m] &:= \underline{v} \\
+  \underline{m}[m := f_m] &:= f_m ; \bot \\
+  \underline{m}ns[m := f_m] &:= r \leftarrow f_m ; \{r = n\} ; s[m := f_m]
+\end{align*}
+XXX: define assertions $\{P\}$ and the monad notation.
+\end{definition}
+
+The outcome of the interaction specification is left unchanged,
+but effects are replaced by their interpretation.
+Whenever the interpretation produces an outcome $r$,
+the matching plays of the original computation
+are allowed to proceed accordingly.
+
+%}}}
+
+\subsection{Game semantics}
+
+As presented so far,
+the interaction specification monad
+can be seen as an extension of the refinement calculus
+able to model effectful computations
+for a given signature.
+
+We now shift our point of view to game semantics
+and show how interaction substitutions
+can be used to define a simple category of games and strategies
+featuring dual nondeterminism and refinement.
+
+\begin{definition}[Interaction substitutions as morphisms]
+Consider the effect signatures $E$, $F$ and $G$.
+We will write $f : E \rightarrow F$
+whenever $(f_m)_{m \in F}$ is a family of interactive computations
+such that $f_m \in \mathcal{I}_E(\kw{ar}(m))$.
+For $x \in \mathcal{I}_F(A)$,
+we can write the interaction substitution $x[m := f_m]$
+as $x[f]$.
+Then for $f : E \rightarrow F$ and $g : F \rightarrow G$,
+we define $g \circ f : E \rightarrow G$ as:
+\[ (g \circ f)_m = f_m[g] \,. \]
+The completely distributive lattice structure
+of $\mathcal{I}_F(-)$ can be extended pointwise
+to interaction substitutions,
+so that for a family $(f^i)_{i \in I}$
+with $f^i : E \rightarrow F$,
+we can define the substitutions
+$(\bigsqcup_{i \in I} f^i) : E \rightarrow F$ and
+$(\bigsqcap_{i \in I} f^i) : E \rightarrow F$ as:
+\begin{gather*}
+    \left( \bigsqcup_{i \in I} f^i \right)_m :=
+      \bigsqcup_{i \in I} f^i_m \qquad
+    \left( \bigsqcap_{i \in I} f^i \right)_m :=
+      \bigsqcap_{i \in I} f^i_m \,,
+\end{gather*}
+and for $f, f' : E \rightarrow F$
+define refinement as:
+\[
+    f \sqsubseteq f' \: \Leftrightarrow \:
+    \forall m \in F : f_m \sqsubseteq f'_m \,.
+\]
+\end{definition}
+
+An interaction substitution $f : E \rightarrow F$
+can be interpreted as a well-bracketed strategy for the game
+${!E} \multimap F$.
+In this game,
+the environment first plays a move $m \in F$.
+The system can then ask a series of questions
+$q_1, \ldots q_k \in E$
+to which the environment will reply with
+answers $r_i \in \kw{ar}(q_i)$,
+and finally produce an answer $n \in \kw{ar}(m)$
+to the environment's initial question $m$.
+The arena for ${!E} \multimap F$
+can be described as:
+\[
+  \begin{tikzpicture}
+    %\node (S) at (0,3) {$\star$};
+    \node (BQ) at (0,2) {$m \in F$};
+    \node (BA) at (-1,1) {$n \in \kw{ar}(m)$};
+    \node (AQ) at (+1,1) {$q \in E$};
+    \node (AA) at (+1,0) {$r \in \kw{ar}(q)$};
+    %\path (S) edge (BQ);
+    \path (BQ) edge (BA);
+    \path (BQ) edge (AQ);
+    \path (AQ) edge (AA);
+  \end{tikzpicture}
+\]
+The plays of ${!E} \multimap F$
+are restricted to a single top-level question $m$,
+and the \emph{well-bracketing} requirement
+ensures a form of stack discipline
+so that at any point,
+only the most recent pending question
+may be answered.
+
+Our model extends the corresponding traditional notion of strategy
+by introducing demonic choice.
+The definition of $g \circ f$ given above
+otherwise corresponds to the traditional notion of
+strategy composition.
+The identity strategy is given by $\mathbf{I}_E : E \rightarrow E$.
+
+\begin{lemma}
+Consider the effect signatures $E, F, G, H$ and
+the substitutions
+$f : E \rightarrow F$,
+$g : F \rightarrow G$ and
+$h : G \rightarrow H$.
+The following properties hold:
+\begin{gather*}
+  \mathbf{I}_F \circ f = f \circ \mathbf{I}_E = f \\
+  h \circ (g \circ f) = (h \circ g) \circ f
+\end{gather*}
+Composition preserves all suprema on the left,
+and all non-empty suprema on the right.
+\begin{proof}
+XXX
+\end{proof}
+\end{lemma}
+
+Having established the relevant properties,
+we can now define our first category of games and strategies.
+
+\begin{definition}
+The category $\gcat^{ib}$ has effect signatures as objects
+and interaction substitutions as morphisms.
+The hom-sets $\gcat^{ib}(E, F)$
+are completely distributive lattices,
+with composition preserving all suprema on the left,
+and all non-empty suprema on the right.
+\end{definition}
 
 %}}}
 
