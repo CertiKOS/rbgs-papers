@@ -1382,7 +1382,7 @@ This is traditionally expressed as a promotion operator
 mapping a strategy $\sigma : {!A} \multimap B$
 to the strategy $\sigma^\dagger : {!A} \multimap {!B}$.
 
-\subsection{Plays} %{{{
+\subsection{Overview} %{{{
 \label{sec:arrow}
 
 In the game ${!E} \multimap {!F}$,
@@ -1456,6 +1456,7 @@ this corresponds to the following inductive definition:
     \infer0{\epsilon \in P_{E,F}^{[p]}}
   \end{prooftree}}
 \end{gather*}
+\begin{color}{gray}
 The prefix relation on these sets
 can be defined as:
 \[
@@ -1487,29 +1488,455 @@ Then the well-bracketed plays
 for the game ${!E} \multimap {!F}$
 consist of the set $P_{E,F} := P_{E,F}^{[\epsilon]}$
 ordered by the prefix relation $\sqsubseteq$.
+\end{color}
 
-\subsection{Strategies}
+This graph encodes two independent features of
+the plays we have described.
+On one hand,
+the stack discipline is enforced by the fact that
+questions must be answered in the reverse order
+in which they were asked.
+On the other hand,
+the graph also specifies the alternation between
+environment and system moves.
 
-For two event signatures $E$ and $F$,
-the \emph{well-bracketed strategy specifications}
-for the game ${!E} \multimap {!F}$
-are given by $\mathbf{FCD}(P_{E,F})$.
-The identity strategy is given as:
+%}}}
+
+\subsection{Games} %{{{
+
+To facilitate reasoning,
+and make it easier to describe operators on strategies
+in a systematic way,
+we will construct the graph above in several steps.
+We start by defining precisely the notion of graph we will use
+and fixing notations for the associated constructions.
+
+\begin{definition}
+A \emph{quiver} $Q$ is a set of vertices together with,
+for each pair of vertices $u, v \in Q$,
+a set $Q(u,v)$ of edges from $u$ to $v$.
+We write $e : u \rightarrow v$ when $e \in Q(u, v)$.
+
+The \emph{paths} $s : u \rightarrow^* v$
+from $u$ to $v$ in $Q$ are
+sequences of edges
+$u_0 \xrightarrow{e_1} \cdots \xrightarrow{e_n} u_n$
+where $u_0 = u$ and $u_n = v$,
+written as $e_1 \cdots e_n : u \twoheadrightarrow v$.
+The empty path is written $\epsilon : u \twoheadrightarrow u$.
+\end{definition}
+
+Quivers are essentially directed multigraphs,
+and are also known as \emph{precategories}.
+
+To describe a game,
+we use a specific kind of graph
+where vertices represent players
+and eges represent questions that can be asked
+by one player to another.
+Generalizing from effect signatures,
+questions are assigned an arity
+which gives the type of the answer.
+
+\begin{definition}
+A \emph{game signature} $\Gamma$
+is a quiver with a distinguished vertex $\kw{O}$
+and where each edge $m : u \rightarrow v$
+is associated with a set $\kw{ar}(m)$ called its \emph{arity}.
+The vertices are called the \emph{players} of $\Gamma$,
+and the edges are called the \emph{questions}.
+\end{definition}
+
+An effect signature $\{ m_i : N_i \mid i \in I \}$
+can be understood as a game signature $[E]$
+with a single player $\kw{O}$ and
+with an edge $(m_i : N_i) : \kw{O} \rightarrow \kw{O}$
+for each $i \in I$:
 \[
-  \kw{id}_E :=
-    \bigsqcup_{m \in E, n \in \kw{ar}(m)}
-      m \underline{m} n \underline{n}
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,double,draw] (O) at (0,0) {$\kw{O}$};
+    \path[->] (O) edge[loop right] node[auto] {$m_i : N_i$} (O);
+  \end{tikzpicture}
+  \qquad
+  (i \in I)
+\]
+For convenience we will write:
+\[
+  [E] =
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,double,draw] (O) at (0,0) {$\kw{O}$};
+    \path[->] (O) edge[loop right] node[auto] {E} (O);
+  \end{tikzpicture}
+\]
+The game ${!E} \multimap {!F}$ will be generated from
+the signature:
+\[
+  [E,F] =
+  \begin{tikzpicture}[baseline=(O.base),scale=2]
+    \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
+    \node[circle,draw] (P) at (-1,0) {$\kw{P}$};
+    \path[->] (P) edge[bend left] node[above] {$E$} (O);
+    \path[->] (O) edge[bend left] node[below] {$F$} (P);
+  \end{tikzpicture}
 \]
 
+Game signatures with more than two players
+can be convenient to describe composite systems.
+For instance,
+consider the composition $\tau \circ \sigma$
+of $\sigma : E \rightarrow F$ and $\tau : F \rightarrow G$.
+Questions of the environment are directed to $\tau$,
+questions of $\tau$ are directed to $\sigma$,
+and questions of $\sigma$ are directed back to the environment.
+This is described by the following three-player game signature, where
+$\tau$ can be identified with $P_1$ and
+$\sigma$ can be identified with $P_2$:
+\[
+  [E,F,G] =
+  \begin{tikzpicture}[baseline=(O.base),scale=1.5]
+    \node[circle,double,draw] (O) at (1,0) {$O$};
+    \node[circle,draw] (P2) at (0,0) {$P_2$};
+    \node[circle,draw] (P1) at (-1,0) {$P_1$};
+    \path[->] (O) edge node[below] {$G$} (P2);
+    \path[->] (P2) edge node[below] {$F$} (P1);
+    \path[->] (P1) edge[bend left] node[above] {$E$} (O);
+  \end{tikzpicture}
+\]
+On the other hand,
+a situation where
+$\sigma_1 : E_1 \rightarrow F_1$ and
+$\sigma_2 : E_2 \rightarrow F_2$
+interact with the environment
+independently of one another
+can be described as:
+\[
+  [E_1,F_1] \vee [E_2,F_2] =
+  \begin{tikzpicture}[baseline=(O.base),scale=1.5]
+    \node[circle,draw] (P1) at (-1,0) {$P_2$};
+    \node[circle,draw,double] (O) at (0,0) {$O$};
+    \node[circle,draw] (P2) at (+1,0) {$P_1$};
+    \path[->] (P1) edge[bend left] node[above] {$E_1$} (O);
+    \path[->] (O) edge[bend left] node[below] {$F_1$} (P1);
+    \path[->] (P2) edge[bend right] node[above] {$E_2$} (O);
+    \path[->] (O) edge[bend right] node[below] {$F_2$} (P2);
+  \end{tikzpicture}
+\]
+
+The constructions generalize as follows.
+The game signatures
+$\langle E_1, \ldots, E_n \rangle$ and
+$[F, E_1, \ldots, E_n]$ 
+correspond respectively to a path and a cycle,
+as described in the following.
+
+\begin{definition}
+For the effect signatures $F, E_1, \ldots, E_n$,
+the game signature $\langle E_n, \ldots, E_1 \rangle$
+has players $\kw{O} = \kw{P}_0, \kw{P}_1, \ldots, \kw{P}_n$,
+and for each operation $m \in E_i$
+has a question $m : \kw{P}_{i-1} \rightarrow \kw{P}_i$
+with the same arity:
+\[
+  \langle E_n, \ldots, E_1 \rangle :=
+  \begin{tikzpicture}[scale=1.5,baseline=(O.base)]
+    \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
+    \node[circle,draw] (P1) at (-1,0) {$\kw{P}_1$};
+    \node (D) at (-2,0) {$\ldots$};
+    \node[circle,draw] (Pn) at (-3,0) {$\kw{P}_n$};
+    \path[->] (O) edge node[below] {$E_1$} (P1);
+    \path[->] (P1) edge node[below] {$E_2$} (D);
+    \path[->] (D) edge node[below] {$E_n$} (Pn);
+  \end{tikzpicture}
+\]
+For each operation $m \in F$,
+the game signature $[F, E_n, \ldots, E_1]$
+additionally
+has a question $m : \kw{P}_n \rightarrow \kw{O}$
+of same arity:
+\[
+  [F, E_n, \ldots, E_1] :=
+  \begin{tikzpicture}[scale=1.5,baseline=(O.base)]
+    \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
+    \node[circle,draw] (P1) at (-1,0) {$\kw{P}_1$};
+    \node (D) at (-2,0) {$\ldots$};
+    \node[circle,draw] (Pn) at (-3,0) {$\kw{P}_n$};
+    \path[->] (O) edge node[below] {$E_1$} (P1);
+    \path[->] (P1) edge node[below] {$E_2$} (D);
+    \path[->] (D) edge node[below] {$E_n$} (Pn);
+    \path[->] (Pn) edge[bend left] node[above] {$F$} (O);
+  \end{tikzpicture}
+\]
+\end{definition}
+
+The wedge sum $\vee$ of a collection of game signatures
+corresponds to their disjoint union,
+where the $\kw{O}$ players of each game signature
+have been identified.
+
+\begin{definition}[Wedge sum of game signatures]
+For a collection of game signatures $(\Gamma_i)_{i \in I}$,
+the \emph{wedge sum} $\bigvee_{i \in I} \Gamma_i$ has the players:
+\[
+  \iota_i(p) := \begin{cases}
+    \kw{O} & \text{if } p = \kw{O} \\
+    (i, p) & \text{otherwise,}
+  \end{cases}
+\]
+where $i \in I$ and $p \in \Gamma_i$.
+For each question $m : u \rightarrow v$ in $\Gamma_i$,
+the wedge sum has a corresponding question
+$\iota_i(m) : \iota_i(u) \rightarrow \iota_i(v)$.
+\end{definition}
+
+Note that the empty game signature $0$ can be
+described in the following ways:
+\[
+  0 := \langle \rangle = \bigvee \varnothing =
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw,double] {$\kw{O}$};
+  \end{tikzpicture}
+\]
+
+\begin{color}{gray}
+
+An edge $(m : N) : p \rightarrow p'$ in a simple game
+signifies that the player $p'$ can ask a question
+$m$ to the player $p$,
+which will eventually provide an answer $n \in N$.
+Hence, effect signatures can be seen as one-player simple games.
+More interestingly,
+we will represent the game ${!E} \multimap {!F}$
+as the simple game with two players $\kw{O}$ and $\kw{P}$,
+where each operation $m \in E$
+has a corresponding edge $m : \kw{O} \rightarrow \kw{P}$,
+and each operation $q \in F$
+has a corresponding edge $q : \kw{P} \rightarrow \kw{O}$:
+\[
+  \begin{tikzpicture}[scale=2]
+    \node (O) at (0,0) {$\kw{O}$};
+    \node (P) at (1,0) {$\kw{P}$};
+    \path [->] (O) edge[bend left] node[above] {$m \in E$} (P);
+    \path [->] (P) edge[bend left] node[below] {$q \in F$} (O);
+  \end{tikzpicture}
+\]
+
+\end{color}{gray}
+
+%}}}
+
+\subsection{Plays and strategies}
+
+This description of the game ${!E} \multimap {!F}$
+as the game signature $[E, F]$.
+already encodes the alternating aspect of plays.
+For the purpose of constructing well-bracketed plays,
+a path in a simple game
+can be understood as a stack of pending questions.
+We can then describe a graph over such stacks
+where the paths will be the plays of the game.
+
+\begin{definition}
+The \emph{well-bracketed expansion} of a game signature $\Gamma$
+is the quiver $\Gamma^*$.
+The vertices of $\Gamma^*$
+are pairs $(v, \vec{k})$
+where $v \in \Gamma$ is a player and
+the path $\vec{k} : \kw{O} \twoheadrightarrow v$ in $\Gamma$
+is a sequence of pending questions.
+For each question $m : u \rightarrow v$
+and each path $\vec{k} : \kw{O} \twoheadrightarrow u$ in $\Gamma$,
+there is an edge
+$m : (u, \vec{k}) \rightarrow (v, \vec{k}m)$ in $\Gamma^*$,
+and for each answer $n \in \kw{ar(m)}$,
+there is an edge
+$n : (v, \vec{k}m) \rightarrow (u, \vec{k})$.
+\end{definition}
+
+The vertices of the well-bracketed expansion can be
+seen as the states of the interaction:
+the first component determines whose turn it is to play,
+the second component lists the currently pending questions,
+and outgoing edges correspond to the possible moves.
+The corresponding definition of
+plays and strategies is as follows.
+
+\begin{definition}[Plays and strategies over a game signature]
+The \emph{plays} of the game signature $\Gamma$ are
+paths from $(\kw{O}, \epsilon)$ to $(O, \vec{k})$ in $\Gamma^*$,
+with $\vec{k} : \kw{O} \twoheadrightarrow \kw{O}$ a path in $\Gamma$:
+\[
+    P_\Gamma := \{ s : (O, \epsilon) \twoheadrightarrow (O, \vec{k}) \in \Gamma^*
+      \mid \vec{k} : \kw{O} \twoheadrightarrow \kw{O} \in \Gamma \} \,.
+\]
+Plays are ordered under the prefix relation on paths,
+so that $s \sqsubseteq t$ whenever there exists
+$s'$ such that $s \cdot s' = t$.
+The \emph{strategies} for $\Gamma$
+are given by the free distributive completion
+of the poset of plays:
+\[
+    \mathcal{S}_G := \mathbf{FCD}(P_\Gamma) \,.
+\]
+\end{definition}
+
+%}}}
+
+\subsection{Operators} %{{{
+
+[The basic idea is that we define
+mappings between the players and edges of game signatures,
+so that an edge of the first game maps to a path between
+the corresponding players of the second game.
+An operator of arity $n$ can be defined by two such mappings:
+\[ \Gamma_I \Leftarrow \Gamma_G \Rightarrow \Gamma_X \,, \]
+where $\Gamma_I = \Gamma_1 \vee \cdots \vee \Gamma_n$ is the \emph{internal} view,
+$\Gamma_G$ is the \emph{global} view,
+and $\Gamma_X$ is the \emph{external} view.
+The internal view is a wedge sum
+$\Gamma_1 \vee \cdots \vee \Gamma_n$
+where the $n$ strategies we want to operate on
+will play.
+The mapping $\Gamma_I \Leftarrow \Gamma_G$
+will determine which global plays correspond
+to which interactions of the $n$ strategies
+(allowing us to synchronize their moves),
+and the mapping $\Gamma_G \Rightarrow \Gamma_X$
+gives the result.
+This works to define all that we want:
+\begin{itemize}
+\item Identity: $0 \Leftarrow [E] \Rightarrow [E,E]$
+\item Composition: $[E,F] \vee [F,G] \Leftarrow [E,F,G] \Rightarrow [E,G]$
+\item Tensor: \[ [E,F] \vee [G,H] \Leftarrow [E,F] \vee [G,H] \Rightarrow
+  [E \otimes G, F \otimes H] \]
+\item The $\kw{Z}$ operator for self-interaction:
+  \[ [E \otimes A, A \otimes F] \Leftarrow
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw] (P) at (-1,0) {$\kw{P}$};
+    \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
+    \path[->] (P) edge[loop left] node[auto] {$A$} (P);
+    \path[->] (P) edge[bend left] node[above] {$E$} (O);
+    \path[->] (O) edge[bend left] node[below] {$F$} (P);
+  \end{tikzpicture} \Rightarrow [E,F] \]
+\end{itemize}
+Then we can reason on operators by reasoning at the level of moves
+in game signature mappings,
+rather than having to handle the complicated
+plays and strategies generated from them
+directly.]
+
+---
+
+At the level of strategies the mapping
+$\Gamma_I \Leftarrow \Gamma_G$ preserved joins
+and so has a Galois adjoint $\Gamma_I \Leftarrow \Gamma_G$,
+which allows us to compose with $\Gamma_G \Rightarrow \Gamma_X$
+to build the overall operator on strategies.
 
 
-\subsection{Composition}
 
 
 
+We will define operators on strategies
+by specifying their actions on moves of the game.
+
+\begin{definition}
+A \emph{quiver homomorphism} from $Q_1$ to $Q_2$
+as a function $f : Q_1 \rightarrow Q_2$ together with,
+for each pair of vertices $u, v \in Q$,
+a function $f_{u,v} : Q_1(u, v) \rightarrow Q_2(f(u), f(v))$
+\end{definition}
+
+\begin{definition}
+A \emph{homomorphism of game signatures} $f : \Gamma_1 \rightarrow \Gamma_2$
+is a homomorphism on the underlying quivers
+such that $f(\kw{O}) = \kw{O}$ and for all
+$m : u \rightarrow v$ in $\Gamma_1$,
+$\kw{ar}(f(m)) = \kw{ar}(m)$.
+\end{definition}
+
+These notions define the categories
+$\mathbf{Quiv}$ and $\mathbf{GS}$
+in a straightforward way.
+Another useful construction will be the
+free category generated by the paths in a quiver.
+
+\begin{definition}
+The \emph{free category} $\vec{Q}$ on $Q$
+has the vertices of $Q$ as objects and
+the paths $s : u \twoheadrightarrow v$
+as morphisms between $u$ and $v$.
+The identity on $u$ is the empty path
+$\epsilon_u : u \twoheadrightarrow u$,
+and the composition of $s : u \twoheadrightarrow v$ and
+$t : v \twoheadrightarrow w$
+is given by their concatenation $s \cdot t$
+(we use opposite directions for $\cdot$ and $\circ$).
+\end{definition}
+
+The free category construction defines a functor
+of type $\mathbf{Quiv} \rightarrow \mathbf{Cat}$
+mapping $Q \in \mathbf{Quiv}$ to $\vec{Q} \in \mathbf{Cat}$.
+This functor is the left adjoint of
+the forgetful functor $U : \mathbf{Cat} \rightarrow \mathbf{Quiv}$.
+The adjunction's unit maps an edge to
+the corresponding path of length one,
+and its initial morphisms extend a quiver homomorphism
+$f : Q \rightarrow U(C)$
+to a functor $f^* : \vec{Q} \rightarrow C$
+which transforms a path
+$e_1 e_2 \cdots e_n : u \twoheadrightarrow v$ in $Q$
+into the morphism
+$f(e_n) \circ \cdots \circ f(e_2) \circ f(e_1) : f(u) \rightarrow f(v)$ in $C$.
+
+These constructions allow us to extend
+the well-bracketed expansion $\Gamma^*$ to a functor
+$-^* : \mathbf{GS} \rightarrow \mathbf{Quiv}$.
 
 
 %}}}
+
+\subsection{Identity and composition} %{{{
+
+\[
+  \begin{tikzpicture}
+    \node[circle,double,draw] (O) at (0:1) {$O$};
+    \node[circle,draw] (R) at (120:1) {$M$};
+    \node[circle,draw] (L) at (-120:1) {$P$};
+    \path[->] (O) edge[bend right] node[auto=right] {$G$} (R);
+    \path[->] (R) edge[bend right] node[auto=right] {$F$} (L);
+    \path[->] (L) edge[bend right] node[auto=right] {$E$} (O);
+  \end{tikzpicture}
+\]
+
+\[
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw] (O) at (0,0) {$\kw{O}$};
+  \end{tikzpicture}
+  \Leftarrow
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw] (O) at (0,0) {$\kw{O}$};
+    \path[->] (O) edge[loop left] node[auto] {$E$} (O);
+  \end{tikzpicture}
+  \Rightarrow
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw] (O) at (1,0) {$\kw{O}$};
+    \node (P) at (0,0) {$\kw{P}$};
+    \path[->] (O) edge[bend left] node[below] {$E$} (P);
+    \path[->] (P) edge[bend left] node[above] {$E$} (O);
+  \end{tikzpicture}
+\]
+
+%}}}
+
+\subsection{Monoidal structure} %{{{
+
+%}}}
+
+\subsection{Self-interaction} %{{{
+
+%}}}
+
+\
 
 %}}}
 
