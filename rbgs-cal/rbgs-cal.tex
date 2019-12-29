@@ -1,4 +1,5 @@
 \documentclass[format=sigplan,authordraft]{acmart}
+\usepackage{amsmath} % in acmart, but helps vim syntax highlighting
 \usepackage{tikz-cd}
 \usepackage{bbm}
 \usepackage{ebproof}
@@ -1572,7 +1573,7 @@ The game ${!E} \multimap {!F}$ will be generated from
 the signature:
 \[
   [E,F] =
-  \begin{tikzpicture}[baseline=(O.base),scale=2]
+  \begin{tikzpicture}[baseline=(O.base),scale=1.5]
     \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
     \node[circle,draw] (P) at (-1,0) {$\kw{P}$};
     \path[->] (P) edge[bend left] node[above] {$E$} (O);
@@ -1783,8 +1784,49 @@ of the poset of plays:
 
 \subsection{Operators} %{{{
 
-We specify describe operators by their action on moves,
-with the following notion as a starting point.
+The strategy specifications we have described
+are fairly complex mathematical objects.
+Because of this, it is challenging to
+define and reason about operators
+directly at the level of strategy specifications.
+To address this,
+we introduce a systematic way of defining operators
+in term of their action on the moves of game signatures.
+To illustrate this method,
+we use the categorical composition of strategies as an example.
+
+The traditional definition of composition
+in categories of games and strategies,
+as given for example in \cite{gamesem99},
+is as follows.
+Given a strategy $\sigma : A \rightarrow B$,
+which plays the game $B$ as the proponent
+and the game $A$ as the opponent,
+and a strategy $\tau : B \rightarrow C$,
+which plays the game $C$ as the proponent
+and the game $A$ as the opponent,
+the strategy $\tau \circ \sigma : A \rightarrow C$
+is obtained by first considering plays
+of a game consisting of the three components $A, B, C$.
+Given such a play $s \in P_{A,B,C}$,
+we can project out
+a play $s \restriction A,B$ for the game $A \rightarrow B$,
+a play $s \restriction B,C$ for the game $B \rightarrow C$, and
+a play $s \restriction A,C$ for the game $A \rightarrow C$.
+The composite strategy $\tau \circ \sigma$
+can then be given as the set of plays:
+\[
+  \tau \circ \sigma =
+    \{ s \restriction A,C \mid
+       s \in P_{A,B,C} \wedge
+       s \restriction A,B \in \sigma \wedge
+       s \restriction B,C \in \tau \} \,.
+\]
+In our setting,
+$s$ will correspond to a play
+in the two-player game signature $[A,B,C]$.
+The projections can be defined as
+operators of the following kind.
 
 \begin{definition}
 An \emph{operator} $\psi : \Gamma_1 \rightarrow \Gamma_2$
@@ -1800,8 +1842,48 @@ in $\Gamma_2$ such that
 $\kw{ar}(m_1) = \cdots = \kw{ar}(m_n) = \kw{ar}(m)$.
 \end{definition}
 
+For instance,
+when composing the strategy specification
+$\sigma \in \mathcal{S}_{[E, F]}$ and
+$\tau \in \mathcal{S}_{[F, G]}$
+to obtain $\tau \circ \sigma \in \mathcal{S}_{[E, F]}$,
+we will use the following operator
+$\psi_X : [E,F,G] \Rightarrow [E,G]$
+to describe the externally observable behavior
+of the game $[E,F,G]$:
+\begin{gather*}
+  \psi_X :
+  \begin{tikzpicture}[baseline=(O.base),scale=1.2]
+    \node[circle,double,draw] (O) at (1,0) {$O$};
+    \node[circle,draw] (P2) at (0,0) {$P_2$};
+    \node[circle,draw] (P1) at (-1,0) {$P_1$};
+    \path[->] (O) edge node[below] {$G$} (P2);
+    \path[->] (P2) edge node[below] {$F$} (P1);
+    \path[->] (P1) edge[bend left] node[above] {$E$} (O);
+  \end{tikzpicture}
+  \Rightarrow
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
+    \node[circle,draw] (P) at (-1,0) {$\kw{P}$};
+    \path[->] (P) edge[bend left] node[above] {$E$} (O);
+    \path[->] (O) edge[bend left] node[below] {$G$} (P);
+  \end{tikzpicture}
+  \\
+  \psi_X(\kw{P}_1) = \psi_X(\kw{P}_2) = \kw{P} \qquad
+  \psi_X(\kw{O}) = \kw{O}
+  \\
+  \psi_X(m) = \begin{cases}
+    \epsilon & \text{if } m \in F \\
+    m & \text{otherwise}
+  \end{cases}
+\end{gather*}
+We define the internal views
+$\psi_1 : [E,F,G] \rightarrow [F,G]$ and
+$\psi_2 : [E,F,G] \rightarrow [E,F]$
+in similar ways.
 Operators of this kind can be extended to
-game states, plays, and ultimately strategies.
+game states, plays, and ultimately strategies
+in the following way.
 
 \begin{definition}
 An operator
@@ -1839,6 +1921,106 @@ the plays of $\Gamma_1$ yield plays of $\Gamma_2$,
 and the action of $\psi$ on strategies can be defined
 as $\kw{FCD}(\psi)$.
 \end{definition}
+
+We can then formulate our own definition of composition
+as follows.
+The ``footprint'' of the plays $s_1 \in P_{[E,F]}$ and $s_2 \in P_{[F,G]}$
+can be defined as:
+\[
+  \psi(s_1, s_2) :=
+    \bigsqcup_{s \in P_{[E,F,G]}}
+    \{ \psi_1(s) \sqsubseteq s_1 \wedge \psi_2(s) \sqsubseteq s_2 \} ;
+    \psi_X(s) \,.
+\]
+In other words,
+the angel chooses a global play $s$
+matching $s_1$ and $s_2$
+and returns its external view.
+The composition operator extends this to strategies
+in the usual way:
+\[
+  \psi(\sigma, \tau) := 
+    s_1 \leftarrow \sigma ;
+    s_2 \leftarrow \tau ;
+    \psi(s_1, s_2) \,.
+\]
+We generalize this approach with the following definition.
+
+\begin{definition}
+An \emph{operator} $\psi$ of arity $n$
+from a family of game signature $(\Gamma_i)_{1 \le i \le n}$
+to a game signature $\Gamma_X$
+is given by:
+\begin{itemize}
+\item A game signature $\Gamma_G$ called the \emph{global signature};
+\item An \emph{external view} $\psi_X : \Gamma_G \rightarrow \Gamma_X$;
+\item An \emph{internal view} $\psi_i : \Gamma_G \rightarrow \Gamma_i$
+  for each $1 \le i \le n$.
+\end{itemize}
+The image of the plays $(s_i)_{1 \le i \le n}$
+where $s_i \in P_{\Gamma_i}$
+is given by:
+\[
+  \psi(s_1, \ldots, s_n) :=
+    \bigsqcup_{s \in P_{\Gamma_G}}
+    \{ \forall i \bdot \psi_i(s) \sqsubseteq s_i \} ;
+    \psi_X(s) \,.
+\]
+Then the action of $\psi$ on strategies is given by:
+\[
+  \psi(\sigma_1, \ldots, \sigma_n) :=
+    s_1 \leftarrow \sigma_1 \, ; \, {\cdots} \, ; \,
+    s_n \leftarrow \sigma_n \, ; \,
+    \psi(s_1, \ldots, s_n) \,.
+\]
+\end{definition}
+
+%}}}
+
+\subsection{Identity and composition} %{{{
+
+Identity is defined as a nullary operator
+$\mathrm{id}_E : 1 \rightarrow [E,E]$
+with global signature $[E]$:
+\begin{gather*}
+  \mathrm{id}_E^X :
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw,double] (O) at (0,0) {$\kw{O}$};
+    \path[->] (O) edge[loop left] node[auto] {$E$} (O);
+  \end{tikzpicture}
+  \Rightarrow
+  \begin{tikzpicture}[baseline=(O.base)]
+    \node[circle,draw,double] (O) at (1,0) {$\kw{O}$};
+    \node[circle,draw] (P) at (0,0) {$\kw{P}$};
+    \path[->] (O) edge[bend left] node[below] {$E$} (P);
+    \path[->] (P) edge[bend left] node[above] {$E$} (O);
+  \end{tikzpicture}
+  \\
+  \mathrm{id}_E^X(\kw{O}) := \kw{O}
+  \qquad
+  \mathrm{id}_E^X(m) := mm
+\end{gather*}
+The definition of composition has been given above.
+
+%}}}
+
+\subsection{Monoidal structure} %{{{
+
+We define the tensor product of strategies
+as the operator
+$\psi^{\otimes} : [E_1,F_1] \times [E_2,F_2] \rightarrow
+ [E_1 \otimes E_2, F_1 \otimes F_2]$
+with global plays in
+$[E_1,F_1] \vee [E_2,F_2]$.
+
+%}}}
+
+\subsection{Self-interaction} %{{{
+
+%}}}
+
+
+
 
 
 [The basic idea is that we define
@@ -1889,13 +2071,6 @@ $\Gamma_I \Leftarrow \Gamma_G$ preserved joins
 and so has a Galois adjoint $\Gamma_I \Leftarrow \Gamma_G$,
 which allows us to compose with $\Gamma_G \Rightarrow \Gamma_X$
 to build the overall operator on strategies.
-
-
-
-
-
-We will define operators on strategies
-by specifying their actions on moves of the game.
 
 \begin{definition}
 A \emph{quiver homomorphism} from $Q_1$ to $Q_2$
@@ -1950,47 +2125,6 @@ These constructions allow us to extend
 the well-bracketed expansion $\Gamma^*$ to a functor
 $-^* : \mathbf{GS} \rightarrow \mathbf{Quiv}$.
 
-
-%}}}
-
-\subsection{Identity and composition} %{{{
-
-\[
-  \begin{tikzpicture}
-    \node[circle,double,draw] (O) at (0:1) {$O$};
-    \node[circle,draw] (R) at (120:1) {$M$};
-    \node[circle,draw] (L) at (-120:1) {$P$};
-    \path[->] (O) edge[bend right] node[auto=right] {$G$} (R);
-    \path[->] (R) edge[bend right] node[auto=right] {$F$} (L);
-    \path[->] (L) edge[bend right] node[auto=right] {$E$} (O);
-  \end{tikzpicture}
-\]
-
-\[
-  \begin{tikzpicture}[baseline=(O.base)]
-    \node[circle,draw] (O) at (0,0) {$\kw{O}$};
-  \end{tikzpicture}
-  \Leftarrow
-  \begin{tikzpicture}[baseline=(O.base)]
-    \node[circle,draw] (O) at (0,0) {$\kw{O}$};
-    \path[->] (O) edge[loop left] node[auto] {$E$} (O);
-  \end{tikzpicture}
-  \Rightarrow
-  \begin{tikzpicture}[baseline=(O.base)]
-    \node[circle,draw] (O) at (1,0) {$\kw{O}$};
-    \node (P) at (0,0) {$\kw{P}$};
-    \path[->] (O) edge[bend left] node[below] {$E$} (P);
-    \path[->] (P) edge[bend left] node[above] {$E$} (O);
-  \end{tikzpicture}
-\]
-
-%}}}
-
-\subsection{Monoidal structure} %{{{
-
-%}}}
-
-\subsection{Self-interaction} %{{{
 
 %}}}
 
