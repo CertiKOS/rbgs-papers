@@ -97,7 +97,7 @@ is softward accompanied by
 mechanized, machine-checkable proofs of correctness.
 To construct a certified program,
 we must not only write its code in a given programming language,
-but also write a formal specification of its intended behavior
+but also formally specify intended behavior
 and construct, using specialized tools,
 evidence that the program
 indeed conforms to the specification.
@@ -105,16 +105,16 @@ indeed conforms to the specification.
 In order to connect the program and specification
 using a formal proof,
 we need a formal mathematical model of
-the languages used to formulate them.
+the languages in which they are described.
 The tools used to reason about them
-should then be sound with respect to this interpretation.
+should be sound with respect to this interpretation.
 Ideally,
 this will be demonstrated in an established,
 general-purpose proof assistant,
 diminishing the possibility that
 incorrect programs will be validated because of
 accidental or deliberate mistake
-in the software used to construct proofs.
+in the software used to construct and check proofs.
 
 %}}}
 
@@ -132,7 +132,7 @@ often by introducing novel techniques
 and mathematical models.
 In this context,
 there has been increasing interest in
-rendering these systems (and their proofs of correctness)
+making these components (and their proofs of correctness)
 interoperable
 in order to build certified systems
 at an even larger scale.
@@ -140,14 +140,13 @@ at an even larger scale.
 This is exemplified by the DeepSpec project \cite{deepspec},
 which seeks to connect various components
 specified and verified in the Coq proof assistant.
-The key idea of the DeepSpec project
+The key idea behind DeepSpec
 is to interpret specifications as \emph{interfaces}
 between components.
 When a component providing a certain interface
 has been verified,
-another component can in turn
-rely on the corresponding specification
-for its own proof of correctness.
+client components can rely on it
+for their own proofs of correctness.
 Standardizing this process would make it possible
 to construct large-scale certified systems
 by assembling off-the-shelf certified components.
@@ -233,10 +232,9 @@ across projects
 there exists a great diversity
 of semantics models and verification techniques.
 This makes it difficult to formulate
-interface specifications to connect components
-in specific cases,
-let alone constructing certified systems
-from off-the-shelf certified components.
+interface specifications to connect specific components,
+let alone devising a general system
+to express such interfaces.
 
 Worse yet,
 this diversity is not simply a historical accident.
@@ -366,7 +364,7 @@ Notions of ``syntax'' and ``semantics'' are relative concepts.]
 
 %}}}
 
-\subsection{Contributions}
+\subsection{Contributions} %{{{
 
 Our central claim is that a synthesis
 of the existing research on
@@ -424,6 +422,8 @@ in the context of certified abstraction layers:
   and outline possible next steps
   in our research programme.
 \end{itemize}
+
+%}}}
 
 %}}}
 
@@ -510,9 +510,8 @@ To demonstrate the applicability of our results,
 we will use them to construct
 increasingly expressive theories of
 \emph{certified abstraction layers}.
-We start with a semi-formal description,
-and will fill in the blanks as we go.
-
+%We start with a semi-formal description,
+%and will fill in the blanks as we go.
 As described in \cite{popl15},
 a certified abstraction layer
 consists of a \emph{layer implementation} together with
@@ -546,17 +545,79 @@ Here $\mathcal{P}^1$ corresponds to the \emph{maybe} monad:
   \mathcal{P}^1(A) := \{ x \subseteq A : |x| \le 1 \} \,,
 \]
 where the empty set $\varnothing \in \mathcal{P}^1(A)$
-is indiscriminately to capture
+is used indiscriminately to capture
 failure, silent divergence and otherwise unspecified behaviors.
 
 As a running example,
-we will use a certified layer
-implementing a bounded queue with at most $N$ elements
+we will use the certified layer
+depicted in Fig.~\ref{fig:cal},
+which implements a bounded queue with at most $N$ elements
 using a circular buffer.
-The definition of this abstraction layer
-is given in Fig.~\ref{fig:cal}.
+The underlay interface $L_\kw{rb}$
+contains an array $f \in V^N$
+with $N$ values of type $V$ and two counters
+which will take values in the interval $0 \le c_1, c_2 < n$.
+The array can be accessed through the primitives
+$\kw{get}$ and $\kw{set}$;
+the primitive $\kw{inc}_1$ and $\kw{inc}_2$
+increment the corresponding counter
+and return the counter's old value.
 
-[add more here]
+The overlay $L_\kw{bq}$ features two primitives
+$\kw{enq}$ and $\kw{deq}$
+which respectively add a new element to the queue
+and remove the oldest element added.
+If we attempt to add an element
+which would overflow the queue's capacity $N$,
+or we attempt to remove an element from an empty queue,
+the result is undefined.
+
+The layer implementation $N$
+stores the queue's elements into the array,
+between the indices given by the counters' values.
+This is expressed by the simulation relation $R$,
+which explains how overlay states are realized by $M$
+in terms of underlay state.
+The program $M_\kw{bq}$ can be interpreted in the monad:
+\[
+    S_\kw{rb} \rightarrow \mathcal{P}^1(- \times S)
+\]
+used to define the operations of $L_\kw{rb}$.
+Correctness is proved by showing
+for each operation
+$\kw{op} \in \{ \kw{enq}(v), \kw{deq}(*) \mid v \in V \}$
+the simulation diagram:
+\begin{equation}
+  \label{eqn:sim}
+  L_\kw{bq}.\kw{op}
+  \: \mathrel{[R \rightarrow \mathcal{P}^\le({=} \times R)]} \:
+  M_\kw{bq}.\kw{op} \,,
+\end{equation}
+where the relators $\rightarrow$, $\times$, $\mathcal{P}^\le$
+are defined by:
+\[
+  \begin{array}{rclcl}
+    f & [R \rightarrow R'] & g & \Leftrightarrow &
+    \forall x y \bdot x \mathrel{R} y \Rightarrow
+    f(x) \mathrel{R'} g(y) \\
+  x & [R_1 \times R_2] & y & \Leftrightarrow &
+    \pi_1(x) \mathrel{R_1} \pi_1(y) \wedge
+    \pi_2(x) \mathrel{R_2} \pi_2(y) \\
+  s & \mathcal{P}^\le(R) & t & \Leftrightarrow &
+    \forall x \in s \bdot \exists y \in t \bdot x \mathrel{R} y \,.
+  \end{array}
+\]
+We will write $L_\kw{rb} \vdash_R M : L_\kw{bq}$
+to express that condition (\ref{eqn:sim}) holds.
+Certified abstraction layers presented in this way
+can be vertically composed:
+\[
+  \begin{prooftree}
+    \hypo{L_2 \vdash_S M : L_3}
+    \hypo{L_1 \vdash_R N : L_2}
+    \infer2{L_1 \vdash_{S \circ R} M[N] : L_3}
+  \end{prooftree}
+\]
 
 \subsection{Dual nondeterminism and refinement} \label{sec:refcal} %{{{
 
