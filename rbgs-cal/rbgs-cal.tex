@@ -400,11 +400,9 @@ in the context of certified abstraction layers:
   The behavior of certified abstraction layers
   can then be represented canonically,
   and reentrant layer interfaces can be modelled.
-\item
-  We conclude in \S\ref{sec:rw}
-  by a brief summary of related work
-  and outline possible next steps.
 \end{itemize}
+We conclude in \S\ref{sec:rw}
+with a brief outline of related and future work.
 
 %}}}
 
@@ -1855,9 +1853,147 @@ Hence, $\langle f_i \rangle_{i \in I}$ is uniquely defined as:
 
 %}}}
 
-\subsection{Certified abstraction layers}
+\subsection{Certified abstraction layers} %{{{
 
-[What the theory of CAL becomes with the interaction monad.]
+Certified abstraction layers can be embedded into
+the category $\gcat^{ib}$ as follows.
+
+\paragraph{Signatures}
+
+The signature of a layer interface or implementation
+can be encoded as an effect signature.
+For example:
+\begin{align*}
+  E_\kw{bq} &:= \{
+    \kw{enq}[v] : \mathbbm{1}, \kw{deq} : V \mid
+    v \in V \} \\
+  E_\kw{rb} &:= \{
+    \kw{set}[i, v] : \mathbbm{1},
+    \kw{get}[i] : V,
+    \kw{inc}_1 : \mathbb{N},
+    \kw{inc}_2 : \mathbb{N} \mid
+    i \in \mathbb{N}, v \in V \}
+\end{align*}
+A layer implementation $M$ with
+an underlay signature $E$ and
+an overlay signature $F$
+can then be interpreted as a morphism
+$\llbracket M \rrbracket : E \rightarrow F$
+in a straightforward manner,
+by interpreting underlay operations
+used in the definition of $M$
+by the corresponding interaction primitives:
+\[
+  \llbracket M \rrbracket^m := (M.m)[e := \mathbf{I}_E^e]_{e \in E}
+\]
+
+\paragraph{Interfaces}
+In order to handle the layer's abstract data,
+we can extend signatures with state in the following way:
+\[
+  E@S :=
+    \{ m@k : \kw{ar}(m) \times S \mid
+       m \in E, k \in S \}
+\]
+A layer interface $L$ with a signature $E$
+and states in $S$
+corresponds to a morphism $\llbracket L \rrbracket : 1 \rightarrow E@S$
+almost directly:
+\[
+  \llbracket L \rrbracket^{m@s} :=
+    \bigsqcup L.m@s
+\]
+
+\paragraph{Keeping state}
+For a morphism $f : E \rightarrow F$,
+we construct $f@S : E@S \rightarrow F@S$
+which keeps updating a state $k \in S$
+as it performs effects in $E@S$,
+then adjoins the final state to any answer
+returned by $f$.
+We define
+$-\#- : \bar{P}_E \times S \rightarrow \mathcal{S}_{E@S}$:
+\begin{align*}
+  \underline{v}\#k &:= \underline{v@k} \\
+  \underline{m}\#k &:= \underline{m@k} \\
+  \underline{m}ns\#k &:=
+    \bigsqcup_{k' \in S} \, \underline{m@k} \,\, n@k' \, s\#k' \,,
+\end{align*}
+and extend it to morphisms as $(f@S)^{m@k} := f^m\#k$.
+Then in particular,
+running a layer implementation
+$\llbracket M \rrbracket : E \rightarrow F$
+on top of a layer interface
+$\llbracket L \rrbracket : 1 \rightarrow E@S$
+yields the morphism
+$\llbracket M \rrbracket @ S \circ \llbracket L \rrbracket :
+ 1 \rightarrow F@S$.
+
+\paragraph{Simulation relations}
+
+The most interesting aspect of our embedding
+is the representation of simulation relations.
+We will see that dual nondeterminism
+allows us to represent them as regular morphisms.
+
+Recall the definition of
+the correctness judgement $L_1 \vdash_R L_2$,
+which means that a layer implementation $M$
+correctly implement $L_2$ on top of $L_1$
+through a simulation relation $R \subseteq S_1 \times S_2$.
+If we write $L_1'$ for the layer interface obtained
+by interpreting $M$ on top of $L_1$,
+then:
+\[
+  L_1 \vdash_R M : L_2 \:\Leftrightarrow\:
+  \forall m \in E_2 \bdot
+    {L_1'}^m
+    \mathrel{[R \rightarrow \mathcal{P}^\le({=} \times R)]}
+    L_2^m
+\]
+We will use families of morphisms
+$R_*^E : E@S_2 \rightarrow E@S_1$ and
+$R^*_E : E@S_1 \rightarrow E@S_2$
+to encode this judgement
+as two equivalent refinement properties:
+\begin{align*}
+  (R^*_E)^{m@k_1} &:=
+    \bigsqcup_{k_1 \mathrel{R} k_2}
+    \bigsqcup_{k_2' \in S_2}
+    \bigsqcap_{k_1' \mathrel{R} k_2'}
+    \, \underline{m@k_2} \, n@k_2' \, \underline{n@k_1'} \\
+  (R_*^E)^{m@k_2} &:=
+    \bigsqcap_{k_1 \mathrel{R} k_2}
+    \bigsqcup_{k_1' \in S_1}
+    \bigsqcup_{k_1' \mathrel{R} k_2'}
+    \, \underline{m@k_1} \, n@k_1' \, \underline{n@k_2'}
+\end{align*}
+In the first case,
+$R^*_E$ represents a high-level behavior
+which uses overlay states $k_1, k_2' \in S_2$
+as a low-level 
+
+translates between a low-level environment,
+which uses underlay states $k_1, k_1' \in S_1$,
+and an overlay specification,
+If there is \emph{any} overlay state matching
+the current underlay state,
+the client expects to be able to rely on 
+
+\begin{lemma}
+Define
+$\sigma := \llbracket M \rrbracket @ S_1 \circ \llbracket L_1 \rrbracket$.
+Then:
+\[
+  L_1 \vdash_R M : L_2
+  \: \Leftrightarrow \:
+  R^*_{E_2} \!\circ \llbracket L_2 \rrbracket \sqsubseteq \sigma
+  \: \Leftrightarrow \:
+  \llbracket L_2 \rrbracket \sqsubseteq R_*^{E_2} \!\circ \sigma
+\]
+\end{lemma}
+
+%}}}
 
 %}}}
 
