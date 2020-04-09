@@ -20,7 +20,7 @@
 \newcommand{\nonmodule}[1]{\UnaryInfC{\makebox[\layerwidth]{#1}}}
 \newcommand{\layer}[1]{\RightLabel{\footnotesize #1}}
 
-\title{Refinement-Based Game Semantics for CertiKOS}
+\title{Refinement-Based Game Semantics for \\ Certified Abstraction Layers}
 \author{J\'er\'emie Koenig}
 
 \begin{document}
@@ -88,7 +88,7 @@ $C[-] \sqsubseteq C[-]$
   \vfill
   Things we would like to improve:
   \begin{itemize}
-    \item Fixed interaction model (primitive calls)
+    \item More flexible interaction model (not just primitive calls)
     \item Interfacing with other projects
     \item Upcalls etc.
     \item Oracle is not very compositional
@@ -189,10 +189,10 @@ $C[-] \sqsubseteq C[-]$
       S_n \sqsubseteq P \,.
   \]
 
-  The refinement calculus allows specifications to contain
-  unbounded angelic and demonic choices.
-  They correspond to the join and meet operations
-  in a lattice associated with $\sqsubseteq$:
+  The refinement calculus allows %specifications to contain
+  unbounded dual nondeterminism,
+  %unbounded angelic and demonic choices.
+  in the form of a lattice structure associated with $\sqsubseteq$:
 %  \[
 %    \begin{prooftree}
 %      \hypo{P\{C_1\}Q}
@@ -210,15 +210,17 @@ $C[-] \sqsubseteq C[-]$
 %      \infer2{P\{C_1 \sqcap C_2\}Q}
 %    \end{prooftree}
 %  \]
-  \begin{gather*}
+  \begin{align*}
     (\forall i \in I \,.\, P_i \sqsubseteq P')
-    \: \Rightarrow \:
+    \: &\Rightarrow \:
     \bigsqcup_{i \in I} P_i \: \sqsubseteq \: P'
+    & & \text{(angelic/env. choice)}
     \\
     (\exists i \in I \,.\, P_i \sqsubseteq P')
-    \: \Rightarrow \:
+    \: &\Rightarrow \:
     \bigsqcap_{i \in I} P_i \: \sqsubseteq \: P'
-  \end{gather*}
+    & & \text{(demonic/system choice)}
+  \end{align*}
 
   \textbf{Why we like it:}
   Use this to uniformly model
@@ -237,8 +239,8 @@ $C[-] \sqsubseteq C[-]$
 \begin{frame}{Overview}
   We will combine these ingredients into
   a series of general-purpose models.
-  This week I focus on the game model I build
-  using the \emph{interaction specification monad}.
+  This week I focus on %the game model I build using
+  the \emph{interaction specification monad}.
 
   \vfill
   Similar to interaction trees:
@@ -247,6 +249,8 @@ $C[-] \sqsubseteq C[-]$
     \item Use a variant of the \emph{free monad} to
       describe simple strategies.
   \end{itemize}
+
+  \vfill
   Then:
   \begin{itemize}
     \item Add a lattice structure to support specifications;
@@ -262,8 +266,8 @@ $C[-] \sqsubseteq C[-]$
   Effect signatures specify a set of operations
   and their return type:
   \[
-    E_\mathsf{bq} := \{ \mathsf{enq}[v] : \mathbbm{1} \mid v \in V \}
-              \uplus \{ \mathsf{deq} : V \}
+    E_\mathsf{bq} :=
+    \{ \mathsf{enq}[v] : \mathbbm{1}, \mathsf{deq} : V \mid v \in V \}
   \]
   Then a computation with effects in $E$ and a result in $X$
   is described using plays of the form:
@@ -275,11 +279,11 @@ $C[-] \sqsubseteq C[-]$
   \vfill
   The monad $\mathcal{I}_E$ adds a lattice structure.
   Operations $(m : N) \in E$ yield
-  monadic operations $m \in \mathcal{I}_E(N)$ which record events:
+  monadic operations $\mathbf{I}^m \in \mathcal{I}_E(N)$ which record events:
   \[
     \mathsf{rot} \in \mathcal{I}_{E_\mathsf{bq}}(V)
-      := v \leftarrow \mathsf{deq} ;
-        \mathsf{enq}[v] ; \mathsf{ret}(v)
+      := v \leftarrow \mathbf{I}^\mathsf{deq} ;
+        \mathbf{I}^{\mathsf{enq}[v]} ; \mathsf{ret}(v)
   \]
   represents the behavior $
     \bigsqcup_{v \in V} \:
@@ -303,16 +307,21 @@ $C[-] \sqsubseteq C[-]$
   \[
     (g \circ f)^m := g^m[q := f^q]_{q \in F} \qquad (m \in G)
   \]
+  %where $x[q := f^q]_{q \in F}$ interprets $q$ with $f^q$ so that:
+  %\[
+  %  \mathbf{I}^q[q := f^q]_q = f^q \qquad
+  %  x[q := \mathbf{I}^q] = x
+  %\]
 \end{frame}
 
 \begin{frame}{Example}
 For the signatures:
 \begin{align*}
-  E_\mathsf{bq} &:= \{ \mathsf{enq}[v] : \mathbbm{1}, \mathsf{deq} : V \} \\
-  E_\mathsf{rb} &:= \{ \mathsf{set}[n,v] : \mathbbm{1},
-                       \mathsf{get} : V,
+  E_\mathsf{rb} &:= \{ \mathsf{set}[i,v] : \mathbbm{1},
+                       \mathsf{get}[i] : V,
                        \mathsf{inc}_1 : \mathbb{N},
                        \mathsf{inc}_2 : \mathbb{N} \} \\
+  E_\mathsf{bq} &:= \{ \mathsf{enq}[v] : \mathbbm{1}, \mathsf{deq} : V \} \\
   E_\mathsf{rt} &:= \{ \mathsf{rot} : V \}
 \end{align*}
 Consider $M : E_\mathsf{rb} \rightarrow E_\mathsf{bq}$
