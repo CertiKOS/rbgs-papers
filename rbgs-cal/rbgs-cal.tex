@@ -796,65 +796,6 @@ and to $\bot$ otherwise.
 
 %}}}
 
-\subsection{Effect signatures} \label{sec:bg:sig} %{{{
-
-The framework of \emph{algebraic effects}
-models computations as terms in an algebra
-whose operations represent effects:
-a term $m(x_1, \ldots x_n)$
-represents a computation which first
-triggers an effect $m$,
-then continues as a computation derived from
-the subcomputations $x_1, \ldots x_n$.
-For example,
-the term:
-\[
-    \kw{readbit}(
-      \kw{print}["\text{Hello}"](\kw{done}),
-      \kw{print}["\text{World}"](\kw{done}))
-\]
-could denote a computation which
-first reads one bit of information,
-then depending on the result
-causes the words ``Hello'' or ``World'' to be output,
-and finally terminates.
-
-Under this approach,
-effects can be described as algebraic theories:
-a signature describes the set of operations together with their arities,
-and a set of equations describes their behaviors
-by specifying which computations are equivalent.
-The example above uses a signature with the operations
-$\kw{done}$ of arity $0$,
-$\kw{readbit}$ of arity $2$,
-and a family of operations $(\kw{print}[s])_{s \in \kw{string}}$
-of arity $1$.
-An equation for this signature is:
-\[
-    \kw{print}[s](\kw{print}[t](x)) =
-    \kw{print}[st](x) \,,
-\]
-which indicates that
-printing the string $s$ followed by
-printing the string $t$ is equivalent to
-printing the string $st$ in one go.
-
-In this work,
-we use effect signatures to represent
-the possible external interactions
-of a computation,
-but we will not use equational theories.
-The \emph{interaction specification monad} $\mathcal{I}_E$
-presented in \S\ref{sec:intspec}
-combines the dual nondeterminism of $\mathbf{FCD}$ with
-uninterpreted effects taken from
-an arbitrary effect signature $E$.
-We will however make it possible to interpret effects
-into another completely distributive lattice,
-modeling \emph{effect handlers}.
-
-%}}}
-
 \subsection{Game semantics} \label{sec:strat} %{{{
 
 Game semantics is an approach to compositional semantics
@@ -1016,6 +957,168 @@ of the system.
 %between the outcomes $s m_1$ and $s m_2$.
 %
 %%}}}
+
+%}}}
+
+\subsection{Algebraic effects} \label{sec:bg:sig} %{{{
+
+The framework of \emph{algebraic effects}
+models computations as terms in an algebra
+whose operations represent effects:
+a term $m(x_1, \ldots x_n)$
+represents a computation which first
+triggers an effect $m$,
+then continues as a computation derived from
+the subcomputations $x_1, \ldots x_n$.
+For example,
+the term:
+\[
+    \kw{readbit}(
+      \kw{print}["\text{Hello}"](\kw{done}),
+      \kw{print}["\text{World}"](\kw{done}))
+\]
+could denote a computation which
+first reads one bit of information,
+then depending on the result
+causes the words ``Hello'' or ``World'' to be output,
+and finally terminates.
+
+Under this approach,
+effects can be described as algebraic theories:
+a signature describes the set of operations together with their arities,
+and a set of equations describes their behaviors
+by specifying which computations are equivalent.
+The example above uses a signature with the operations
+$\kw{done}$ of arity $0$,
+$\kw{readbit}$ of arity $2$,
+and a family of operations $(\kw{print}[s])_{s \in \kw{string}}$
+of arity $1$.
+An equation for this signature is:
+\[
+    \kw{print}[s](\kw{print}[t](x)) =
+    \kw{print}[st](x) \,,
+\]
+which indicates that
+printing the string $s$ followed by
+printing the string $t$ is equivalent to
+printing the string $st$ in one go.
+In this work,
+we use effect signatures to represent
+the possible external interactions
+of a computation,
+but we will not use equational theories.
+We will however make it possible to interpret effects,
+modeling \emph{effect handlers} \cite{eff}.
+
+\begin{definition}
+An \emph{effect signature}
+is a set $E$ of operations
+together with a mapping $\kw{ar}$,
+which assigns to each $e \in E$ a set $\kw{ar}(e)$
+called the \emph{arity} of $e$.
+We will use the notation
+$E = \{ e_1 : \kw{ar}(e_1), \: e_2 : \kw{ar}(e_2), \: \ldots \}$
+to describe effect signatures.
+\end{definition}
+
+Note that in this definition,
+arities are \emph{sets} rather than natural numbers.
+This allows the representation of effects
+with a potentially infinite number of outcomes.
+The examples above
+used effects from the following signature:
+\[
+  E_\kw{io} :=
+  \{ \kw{readbit} : \mathbbm{2}, \:
+     \kw{print}[s] : \mathbbm{1}, \:
+     \kw{done} : \varnothing \mid
+     s \in \kw{string} \}
+\]
+
+The most direct way to interpret an effect signature
+is the algebraic point of view,
+in which it induces a set of terms
+built out of the signature's operations.
+
+An effect signature can also be used
+for decribing the interface of a monad $T$,
+where each effect $e \in E$ corresponds to
+a computation of type $T(\kw{ar}(e))$.
+Presented as a monadic expression of type $T(\varnothing)$,
+the example above corresponds to:
+\[
+  b \leftarrow \kw{readbit} \: ; \:
+  \kw{print}[s_b] \: ; \:
+  \kw{done}
+\]
+where $s_0 = "\text{Hello}"$ and $s_1 = "\text{World}"$.
+Monads which offer this structure
+include the free monad on the signature $E$,
+which leaves effects entirely uninterpreted;
+roughly, its computations of type $A$
+correspond to terms over the signature
+$E \uplus \{ v : \varnothing \mid v \in A \}$.
+The interaction specification monad $\mathcal{I}_E$
+presented in \S\ref{sec:intspec} is a version of the free monad
+which combines the dual nondeterminism of $\mathbf{FCD}$ with
+uninterpreted effects taken the signature $E$.
+
+Finally,
+an effect signature can also be seen as
+a particularly simple \emph{game},
+in which the proponent chooses a question $m \in E$ and
+the opponent responds with an answer $n \in \kw{ar}(m)$.
+Then the terms induced by the signature
+are \emph{strategies}
+for an iterated version of this game.
+Indeed, the abstract syntax tree of our example term
+can directly be read as the strategy:
+\[
+  \begin{tikzpicture}[scale=0.8]
+    %\node (W) at (0,0) {};
+    \node (R) at (0,-1) {$\kw{readbit}$};
+    \node (W0) at (-2,-2) {$\kw{print}["\text{Hello}"]$};
+    \node (W1) at (+2,-2) {$\kw{print}["\text{World}"]$};
+    \node (K0) at (-2,-3) {$\kw{done}$};
+    \node (K1) at (+2,-3) {$\kw{done}$};
+    %\path (W) edge node[auto,swap] {$*$} (R);
+    \path (R) edge node[auto,swap] {0} (W0);
+    \path (R) edge node[auto] {1} (W1);
+    \path (W0) edge node[auto,swap] {$*$} (K0);
+    \path (W1) edge node[auto,swap] {$*$} (K1);
+  \end{tikzpicture}
+\]
+where we interpret edge labels
+as moves of the environment,
+and node labels as moves of the system.
+
+%Terms are constructed by
+%applying function symbols $e \in E$
+%to subcomputations given for each $r \in \kw{ar}(e)$.
+%In simple cases,
+%the computation $e(x_r)_{r \in \kw{ar}(e)}$
+%first triggers an effect $e$;
+%then the context chooses $r$
+%and resumes the computation as $x_r$.
+%For example,
+%the following effect signature
+%models a very basic input/output facility:
+%\[
+%  E_\kw{io} :=
+%    \{ \kw{readbit} : \mathbbm{2}, \:
+%       \kw{writebit}[n] : \mathbbm{1} \mid
+%       n \in \mathbbm{2} \}
+%\]
+%A computation which writes a zero,
+%reads one bit, echoes its complement
+%and continues as the computation $k$
+%can be written as:
+%\[
+%  \kw{writebit}[0](
+%    \kw{readbit}(
+%      \kw{writebit}[1](k),
+%      \kw{writebit}[0](k)))
+%\]
 
 %}}}
 
@@ -1245,126 +1348,6 @@ a first category of games and strategy specifications,
 where $\mathbf{I}_E$ is used as
 the identity morphism for $E$ and
 the substitution operator is used to define composition.
-
-%}}}
-
-\subsection{Effect signatures} %{{{
-
-\begin{definition}
-An \emph{effect signature}
-is a set $E$ of operations
-together with a mapping $\kw{ar}$,
-which assigns to each $e \in E$ a set $\kw{ar}(e)$
-called the \emph{arity} of $e$.
-We will use the notation
-$E = \{ e_1 : \kw{ar}(e_1), \: e_2 : \kw{ar}(e_2), \: \ldots \}$
-to describe effect signatures.
-\end{definition}
-
-The most direct way to interpret an effect signature
-is the algebraic point of view,
-in which it induces a set of terms
-built out of the signature's operations,
-such as the example from \S\ref{sec:bg:sig}:
-\[
-    \kw{readbit}(
-      \kw{print}["\text{Hello}"](\kw{done}),
-      \kw{print}["\text{World}"](\kw{done}))
-\]
-The signature for the effects used in this term
-can be written:
-\[
-  E_\kw{io} :=
-  \{ \kw{readbit} : \mathbbm{2}, \:
-     \kw{print}[s] : \mathbbm{1}, \:
-     \kw{done} : \varnothing \mid
-     s \in \kw{string} \}
-\]
-
-An effect signature can also be used
-for decribing the interface of a monad $T$,
-where each effect $e \in E$ corresponds to
-a computation of type $T(\kw{ar}(e))$.
-Presented as a monadic expression of type $T(\varnothing)$,
-the example above corresponds to:
-\[
-  b \leftarrow \kw{readbit} \: ; \:
-  \kw{print}[s_b] \: ; \:
-  \kw{done}
-\]
-where $s_0 = "\text{Hello}"$ and $s_1 = "\text{World}"$.
-Monads which offer this structure
-include the free monad on the signature $E$,
-which leaves effects entirely uninterpreted;
-roughly, its computations of type $A$
-correspond to terms over the signature
-$E \uplus \{ v : \varnothing \mid v \in A \}$.
-The interaction specification monad $\mathcal{I}_E$
-described in this section is another example
-of a monad with this interface.
-It extends the free monad
-to incorporate
-a completely distributive lattice structure.
-
-Finally,
-an effect signature can also be seen as
-a particularly simple \emph{game},
-where plays consist of a single question $m \in E$ from the opponent,
-followed by a single answer $n \in \kw{ar}(m)$ from the proponent.
-Then the terms induced by the signature
-roughly correspond to a certain kind of \emph{strategies}
-for the game $!(E^\bot)$,
-in which the environment initiates successive
-instances of $E$ which it plays as the proponent,
-with the system as the opponent.
-Indeed, the abstract syntax tree of our example term
-can directly be read as the strategy:
-\[
-  \begin{tikzpicture}[scale=0.7]
-    \node (W) at (0,0) {};
-    \node (R) at (0,-1) {$\kw{readbit}$};
-    \node (W0) at (-2,-2) {$\kw{print}["\text{Hello}"]$};
-    \node (W1) at (+2,-2) {$\kw{print}["\text{World}"]$};
-    \node (K0) at (-2,-3) {$\kw{done}$};
-    \node (K1) at (+2,-3) {$\kw{done}$};
-    \path (W) edge node[auto,swap] {$*$} (R);
-    \path (R) edge node[auto,swap] {0} (W0);
-    \path (R) edge node[auto] {1} (W1);
-    \path (W0) edge node[auto,swap] {$*$} (K0);
-    \path (W1) edge node[auto,swap] {$*$} (K1);
-  \end{tikzpicture}
-\]
-where we interpret edge labels
-as moves of the environment,
-and node labels as moves of the system.
-
-%Terms are constructed by
-%applying function symbols $e \in E$
-%to subcomputations given for each $r \in \kw{ar}(e)$.
-%In simple cases,
-%the computation $e(x_r)_{r \in \kw{ar}(e)}$
-%first triggers an effect $e$;
-%then the context chooses $r$
-%and resumes the computation as $x_r$.
-%For example,
-%the following effect signature
-%models a very basic input/output facility:
-%\[
-%  E_\kw{io} :=
-%    \{ \kw{readbit} : \mathbbm{2}, \:
-%       \kw{writebit}[n] : \mathbbm{1} \mid
-%       n \in \mathbbm{2} \}
-%\]
-%A computation which writes a zero,
-%reads one bit, echoes its complement
-%and continues as the computation $k$
-%can be written as:
-%\[
-%  \kw{writebit}[0](
-%    \kw{readbit}(
-%      \kw{writebit}[1](k),
-%      \kw{writebit}[0](k)))
-%\]
 
 %}}}
 
