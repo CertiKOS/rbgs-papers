@@ -32,6 +32,7 @@ in Computer Science (LICS '20), July 8--11, 2020, Saarbr\"ucken, Germany}
 
 \newcommand{\hlc}[2][yellow]{ {\sethlcolor{#1} \hl{#2}} }
 \newcommand\zhong[1]{\hlc[yellow]{[Zhong: #1]}}
+\newcommand\jk[1]{\hlc[pink]{[Jeremie: #1]}}
 
 \hyphenation{Comp-Cert}
 \hyphenation{Comp-CertX}
@@ -1000,6 +1001,9 @@ can be written as follows
     \{ \epsilon, \: n, \: n \cdot \underline{2n} \mid n \in \mathbb{N} \}
 \]
 \zhong{This prefix relation is different from the one used in Definition 3.1.}
+\jk{The form of traces as well.
+  I can try to adapt them but traces in \S3 are odd-length and start
+  with a system move.}
 %%%%
 If we want $\sigma$ to be a looser specification,
 so that an acceptable implementation
@@ -1159,6 +1163,19 @@ first reads one bit of information,
 then depending on the result
 causes the words ``Hello'' or ``World'' to be output,
 and finally terminates.
+
+\jk{Adding this to address your comment:}
+Note that somewhat counter-intuitively,
+the \emph{arguments} of operations correspond to
+the possible \emph{outcomes} of the effect,
+so that for instance the $\kw{readbit}$ operation takes two arguments.
+Moreover,
+effects such as $\kw{print}$
+which take parameters
+are represented by \emph{families}
+of operations indexed by the parameters' values,
+so that there is a $\kw{print}[s]$
+operation for every $s \in \kw{string}$.
 
 Under this approach,
 effects can be described as algebraic theories:
@@ -1382,9 +1399,11 @@ and remove the oldest element.
 If we attempt to add an element
 which would overflow the queue's capacity $N$,
 or we attempt to remove an element from an empty queue,
-the result is undefined.
+the result is unspecified.
 
 \zhong{What does ``undefined'' mean here? the empty set?}
+\jk{Going with ``unspecified'' for now to match earlier discussion
+  of $\varnothing$}
 
 The layer implementation $M_\kw{bq}$ 
 stores the queue's elements into the array,
@@ -1392,12 +1411,15 @@ between the indices given by the counters' values.
 This is expressed by the simulation relation $R$,
 which explains how overlay states are realized by $M_\kw{bq}$ 
 in terms of the underlay state.
-The program $M_\kw{bq}$ can be interpreted in the monad:
-\[
+
+The code of $M_\kw{bq}$ can be interpreted in the monad
+$
     S_\kw{rb} \rightarrow \mathcal{P}^1(- \times S_\kw{rb})
-\]
-used to define the operations of $L_\kw{rb}$.
-Correctness is proved by showing
+$,
+with primitive calls into $L_\kw{rb}$
+replaced by their specifications.
+We will write $M_\kw{bq}[L_\kw{rb}]$ to denote the result.
+Correctness is then proved by showing
 for each operation
 $\kw{op} \in \{ \kw{enq}(v), \kw{deq}(*) \mid v \in V \}$
 the simulation diagram:
@@ -1405,7 +1427,7 @@ the simulation diagram:
   \label{eqn:sim}
   L_\kw{bq}.\kw{op}
   \: \mathrel{[R \rightarrow \mathcal{P}^\le({=} \times R)]} \:
-  M_\kw{bq}.\kw{op} \,,
+  M_\kw{bq}[L_\kw{rb}].\kw{op} \,,
 \end{equation}
 where the relators $\rightarrow$, $\times$, $\mathcal{P}^\le$
 are defined by:
@@ -1424,6 +1446,7 @@ are defined by:
 We will write $L_\kw{rb} \vdash_R M : L_\kw{bq}$
 to express that condition (\ref{eqn:sim}) holds.
 \zhong{But where is $L_{rb}$ in the above condition?}
+\jk{Tried to clarify}
 Certified abstraction layers presented in this way
 can be vertically composed:
 \[
@@ -1707,6 +1730,8 @@ is defined by:
 \end{definition}
 
 \zhong{Where is the definition of $\bot$?}
+\jk{It is given in passing at the end of \S2.1,
+  I can try to make it more explicit.}
 
 The outcome of the interaction specification is left unchanged,
 but effects are replaced by their interpretation.
@@ -2056,14 +2081,14 @@ how to interpret it as an overlay state $k_2'$.
 
 \begin{theorem}
 Define
-$\tau := \llbracket M \rrbracket @ S_1 \circ \llbracket L_1 \rrbracket$.
+$\mu := \llbracket M \rrbracket @ S_1 \circ \llbracket L_1 \rrbracket$.
 Then:
 \[
-  R^*_{E_2} \!\circ \llbracket L_2 \rrbracket \sqsubseteq \tau
+  R^*_{E_2} \!\circ \llbracket L_2 \rrbracket \sqsubseteq \mu
   \: \Leftrightarrow \:
   L_1 \vdash_R M : L_2
   \: \Leftrightarrow \:
-  \llbracket L_2 \rrbracket \sqsubseteq R_*^{E_2} \!\circ \tau \,.
+  \llbracket L_2 \rrbracket \sqsubseteq R_*^{E_2} \!\circ \mu \,.
 \]
 \begin{proof}
 The proof is straightforward but requires
@@ -2072,6 +2097,7 @@ Thm.~5.3 from \citet{dndf}.
 \end{theorem}
 
 \zhong{Should there be a $\sigma$ somewhere above instead of having $\tau$ twice?}
+\jk{Those are the same, but I renamed for clarity}
 
 %}}}
 
@@ -2096,14 +2122,16 @@ the environment is free to initiate a new instance
 whenever it is in control,
 by asking a new top-level question $m \in F$.
 The system's own questions in ${!E}$
-are made in the context of a specific question in ${!F}$;
-this information is often encoded using \emph{justification pointers},
-whereby all non-top-level moves are required to refer to
-an earlier move,
-in a way that is compatible with the enabling relation
-used to define the game's arena.
+are made in the context of a specific question in ${!F}$.
+%this information is often encoded using \emph{justification pointers},
+%whereby all non-top-level moves are required to refer to
+%an earlier move,
+%in a way that is compatible with the enabling relation
+%used to define the game's arena.
 The well-bracketing condition only allows the players
 to answer the most recent pending question.
+%ask new questions in the context of
+%the most recent pending question.
 In our limited setting,
 the innocence condition requires that the system
 behave in the same way for each top-level question.
@@ -2787,7 +2815,7 @@ is that it starts from a poset rather than a set,
 allowing us to use it in the context of game semantics.
 The model of the process calculus CSP
 proposed \cite{cspdnd} in the context of Morris and Tyrrell's line of work
-comes closest to our own,
+comes closest to the models presented here,
 but to our knowledge its relevance to game semantics
 has not been fully appreciated.
 %and we believe the understanding of dual nondeterminism
