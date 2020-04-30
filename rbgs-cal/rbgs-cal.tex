@@ -98,6 +98,7 @@ kernel CertiKOS. %~\cite{popl15}.
 \end{abstract}
 %}}}
 
+%% keywords {{{
 %% 2012 ACM Computing Classification System (CSS) concepts
 %% Generate at 'http://dl.acm.org/ccs/ccs.cfm'.
 \begin{CCSXML}
@@ -143,11 +144,11 @@ kernel CertiKOS. %~\cite{popl15}.
 \ccsdesc[500]{Software and its engineering~Functionality}
 %% End of generated code
 
-
 %% Keywords
 %% comma separated list
 \keywords{certified abstraction layers; dual nondeterminism; game semantics; strategy specification; program refinement; interaction specification; algebraic effects}
 %% \keywords are mandatory in final camera-ready submission
+%}}}
 
 \maketitle
 
@@ -535,6 +536,10 @@ when the program $C$ is started in a state which
 satisfies the predicate $P$ (the \emph{precondition}),
 then the state in which $C$ terminates
 will satisfy the predicate $Q$ (the \emph{postcondition}).
+For example:
+\[
+    \htr{\text{$\kw{n}$ is odd}\,}{\kw{n := n * 2}}{\,\text{$\kw{n}$ is even}}
+\]
 In the \emph{axiomatic} approach to programming language semantics,
 inference rules
 corresponding to the different constructions of the language
@@ -547,6 +552,9 @@ Axiomatic semantics
 can accommodate nondeterminism in two different ways.
 In the program $C_1 \sqcap C_2$,
 a \emph{demon} will choose which of $C_1$ or $C_2$ is executed.
+The program $\kw{n := 2 * n} \: \sqcap \: \kw{n := 0}$
+may be executed arbitrarily as $\kw{n := 2 * n}$ or $\kw{n := 0}$,
+with no guarantee to the user as to which branch will be chosen.
 The demon will work against us,
 so that if we want $C_1 \sqcap C_2$ to satisfy a given property,
 we need to make sure we can deal with either choice.
@@ -576,7 +584,13 @@ This corresponds to the rules:
     \infer1{\htr{P}{C_1 \sqcup C_2}{Q}}
   \end{prooftree}
 \]
-In other words,
+The statement $\kw{n := n * 2} \: \sqcup \: \kw{n := 0}$
+is more difficult to interpret than its demonic counterpart,
+but can tought of as a program which magically behaves as
+$\kw{n := n * 2}$ or $\kw{n := 0}$
+depending on the needs of user.
+
+More accurately,
 a triple $\htr{P}{C}{Q}$
 can be thought of as a \emph{game}
 between the angel and the demon.
@@ -665,31 +679,31 @@ either:
     C_1 \sqsubseteq C \: \vee \: C_2 \sqsubseteq C \,.
 \]
 
-Note that in the context of \emph{specifications}
-(on the left of $\sqsubseteq$),
-the terminology of \emph{angelic} and \emph{demonic}
-choices are somewhat counterintuitive
-because they work in the opposite way:
-demonic choices in the specification gives us more
+In other words,
+demonic choices %in the specification
+%(on the left of $\sqsubseteq$)
+give us more
 implementation freedom,
-and help us establish refinement,
-whereas angelic choices make the specification
+whereas angelic choices make a specification
 stronger and more difficult to implement.
-Intuitively,
-the \emph{user} of a specification
-will need to be ready to handle any demonic choice
-made in that specification.
-The specification's implementer
-will have more freedom because they \emph{are} the demon.
-Conversely,
-angelic choice requires the implementation
-to behave appropriately
-no matter which alternative the user decides to rely on.
-Therefore,
-we will often think of demonic choices as
-choices of the \emph{system} we are considering,
+%Intuitively,
+%the \emph{user} of a specification
+%will need to be ready to handle any demonic choice
+%made in that specification.
+%The specification's implementer
+%will have more freedom because they \emph{are} the demon.
+%Conversely,
+%angelic choice requires the implementation
+%to behave appropriately
+%no matter which alternative the user decides to rely on.
+%Therefore,
+We will often think of demonic choices as
+choices of the \emph{system}, % we are considering,
 and think of angelic choices as
-choices of its \emph{environment}.
+choices of the \emph{environment}.
+
+\jk{Say more about $\bot$ (aka $\kw{abort}$) and
+$\top$ (aka $\kw{magic}$) here?}
 
 %}}}
 
@@ -764,7 +778,7 @@ and monotonic function $f : C \rightarrow M$,
 there exists a unique complete homomorphism $f^*_\phi : L \rightarrow M$
 such that $f^*_\phi \circ \phi = f$:
 \[
-  \begin{tikzcd}[sep=large]
+  \begin{tikzcd}%[sep=large]
     C \arrow[r, "\phi"] \arrow[rd, "f"'] &
     L \arrow[d, "f^*_\phi", dashed] \\ & M
   \end{tikzcd}
@@ -908,6 +922,8 @@ blocking a subset of angelic choices.
 
 \subsection{Game semantics} \label{sec:strat} %{{{
 
+% preamble {{{
+
 Game semantics is an approach to compositional semantics
 which interprets types as two-player games
 between a program component (the \emph{system})
@@ -916,6 +932,30 @@ Terms of a given type are then interpreted as
 strategies for the corresponding game,
 specifying for each position in the game
 the next action to be taken by the system.
+
+For example,
+in a simple game semantics resembling that of
+Idealized Algol \cite{gsia},
+sequences of actions corresponding to
+the execution of $\kw{n := 2 * n}$
+could have the form:
+\[
+    \kw{run} \cdot
+    \underline{\kw{read}_\kw{n}} \cdot n \cdot
+    \underline{\kw{write}_\kw{n}[2n]} \cdot \kw{ok} \cdot
+    \underline{\kw{done}} \quad (n \in \mathbb{N})
+\]
+The moves of the system have been underlined.
+The environment initiates the execution with
+the move $\kw{run}$.
+The system move $\kw{read}_\kw{n}$ requests
+the value of the variable $\kw{n}$,
+communicated in response by the environment move $n$.
+The system move $\kw{write}_\kw{n}(n)$ requests
+storing the value $n$ in the variable $\kw{n}$,
+and is acknowledged by the environment move $\kw{ok}$.
+Finally, the system move $\kw{done}$
+communicates termination.
 
 An early success of this approach,
 building on game models developed for
@@ -926,6 +966,8 @@ for the functional programming language PCF \cite{pcfajm,pcfho}.
 Since then,
 game semantics has been extended to
 model a wide variety of language features.
+
+%}}}
 
 \paragraph{Traditional strategy models} %{{{
 
@@ -990,61 +1032,137 @@ Angelic nondeterminism
 allows us to range over all possible choices of the environment
 and record the resulting plays.
 For instance,
-a simple strategy which computes
-the double of a natural number $n$
-provided by the environment
-can be written as follows
-(we underline moves of the system):
+the strategy for $\kw{n := 2 * n}$
+would be:
+\begin{align*}
+  \sigma &:=
+    \bigcup_{n \in \mathbb{N}} {\downarrow}(
+      \kw{run} \cdot
+      \underline{\kw{read}_\kw{n}} \cdot n \cdot
+      \underline{\kw{write}_\kw{n}[2n]} \cdot \kw{ok} \cdot
+      \underline{\kw{done}}) \\
+  &
+      \begin{array}{l@{\,}l}
+        = \{ & \epsilon, \\ &
+        \kw{run} \cdot
+        \underline{\kw{read}_\kw{n}} ,
+        \\ &
+        \kw{run} \cdot
+        \underline{\kw{read}_\kw{n}} \cdot n \cdot
+        \underline{\kw{write}_\kw{n}[2n]} ,
+        \\ &
+        \kw{run} \cdot
+        \underline{\kw{read}_\kw{n}} \cdot n \cdot
+        \underline{\kw{write}_\kw{n}[2n]} \cdot \kw{ok} \cdot
+        \underline{\kw{done}}
+        \mid n \in \mathbb{N} \}
+      \end{array}
+\end{align*}
+Note that this strategy admits refinements
+containing much more angelic nondeterminism,
+including with respect to moves of the system.
+For instance:
 \[
-  \sigma :=
-    \bigcup_{n \in \mathbb{N}} {\downarrow}(n \cdot \underline{2n}) =
-    \{ \epsilon, \: n, \: n \cdot \underline{2n} \mid n \in \mathbb{N} \}
+  \sigma \subseteq
+    \bigcup_{n \in \mathbb{N}} \:
+    \bigcup_{-1 \le \delta \le 1}
+    {\downarrow}(
+      \kw{run} \cdot
+      \underline{\kw{read}_\kw{n}} \cdot n \cdot
+      \underline{\kw{write}_\kw{n}[2n + \delta]} \cdot \kw{ok} \cdot
+      \underline{\kw{done}})
 \]
-\zhong{This prefix relation is different from the one used in Definition 3.1.}
-\jk{The form of traces as well.
-  I can try to adapt them but traces in \S3 are odd-length and start
-  with a system move.}
-%%%%
-If we want $\sigma$ to be a looser specification,
-so that an acceptable implementation
-would be allowed to provide any answer in the interval
-$[2n - 1, 2n + 1]$,
-this strategy model becomes insufficient
+These refinements do not correspond to the interpretation
+of any concrete program,
+and in game models which seek to achieve definability
+they are usually excluded.
+In our context, retaining them is algebraically important,
+and they can in fact appear as intermediate terms
+in some applications.
+In the construction above,
+although $\delta$ appears in a system move,
+it is still associated with an \emph{angelic} choice.
+This can be interpreted as choice of the environment
+which is not directly observed
+(perhaps as a result of abstraction),
+but which nonetheless influences the behavior of the system.
+
+Moreover,
+this is quite different from allowing the \emph{system}
+to choose an answer in the interval $[2n - 1, 2n + 1]$.
+The model we have presented so far is insufficient
+to handle this situation,
 because the downset lattice does not add enough meets
 to precisely relax the specification,
 forcing it to become
 much coarser:
-\[
-  \sigma :=
+\begin{align*}
+  \sigma' &:=
     \bigcup_{n \in \mathbb{N}} \:
     \bigcap_{-1 \le \delta \le 1}
-    {\downarrow}(n \cdot \underline{2n+\delta}) =
-    \{ \epsilon, n \mid n \in \mathbb{N} \} \,,
-\]
+    {\downarrow}(
+      \kw{run} \cdot
+      \underline{\kw{read}_\kw{n}} \cdot n \cdot
+      \underline{\kw{write}_\kw{n}[2n + \delta]} \cdot \kw{ok} \cdot
+      \underline{\kw{done}}) \\
+  & \, =
+    \{ \epsilon,  \:
+       \kw{run} \cdot \underline{\kw{read}_\kw{n}} \cdot n
+       \mid n \in \mathbb{N} \} \,.
+\end{align*}
 We will remedy this by using a richer completion.
 
 %}}}
 
 \paragraph{Dually nondeterministic strategies} %{{{
 
-Our approach to nondeterminism in game semantics
+Our approach to demonic nondeterminism in game semantics
 will be to substitute $\mathbf{FCD}$ for $\mathcal{D}$
 in the construction of strategies presented earlier. 
-In this framework,
-the more permissive strategy
+Writing:
+\[
+  s_{n,\delta} :=
+        \kw{run} \cdot
+        \underline{\kw{read}_\kw{n}} \cdot n \cdot
+        \underline{\kw{write}_\kw{n}[2n + f_n]} \cdot \kw{ok} \cdot
+        \underline{\kw{done}} \,,
+\]
+the more permissive \emph{strategy specification}
 can be written as:
 \[
-  \sigma :=
+  \sigma' :=
     \bigsqcup_{n \in \mathbb{N}}
     \bigsqcap_{-1 \le \delta \le 1}
-    \phi(n \cdot \underline{2n + \delta})
+    \phi ( s_{n,\delta} )
 \]
 Because of the properties of $\mathbf{FCD}$,
-the strategy $\sigma$ will retain
+the strategy specification $\sigma$ will retain
 not only angelic choices,
 but demonic choices as well,
 corresponding to the possible behaviors
 of the system.
+
+Under the construction $\kw{FCD} := \mathcal{U} \mathcal{D}$,
+strategy specifications correspond to
+sets of traditional specifications,
+ordered by containement ($\supseteq$).
+The outer set ranges over demonic choices.
+The strategy specification $\sigma'$
+will be encoded as:
+\[
+  \sigma' =
+  \{ \sigma \in \mathcal{D}(P_G) \mid
+     \forall n \in \mathbb{N} \bdot
+     \exists \delta \in [-1,1] \bdot
+     s_{n,\delta} \in \sigma \} \,.
+\]
+Upward closure ensures that a strategy specification
+which contains a strategy $\sigma$
+contains all of its refinements as well.
+For instance,
+the only strategy specification
+containing the completely undefined strategy $\varnothing$
+is the maximally permissive strategy specification $\bot = \mathcal{D}(P_G)$.
 
 \zhong{This example should be expanded to provide some intuitions. We might consider adding another example.}
 
@@ -1165,7 +1283,7 @@ causes the words ``Hello'' or ``World'' to be output,
 and finally terminates.
 
 \jk{Adding this to address your comment:}
-Note that somewhat counter-intuitively,
+Note that somewhat counterintuitively,
 the \emph{arguments} of operations correspond to
 the possible \emph{outcomes} of the effect,
 so that for instance the $\kw{readbit}$ operation takes two arguments.
@@ -2081,14 +2199,15 @@ how to interpret it as an overlay state $k_2'$.
 
 \begin{theorem}
 Define
-$\mu := \llbracket M \rrbracket @ S_1 \circ \llbracket L_1 \rrbracket$.
+$\sigma := \llbracket L_2 \rrbracket$ and
+$\tau := \llbracket M \rrbracket @ S_1 \circ \llbracket L_1 \rrbracket$.
 Then:
 \[
-  R^*_{E_2} \!\circ \llbracket L_2 \rrbracket \sqsubseteq \mu
+  R^*_{E_2} \!\circ \sigma \sqsubseteq \tau
   \: \Leftrightarrow \:
   L_1 \vdash_R M : L_2
   \: \Leftrightarrow \:
-  \llbracket L_2 \rrbracket \sqsubseteq R_*^{E_2} \!\circ \mu \,.
+  \sigma \sqsubseteq R_*^{E_2} \!\circ \tau \,.
 \]
 \begin{proof}
 The proof is straightforward but requires
