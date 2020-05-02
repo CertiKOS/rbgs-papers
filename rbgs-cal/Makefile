@@ -5,7 +5,7 @@ all: rbgs-cal.pdf
 %.aux: %.tex
 	pdflatex $* </dev/null || true
 
-%.bbl: lwcc.bib %.aux
+%.bbl: ../references.bib %.aux
 	bibtex $*
 	pdflatex $* </dev/null || true
 
