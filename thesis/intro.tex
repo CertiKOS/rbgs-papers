@@ -1,0 +1,363 @@
+
+\section{Introduction} \label{sec:intro} % From rbgs-cal {{{
+
+% Preamble: certified software {{{
+
+Certified software~\cite{shao10}
+is software accompanied by
+mechanized, machine-checkable proofs of correctness.
+To construct a certified program,
+we must not only write its code in a given programming language,
+but also formally specify its intended behavior
+and construct, using specialized tools,
+evidence that the program
+indeed conforms to the specification.
+
+%To achieve this,
+%we need formal models of
+%the languages in which they are described.
+%The tools used to reason about them
+%should be sound with respect to these models.
+%Ideally,
+%this will be demonstrated in an established,
+%%general-purpose proof assistant,
+%diminishing the possibility that
+%incorrect programs will be validated because of
+%accidental or deliberate mistake
+%in the software used to construct and check proofs.
+
+%}}}
+
+\subsection{Certified systems at scale} %{{{
+\label{ssec:certsys}
+
+The past decade has seen an explosion
+in the scope and scale of practical software verification.
+Researchers have been able to produce certified
+compilers \cite{compcert},
+program logics \cite{vst},
+operating system kernels \cite{sel4,popl15},
+file systems \cite{fscq} and more,
+often introducing new techniques
+and mathematical models.
+In this context,
+there has been increasing interest in
+making these components
+interoperable and
+combining them---and their proofs of correctness---%
+into larger certified systems.
+
+This is exemplified by the DeepSpec project \cite{deepspec},
+which seeks to connect various components
+specified and verified in the Coq proof assistant.
+The key idea behind DeepSpec
+is to interpret specifications as \emph{interfaces}
+between components.
+When a component providing a certain interface
+has been verified,
+client components can rely on this
+for their own proofs of correctness.
+Standardizing this process would make it possible
+to construct large-scale certified systems
+by assembling off-the-shelf certified components.
+
+%This approach would provides benefits
+%beyond the potential increase in the scale of
+%practical certified system.
+%As it stands,
+%a certified system is only
+%as trustworthy as its specification.
+%Indeed,
+%it is possible to prove a buggy system correct
+%with respect to a buggy specification.
+%If the only user of the specification
+%is a human expert subjecting it to careful examination,
+%these bugs could go unnoticed
+%and persist in the final system.
+%By contrast,
+%if we attempt to use the same specification as a dependency
+%in the correctness proof of a client component,
+%its deficiencies will become apparent
+%and prevent us from carrying out this second proof of correctness.
+%Moreover,
+%the internal specifications used
+%as intermediate steps
+%in the verification of a complex system
+%disappear from the external characterization of the system,
+%and no longer need to be trusted.
+%This reduces the ratio between the size of the system
+%and the size of the specification
+%which must be trusted and understood
+%to establish guarantees about the overall system.
+
+To an extent,
+these principles are already demonstrated in the structure of the
+certified C compiler CompCert \cite{compcert},
+where the semantics of intermediate languages
+serve as intermediate specifications for each compilation pass.
+The correctness of each pass is established by
+proving that the behavior of its target program
+refines that of its source program.
+%(which serves in this case as the specification).
+As passes are composed to obtain the overall
+C-to-assembly compiler,
+the correctness proofs are composed as well
+to construct a correctness proof for the whole compiler.
+The final theorem does not mention the intermediate
+programs or language semantics,
+so that a user only needs to trust
+the accuracy of the C and assembly semantics,
+and the soundness of the proof assistant.
+
+Building on this precedent,
+the CertiKOS verification effort~\cite{popl15,ccal,osdi16}
+divided the kernel into several dozen abstraction layers
+which were then specified and verified individually.
+Layer specifications provide
+an abstract view of a layer's functionality,
+hiding the procedural details and low-level data representations
+involved in its implementation.
+Client code can be verified in terms of
+this abstract view
+in order to build higher-level layers.
+Certified layers
+with compatible interfaces can then be chained together
+in the way passes of a compiler
+can be composed when the target language of one
+corresponds to the source language of the other.
+
+%}}}
+
+\subsection{Semantic models for verification} %{{{
+\label{ssec:semant}
+
+While this approach is compelling,
+there are difficulties associated with extending it
+to build larger-scale certified systems
+by connecting disparate certified components.
+A key aspect enabling composition in CompCert and CertiKOS
+is the uniformity of the models underlying
+their language semantics and correctness proofs.
+By contrast,
+across projects
+there exist a great diversity
+of semantic models and verification techniques.
+This makes it difficult to formulate
+interface specifications to connect specific components,
+let alone devising a general system
+to express such interfaces.
+
+Worse yet,
+this diversity is not simply a historical accident.
+The semantic models
+used in the context of individual verification projects
+are often carefully chosen
+to make the verification task tractable.
+The semantic model used in CompCert alone
+has changed multiple times,
+addressing new requirements and techniques
+that were introduced alongside
+new compiler features and optimizations~\cite{compsem}.
+Given the difficulty of verification,
+preserving this flexibility is essential.
+
+Then,
+to make it possible to link components
+verified using a variety of paradigms,
+we need to identify a model
+expressive enough to embed
+the semantics, specifications and correctness proofs
+of a variety of paradigms.
+%To enable constructing large-scale certified systems,
+%the model should provide
+%high-level composition and reasoning principles.
+
+%}}}
+
+\subsection{General models for system behaviors} %{{{
+\label{ssec:genmodel}
+
+Fortunately,
+there is a wealth of semantics research to draw from
+when attempting to design models for this task.
+
+The framework of
+symmetric monoidal categories,
+which allows components to be
+connected in series~($\circ$) and in parallel~($\otimes$),
+captures structures found
+in various kinds of systems and processes \cite{rosetta},
+and appears in different forms
+in many approaches to logic and programming language semantics.
+
+A particularly expressive instance of this phenomenon
+is realized in \emph{game semantics} \cite{cspgs},
+an approach to compositional semantics
+which uses two-player games to model
+the interaction between a component and its environment,
+and represents the externally observable behavior
+of the component as a strategy in this game.
+The generality of games as
+descriptions of the possible interactions of components
+makes this approach broadly applicable,
+and the typed aspect of the resulting models
+makes it ideal to the task of
+describing the behavior of heterogeneous systems.
+
+However,
+the generality of game models
+often translates to a fair amount of complexity,
+which imposes a high barrier to entry for practitioners
+and makes them difficult to formalize in a proof assistant.
+While more restricted,
+the framework of \emph{algebraic effects} \cite{effadq}
+is sufficient for many modeling tasks,
+fits within the well-known monadic approach
+to effectful and interactive computations,
+and can be adapted into a particularly simple version
+of game semantics.
+Along these lines,
+\emph{interaction trees} \cite{itree}
+have been developed for use in and across
+several DeepSpec projects.
+
+%\subsection{General formulations for correctness proofs}
+%\label{ssec:genform}
+
+Finally,
+while game models have been proposed
+for a wide variety of programming languages,
+there has been comparatively less focus
+on specifications and correctness properties.
+%in the context of game semantics.
+By contrast,
+the general approach of \emph{stepwise refinement}
+suggests a uniform treatment of programs, specifications
+and their relationships.
+It has been studied extensively in the context of
+%Dijkstra's
+predicate transformer semantics \cite{gc}
+and in the framework known as the \emph{refinement calculus} \cite{refcal}.
+
+%In refinement-based approaches,
+%programs and specifications are expressed in a common language,
+%and a certified program is constructed in an incremental manner,
+%by applying a series of correctness-preserving transformation
+%to the (abstract and declarative) specification
+%until we obtain a (concrete and executable) program.
+%Correctness preservation is expressed
+%by a reflexive and transitive \emph{refinement relation} $\sqsubseteq$.
+%Language constructions are monotonic with respect to $\sqsubseteq$,
+%so that elementary refinement rules
+%can be applied congruently within any program context.
+%
+%To make it possible to express specifications,
+%the language is extended with non-executable constructions,
+%including in particular infinitary versions of both
+%\emph{angelic} and \emph{demonic} nondeterministic choice operators.
+%In its modern presentation,
+%the refinement calculus is formulated in a lattice-theoretic framework
+%where joins ($\sqcup$) and meets ($\sqcap$)
+%correspond respectively to angelic and demonic choices.
+%The resulting language is remarkably expressive
+%and requires very few additional primitive constructions.
+%The duality inherent in this approach
+%also lends itself to game-theoretic interpretations,
+%and indeed the semantics of the refinement calculus
+%can be expressed as a two-player game between
+%the angel and the demon \cite{refcal}.
+%
+%Like all approaches in the lineage of Hoare logic
+%and predicate transformer semantics,
+%the refinement calculus is limited to
+%modeling imperative programs.
+%[However,
+%M\&T propose to extend it to terms and functional programming
+%by constructing the FCD blah blah.]
+%
+%[Also: describe the idea of the \emph{refinement calculus hierarchy}
+%(general and difficult <-> specific and easy to reason about
+%and string properties).
+%More than one level of ``semantics''
+%Notions of ``syntax'' and ``semantics'' are relative concepts.]
+%
+%}}}
+
+%\zhong{Maybe we should shorten the last two subsections a bit so we can get to the contributions sooner.}
+
+\subsection{Contributions} %{{{
+\label{ssec:contrib}
+
+Our central claim is that a synthesis
+of %the existing research on
+game semantics, algebraic effects, and the refinement calculus
+can be used to construct a hierarchy of semantic models
+suitable for constructing large-scale, heterogeneous certified systems.
+To provide evidence for this claim,
+we outline general techniques
+which can realize this synthesis
+and demonstrate their use
+in the context of certified abstraction layers:
+\begin{itemize}
+\item
+  We adapt the work of Morris and Tyrrell \cite{augtyp,dndf},
+  which extends the refinement calculus to the level of terms
+  by using \emph{free completely distributive completions} of posets,
+  to investigate \emph{dual nondeterminism}
+  in the context of game semantics
+  %Using the free completely distributive completion
+  %instead of downsets when constructing strategies
+  %yields
+  and construct
+  completely distributive lattices of
+  \emph{strategy specifications},
+  partially ordered
+  under a form of alternating refinement
+  \cite{altref}.
+\item
+  In \S\ref{sec:intspec},
+  we define a version of the
+  \emph{free monad on an effect signature}
+  which incorporates dual nondeterminism and refinement.
+  The result can be used to formulate a theory of certified abstraction
+  layers in which
+  layer interfaces, layer implementations, and simulation relations
+  are treated uniformly and compositionally.
+\item
+  In \S\ref{sec:gamesem},
+  we outline a more general category of games and
+  strategy specifications;
+  its object are effect signatures regarded as games
+  and its morphisms specify well-bracketed strategies.
+  The behavior of certified abstraction layers
+  can then be represented canonically,
+  and reentrant layer interfaces can be modeled.
+\end{itemize}
+
+The model presented in \S\ref{sec:intspec} was designed to be simple but
+general enough to embed CompCert semantics, certified
+abstraction layers, and interaction trees. The main purpose for
+the model presented in \S\ref{sec:gamesem} is then to hide state and
+characterize certified abstraction layers through
+their externally observable interactions only.
+
+Note that rather than providing
+denotational semantics for specific programming
+languages, our models are intended as a coarse-grained composition
+``glue'' between components developed and verified in their own
+languages, each equipped with their own internal semantics.
+In this context,
+the models' restriction to first-order computation
+applies only to cross-component interactions,
+and conforms to our interest in connecting
+%relatively
+low-level system components.
+
+%They could be embedded in turn
+%into more general game models, for instance where concurrency
+%could be expressed in a more natural way.
+
+%}}}
+
+%}}}
+
