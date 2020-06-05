@@ -323,124 +323,235 @@
   \[
     L.\kw{op} :
       A_1 \times \cdots \times A_n \rightarrow
-      S \rightarrow \mathcal{P}^1(S \times B)
+      S \rightarrow \mathcal{P}^1(B \times S)
   \]
   \pause
-  The result can be a singleton $\{(s, v)\}$
+  The result can be a singleton $\{v@s\}$
   or $\varnothing$ (undefined).
-
-  \pause
-  The monad associated with
-  $S \rightarrow \mathcal{P}^1(S \times {-})$
-  gives sequential composition and
-  can be used to interpret client programs.
-%
-%  \pause
-%  If the code $M$ uses the primitives of $L$,
-%  then $\llbracket M \rrbracket_L$ describes a layer interface
-%  providing the functions defined in $M$ as primitives.
 \end{frame}
 %}}}
 
-%\begin{frame}{Example (layer interface)}
-%  Consider a ring buffer with a bounded capacity $N$:
-%  \[
-%    \begin{tikzpicture}
-%      \begin{scope}[shift=(-0.5,-0.5)]
-%        \draw (0,0) grid (5,1);
-%      \end{scope}
-%      \node at (0,0) {$a$};
-%      \node at (1,0) {$b$};
-%      \node at (2,0) {$c$};
-%      \node at (3,0) {$d$};
-%      \node at (4,0) {$e$};
-%    \end{tikzpicture}
-%  \]
-%\end{frame}
-
-\begin{frame}{Abstraction} %{{{
-  Different layer interfaces use different kinds of abstract states,
-  but $\llbracket M \rrbracket_L$ inherits its abstract states from $L$.
-
-  \pause
-  So in truth we have:
+\begin{frame}{Example: overlay interface} %{{{
+  $L_\kw{bq}$ provides a queue with values in $V$ and capacity $N = 4$:
   \[
-    \begin{prooftree}
-      \infer0[$L_2$]{\fbox{$\qquad M \qquad$}}
-      \infer1[$L_1$]{}
-    \end{prooftree}
-    \qquad
-    \begin{array}{c}
-      \fbox{$L_1 \vdash_R M : L_2$} \\[1em]
-      \forall C \: \bdot \:
-      \llbracket C \rrbracket_{L_2} \sqsubseteq_R
-      \llbracket C \oplus M \rrbracket_{L_1}
-    \end{array}
+    \includegraphics[scale=0.1]{enq_deq}
   \]
-
   \pause
-  Simulation relations compose when we combine layers:
-  \[
-    \llbracket C \rrbracket_\kw{TSyscall}
-    \sqsubseteq_{R_n \circ \cdots \circ R_1}
-    \llbracket C \oplus M_n \oplus \cdots \oplus M_1 \rrbracket_\kw{MBoot}
-  \]
-\end{frame}
-%}}}
-
-\begin{frame}{Example} %{{{
-  \vspace{-2em}
-  \[ L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq} \]
-  \tiny
+  The signature has two operations:
   \begin{align*}
-    %
-    % Overlay
-    %
-    & \fbox{$L_\kw{bq}$} &
-      S_\kw{bq} &:= V^* \\
-    \kw{enq} &: V \rightarrow \mathbbm{1} &
-      L_\kw{bq}.\kw{enq}(v)@\vec{q} &:= \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
-    \kw{deq} &: \mathbbm{1} \rightarrow V &
-      L_\kw{bq}.\kw{deq}(*)@\vec{q} &:= \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
-    \\[1em]
-    %
-    % Implementation
-    %
-    & \fbox{$M_\kw{bq}$} &
-      R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
-    M_\kw{bq}.\kw{enq}(v) &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) &
-      \vec{q} \mathrel{R} (f, c_1, c_2) &\Leftrightarrow
-      \: c_1 < N \:\wedge\: c_2 < N \:\wedge\: {}
-    \\
-    M_\kw{bq}.\kw{deq}(*) &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
-      & \qquad \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2}
-    \\[1em]
-    %
-    % Underlay
-    %
-    & \fbox{$L_\kw{rb}$} &
-      S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
-    \\
-    \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
-      L_\kw{rb}.\kw{set}(i, v)@(f, c_1, c_2) &:=
-      \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
-    \\
-    \kw{get} &: \mathbb{N} \rightarrow V &
-      L_\kw{rb}.\kw{get}(i)@(f, c_1, c_2) &:=
-      \{ f_i@(f, c_1, c_2) \mid i < N \}
-    \\
-    \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
-      L_\kw{rb}.\kw{inc}_1@(f, c_1, c_2) &:=
-      \{ c_1@(f, c_1', c_2) \mid
-         c_1' = (c_1 + 1) \mathop{\mathrm{mod}} N \}
-    \\
-    \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
-      L_\kw{rb}.\kw{inc}_2@(f, c_1, c_2) &:=
-      \{ c_2@(f, c_1, c_2') \mid
-         c_2' = (c_2 + 1) \mathop{\mathrm{mod}} N \}
+    \kw{enq} &: V \rightarrow \mathbbm{1} \\
+    \kw{deq} &: \mathbbm{1} \rightarrow V
+  \end{align*}
+  \pause
+  The states are taken in $S_\kw{bq} := V^+$
+  and the specifications are:
+  \begin{align*}
+    L_\kw{bq}.\kw{enq}(v)@\vec{q} &:= \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
+    L_\kw{bq}.\kw{deq}(*)@\vec{q} &:= \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
   \end{align*}
 \end{frame}
 %}}}
+
+\begin{frame}{Client code} %{{{
+  Since specifications have the type:
+  \[
+    L.\kw{op} :
+      A_1 \times \cdots \times A_n \rightarrow
+      S \rightarrow \mathcal{P}^1(B \times S) \,,
+  \]
+  the monad $T(B) := S \rightarrow \mathcal{P}^1(B \times S)$
+  can be used to define sequential composition and
+  interpret client programs.
+
+  \pause
+  For example, using the free monad associated with $\Sigma_\kw{bq}$:
+  \[
+    \kw{rot} \in F_\kw{bq}(V) :=
+      v \leftarrow \kw{deq} \mathop{;}
+      \kw{enq}(v) \mathop{;}
+      \eta(v)
+  \]
+  \pause
+  This program can be evaluated on $L_\kw{bq}$ as:
+  \[
+    \llbracket \kw{rot} \rrbracket_{L_\kw{bq}} \in T_\kw{bq}(V) :=
+      v \leftarrow L_\kw{bq}.\kw{deq} \mathop{;}
+      L_\kw{bq}.\kw{enq}(v) \mathop{;}
+      \eta(v)
+  \]
+\end{frame}
+%}}}
+
+\begin{frame}{Layer implementation} %{{{
+  A layer implementation $L_1 \vdash M : L_2$
+  associates to each operation:
+  \[
+    \kw{op} : A_1 \times \cdots \times A_n \rightarrow B
+      \: \in \: \Sigma_2
+  \]
+  code which implements it in terms of $L_1$:
+  \[
+    M.\kw{op} : A_1 \times \cdots \times A_n \rightarrow F_1(B) \,.
+  \]
+
+  \pause
+  We can then write $\llbracket M \rrbracket_{L_1}$
+  to describes a layer interface obtained by
+  evaluating $M$
+  on top of the underlay interface $L_1$:
+  \[
+    \llbracket M \rrbracket_{L_1}.\kw{op} :=
+      \llbracket M.\kw{op} \rrbracket_{L_1}
+    \qquad (\kw{op} \in \Sigma_2)
+  \]
+\end{frame}
+%}}}
+
+\begin{frame}{Example: underlay interface}
+  Consider the underlay interface
+  $L_\kw{rb}$ provides a ring buffer with elements of $V$ and size $N = 4$:
+  \[
+    \includegraphics[scale=0.1]{ringbuf}
+  \]
+  \pause
+  States are taken in:
+  \[
+    S_\kw{rb} := V^N \times \mathbb{N} \times \mathbb{N}
+  \]
+  \pause
+  The operations are:
+  \begin{align*}
+    \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
+    \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} \\
+    \kw{get} &: \mathbb{N} \rightarrow V &
+    \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N}
+  \end{align*}
+\end{frame}
+
+\begin{frame}{Example: layer implementation}
+  Then a possible layer implementation of $L_\kw{bq}$
+  over $L_\kw{rb}$
+  is:
+  \begin{align*}
+    M_\kw{bq}.\kw{enq}(v) &:=
+      i \leftarrow \kw{inc}_2 \mathop{;} \kw{set}(i, v) \\
+    M_\kw{bq}.\kw{deq}(*) &:=
+      i \leftarrow \kw{inc}_1 \mathop{;} \kw{get}(i)
+  \end{align*}
+  \pause
+  Note that $\llbracket M_\kw{bq} \rrbracket_{L_\kw{rb}}$
+  inherits the states of $L_\kw{rb}$.
+  \pause
+  \begin{center}
+    \includegraphics[scale=0.1]{enq_deq} \\
+    \includegraphics[scale=0.1]{ringbuf_enq_deq}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Layer correctness}
+  To establish the layer correctness property:
+  \[
+    \fbox{$L_1 \vdash M : L_2$}
+  \]
+  we need a \emph{simulation relation}
+  $R \subseteq S_2 \times S_1$ satisfying:
+  \[
+    \begin{tikzcd}[sep=large]
+      s_2 \ar[r, "L_2.\kw{op}"] \ar[d, "R"', dash] &
+      s_2' \ar[d, "R", dash, dashed] \\
+      s_1 \ar[r, "\llbracket M \rrbracket_{L_1}.\kw{op}"', dashed] &
+      s_1'
+    \end{tikzcd}
+  \]
+  The relation specifies how an overlay state $s_2$
+  may be realized as an underlay state $s_1$.
+\end{frame}
+
+%
+%\begin{frame}{Abstraction} %{{{
+%  Different layer interfaces use different kinds of abstract states,
+%  but $\llbracket M \rrbracket_L$ inherits its abstract states from $L$.
+%
+%  \pause
+%  So in truth we have:
+%  \[
+%    \begin{prooftree}
+%      \infer0[$L_2$]{\fbox{$\qquad M \qquad$}}
+%      \infer1[$L_1$]{}
+%    \end{prooftree}
+%    \qquad
+%    \begin{array}{c}
+%      \fbox{$L_1 \vdash_R M : L_2$} \\[1em]
+%      \forall C \: \bdot \:
+%      \llbracket C \rrbracket_{L_2} \sqsubseteq_R
+%      \llbracket C \oplus M \rrbracket_{L_1}
+%    \end{array}
+%  \]
+%
+%  \pause
+%  Simulation relations compose when we combine layers:
+%  \[
+%    \llbracket C \rrbracket_\kw{TSyscall}
+%    \sqsubseteq_{R_n \circ \cdots \circ R_1}
+%    \llbracket C \oplus M_n \oplus \cdots \oplus M_1 \rrbracket_\kw{MBoot}
+%  \]
+%\end{frame}
+%%}}}
+%
+%\begin{frame}{Example} %{{{
+%  \vspace{-2em}
+%  \[ L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq} \]
+%  \tiny
+%  \begin{align*}
+%    %
+%    % Overlay
+%    %
+%    & \fbox{$L_\kw{bq}$} &
+%      S_\kw{bq} &:= V^* \\
+%    \kw{enq} &: V \rightarrow \mathbbm{1} &
+%      L_\kw{bq}.\kw{enq}(v)@\vec{q} &:= \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
+%    \kw{deq} &: \mathbbm{1} \rightarrow V &
+%      L_\kw{bq}.\kw{deq}(*)@\vec{q} &:= \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
+%    \\[1em]
+%    %
+%    % Implementation
+%    %
+%    & \fbox{$M_\kw{bq}$} &
+%      R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
+%    M_\kw{bq}.\kw{enq}(v) &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) &
+%      \vec{q} \mathrel{R} (f, c_1, c_2) &\Leftrightarrow
+%      \: c_1 < N \:\wedge\: c_2 < N \:\wedge\: {}
+%    \\
+%    M_\kw{bq}.\kw{deq}(*) &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
+%      & \qquad \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2}
+%    \\[1em]
+%    %
+%    % Underlay
+%    %
+%    & \fbox{$L_\kw{rb}$} &
+%      S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
+%    \\
+%    \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
+%      L_\kw{rb}.\kw{set}(i, v)@(f, c_1, c_2) &:=
+%      \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
+%    \\
+%    \kw{get} &: \mathbb{N} \rightarrow V &
+%      L_\kw{rb}.\kw{get}(i)@(f, c_1, c_2) &:=
+%      \{ f_i@(f, c_1, c_2) \mid i < N \}
+%    \\
+%    \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
+%      L_\kw{rb}.\kw{inc}_1@(f, c_1, c_2) &:=
+%      \{ c_1@(f, c_1', c_2) \mid
+%         c_1' = (c_1 + 1) \mathop{\mathrm{mod}} N \}
+%    \\
+%    \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
+%      L_\kw{rb}.\kw{inc}_2@(f, c_1, c_2) &:=
+%      \{ c_2@(f, c_1, c_2') \mid
+%         c_2' = (c_2 + 1) \mathop{\mathrm{mod}} N \}
+%  \end{align*}
+%\end{frame}
+%%}}}
+%
 
 \begin{frame}{Limitations} %{{{
   As used in CertiKOS,
