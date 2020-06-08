@@ -9,7 +9,7 @@
 \newcommand{\kw}[1]{\ensuremath{ \mathrm{#1} }}
 \newcommand{\bdot}{\boldsymbol{\cdot}}
 \newcommand{\htr}[3]{{ {#1} \mathbbm{\{} {#2} \mathbbm{\}} {#3} }}
-\setlength{\parskip}{1em}
+\setlength{\parskip}{1ex}
 
 \AtBeginSection[]
 {
@@ -29,27 +29,34 @@
 \titlepage
 \end{frame}
 
-\section{Introduction} %{{{
+
+\section{Introduction}
 
 \begin{frame}{Certified software} %{{{
   Certified software this past decade:
+  \pause
   \begin{itemize}
-    \pause \item C compiler (CompCert) \pause and program logic (VST)
-    \pause \item Operating system kernel (CertiKOS)\pause , file system (FSCQ)
-    \pause \item Processor designs (Bluespec)\pause , \ldots
+    \item C compiler (CompCert) and program logic (VST)
+    \item Operating system kernel (CertiKOS), file system (FSCQ)
+    \item Processor designs (Bluespec), \ldots
   \end{itemize}
 
   \pause
-  The DeepSpec project seeks to build:
+  To scale up verification further, we need a compositional glue:
   \begin{itemize}
-    \pause \item Large-scale, heterogenous systems
-    \pause \item Certified end-to-end in a general-purpose proof assistant
-    \pause \item Constructed from off-the-shelf certified components.
+    \item General-purpose model to embed everything
+    \item High-level composition algebra
   \end{itemize}
+  %The DeepSpec project seeks to build:
+  %\begin{itemize}
+  %  \pause \item Large-scale, heterogenous systems
+  %  \pause \item Certified end-to-end in a general-purpose proof assistant
+  %  \pause \item Constructed from off-the-shelf certified components.
+  %\end{itemize}
 \end{frame}
 %}}}
 
-\begin{frame}{Theoretical machinery} %{{{
+\begin{frame}{Theoretical frameworks} %{{{
   The past 30 years of semantics research
   provide ample material to address this challenge!
   \pause
@@ -64,33 +71,349 @@
       \\
       \hline
       \\
-      \pause
       \parbox{.45\textwidth}{
         \centering
         Game semantics \\ Linear logic
       } &
-      \pause
       \parbox{.45\textwidth}{
         \centering
         Transition systems
       } \\[1.5em]
-      \pause
       Logical relations &
-      \pause
       Simulations \\[1.5em]
-      \pause
       Refinement calculus &
-      \pause
       Hoare logic \\[1.5em]
-      \pause
       Algebraic effects &
-      \pause
       Closed systems \\[1.5em]
       \hline
     \end{tabular}
   \end{centering}
 \end{frame}
 %}}}
+
+\begin{frame}{Case study: CertiKOS} %{{{
+  Software systems use abstraction layers. In CertiKOS:
+  \[
+    \begin{prooftree}
+      \hypo{C}
+      \infer1[\kw{TSyscall}]{\fbox{$\quad M_n \quad$}}
+      \infer1[\kw{TTrap}]{\vdots}
+      \infer1[\kw{MATInit}]{\fbox{$\quad M_1 \quad$}}
+      \infer1[\kw{MBoot}]{}
+    \end{prooftree}
+  \]
+
+  \pause
+  Our verification effort uses
+  \emph{certified abstraction layers}:
+  \[
+    \begin{prooftree}
+      \hypo{C}
+      \infer1[$L_2$]{\begin{array}{c}R \\ \fbox{$\qquad M \qquad$}\end{array}}
+      \infer1[$L_1$]{}
+    \end{prooftree}
+    \qquad
+    \begin{array}{c}
+      \fbox{$L_1 \vdash M : L_2$} \\[1em]
+      \forall C \: \bdot \:
+      \llbracket C \rrbracket_{L_2} \le_R
+      \llbracket C \oplus M \rrbracket_{L_1}
+    \end{array}
+  \]
+%
+%  \pause
+%  Using transitivity we achieve compositional verification:
+%
+%    \qquad
+%    \begin{array}{r@{\:}l}
+%      \forall C \: \bdot &
+%      \llbracket C \rrbracket_\kw{TSyscall} \\
+%      \sqsubseteq &
+%      \llbracket C \oplus M_n \rrbracket_\kw{TTrap} \\
+%      \vdots &
+%      \\
+%      \sqsubseteq &
+%      \llbracket C \oplus M_n \oplus \cdots \oplus M_2
+%      \rrbracket_\kw{MATInit} \\
+%      \sqsubseteq &
+%      \llbracket C \oplus M_n \oplus \cdots \oplus M_2 \oplus M_1
+%      \rrbracket_\kw{MBoot}
+%    \end{array}
+\end{frame}
+%}}}
+
+\begin{frame}{Contributions} %{{{
+We combine various paradigms to introduce:
+\begin{center}
+\textbf{Refinement-Based Game Semantics}
+\end{center}
+
+\pause
+Our models provide:
+\begin{itemize}
+  \item \emph{Symmetric monoidal categories} for compositionality;
+  \item \emph{Strategy specifications} to support stepwise refinement;
+  \item \emph{Dual nondeterminism} for open systems and data abstraction.
+\end{itemize}
+
+%Based on a new approach to
+%nondeterminism in game semantics,
+%we introduce \emph{refinement-based game semantics}:
+%%syntesizing techniques from game semantics and stepwise refinement,
+%%and apply them to simple game models:
+%\pause
+%\begin{itemize}
+%  \item Games are first-order signatures $E, F$;
+%  \item \emph{Strategy specifications} are morphisms $f : E \rightarrow F$;
+%  \item They are equipped with complete lattices,
+%    representing \emph{dual nondeterminism}
+%\end{itemize}
+
+%\pause
+%The result is a very expressive framework,
+%which nevertheless remains simple enough to
+%formalize in a proof assistant.
+
+%\pause
+%In particular,
+%our models are rich enough to embed
+%certified abstraction layers
+%and a compositional semantics for CompCert.
+\end{frame}
+%}}}
+
+\section{Dual nondeterminism}
+
+\begin{frame}[fragile]{Angelic and demonic nondeterminism} %{{{
+  Axiomatic semantics and Hoare logic use
+  \emph{correctness statements}:
+  \begin{gather*}
+    \fbox{$\htr{P}{C}{Q}$} \\[1ex]
+    \xrightarrow{k} \fbox{$C$} \xrightarrow{k'} \\
+    P(k) \Rightarrow Q(k')
+  \end{gather*}
+
+  \pause
+  Two ways to add nondeterministic choice:
+  \onslide<2->
+  \only<1-2>{
+    \begin{gather*}
+      \fbox{$C_1 \sqcup C_2$}
+      \\[1ex]
+      {\begin{prooftree}
+        \hypo{\htr{P}{C_1}{Q}}
+        \infer1{\htr{P}{C_1 \sqcup C_2}{Q}}
+      \end{prooftree}}
+      \qquad
+      {\begin{prooftree}
+        \hypo{\htr{P}{C_2}{Q}}
+        \infer1{\htr{P}{C_1 \sqcup C_2}{Q}}
+      \end{prooftree}}
+    \end{gather*}
+  }
+  \only<3>{
+    \begin{gather*}
+      \fbox{$C_1 \sqcap C_2$}
+      \\[1ex]
+      {\begin{prooftree}
+        \hypo{\htr{P}{C_1}{Q}}
+        \hypo{\htr{P}{C_2}{Q}}
+        \infer2{\htr{P}{C_1 \sqcup C_2}{Q}}
+      \end{prooftree}}
+    \end{gather*}
+  }
+\end{frame}
+%}}}
+
+\begin{frame}{Refinement}
+  Stepwise refinement techniques use a relation:
+  \begin{gather*}
+    \fbox{$C_1 \sqsubseteq C_2$} \\[1ex]
+    \forall P Q \bdot
+      \htr{P}{C_1}{Q} \Rightarrow
+      \htr{P}{C_2}{Q}
+  \end{gather*}
+  \pause
+  Then:
+  \begin{itemize}
+    \item \emph{Transitivity} enables incremental derivation:
+      $C_1 \sqsubseteq \cdots \sqsubseteq C_n$
+    \item \emph{Monotonicity} enables congruent refinement
+    \item $\sqsubseteq, \sqcup, \sqcap$ work together
+      as a \emph{distributive lattice}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Specifications}
+  Refinement subsumes correctness:
+  \[
+    \htr{P}{C}{Q} \: \Leftrightarrow \:
+    \langle P \mid Q \rangle \sqsubseteq C
+  \]
+
+  In the context of specifications:
+  \begin{center}
+    \begin{tabular}{cc}
+      \hline
+      Angelic choice ($\sqcup$) & Demonic choice ($\sqcap$) \\
+      \hline
+      Must satisfy both & Can satisfy either \\
+      Stronger guarantees & Implementation freedom \\
+      Environment & System \\
+      Increases with $\sqsubseteq$ & Decreases with $\sqsubseteq$ \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Example}
+\end{frame}
+
+\section{Refinement-based game semantics} %{{{
+
+\begin{frame}{Games} %{{{
+A very simple, first-order game model
+is sufficient to describe low-level system components.
+We use \emph{effect signatures}:
+\[
+  E_\kw{bq} := \{
+    \kw{enq}[v] : \mathbbm{1}, \kw{deq} : V \mid
+    v \in V \}
+\]
+\pause
+Code using primitives from that signatures
+can be described in a \emph{free monad}
+with corresponding operations:
+\[
+  \kw{rot} \in \mathcal{I}_{E_\kw{bq}}(V) :=
+    v \leftarrow \mathbf{I}^\kw{deq} ;
+    {\_} \leftarrow \mathbf{I}^\kw{enq}[v] ;
+    \eta(v)
+\]
+\pause
+The corresponding behavior can be described as:
+\[
+  \includegraphics[scale=0.1]{rot}
+\]
+\end{frame}
+%}}}
+
+\begin{frame}{Plays} %{{{
+More generally,
+for a signature $E$ our game model
+will use plays of the following form:
+\[
+  s \in \bar{P}_E(A) ::=
+    \underline{v} \mid
+    \underline{m} \mid
+    \underline{m} n s
+  \qquad
+  (v \in A, m \in E, n \in \kw{ar}(m))
+\]
+
+This corresponds to behaviors of the following shape:
+\[
+  \includegraphics[scale=0.1]{play}
+\]
+\end{frame}
+%}}}
+
+\begin{frame}{Strategies} %{{{
+We define a category of strategies
+where $f : E \rightarrow F$
+\emph{uses} outgoing calls in $E$
+to \emph{implement} incoming calls in $F$.
+
+We will use \emph{families} of the form
+$(f^q)_{q \in F}$, where
+$f^q \in \mathcal{I}_E(\kw{ar}(q))$.
+This can be depicted as:
+\[
+  \includegraphics[scale=0.1]{mor}
+\]
+\end{frame}
+%}}}
+
+\begin{frame}{Composition} %{{{
+To compose $f : E \rightarrow F$ and $g : F \rightarrow G$,
+we will substitute the $F$ calls in $g$ by
+the correponding behavior given by $f$:
+\[
+  \includegraphics[scale=0.1]{comp}
+\]
+\end{frame}
+
+\begin{frame}{Layers}
+Given a set of abstract states $S$,
+we can extend an effect signature $E$
+to annotate all calls and returns with a state $k \in S$:
+\[
+  E@S :=
+    \{ m@k : \kw{ar}(m) \times S \mid
+       m \in E, k \in S \}
+\]
+These ingredients allow us to represent:
+\begin{itemize}
+  \item Layer interfaces as $L : 1 \rightarrow E@S$
+  \item Layer implementations as $M : E_1 \rightarrow E_2$
+  \item This can be promoted to $M@S : E_1@S \rightarrow E_2@S$
+  \item Then $\llbracket M \rrbracket_L := M@S \circ L : 1 \rightarrow E_2@S$
+\end{itemize}
+\end{frame}
+%}}}
+
+\begin{frame}{Abstraction} %{{{
+To formulate correctness properties,
+we will encode simulation relations as morphisms:
+\[
+  \includegraphics[scale=0.07]{simrel}
+\]
+and need to define an appropriate notion of refinement,
+so that layer correctness can be expressed as:
+\[
+  R^*_{E_2} \!\circ L_2 \: \sqsubseteq \: \llbracket M \rrbracket_{L_1}
+  \: \Leftrightarrow \:
+  L_1 \vdash_R M : L_2
+  \: \Leftrightarrow \:
+  L_2 \: \sqsubseteq \: R_*^{E_2} \!\circ \llbracket M \rrbracket_{L_1} \,.
+\]
+However,
+this requires a satisfactory treatment
+of \emph{dual nondeterminism} and
+\emph{alternating refinement}
+in the context of our game model.
+\end{frame}
+%}}}
+
+%}}}
+
+\section{Conclusion} %{{{
+
+\begin{frame}{Conclusion}
+  Takeaway:
+  \begin{itemize}
+    \item Decouple nondeterminism from the structure of plays
+    \item Our model of nondeterminism must reflect the duality
+  \end{itemize}
+
+  Provides a new lens to think about:
+  \begin{itemize}
+    \item Concurrent games
+    \item Galois connexion model of LL
+  \end{itemize}
+\end{frame}
+
+%}}}
+
+\appendix
+
+\begin{frame}{}
+  \begin{center}
+    [Backup slides]
+  \end{center}
+\end{frame}
+
+\section*{Introduction} %{{{
 
 \begin{frame}[fragile]{Why this gap?} %{{{
   \centering
@@ -271,79 +594,10 @@
 %\end{frame}
 %}}}
 %
-%\begin{frame}{Contributions} %{{{
-%Our work is a first step in this direction,
-%synthesizing ideas from:
-%\begin{itemize}
-%  \item Game semantics
-%  \item The refinement calculus
-%  \item Algebraic effects
-%\end{itemize}
-%We build models which can embed a variety of
-%languages, specifications and correctness proofs.
-%Their structure as symmetric monoidal categories then
-%provides a high-level ``composition glue''.
-%
-%In particular,
-%our models are rich enough to embed
-%the \emph{certified abstraction layers}
-%used to verify CertiKOS,
-%and a compositional semantics for
-%the certified C compiler CompCert.
-%\end{frame}
-%%}}}
-%
 
 %}}}
 
-\section{CertiKOS and Certified Abstraction Layers} %{{{
-
-\begin{frame}{Certified abstraction layers} %{{{
-  CertiKOS is decomposed into
-  \emph{certified abstraction layers}:
-  \[
-    \begin{prooftree}
-      \hypo{C}
-      \infer1[$L_2$]{\fbox{$\qquad M \qquad$}}
-      \infer1[$L_1$]{}
-    \end{prooftree}
-    \qquad
-    \begin{array}{c}
-      \fbox{$L_1 \vdash M : L_2$} \\[1em]
-      \forall C \: \bdot \:
-      \llbracket C \rrbracket_{L_2} \sqsubseteq
-      \llbracket C \oplus M \rrbracket_{L_1}
-    \end{array}
-  \]
-
-  \pause
-  Using transitivity we achieve compositional verification:
-  \[
-    \begin{prooftree}
-      \hypo{C}
-      \infer1[\kw{TSyscall}]{\fbox{$\quad M_n \quad$}}
-      \infer1[\kw{TTrap}]{\vdots}
-      \infer1[\kw{MATInit}]{\fbox{$\quad M_1 \quad$}}
-      \infer1[\kw{MBoot}]{}
-    \end{prooftree}
-    \qquad
-    \begin{array}{r@{\:}l}
-      \forall C \: \bdot &
-      \llbracket C \rrbracket_\kw{TSyscall} \\
-      \sqsubseteq &
-      \llbracket C \oplus M_n \rrbracket_\kw{TTrap} \\
-      \vdots &
-      \\
-      \sqsubseteq &
-      \llbracket C \oplus M_n \oplus \cdots \oplus M_2
-      \rrbracket_\kw{MATInit} \\
-      \sqsubseteq &
-      \llbracket C \oplus M_n \oplus \cdots \oplus M_2 \oplus M_1
-      \rrbracket_\kw{MBoot}
-    \end{array}
-  \]
-\end{frame}
-%}}}
+\section*{CertiKOS and Certified Abstraction Layers} %{{{
 
 \begin{frame}{Layer interfaces} %{{{
   Each layer interface $L$ consists of:
@@ -619,121 +873,7 @@
 
 %}}}
 
-\section{Game semantics for low-level components} %{{{
-
-\begin{frame}{Games} %{{{
-A very simple, first-order game model
-is sufficient to describe low-level system components.
-We use \emph{effect signatures}:
-\[
-  E_\kw{bq} := \{
-    \kw{enq}[v] : \mathbbm{1}, \kw{deq} : V \mid
-    v \in V \}
-\]
-\pause
-Code using primitives from that signatures
-can be described in a \emph{free monad}
-with corresponding operations:
-\[
-  \kw{rot} \in \mathcal{I}_{E_\kw{bq}}(V) :=
-    v \leftarrow \mathbf{I}^\kw{deq} ;
-    {\_} \leftarrow \mathbf{I}^\kw{enq}[v] ;
-    \eta(v)
-\]
-\pause
-The corresponding behavior can be described as:
-\[
-  \includegraphics[scale=0.1]{rot}
-\]
-\end{frame}
-%}}}
-
-\begin{frame}{Plays}
-More generally,
-for a signature $E$ our game model
-will use plays of the following form:
-\[
-  s \in \bar{P}_E(A) ::=
-    \underline{v} \mid
-    \underline{m} \mid
-    \underline{m} n s
-  \qquad
-  (v \in A, m \in E, n \in \kw{ar}(m))
-\]
-
-This corresponds to behaviors of the following shape:
-\[
-  \includegraphics[scale=0.1]{play}
-\]
-\end{frame}
-
-\begin{frame}{Strategies}
-We define a category of strategies
-where $f : E \rightarrow F$
-\emph{uses} outgoing calls in $E$
-to \emph{implement} incoming calls in $F$.
-
-We will use \emph{families} of the form
-$(f^q)_{q \in F}$, where
-$f^q \in \mathcal{I}_E(\kw{ar}(q))$.
-This can be depicted as:
-\[
-  \includegraphics[scale=0.1]{mor}
-\]
-\end{frame}
-
-\begin{frame}{Composition}
-To compose $f : E \rightarrow F$ and $g : F \rightarrow G$,
-we will substitute the $F$ calls in $g$ by
-the correponding behavior given by $f$:
-\[
-  \includegraphics[scale=0.1]{comp}
-\]
-\end{frame}
-
-\begin{frame}{Layers}
-Given a set of abstract states $S$,
-we can extend an effect signature $E$
-to annotate all calls and returns with a state $k \in S$:
-\[
-  E@S :=
-    \{ m@k : \kw{ar}(m) \times S \mid
-       m \in E, k \in S \}
-\]
-These ingredients allow us to represent:
-\begin{itemize}
-  \item Layer interfaces as $L : 1 \rightarrow E@S$
-  \item Layer implementations as $M : E_1 \rightarrow E_2$
-  \item This can be promoted to $M@S : E_1@S \rightarrow E_2@S$
-  \item Then $\llbracket M \rrbracket_L := M@S \circ L : 1 \rightarrow E_2@S$
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Abstraction}
-To formulate correctness properties,
-we will encode simulation relations as morphisms:
-\[
-  \includegraphics[scale=0.07]{simrel}
-\]
-and need to define an appropriate notion of refinement,
-so that layer correctness can be expressed as:
-\[
-  R^*_{E_2} \!\circ L_2 \: \sqsubseteq \: \llbracket M \rrbracket_{L_1}
-  \: \Leftrightarrow \:
-  L_1 \vdash_R M : L_2
-  \: \Leftrightarrow \:
-  L_2 \: \sqsubseteq \: R_*^{E_2} \!\circ \llbracket M \rrbracket_{L_1} \,.
-\]
-However,
-this requires a satisfactory treatment
-of \emph{dual nondeterminism} and
-\emph{alternating refinement}
-in the context of our game model.
-\end{frame}
-
-%}}}
-
-\section{Dual nondeterminism and refinement} %{{{
+\section*{Dual nondeterminism and refinement} %{{{
 
 \begin{frame}{Nondeterminism} %{{{
   Nondeterminism occurs
@@ -1120,7 +1260,7 @@ and $\tau : 1 \rightarrow E@S_1$,
 
 %}}}
 
-\section{Conclusion} %{{{
+\section*{Conclusion} %{{{
 
 \begin{frame}{Conclusion}
 \end{frame}
@@ -1147,7 +1287,7 @@ and $\tau : 1 \rightarrow E@S_1$,
 %\end{frame}
 %%}}}
 %
-%\section{Effectful computations}
+%\section*{Effectful computations}
 %
 %\begin{frame}{Algebraic effects} %{{{
 %In the framework of \emph{algebraic effects}:
@@ -1266,7 +1406,7 @@ and $\tau : 1 \rightarrow E@S_1$,
 %structure which models \emph{dual nondeterminism}.
 %\end{frame}
 %
-%\section{Strategies}
+%\section*{Strategies}
 %
 %\begin{frame}{Interaction primitives and substitution}
 %A strategy specification $f : E \rightarrow F$
