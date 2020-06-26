@@ -1757,51 +1757,153 @@ This is enforced by indexing the simulation relation
 over a well-founded order,
 and requiring the index to decrease
 whenever an empty transition sequence is used.
+Since this mechanism is unchanged in CompCertO
+and is largely orthogonal to the techniques we introduce,
+we omit this aspect of forward simulations
+in our exposition below.
 
-%A simulation between the small-step semantics
-%$L_1 : A_1 \rightarrow B_1$ and
-%$L_2 : A_2 \rightarrow B_2$ will
-%operate in the context of the refinement conventions
-%$\mathbb{C}_A : A_1 \Leftrightarrow A_2$ and
-%$\mathbb{C}_B : B_1 \Leftrightarrow B_2$.
-%When relating sets of states,
-%we will want to make sure that
-%each \emph{target} state has a corresponding \emph{source} state,
-%but the source program may allow additional behaviors
-%that are not realized in the target program.
-%However, to take into account the convention that
-%empty sets of states correspond to undefined behaviors,
-%when the source set is empty,
-%no restrictions are placed on the target state.
-%
-%\begin{definition}[Backward simulation between sets of states]
-%We say that $R : \mathcal{R}(S_1, S_2)$ is a
-%\emph{backward simulation relation
-%  between the sets $Q_1 \subseteq S_1$ and  $Q_2 \subseteq S_2$}
-%if the following conditions hold:
-%\begin{enumerate}
-%\item
-%  If $Q_1$ is non-empty,
-%  then $Q_2$ is non-empty as well.
-%\item
-%  If $Q_1$ is non-empty,
-%  then for all $s_2 \in Q_2$,
-%  there exists $s_1 \in Q_1$
-%  such that $(s_1, s_2) \in R$.
-%\end{enumerate}
-%We will write $Q_1 \ge_R Q_2$.
-%\end{definition}
-%
-%A state $s$ \emph{goes wrong}
-%if it is neither an interaction nor a final state,
-%and if there is no transition $s \stackrel{t}{\rightarrow} s'$;
-%a state $s$ is \emph{safe}
-%if no state that goes wrong is reachable from $s$
-%by the relation $\stackrel{\epsilon}{\rightarrow}$.
-%Safe states will be denoted using the predicate $\kw{safe}(s)$.
-%We can now define backward simulations.
+Since our transition systems introduce
+various form of external communication,
+they must be taken into account by our notions of simulation.
+In CompCertO,
+a forward simulation between the small-step semantics
+$L_1 : A_1 \rightarrow B_1$ and
+$L_2 : A_2 \rightarrow B_2$
+operates in the context of the simulation conventions
+$\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
+$\mathbb{R}_B : B_1 \Leftrightarrow B_2$.
 
-\begin{definition}[Forward simulation] \label{def:sim}
+The simulation convention $\mathbb{R}_B$
+determines how
+the incoming questions used to activate $L_1$ and $L_2$ and
+the answers eventually returned
+are expected to be related.
+The corresponding simulation properties
+are shown in Fig.~\ref{fig:fsim}.
+Since the incoming questions correspond to environment moves,
+in a simulation the environment also chooses the world $w_B$
+at which they are related.
+The simulation relation $R \in \mathcal{R}_{W_B}(S_1, S_2)$
+is itself indexed by $w_B$
+to ensure that the eventual answers
+are related consistently.
+
+\begin{figure} % fig:fsim {{{
+  \[
+    \begin{array}{c@{\qquad}c@{\qquad}c}
+      \begin{tikzcd}[sep=large]
+        q_1 \ar[d, "w_B \Vdash \mathbb{R}_B^\que"', dash] \ar[r, dash, "I_1"] &
+        s_1 \ar[d, "w_B \Vdash R", dash, dashed] \\
+        q_2 \ar[r, "I_2"', dash, dashed] &
+        s_2
+      \end{tikzcd}
+      &
+      \begin{tikzcd}[sep=large]
+        s_1 \ar[r, "t"] \ar[d, "w_B \Vdash R"', dash] &
+        \!\!{}_1 \:\, s_1' \ar[d, "w_B \Vdash R", dash, dashed] \\
+        s_2 \ar[r, "t", dashed] &
+        \!\!{}_2^* \:\, s_2'
+      \end{tikzcd}
+      &
+      \begin{tikzcd}[sep=large]
+        s_1 \ar[r, "F_1", dash] \ar[d, "w_B \Vdash R"', dash] &
+        r_1 \ar[d, "w_B \Vdash \mathbb{R}_B^\ans", dash, dashed] \\
+        s_2 \ar[r, "F_2"', dash, dashed] &
+        s_2'
+      \end{tikzcd}
+      \\[3.5em]
+      I_1 \ifr{\Vdash \mathbb{R}_B^\que \rightarrow \mathcal{P}^\le(R)} I_2
+      &
+      {\rightarrow_1}
+      \ifr{\Vdash R \rightarrow {=} \rightarrow \mathcal{P}^\le(R)}
+      {\rightarrow_2^*}
+      &
+      F_1
+      \ifr{\Vdash R \rightarrow \mathcal{P}^\le(\mathbb{R}_B^\ans)}
+      F_2
+      \\[1em]
+      \small \textsf{(a) Initial states} &
+      \small \textsf{(b) Internal states} &
+      \small \textsf{(c) Final states}
+    \end{array}
+  \]
+  \caption{Forward simulation properties for initial, internal and final states.
+    (a)~When the execution is initiated by two related questions,
+    any initial state of $L_1$ is matched by
+    a related initial state of $L_2$.
+    (b)~Every internal transition of $L_1$ is then matched by
+    a sequence of transitions of $L_2$,
+    preserving the simulation relation.
+    (c)~When a final state is eventually reached by $L_1$,
+    any related state in $L_2$ is final as well and
+    produces a related answer.
+    The indexing of the relations
+    $\mathbb{R}_B^\que$, $R$, $\mathbb{R}_B^\ans$
+    by the Kripke world $w_B$
+    guarantees that the original questions and their eventual answers
+    are related in a consistent way.}
+  \label{fig:fsim}
+\end{figure}
+%}}}
+
+The simulation convention $\mathbb{R}_A$
+determines the correspondance between
+outgoing questions triggered by
+the transition systems' external states.
+The corresponding simulation properties
+are shown in Fig.~\ref{fig:fsim-ext}.
+The questions are system moves:
+the simulation proof can choose an arbitrary $w_A$ to relate them,
+and the environment guarantees that any corresponding answers
+will be related at that world.
+
+\begin{figure} % fig:fsim-ext {{{
+  \[
+    \begin{array}{ccc}
+      \begin{tikzcd}[sep=large]
+        s_1 \ar[r, "X_1", dash] \ar[d, "w_B \Vdash R"', dash] &
+        m_1 \ar[d, "w_A \Vdash \mathbb{R}_A^\que", dash, dashed] \\
+        s_2 \ar[r, "X_2"', dash, dashed] &
+        m_2
+      \end{tikzcd}
+      &
+      \wedge
+      &
+      \begin{tikzcd}[sep=large]
+        n_1 \ar[r, "Y_1^{s_1}", dash] \ar[d, "w_A \Vdash \mathbb{R}_A^\ans"', dash] &
+        s_1' \ar[d, "w_B \Vdash R", dash, dashed] \\
+        n_2 \ar[r, "Y_2^{s_2}"', dash, dashed] &
+        s_2
+      \end{tikzcd}
+    \end{array}
+  \]
+  \[
+        \begin{array}{l@{\:}c@{\:}ccl@{\:}c@{\:}cc}
+          \forall w_B \Vdash s_1 \mathrel{R} s_2 & . &
+                  s_1 \mathrel{X_1} m_1 & \Rightarrow &
+          \exists w_A \Vdash m_1 \mathrel{\mathbb{R}_A^\que} m_2 & . &
+                  s_2 \mathrel{X_2} m_2 & \wedge \\
+          \forall w_A \Vdash n_1 \mathrel{\mathbb{R}_A^\ans} n_2 & . &
+                  n_1 \mathrel{Y_1^{s_1}} s_1' & \Rightarrow &
+          \exists w_B \Vdash s_1' \mathrel{R} s_2' & . &
+                  n_2 \mathrel{Y_2^{s_2}} s_2' &
+        \end{array}
+  \]
+  \caption{Forward simulation property for external states.
+    When $L_1$ assigns a question $m_1$ to an external state,
+    $L_2$ assigns a corresponding question $m_2$ to any related state.
+    The questions are related according to
+    the simulation convention $\mathbb{R}_A$,
+    at a world $w_A$ chosen by the simulation.
+    When $L_1$ is resumed by an answer $n_1$,
+    then a related answer $n_2$ also resumes $L_2$,
+    and reestablishes the simulation relation
+    between resulting states.}
+  \label{fig:fsim-ext}
+\end{figure}
+%}}}
+
+\begin{definition}[Forward simulation] \label{def:sim} %{{{
 Given
 two simulation conventions
 $\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
@@ -1811,50 +1913,20 @@ the transition systems
 $L_1 : A_1 \twoheadrightarrow B_1$ and
 $L_2 : A_2 \twoheadrightarrow B_2$,
 a \emph{forward simulation} between $L_1$ and $L_2$
-consists of a
-well-founded relation $(I, <)$
-together with a family of relations
-$(R_i : \mathcal{R}_{W_B}(S_1, S_2))_{i \in I}$
-satisfying the following properties:
-\begin{description}
-\item[Domains]
-  For all
-  $w_B \Vdash q_1 \mathrel{\mathbb{R}_B^\que} q_2, \:\:
-   q_1 \in D_1 \Leftrightarrow q_2 \in D_2$.
-\item[Initial states]
-  For
-  $w_B \Vdash q_1 \mathrel{\mathbb{R}_B^\que} q_2$
-  with $q_1 \mathrel{I_1} s_1$,
-  there exist $i \in I, s_2 \in S_2$
-  such that $q_2 \mathrel{I_2} s_2$ and
-  $w_B \Vdash s_1 \mathrel{R_i} s_2$.
-\item[Simulation]
-  For $w_B \Vdash s_1 \mathrel{R_i} s_2$
-  with $s_1 \stackrel{t}{\rightarrow} s_1'$,
-  there exist $i' \in I$ and $s_2' \in S_2$
-  such that $w_B \Vdash s_1' \mathrel{R_{i'}} s_2'$ and
-  such that
-    $s_2 \mathrel{\stackrel{t}{\rightarrow}{\!\!}^+} s_2'$ or
-    $s_2 \mathrel{\stackrel{t}{\rightarrow}{\!\!}^*} s_2' \:\wedge\: i' < i$.
-\item[External calls]
-  For $w_B \Vdash s_1 \mathrel{R_i} s_2$
-  with $s_1 \mathrel{X_1} m_1$,
-  there exist $w_A \in W_A$ and $m_2 \in M_{A_2}^\que$
-  with $w_A \Vdash m_1 \mathrel{\mathbb{R}_A^\que} m_2$,
-  such that for all
-  $w_A \Vdash n_1 \mathrel{\mathbb{R}_A^\ans} n_2$
-  and $s_1' \in S_1$ with $(s_1, n_1, s_1') \in Y_1$,
-  there exists $s_2' \in S_2$ such that
-  $(s_2, n_2, s_2') \in Y_2$ and
-  $w_B \Vdash s_1' \mathrel{R} s_2'$.
-\item[Final states]
-  For $w_B \Vdash s_1 \mathrel{R_i} s_2$
-  with $s_1 \mathrel{F_1} r_1$,
-  there exists $r_2 \in M_{B_2}^\ans$ such that
-  $s_2 \mathrel{F_2} r_2$ and $w_B \Vdash r_1 \mathrel{\mathbb{R}_B^\ans} r_2$.
-\end{description}
+consists of a relation
+$R \in \mathcal{R}_{W_B}(S_1, S_2)$
+satisfying the properties shown in
+Fig.~\ref{fig:fsim} and Fig.~\ref{fig:fsim-ext}.
+In addition, the domains of $L_1$ and $L_2$
+must satisfy:
+\[
+  ({-} \in D_1)
+  \ifr{\Vdash \mathbb{R}_B^\que \rightarrow {\Leftrightarrow}}
+  ({-} \in D_2)
+\]
 We will write $L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
 \end{definition}
+%}}}
 
 %}}}
 
