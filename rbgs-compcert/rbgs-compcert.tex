@@ -152,83 +152,152 @@ in proof size.
 
 % preamble {{{
 
-The certified compiler CompCert \cite{compcert}
-represented a milestone
-in terms of the scale at which software verification techniques
-have been applied,
-but most importantly
-it has been used as a platform for other projects to build upon.
-For instance,
-verification tools have been created with soundness proofs
-connecting to CompCert \cite{vst,verasco},
-and it has been used as a component
-in larger verification projects \cite{popl15}.
-
-More broadly, over the past decade,
+The introduction a decade ago of
+the certified compiler CompCert \cite{compcert}
+represented a breakthrough
+in the scale and feasability of
+certified software \cite{shao10}.
+Since then,
 researchers have been able to formally verify the
 total functional correctness
 of various key components of computer systems,
 including
 %compilers \cite{compcert, vellvm},
-operating system kernels \cite{sel4, popl15},
+operating system kernels \cite{sel4,popl15},
 file systems \cite{fscq} and
-processor designs \cite{safe}.
-These achievements remain discrete, but
-there is interest in rendering them interoperable,
-as exemplified by the DeepSpec project \cite{deepspec}.
-By using formal specifications as interfaces
-between the correctness proofs of various components, %---
-%showing that the requirements of one component
-%are met by the guarantees of another ---
-the researchers in DeepSpec hope to
-verify composite systems
-operating across many levels of abstraction.
-%If successful,
-%this would represent a deployment of formal methods
-%at an unprecedented scale.
+processor designs \cite{safe,bluespec}.
 
-%}}}
+Building on this legacy,
+the research community is now undertaking the next challenge
+\cite{deepspec}:
+constructing large-scale, heterogenous certified systems
+by using formal specifications as interfaces
+between the correctness proofs of various components,
+covering a range of abstraction levels.
+%XXX anonymize in submission
+To~this end,
+we have proposed
+a synthesis of game semantics and the refinement calculus
+\cite{rbgs-cal}
+as a common setting
+in which various
+certified component could be embedded and
+made interoperable.
+If successful,
+this would represent a deployment of formal methods
+at an unprecedented scale.
 
-\subsection{Refinement-based game semantics} %{{{
+%Meanwhile,
+%CompCert itself
+%has been used as a platform other projects have built upon.
+%For example,
+%verification tools have been created with soundness proofs
+%connecting to CompCert \cite{vst,verasco}.
+%The composition techniques used to verify CompCert
+%have been extended in various directions
+%\cite{compcompcert,sepcompcert,compcertm}
+%and have inspired the \emph{certified abstraction layers}
+%used to verify the operating system kernel CertiKOS \cite{popl15}.
 
-To enable this,
-we are investigating
-\emph{refinement-based game semantics}
-as a common framework for
-describing and reasoning about heterogenous systems.
-Game semantics (\S\ref{sec:gamesem})
-provides a highly flexible and expressive approach
-to compositional semantics,
-making it a plausible setting for this task.
-By incorporating ideas from
-the refinement calculus \cite{refcal}
-and abstraction layers \cite{popl15}
-into game semantics,
-we hope to provide a framework
-in which disparate verified artifacts
-can be embedded and their correctness proofs combined.
-
-%}}}
-
-\subsection{Requirements for CompCert} \label{sec:compcertreq} %{{{
-
-Given the central role CompCert has played
-in the modern formal methods landscape,
-its integration
-should be a litmus test for any such effort.
-Moreover, there is an abundance of research
-seeking to make the correctness theorem of CompCert
-more precise and compositional
-\cite{qompcert,sepcompcert,compcompcert,compcerttso,compcertshm,compcertm,cpp15},
-which we can build upon to achieve that goal.
-
+Once again,
+CompCert may play a central role in this effort.
+Given the importance of compilers in
+the construction of present-day computer systems,
+and of CompCert in the formal methods landscape,
+its integration to any framework
+attempting to tackle end-to-end verification
+should be a litmus test.
+%For the framework to be general,
+%it cannot be designed around CompCert itself.
 However, this new application of CompCert also
 comes with its own challenges.
-For the framework to be general,
-it cannot be designed around CompCert itself.
-It should be possible to reason about
+
+\subsection{Decomposing heterogenous systems}
+
+Existing work turns CompCert
+into a platform enabling compositional verification
+\cite{compcompcert,sepcompcert,compcertm,vst,verasco}.
+%with CompCertM as the tip of the spear.
+However, in almost all cases,
+the horizon is a completed program to be run as a user-level process.
+%Indeed, while
+%CompCertM allows the user to reason about components with C and assembly
+%call interfaces in isolation and link them, its top-level correctness
+%theorem only characterizes closed semantics where no calls to outside
+%components remain.
+The line of work we are pursuing attempts to go beyond this horizon.
+We envision a verification infrastructure where,
+for example,
+software and hardware components could be freely combined and described
+at various levels of abstraction.
+
+Consider the problem of verifying
+a network interface card (NIC) driver.
+The NIC and its driver are closely coupled,
+but the details of their interactions
+are irrelvant to the rest of the system
+and should not "leak" into our reasoning at larger scales.
+Instead,
+we would like to treat them as a unit,
+and to establish a direct relationship between calls into
+the driver's C interface and network communication.
+Together, the NIC and driver would implement
+a specification of type (see \S\ref{sec:gamesem}):
+\[ \sigma : \kw{Net} \rightarrow \mathcal{C} \,. \]
+
+To make this possible, we seek to develop a hierarchy of game models
+allowing us to decompose heterogeneous systems in flexible ways.
+The driver code would be verified against its own specification
+($\sigma_\kw{drv}$)
+at the level of CompCert semantics,
+then soundly embedded into a more general model,
+where device I/O primitives
+($\sigma_\kw{io}$)
+and the NIC
+($\sigma_\kw{NIC}$)
+would be specified as additional components:
+\[
+  \sigma_\kw{NIC} : \kw{Net} \rightarrow \kw{IO}
+  \qquad
+  \sigma_\kw{io} : \kw{IO} \rightarrow \mathcal{C}
+  \qquad
+  \sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}
+\]
+We could then reason about their interactions
+to build a heterogeneous component implementing
+the overall specification:
+\[
+  \sigma \refby
+  \sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC} \,.
+\]
+Then a \emph{compiler of certified C components}
+would help us transport the specifications and proofs
+obtained regarding the C implementation of the driver code
+to the lower-level system operating at the assembly level:
+\[
+  \sigma' : \kw{Net} \rightarrow \mathcal{A} \,.
+\]
+
+In this paper, we show how to adapt
+the semantic model and correctness proofs of CompCert
+so that they can be used for that purpose.
+The model we develop for CompCert
+is not intended to reach the level of generality
+required to handle the problem above;
+indeed we want the model to remain tailored to CompCert's
+verification as much as possible.
+However, it is important to make it
+possible for open components and proofs expressed in our model to be
+soundly embedded into more general variants of refinement-based game
+semantics. This is the motivation behind the requirements we
+delineate below.
+
+\subsection{Requirements for CompCert}
+
+To address our use case,
+it should be possible to reason about
 C and assembly components that are part of
-heterogeneous systems, involving for instance hardware components.
+heterogeneous systems.
 This excludes approaches to
 per-module compilation correctness which are formulated in terms
 of completed programs,
