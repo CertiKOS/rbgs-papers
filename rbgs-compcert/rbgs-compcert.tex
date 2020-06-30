@@ -410,6 +410,8 @@ but has been provided in HotCRP alongside this submission.]
 
 \subsection{Principles for system construction} \label{sec:principles} %{{{
 
+[XXX: possibly cut?]
+
 % preamble {{{
 
 The goal of certified system design is
@@ -984,7 +986,11 @@ we have used for each one.
 \end{table}
 %}}}
 
-\paragraph{Compiler correctness} \label{sec:compcert:overview} %{{{
+%}}}
+
+%}}}
+
+\subsection{Simulation convention algebra} %{{{
 
 As outlined in Fig.~\ref{fig:simcomp},
 the resulting proofs can be composed as expected.
@@ -1053,6 +1059,12 @@ the following simulation property holds:
     \kw{Asm}(p') \,.
 \]
 
+[Need to add a few words about what else the sim. conv. algebra
+can do for us.
+Maybe talk about invariants (wt, va),
+and self-simulations.
+Give a concrete example of sim. conv. refinement.]
+
 %In Compositional CompCert,
 %this is achieved independently for each compilation pass.
 %Stated in our terms,
@@ -1108,11 +1120,17 @@ the following simulation property holds:
 
 %}}}
 
-%}}}
-
-%}}}
-
 \subsection{Logical relations} \label{sec:logrel} %{{{
+
+[Need to give a transition and explain how this relates
+to simulation convention algebra:
+zooming in to the specific techniques that we use
+to establish some of the properties we need,
+especially self-simulation under
+simulation conventions of interest,
+compositional definitions of sim. conv. like
+$\kw{injp}, \kw{ext}$
+and how parametricity fits in the picture]
 
 Logical relations are structure-preserving relations,
 in the same way that homomorphisms are structure-preserving maps.
@@ -2219,6 +2237,159 @@ specifically \texttt{compose\_simulation}.
 
 %}}}
 
+\section{Simulation algebra} \label{sec:simalg} %{{{
+
+[XXX reorganize / move stuff around]
+
+This appendix details
+the algebraic manipulations we use
+in the proof of Thm.~\ref{thm:compc}
+to transform the simulation
+obtain by composing passes
+into a standard form.
+
+At the core of our simulation algebra is
+a notion of refinement for simulation conventions.
+The refinement relation $\mathbb{R} \scref \mathbb{S}$
+captures the idea that the convention $\mathbb{R}$
+is more general than the convention $\mathbb{S}$,
+so that any simulation accepting $\mathbb{R}$ as its
+incoming convention will accept $\mathbb{S}$ as well.
+
+\begin{definition}[Simulation convention refinement] %{{{
+Given two simulation conventions
+$\mathbb{R}, \mathbb{S} : A_1 \Leftrightarrow A_2$,
+we say that
+$\mathbb{S}$ refines $\mathbb{R}$ and write
+$\mathbb{R} \scref \mathbb{S}$
+when the following holds:
+\[
+    \begin{array}{r@{}c@{\:\Rightarrow\:}c@{}c@{}l}
+      \forall w \, m_1 \, m_2 \,.\, &
+      w \Vdash m_1 \mathrel{R^\que} m_2 &
+      \exists \, v \,.\, &
+      v \Vdash m_1 \mathrel{S^\que} m_2 &
+      \: \wedge \\
+      \forall \, n_1 \, n_2 \,.\, &
+      v \Vdash n_1 \mathrel{S^\ans} n_2 &
+      &
+      w \Vdash n_1 \mathrel{R^\ans} n_2 & \,.
+    \end{array}
+\]
+We write $\mathbb{R} \equiv \mathbb{S}$ when both
+$\mathbb{R} \scref \mathbb{S}$ and
+$\mathbb{S} \scref \mathbb{R}$.
+\end{definition}
+%}}}
+
+The following theorem states the relationship between
+simulation convention refinement and forward simulations.
+
+\begin{theorem} %{{{
+For
+$\mathbb{R}' \scref \mathbb{R} : A_1 \Leftrightarrow A_2$ and
+$\mathbb{S} \scref \mathbb{S}' : B_1 \Leftrightarrow B_2$,
+the following holds for all
+$L_1 : A_1 \twoheadrightarrow B_1$ and $L_2 : A_2 \twoheadrightarrow B_2$:
+\[
+      L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2
+      \: \Rightarrow \:
+      L_1 \le_{\mathbb{R}' \twoheadrightarrow \mathbb{S}'} L_2 \,.
+\]
+\begin{proof}
+See \texttt{open\_fsim\_ccref} in \texttt{CallconvAlgebra.v}.
+\end{proof}
+\end{theorem}
+%}}}
+
+Refinement can be used to state many interesting properties,
+which can then be used to transform simulations.
+
+\begin{theorem} % assoc, id, monot {{{
+For
+$\mathbb{R} : A_1 \Leftrightarrow A_2$,
+$\mathbb{S} : A_2 \Leftrightarrow A_3$,
+$\mathbb{T} : A_3 \Leftrightarrow A_4$,
+the following properties hold:
+\begin{gather*}
+  ({\cdot}) :: {{\scref} \times {\scref} \rightarrow {\scref}}
+  \\
+  (\mathbb{R} \cdot \mathbb{S}) \cdot \mathbb{T} \equiv
+    \mathbb{R} \cdot (\mathbb{S} \cdot \mathbb{T})
+  \qquad
+  \mathbb{R} \cdot \kw{id} \equiv
+  \kw{id} \cdot \mathbb{R} \equiv
+  \mathbb{R}
+\end{gather*}
+\end{theorem}
+%}}}
+
+\begin{theorem}[Addition and Kleene iteration of simulations] \label{thm:simk} %{{{
+Together with the composition and refinement of simulation conventions,
+the additive constructions presented in Def.~\ref{def:joins}
+constitute a typed Kleene algebra \cite{tka}.
+Moreover, the following properties hold:
+\[
+  \AxiomC{$\forall i \,.\,
+    L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}_i} L_2$}
+  \UnaryInfC{$
+    L_1 \le_{\mathbb{R} \twoheadrightarrow \sum_i \mathbb{S}_i} L_2$}
+  \DisplayProof
+  \quad
+  \AxiomC{$L \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L$}
+  \UnaryInfC{$L \le_{\mathbb{R}^* \twoheadrightarrow \mathbb{S}^*} L$}
+  \DisplayProof
+\]
+\begin{proof}
+See \texttt{cc\_star\_fsim} and the preceding definitions
+in \texttt{common/CallconvAlgebra.v}.
+\end{proof}
+\end{theorem}
+%}}}
+
+These properties can be used to construct
+the self-simulations which are used
+when composing the passes of CompCertO.
+
+\begin{theorem} \label{thm:lprops} %{{{
+These simulations hold
+for all programs:
+\begin{gather*}
+\forall \, p \,.\,
+  \kw{Clight}(p)
+  \le_{(\kw{ext} + \kw{injp})^* \twoheadrightarrow (\kw{ext} + \kw{injp})^*}
+  \kw{Clight}(p) \\
+\forall \, p \,.\,
+  \kw{RTL}(p)
+  \le_{\kw{inj} \twoheadrightarrow \kw{inj}}
+  \kw{RTL}(p)
+\end{gather*}
+\begin{proof}
+Using Thm~\ref{thm:param} and \ref{thm:simk}.
+\end{proof}
+\end{theorem}
+%}}}
+
+Finally,
+we state the following properties of $\kw{ext}$ and $\kw{inj}$
+which are used to simplify
+the compiler's right-hand side simulation convention.
+
+\begin{theorem} \label{thm:extinj}
+$
+  \kw{ext} \cdot \kw{inj} \equiv
+  \kw{inj} \cdot \kw{ext} \equiv
+  \kw{inj} \cdot \kw{inj} \equiv
+  \kw{inj}
+$.
+\begin{proof}
+\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj},
+found under \texttt{cklr/}.
+\end{proof}
+\end{theorem}
+
+%}}}
+
 \section{Logical relations for CompCert} \label{sec:cklr} %{{{
 
 Language interfaces reveal the information
@@ -2567,6 +2738,71 @@ in particular \texttt{cklr/Clightrel.v} and \texttt{cklr/RTLrel.v}.
 %}}}
 
 %}}}
+
+%}}}
+
+\section{Invariants} %{{{
+
+Several passes of CompCert
+rely on the preservation of invariants
+by their source program.
+The $\kw{Selection}$, $\kw{Allocation}$, and $\kw{Stacking}$ passes
+rely on typing invariants,
+whereas the $\kw{Constprop}$, $\kw{CSE}$, $\kw{Deadcode}$
+rely invariants tracked using CompCert's value analysis framework.
+These invariants must be maintained by externall calls.
+In CompCert,
+this is achieved through contraints placed on
+the external call semantics.
+In CompCertO,
+this must be expressed as part of the simulation conventions
+used by compilation passes.
+
+Invariants are a special case of simluation conventions
+which constrain the source and target questions and answers
+to be equal.
+This entails a number of useful properties:
+for instance,
+invariants commute with each other.
+In addition,
+treating invariants as first-class objects
+enables new verification techniques
+outlined in this section.
+
+In the following, [\ldots]
+
+\subsection{Invariants}
+
+[Definition, invariants as simulation conventions,
+preservation, self-simulation]
+
+\subsection{Typing invariants}
+
+Explain $\kw{wt}$.
+
+\subsection{Value analyses}
+
+Explain $\kw{va}$.
+
+\subsection{Simulations modulo invariants}
+
+Simulation diagrams modulo invariants.
+
+Explosion problem if we want 3 versions of
+each one of CompCert's simulation diagram.
+
+Adjoint transformations of transition systems
+for simulations modulo invariants.
+
+\subsection{Algebraic properties}
+
+Commutation, duplication.
+
+\subsection{Propagation of invariants}
+
+Propagation of query and reply invariants,
+going through composition / identity / Kleene star,
+corresponding simulation convention refinements.
 
 %}}}
 
@@ -3404,159 +3640,5 @@ and hope future research will build on this success.
 
 \bibliographystyle{abbrv}
 \bibliography{../references}
-
-%\iffalse
-\appendix
-\section{Simulation algebra} \label{sec:simalg} %{{{
-
-This appendix details
-the algebraic manipulations we use
-in the proof of Thm.~\ref{thm:compc}
-to transform the simulation
-obtain by composing passes
-into a standard form.
-
-At the core of our simulation algebra is
-a notion of refinement for simulation conventions.
-The refinement relation $\mathbb{R} \scref \mathbb{S}$
-captures the idea that the convention $\mathbb{R}$
-is more general than the convention $\mathbb{S}$,
-so that any simulation accepting $\mathbb{R}$ as its
-incoming convention will accept $\mathbb{S}$ as well.
-
-\begin{definition}[Simulation convention refinement] %{{{
-Given two simulation conventions
-$\mathbb{R}, \mathbb{S} : A_1 \Leftrightarrow A_2$,
-we say that
-$\mathbb{S}$ refines $\mathbb{R}$ and write
-$\mathbb{R} \scref \mathbb{S}$
-when the following holds:
-\[
-    \begin{array}{r@{}c@{\:\Rightarrow\:}c@{}c@{}l}
-      \forall w \, m_1 \, m_2 \,.\, &
-      w \Vdash m_1 \mathrel{R^\que} m_2 &
-      \exists \, v \,.\, &
-      v \Vdash m_1 \mathrel{S^\que} m_2 &
-      \: \wedge \\
-      \forall \, n_1 \, n_2 \,.\, &
-      v \Vdash n_1 \mathrel{S^\ans} n_2 &
-      &
-      w \Vdash n_1 \mathrel{R^\ans} n_2 & \,.
-    \end{array}
-\]
-We write $\mathbb{R} \equiv \mathbb{S}$ when both
-$\mathbb{R} \scref \mathbb{S}$ and
-$\mathbb{S} \scref \mathbb{R}$.
-\end{definition}
-%}}}
-
-The following theorem states the relationship between
-simulation convention refinement and forward simulations.
-
-\begin{theorem} %{{{
-For
-$\mathbb{R}' \scref \mathbb{R} : A_1 \Leftrightarrow A_2$ and
-$\mathbb{S} \scref \mathbb{S}' : B_1 \Leftrightarrow B_2$,
-the following holds for all
-$L_1 : A_1 \twoheadrightarrow B_1$ and $L_2 : A_2 \twoheadrightarrow B_2$:
-\[
-      L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2
-      \: \Rightarrow \:
-      L_1 \le_{\mathbb{R}' \twoheadrightarrow \mathbb{S}'} L_2 \,.
-\]
-\begin{proof}
-See \texttt{open\_fsim\_ccref} in \texttt{CallconvAlgebra.v}.
-\end{proof}
-\end{theorem}
-%}}}
-
-Refinement can be used to state many interesting properties,
-which can then be used to transform simulations.
-
-\begin{theorem} % assoc, id, monot {{{
-For
-$\mathbb{R} : A_1 \Leftrightarrow A_2$,
-$\mathbb{S} : A_2 \Leftrightarrow A_3$,
-$\mathbb{T} : A_3 \Leftrightarrow A_4$,
-the following properties hold:
-\begin{gather*}
-  ({\cdot}) :: {{\scref} \times {\scref} \rightarrow {\scref}}
-  \\
-  (\mathbb{R} \cdot \mathbb{S}) \cdot \mathbb{T} \equiv
-    \mathbb{R} \cdot (\mathbb{S} \cdot \mathbb{T})
-  \qquad
-  \mathbb{R} \cdot \kw{id} \equiv
-  \kw{id} \cdot \mathbb{R} \equiv
-  \mathbb{R}
-\end{gather*}
-\end{theorem}
-%}}}
-
-\begin{theorem}[Addition and Kleene iteration of simulations] \label{thm:simk} %{{{
-Together with the composition and refinement of simulation conventions,
-the additive constructions presented in Def.~\ref{def:joins}
-constitute a typed Kleene algebra \cite{tka}.
-Moreover, the following properties hold:
-\[
-  \AxiomC{$\forall i \,.\,
-    L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}_i} L_2$}
-  \UnaryInfC{$
-    L_1 \le_{\mathbb{R} \twoheadrightarrow \sum_i \mathbb{S}_i} L_2$}
-  \DisplayProof
-  \quad
-  \AxiomC{$L \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L$}
-  \UnaryInfC{$L \le_{\mathbb{R}^* \twoheadrightarrow \mathbb{S}^*} L$}
-  \DisplayProof
-\]
-\begin{proof}
-See \texttt{cc\_star\_fsim} and the preceding definitions
-in \texttt{common/CallconvAlgebra.v}.
-\end{proof}
-\end{theorem}
-%}}}
-
-These properties can be used to construct
-the self-simulations which are used
-when composing the passes of CompCertO.
-
-\begin{theorem} \label{thm:lprops} %{{{
-These simulations hold
-for all programs:
-\begin{gather*}
-\forall \, p \,.\,
-  \kw{Clight}(p)
-  \le_{(\kw{ext} + \kw{injp})^* \twoheadrightarrow (\kw{ext} + \kw{injp})^*}
-  \kw{Clight}(p) \\
-\forall \, p \,.\,
-  \kw{RTL}(p)
-  \le_{\kw{inj} \twoheadrightarrow \kw{inj}}
-  \kw{RTL}(p)
-\end{gather*}
-\begin{proof}
-Using Thm~\ref{thm:param} and \ref{thm:simk}.
-\end{proof}
-\end{theorem}
-%}}}
-
-Finally,
-we state the following properties of $\kw{ext}$ and $\kw{inj}$
-which are used to simplify
-the compiler's right-hand side simulation convention.
-
-\begin{theorem} \label{thm:extinj}
-$
-  \kw{ext} \cdot \kw{inj} \equiv
-  \kw{inj} \cdot \kw{ext} \equiv
-  \kw{inj} \cdot \kw{inj} \equiv
-  \kw{inj}
-$.
-\begin{proof}
-\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj},
-found under \texttt{cklr/}.
-\end{proof}
-\end{theorem}
-
-%}}}
-%\fi
 
 \end{document}
