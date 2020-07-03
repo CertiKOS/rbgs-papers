@@ -11,6 +11,8 @@
 \usetikzlibrary{graphs}
 \usetikzlibrary{cd}
 \usetikzlibrary{patterns}
+\usetikzlibrary{backgrounds}
+\usetikzlibrary{shapes}
 \usepackage{bussproofs}
 \usepackage{galois}
 \usepackage{stmaryrd}
@@ -956,7 +958,6 @@ we have used for each one.
       \color{gray} $\kw{inj}$ &
       \color{gray} $\kw{inj}$ \\
     $\kw{Constprop}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
-    $\kw{Renumber}^?$ & $\kw{id}$ & $\kw{id}$ & & \\
     $\kw{CSE}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
     $\kw{Deadcode}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
     \st{Unusedglob} & $\kw{injp}$ & $\kw{inj}$ \\
@@ -979,8 +980,14 @@ we have used for each one.
   \end{tabular}
   \caption{Languages and passes of CompCertO.
     Passes are grouped by their source language.
+    To handle the asymmetry of injection passes
+    ($\kw{injp} \twoheadrightarrow \kw{inj}$),
+    self-simulation properties are inserted as pseudo-passes,
+    allowing us to use the framework describe in \S X to
+    rewrite the compiler's overall simulation convention
+    into a symmetric one.
     Significant lines of code (SLOC) measured by \texttt{coqwc},
-    compared to CompCert v3.5.}
+    compared to CompCert v3.6.}
   \label{tbl:passes}
 \end{table}
 %}}}
@@ -1317,7 +1324,7 @@ $x :: R$ to denote $x \mathrel{R} x$.
 %we describe the extensions we use
 %to model the behavior of \emph{open} programs.
 
-\subsection{Overview of CompCert semantics} \label{sec:sem:overview} %{{{
+\subsection{Whole-program semantics in CompCert} \label{sec:sem:closed} %{{{
 
 The semantics of CompCert languages
 are given in terms of a simple notion of process behavior.
@@ -1433,15 +1440,12 @@ and the correctness of CompCert
 %as a separate compiler
 to be stated as $L_\kw{src} \refby L_\kw{tgt}$.
 
-%}}}
-
-\subsection{Transition systems in CompCert} \label{sec:sem:closed} %{{{
+\paragraph{Transition systems} %{{{
 
 In the original CompCert, language semantics are
 given as labelled transition systems (LTS),
 which characterize a program's behavior in terms of
 sequences of observable events.
-
 Schematically, a CompCert LTS
 is a tuple
 $L = \langle S, I, {\rightarrow}, F \rangle$
@@ -1517,7 +1521,7 @@ through an interaction $t \in \mathbb{E}^*$.
 %This makes it challenging to reason about
 %the behavior of individual compilation units,
 %although there have been successful attempts in this direction
-%\cite{sepcompcert,gilhurslatest}.
+%\cite{sepcompcert,compcertm}.
 %In any case,
 %the compiler's correctness property
 %as described in \S\ref{sec:sem:intro}
@@ -1589,7 +1593,7 @@ the same notion of \emph{memory state}.
 \end{table}
 %}}}
 
-\subsection{The CompCert memory model} \label{sec:sem:mm} %{{{
+\paragraph{Memory model} \label{sec:sem:mm} %{{{
 
 The CompCert memory model \cite{compcertmm,compcertmmv2}
 is the core algebraic structure
@@ -1680,7 +1684,9 @@ which may contain additional values ($\kw{val}$).
 \end{figure}
 %}}}
 
-\subsection{CompCertO's open semantics} \label{sec:sem:open} %{{{
+%}}}
+
+\subsection{Open semantics in CompCertO} \label{sec:sem:open} %{{{
 
 The memory model also plays a central role
 when describing interactions between program modules.
@@ -1780,10 +1786,11 @@ and indicates an exit status upon termination.
 
 \paragraph{Transition systems} %{{{
 
-CompCertO generalizes
-the semantic model of
-\S\ref{sec:sem:closed}
-to account for cross-component interactions.
+To account for the cross-component interactions
+described by language interfaces,
+CompCertO extends
+the transition systems of \S\ref{sec:sem:closed}
+as follows.
 
 \begin{definition} \label{def:lts}
 Given an \emph{incoming} language interface $B$
@@ -1797,7 +1804,7 @@ The set $D \subseteq M_B^\que$ specifies which
 questions the component accepts;
 $I \subseteq D \times S$ then
 assigns to each one a set of \emph{initial states}.
-$F \subseteq S \times M_B^\ans$,
+$F \subseteq S \times M_B^\ans$
 designates \emph{final states} together with corresponding answers.
 External calls are specified by
 $X \subseteq S \times M_A^\que$,
@@ -1825,7 +1832,14 @@ the form of external calls varies significantly
 across languages
 and the simulation convention they follow
 must be defined explicitly.
-%XXX also polarities but that's more involved to describe
+In addition,
+while events and event traces
+bundle together the output and input
+components of the interaction,
+our representation of external calls
+separates them,
+which simplifies the formulation of
+horizontal composition and open simulations.
 
 %For a small-step semantics
 %$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : \kw{semantics}(A,B)$,
@@ -1867,9 +1881,151 @@ must be defined explicitly.
 
 %}}}
 
+\paragraph{Horizontal composition} %{{{
+
+To model linking,
+we need to express the external behavior
+of a collection of components
+in terms of the behaviors of
+individual components.
+This section describes the
+composition operator we use for this purpose.
+
+Consider the components $L_1, L_2 : A \twoheadrightarrow A$.
+When $L_1$ is running and performs an external call
+to one of the functions implemented by $L_2$,
+the execution of $L_1$ is suspended.
+The question of $L_1$ to $L_2$
+is used to initialize a new state for $L_2$,
+and $L_2$ becomes the active component.
+Once $L_2$ reaches a final state,
+the corresponding answer is used to resume
+the execution of $L_1$.
+In the process,
+$L_2$ may itself perform cross-component calls
+instantiating \emph{new} executions of $L_1$.
+Therefore,
+in addition to the state of the active component,
+we need to maintain a \emph{stack} of suspended states
+for component instances awaiting resumption.
+
+\begin{figure} % fig:hcomp {{{
+  \small
+  \begin{tikzpicture}[xscale=0.5,yscale=0.7,
+      baseline=(current bounding box.center)]
+    \node[draw] (L1) at (0, 1) {$L_1$};
+    \node[draw] (L2) at (0,-1) {$L_2$};
+    \begin{scope}[circle, minimum size=3, inner sep=0]
+      \node[draw, fill=black] (X) at (-2,0) {};
+      \node[draw, fill=black] (I) at (+2,0) {};
+    \end{scope}
+    \tiny
+    \node[below right] at (I) {$\kw{in}$};
+    \draw (L1) -| (-1,0);
+    \draw (L2) -| (-1,0) -- (X);
+    \draw[->] (X) -- node[below] {$\kw{out}$} (-3,0);
+    \draw[->] (X) |- (0,2) node[above] {$\kw{push}/\kw{pop}$} -| (I);
+    \draw (3,0) -- (1,0);
+    \draw[->] (1,0) |- (L1);
+    \draw[->] (1,0) |- (L2);
+  \end{tikzpicture}
+  \qquad
+  \begin{minipage}{0.66\textwidth}
+    \begin{gather*}
+        \AxiomC{$q \in D_i$}
+        \AxiomC{$q \mathrel{I_i} s$}
+        \RightLabel{\tiny $\kw{in}^\que$}
+        \BinaryInfC{$q \mathrel{I} (i, s)$}
+        \DisplayProof
+        \quad
+        \AxiomC{$s \stackrel{t}{\rightarrow}_i s'$}
+        \RightLabel{\tiny $\kw{run}$}
+        \UnaryInfC{$
+            (i, s) \, k
+            \stackrel{t}{\rightarrow}
+            (i, s') \, k$}
+        \DisplayProof
+        \quad
+        \AxiomC{$s \mathrel{F_i} r$}
+        \RightLabel{\tiny $\kw{in}^\ans$}
+        \UnaryInfC{$(i, s) \mathrel{F} r$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s \mathrel{X_i} q$}
+        \AxiomC{$q \in D_j$}
+        \AxiomC{$q \mathrel{I_j} s'$}
+        \RightLabel{\tiny $\kw{push}$}
+        \TrinaryInfC{$
+            (i, s) \, k
+            \stackrel{\epsilon}{\rightarrow}
+            (j, s') \, (i, s) \, k$}
+        \DisplayProof
+        \quad
+        \AxiomC{$s' \mathrel{F_j} r$}
+        \AxiomC{$(s, r, s'') \in Y_i$}
+        \RightLabel{\tiny $\kw{pop}$}
+        \BinaryInfC{$
+            (j, s') \, (i, s) \, k
+            \stackrel{\epsilon}{\rightarrow}
+            (i, s'') \, k$}
+        \DisplayProof
+        \\[1ex]
+        \AxiomC{$s \mathrel{X_i} q$}
+        \AxiomC{$\forall j \,.\, q \notin D_j$}
+        \RightLabel{\tiny $\kw{ext}^\que$}
+        \BinaryInfC{$(i, s) \, k \mathrel{X} q$}
+        \DisplayProof
+        \qquad
+        \AxiomC{$(s, r, s') \in Y_i$}
+        \RightLabel{\tiny $\kw{ext}^\ans$}
+        \UnaryInfC{$((i, s) \, k ,\, r ,\, (i, s') \, k) \in Y$}
+        \DisplayProof
+    \end{gather*}
+  \end{minipage}
+    \caption{Horizontal composition of open semantics.
+      The state is a stack of alternating activations
+      of the two components.
+      During normal execution ($\kw{run}$),
+      the top-level state is updated.
+      Calls to functions provided by the other component ($\kw{push}$)
+      are handled by pushing a new state onto the stack,
+      initialized to handle the call in question.
+      If a final state is reached
+      while there are suspended activations ($\kw{pop}$),
+      the result is used to resume the most recent one.
+      External calls which are provided by neither component
+      ($\kw{ext}^\que$),
+      and final states encountered at the top level
+      ($\kw{in}^\ans$),
+      are simply passed along to the environment.
+    }
+    \label{fig:hcomp}
+\end{figure}
 %}}}
 
-\subsection{Forward simulations} \label{sec:sem:ref} %{{{
+\begin{definition}[Horizontal composition] \label{def:hcomp} %{{{
+For two transition systems $L_1, L_2 : A \twoheadrightarrow A$
+with
+$L_i = \langle S_i, {\rightarrow}_i, D_i, I_i, X_i, Y_i, F_i \rangle$,
+the \emph{horizontal composition} of $L_1$ and $L_2$
+is defined as:
+\[
+    L_1 \oplus L_2 :=
+    \langle
+      (S_1 + S_2)^*, {\rightarrow}, D_1 \cup D_2, I, X, Y, F
+    \rangle
+\]
+where the components $\rightarrow$, $I$, $X$, $Y$, $F$
+are defined inductively by
+the rules shown in Fig.~\ref{fig:hcomp}.
+\end{definition}
+%}}}
+
+%}}}
+
+%}}}
+
+\subsection{Simulations} \label{sec:sem:ref} %{{{
 
 CompCert is proved correct using a simulation
 between the transition semantics of the source and target programs.
@@ -1883,7 +2039,7 @@ are in turn proved to be sound with respect to trace containement.
 We have updated forward and backward simulations to
 work with CompCertO's semantic model.
 In this section we present forward simulations,
-which will be used as our primary notion of refinement.
+which are used as our primary notion of refinement.
 %in the remainder of the paper.
 
 %The set of worlds $W$ is used to
@@ -1915,9 +2071,11 @@ and is largely orthogonal to the techniques we introduce,
 so we omit this aspect of forward simulations
 in our exposition below.
 
-Since our transition systems introduce
+\paragraph{Forward simulations} %{{{
+
+Our transition systems introduce
 various forms of external communication,
-they must be taken into account by our notions of simulation.
+which must be taken into account by our notions of simulation.
 In CompCertO,
 a forward simulation between the small-step semantics
 $L_1 : A_1 \rightarrow B_1$ and
@@ -1926,20 +2084,21 @@ operates in the context of the simulation conventions
 $\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
 $\mathbb{R}_B : B_1 \Leftrightarrow B_2$.
 
-The simulation convention $\mathbb{R}_B$
-determines how
-the incoming questions used to activate $L_1$ and $L_2$ and
-the answers eventually returned
-are expected to be related.
-The corresponding simulation properties
-are shown in Fig.~\ref{fig:fsim}.
-Since the incoming questions correspond to environment moves,
-in a simulation the environment also chooses the world $w_B$
-at which they are related.
-The simulation relation $R \in \mathcal{R}_{W_B}(S_1, S_2)$
+As depicted in Fig.~\ref{fig:fsim},
+if questions of $B_1$ and $B_2$
+respectivelly used to activate $L_1$ and $L_2$
+are related by the simulation convention $\mathbb{R}_B$
+at a world $w_B$,
+simulations guarantee that the corresponding answers will be related
+by $\mathbb{R}_B$ as well:
+the diagrams
+can be pasted together horizontally
+to follow the executions of $L_1$ and $L_2$.
+Note that
+the simulation relation $R \in \mathcal{R}_{W_B}(S_1, S_2)$
 is itself indexed by $w_B$
-to ensure that the eventual answers
-are related consistently.
+to ensure that answers
+are related consistently with the corresponding questions.
 
 \begin{figure} % fig:fsim {{{
   \[
@@ -2005,8 +2164,10 @@ outgoing questions triggered by
 the transition systems' external states.
 The corresponding simulation properties
 are shown in Fig.~\ref{fig:fsim-ext}.
-The questions are system moves:
-the simulation proof can choose an arbitrary $w_A$ to relate them,
+Compared with the treatment of incoming questions,
+the roles of the system and environment are reversed:
+the simulation proof can choose $w_A$
+to relate the outgoing questions,
 and the environment guarantees that any corresponding answers
 will be related at that world.
 
@@ -2020,31 +2181,30 @@ will be related at that world.
         m_2
       \end{tikzcd}
       &
-      \wedge
-      &
       \begin{tikzcd}[sep=large]
         n_1 \ar[r, "Y_1^{s_1}", dash] \ar[d, "w_A \Vdash \mathbb{R}_A^\ans"', dash] &
         s_1' \ar[d, "w_B \Vdash R", dash, dashed] \\
         n_2 \ar[r, "Y_2^{s_2}"', dash, dashed] &
         s_2
       \end{tikzcd}
+      &
+      \begin{array}{
+          c @{\:} l @{{} \Vdash {}} c@{}c@{}c @{\:\:.\:\:}
+                                    c@{}c@{}c @{\:\:} l}
+        \forall & w_B & s_1 & {}\mathrel{R}{} & s_2 &
+                        s_1 & {}\mathrel{X_1}{} & m_1 & \Rightarrow \\
+        \exists & w_A & m_1 & {}\mathrel{\mathbb{R}_A^\que}{} & m_2 &
+                        s_2 & {}\mathrel{X_2}{} & m_2 & \wedge \\
+        \forall & w_A & n_1 & {}\mathrel{\mathbb{R}_A^\ans}{} & n_2 &
+                        n_1 & {}\mathrel{Y_1^{s_1}}{} & s_1' & \Rightarrow \\
+        \exists & w_B & s_1' & {}\mathrel{R}{} & s_2' &
+                        n_2 & {}\mathrel{Y_2^{s_2}}{} & s_2' &
+      \end{array}
     \end{array}
   \]
-  \[
-        \begin{array}{l@{\:}c@{\:}ccl@{\:}c@{\:}cc}
-          \forall w_B \Vdash s_1 \mathrel{R} s_2 & . &
-                  s_1 \mathrel{X_1} m_1 & \Rightarrow &
-          \exists w_A \Vdash m_1 \mathrel{\mathbb{R}_A^\que} m_2 & . &
-                  s_2 \mathrel{X_2} m_2 & \wedge \\
-          \forall w_A \Vdash n_1 \mathrel{\mathbb{R}_A^\ans} n_2 & . &
-                  n_1 \mathrel{Y_1^{s_1}} s_1' & \Rightarrow &
-          \exists w_B \Vdash s_1' \mathrel{R} s_2' & . &
-                  n_2 \mathrel{Y_2^{s_2}} s_2' &
-        \end{array}
-  \]
-  \caption{Forward simulation property for external states.
-    When $L_1$ assigns a question $m_1$ to an external state,
-    $L_2$ assigns a corresponding question $m_2$ to any related state.
+  \caption{Forward simulation property for interacting states.
+    When $L_1$ assigns a question $m_1$ to an interacting state $s_1$,
+    $L_2$ assigns a corresponding question $m_2$ to any related state $s_2$.
     The questions are related according to
     the simulation convention $\mathbb{R}_A$,
     at a world $w_A$ chosen by the simulation.
@@ -2083,103 +2243,49 @@ We will write $L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
 
 %}}}
 
-\subsection{Horizontal composition} \label{sec:sem:linker} %{{{
+\paragraph{Horizontal composition} \label{sec:sem:linker} %{{{
 
-The interaction of a set of components
-can be modelled by the following operator.
+The horizontal composition operator
+described by Def.~\ref{def:hcomp}
+preserves simulations.
+Roughly speaking,
+whenever a new component instances are created
+by cross-component calls,
+the simulation property for the new components
+can be stitched in-between
+the two halves of the callers' simulation property
+described in Fig.~\ref{fig:fsim-ext}.
+This can be formalized as follows.
 
-\begin{definition}[Horizontal composition] \label{def:hcomp} %{{{
-For two transition systems $L_1, L_2 : A \rightarrow A$
-with
-$L_i = \langle S_i, {\rightarrow}_i, D_i, I_i, X_i, Y_i, F_i \rangle$,
-the \emph{horizontal composition} of $L_1$ and $L_2$
-is defined as:
+\begin{theorem}[Horizontal composition of simulations] \label{thm:simlinking} %{{{
+For a simulation convention
+$\mathbb{R} : A_1 \Leftrightarrow A_2$
+and transition systems
+$L_1, L_1' : A_1 \twoheadrightarrow A_1$ and
+$L_2, L_2' : A_2 \twoheadrightarrow A_2$,
+the following propery holds:
 \[
-    L_1 \oplus L_2 :=
-    \langle
-      (S_1 + S_2)^*, {\rightarrow}, D_1 \cup D_2, I, X, Y, F
-    \rangle
+    \AxiomC{$L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2$}
+    \AxiomC{$L_1' \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2'$}
+    \BinaryInfC{$L_1 \oplus L_1'
+      \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}}
+      L_2 \oplus L_2'$}
+    \DisplayProof
 \]
-where the components $\rightarrow$, $I$, $X$, $Y$, $F$
-are defined inductively by
-the rules shown in Fig.~\ref{fig:hcomp}.
-\end{definition}
+\begin{proof}
+See \texttt{common/SmallstepLinking.v}
+in the Coq development.
+\end{proof}
+\end{theorem}
 %}}}
 
-\begin{figure} % fig:hcomp {{{
-    \begin{gather*}
-        \AxiomC{$q \in D_i$}
-        \AxiomC{$q \mathrel{I_i} s$}
-        \BinaryInfC{$q \mathrel{I} (i, s)$}
-        \DisplayProof
-        \quad
-        \AxiomC{$s \stackrel{t}{\rightarrow}_i s'$}
-        \UnaryInfC{$
-            (i, s) \, k
-            \stackrel{t}{\rightarrow}
-            (i, s') \, k$}
-        \DisplayProof
-        \quad
-        \AxiomC{$s \mathrel{F_i} r$}
-        \UnaryInfC{$(i, s) \mathrel{F} r$}
-        \DisplayProof
-        \\[1ex]
-        \AxiomC{$s \mathrel{X_i} q$}
-        \AxiomC{$q \in D_j$}
-        \AxiomC{$q \mathrel{I_j} s'$}
-        \TrinaryInfC{$
-            (i, s) \, k
-            \stackrel{\epsilon}{\rightarrow}
-            (j, s') \, (i, s) \, k$}
-        \DisplayProof
-        \quad
-        \AxiomC{$s' \mathrel{F_j} r$}
-        \AxiomC{$(s, r, s'') \in Y_i$}
-        \BinaryInfC{$
-            (j, s') \, (i, s) \, k
-            \stackrel{\epsilon}{\rightarrow}
-            (i, s'') \, k$}
-        \DisplayProof
-        \\[1ex]
-        \AxiomC{$s \mathrel{X_i} q$}
-        \AxiomC{$\forall j \,.\, q \notin D_j$}
-        \BinaryInfC{$(i, s) \, k \mathrel{X} q$}
-        \DisplayProof
-        \qquad
-        \AxiomC{$(s, r, s') \in Y_i$}
-        \UnaryInfC{$((i, s) \, k ,\, r ,\, (i, s') \, k) \in Y$}
-        \DisplayProof
-    \end{gather*}
-    \caption{Horizontal composition of open semantics}
-    \label{fig:hcomp}
-\end{figure}
-%}}}
-
-The state is a stack of alternating activations
-of the two components.
-During normal execution,
-the top-level state is updated.
-Calls to functions provided by the other component
-are handled by pushing a new state onto the stack,
-initialized to handle the call in question.
-If a final state is reached
-while there are suspended activations,
-the result is used to resume the most recent one.
-External calls which are provided by neither component,
-and final states encountered at the top level,
-are simply passed along to the environment.
-The definition shown here
-%XXX determinacy not defined
-assumes that the components are determinate;
-this is indeed the case for languages we use.
-
-Horizontal composition
+Horizontal composition of simulations
 allows us to decompose the verification of a complex program
 into the verification of its parts.
-To establish the correctness of assembly programs,
-the following theorem is particularly important.
+To establish the correctness of the linked assembly program,
+we can then use the following result.
 
-\begin{theorem} \label{thm:asmlinking} %{{{
+\begin{theorem}[Correctness of linking] \label{thm:asmlinking} %{{{
 For \kw{Asm} programs,
 linking is a correct implementation of
 horizontal composition:
@@ -2195,32 +2301,23 @@ See \texttt{x86/AsmLinking.v} in the Coq development.
 \end{theorem}
 %}}}
 
-Once the semantics of the \kw{Asm} program
-has been split into its components,
-we can verify each one independently.
-This is enabled by the following property.
-%namely the preservation of simulations by
-%horizontal composition.
+%}}}
 
-\begin{theorem} \label{thm:simlinking} %{{{
-For a simulation convention
-$\mathbb{R} : A_1 \Leftrightarrow A_2$
-and transition systems
-$L_1, L_1' : A_1 \rightarrow A_1$ and
-$L_2, L_2' : A_2 \rightarrow A_2$,
-the following propery holds:
-\[
-    \AxiomC{$L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2$}
-    \AxiomC{$L_1' \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2'$}
-    \BinaryInfC{$L_1 \oplus L_1' \le_{\mathbb{R} \rightarrow \mathbb{R}} L_2 \oplus L_2'$}
-    \DisplayProof
-\]
-\begin{proof}
-See \texttt{common/SmallstepLinking.v}
-in the Coq development,
-specifically \texttt{compose\_simulation}.
-\end{proof}
-\end{theorem}
+\paragraph{Vertical composition} %{{{
+
+The diagrams shown in Figs.~\ref{fig:fsim} and~\ref{fig:fsim-ext}
+can also be pasted to compose simulations vertically.
+This allows us to further decompose the verification of a component
+into several steps.
+For compilation,
+these steps will correspond to the various passes of CompCertO,
+shown in Table~\ref{tbl:passes}.
+The conventions used by the resulting simulation
+can be described as follows.
+
+\begin{definition}[Composition of simulation conventions]
+\end{definition}
+
 %}}}
 
 %}}}
@@ -2775,6 +2872,31 @@ enables new verification techniques
 outlined in this section.
 
 In the following, [\ldots]
+
+\begin{tikzcd}[execute at end picture={
+    \begin{scope}[radius=0.25, on background layer]
+    \draw (node cs:name=I1,anchor=center) circle;
+    \draw[dashed] (node cs:name=I2,anchor=center) circle;
+    \draw (node cs:name=I3,anchor=center) circle;
+    \draw[dashed] (node cs:name=I4,anchor=center) circle;
+    \end{scope}
+  }]
+%
+  |[alias=I1]| q_1 \ar[r, "I"] &
+  |[alias=I2]| s_1 &
+  |[alias=I3]| s_1 \ar[r, "t"] &
+  |[alias=I4]| s_1'
+  \\
+  |[circle,draw]| q \ar[d, "\mathbb{R}^\que", dash] \ar[r, "I"] &
+  |[circle,draw]| s \ar[d, "R", dash, dashed] &
+  |[circle,draw]| s \ar[d, "R", dash] \ar[r, "t"] &
+  |[circle,draw]| s' \ar[d, "R", dash, dashed]
+  \\
+  q_2 \ar[r, "I", dashed] &
+  s_2 &
+  s_2 \ar[r, "t", dashed] &
+  \!\!\! {}^* \: s_2'
+\end{tikzcd}
 
 \subsection{Invariants}
 
