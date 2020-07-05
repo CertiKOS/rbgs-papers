@@ -2386,6 +2386,8 @@ See \texttt{x86/AsmLinking.v} in the Coq development.
 %
 %}}}
 
+%}}}
+
 \section{Simulation algebra} %{{{
 
 We now describe the way in which
@@ -2553,6 +2555,17 @@ See \texttt{open\_fsim\_ccref} in \texttt{common/CallconvAlgebra.v}.
 \end{proof}
 \end{theorem}
 %}}}
+
+In CompCert,
+the passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
+\kw{CleanupLabels} and \kw{Debugvar}
+restrict the source and target
+memory states and values to be identical.
+Their simulation proofs require very few changes
+and can be assigned the convention $\kw{id} \twoheadrightarrow \kw{id}$.
+The properties above ensure that these passes
+have no impact on the overall simulation convention
+of CompCertO.
 
 %}}}
 
@@ -2763,51 +2776,6 @@ and \texttt{driver/Compiler.v}.
 \end{proof}
 \end{theorem}
 %%}}}
-
-%}}}
-
-\subsection{XXX later} %{{{
-
-These properties can be used to construct
-the self-simulations which are used
-when composing the passes of CompCertO.
-
-\begin{theorem} \label{thm:lprops} %{{{
-These simulations hold
-for all programs:
-\begin{gather*}
-\forall \, p \,.\,
-  \kw{Clight}(p)
-  \le_{(\kw{ext} + \kw{injp})^* \twoheadrightarrow (\kw{ext} + \kw{injp})^*}
-  \kw{Clight}(p) \\
-\forall \, p \,.\,
-  \kw{RTL}(p)
-  \le_{\kw{inj} \twoheadrightarrow \kw{inj}}
-  \kw{RTL}(p)
-\end{gather*}
-\begin{proof}
-Using Thm~\ref{thm:param} and \ref{thm:simk}.
-\end{proof}
-\end{theorem}
-%}}}
-
-Finally,
-we state the following properties of $\kw{ext}$ and $\kw{inj}$
-which are used to simplify
-the compiler's right-hand side simulation convention.
-
-\begin{theorem} \label{thm:extinj}
-$
-  \kw{ext} \cdot \kw{inj} \equiv
-  \kw{inj} \cdot \kw{ext} \equiv
-  \kw{inj} \cdot \kw{inj} \equiv
-  \kw{inj}
-$.
-\begin{proof}
-\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj},
-found under \texttt{cklr/}.
-\end{proof}
-\end{theorem}
 
 %}}}
 
@@ -3046,7 +3014,7 @@ if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
 \end{figure}
 %}}}
 
-\paragraph{Rationale}
+\paragraph{Rationale} %{{{
 
 The relation $R^\kw{mem}$ is given.
 We expect $R^\kw{ptr}$ to map
@@ -3062,6 +3030,8 @@ the injection mapping $f$.
 We expect the other relations to be consistent with $R^\kw{ptr}$
 and $\kw{undef}$ to act as a least element for $R^\kw{val}$,
 which determines them completely.
+
+%}}}
 
 Note that $R^\kw{mem}$
 is the central component driving world transitions,
@@ -3126,7 +3096,7 @@ we can prove the following parametricity theorems.
 
 \begin{theorem}[Relational parametricity of $\kw{Clight}$ and $\kw{RTL}$] %{{{
 \label{thm:param}
-The following properties hold for all programs:
+For all programs $p$:
 \begin{gather*}
     \forall R \,.\,
       \kw{Clight}(p)
@@ -3141,11 +3111,153 @@ The following properties hold for all programs:
       \label{eqn:rtl}
 \end{gather*}
 \begin{proof}
-See \texttt{*/*rel.v} in the Coq development,
-in particular \texttt{cklr/Clightrel.v} and \texttt{cklr/RTLrel.v}.
+See \texttt{cklr/*rel.v} in the Coq development,
+in particular \texttt{Clightrel.v} and \texttt{RTLrel.v}.
 \end{proof}
 \end{theorem}
 %}}}
+
+The passes of CompCert which use memory extensions
+do not feature complex invariants
+which must be preserved at call sites;
+it is enough for external calls to preserve
+the memory extension.
+Consequently,
+they are not much more difficult to update
+than identity passes,
+and can be assigned the type $\kw{ext} \twoheadrightarrow \kw{ext}$.
+By contrast,
+injection passes are trickier to handle.
+
+%}}}
+
+\subsection{External calls in injection passes} \label{sec:pass:inj} %{{{
+
+\begin{figure} % fig:injp {{{
+  \begin{tikzpicture}[scale=0.4,>=stealth]
+    \draw ( 0,4) rectangle +(2,1);
+    \draw[pattern=north east lines] ( 3,4) rectangle +(2,1);
+    \draw ( 6,4) rectangle +(3,1);
+    \draw[pattern=north east lines] (10,4) rectangle +(1,1);
+    \draw[pattern=north east lines] ( 0,0) rectangle +(8,1);
+    \draw[pattern=north east lines] ( 9,0) rectangle +(2,1);
+    \draw[->] (0,4) -- (1,1); \draw[->] (2,4) -- (3,1);
+    \draw[->] (6,4) -- (4,1); \draw[->] (9,4) -- (7,1);
+    \draw[fill=white] (1,0) rectangle +(2,1);
+    \draw[fill=white] (4,0) rectangle +(3,1);
+    %
+    \draw[dashed] (12,5.5) -- (12,-0.5);
+    %
+    \draw (13,4) rectangle +(2,1);
+    \draw (16,4) rectangle +(2,1);
+    \draw (13,0) rectangle +(1,1);
+    \draw (15,0) rectangle +(3,1);
+    \draw[dashed,->] (13,4) -- (15,1);
+    \draw[dashed,->] (15,4) -- (17,1);
+    \draw[dashed] (17,1) -- (17,0);
+  \end{tikzpicture}
+  \caption{External calls and memory injections.
+    The source and target memory states are
+    depicted at the top and bottom
+    of the figure. Arrows describe the injection mapping.
+    Memory blocks to the right of the dashed line
+    are allocated during the call,
+    which adds a new entry to the injection mapping.
+    The shaded areas must not be modified by the call.
+  }
+  \label{fig:injp}
+\end{figure}
+%}}}
+
+Passes which alter the block structure of the memory
+use \emph{memory injections} (\S\ref{sec:meminj}).
+The convention \kw{inj} can be used for incoming calls,
+but it is insufficient for outgoing calls.
+
+Consider the \kw{SimplLocals} pass,
+which removes local variables whose addresses are not taken
+from the memory.
+The corresponding values are instead stored
+as temporaries in the target function's local environment,
+and the correspondance between the two
+is enforced by the simulation relation.
+To maintain it,
+we need to know that
+external calls do not modify
+the corresponding source memory blocks.
+
+More generally,
+as depicted in Fig.~\ref{fig:injp},
+injection passes expect external calls
+to leave regions outside of the injection's footprint untouched.
+This expectation is reasonable because
+external calls
+should behave uniformly between the source and target executions.
+%An external function acting on the memory state
+%should not forge block identifiers and pointers,
+%but can only follow pointers passed as arguments
+%or fetched from the memory itself
+%(as explained in \S\ref{sec:cklr},
+%this is a form of parametricity).
+These requirements can be formalized as the
+following CompCert Kripke logical relation:
+\begin{gather*}
+  \kw{injp} :=
+    \langle
+      \kw{meminj} \times \kw{mem} \times \kw{mem}, \:
+      {\leadsto_\kw{injp}}, \:
+      \pi_1, \:
+      R^\kw{mem}_\kw{injp}
+    \rangle
+  \\
+  \AxiomC{$f \Vdash m_1 \hookrightarrow_\kw{m} m_2$}
+  \UnaryInfC{$(f, m_1, m_2) \Vdash m_1 \mathrel{R^\kw{mem}_\kw{injp}} m_2$}
+  \DisplayProof
+\end{gather*}
+where $(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$
+ensures that $f \subseteq f'$ and that the memory states
+satisfy the constraints in Fig.~\ref{fig:injp}
+(for details,
+see \texttt{cc\_injp} in \texttt{common/LanguageInterface.v}).
+
+%}}}
+
+\subsection{Properties} %{{{
+
+Finally,
+we state some properties which are used
+to derive Thm.~\ref{thm:compc}.
+
+\begin{theorem} \label{thm:cklr-props}
+For all $\kw{Clight}$ and $\kw{RTL}$ programs:
+\begin{gather*}
+\forall \, p \,.\,
+  \kw{Clight}(p)
+  \le_{(\kw{ext} + \kw{injp})^* \twoheadrightarrow (\kw{ext} + \kw{injp})^*}
+  \kw{Clight}(p) \\
+\forall \, p \,.\,
+  \kw{RTL}(p)
+  \le_{\kw{inj} \twoheadrightarrow \kw{inj}}
+  \kw{RTL}(p)
+\end{gather*}
+In addition,
+the simulation relations derived from $\kw{ext}$ and $\kw{inj}$
+compose in the following way:
+\[
+  \kw{ext} \cdot \kw{inj} \equiv
+  \kw{inj} \cdot \kw{ext} \equiv
+  \kw{inj} \cdot \kw{inj} \equiv
+  \kw{inj} \,.
+\]
+\begin{proof}
+The first statement is derived from
+Thms.~\ref{thm:simk} and~\ref{thm:param};
+see \texttt{driver/Compiler.v}.
+For the second statement, see
+\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj}
+found under \texttt{cklr/}.
+\end{proof}
+\end{theorem}
 
 %}}}
 
@@ -3471,167 +3583,49 @@ to match this convention nonetheless.
 
 %}}}
 
-\section{Compiler correctness} \label{sec:passes} %{{{
+\section{Specialized simulation conventions} \label{sec:passes} %{{{
 
-The passes of CompCertO are summarized in Table~\ref{tbl:passes}.
-The incoming and outgoing simulation conventions
-are chosen based on the existing simulation relation
-used for each pass.
-%For passes whose source and target languages
-%use the same language interface,
-%this hinges in particular on the memory transformation
-%used by the proof.
-%and largely translates the existing requirements
-%CompCert places on the semantics of external functions.
-%For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
-%we construct more specific simulation conventions
-%which express the correspondance between
-%the higher-level and lower-level representations
-%of function calls and returns.
-
-\subsection{Identity and extension passes} \label{sec:pass:id} %{{{
-
-The passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
-\kw{CleanupLabels} and \kw{Debugvar}
-restrict the source and target
-memory states and values to be identical.
-Their simulation proofs require very few changes
-and can be assigned the following convention.
-
-\begin{definition} % Identity simulation convention {{{
-The \emph{identity simulation convention} for
-a language interface $A$ is
-$\kw{id}_A := \langle \{*\}, {=}, {=} \rangle : A \Leftrightarrow A$.
-We abbreviate it as $\kw{id}$ when $A$ can be deduced
-from context.
-\end{definition}
-%}}}
-
-Most of the remaining passes use memory extensions
-(\S\ref{sec:memext}).
-Their proofs are not much more difficult to update
-than those of identity passes.
-In particular,
-they do not feature complex invariants
-which must be preserved at call sites;
-it is enough for external calls to preserve
-the memory extension.
-As consequence,
-they can be assigned the type $\kw{ext} \twoheadrightarrow \kw{ext}$.
-
-%}}}
-
-\subsection{Injection passes} \label{sec:pass:inj} %{{{
-
-\begin{figure} % fig:injp {{{
-  \begin{tikzpicture}[scale=0.4,>=stealth]
-    \draw ( 0,4) rectangle +(2,1);
-    \draw[pattern=north east lines] ( 3,4) rectangle +(2,1);
-    \draw ( 6,4) rectangle +(3,1);
-    \draw[pattern=north east lines] (10,4) rectangle +(1,1);
-    \draw[pattern=north east lines] ( 0,0) rectangle +(8,1);
-    \draw[pattern=north east lines] ( 9,0) rectangle +(2,1);
-    \draw[->] (0,4) -- (1,1); \draw[->] (2,4) -- (3,1);
-    \draw[->] (6,4) -- (4,1); \draw[->] (9,4) -- (7,1);
-    \draw[fill=white] (1,0) rectangle +(2,1);
-    \draw[fill=white] (4,0) rectangle +(3,1);
-    %
-    \draw[dashed] (12,5.5) -- (12,-0.5);
-    %
-    \draw (13,4) rectangle +(2,1);
-    \draw (16,4) rectangle +(2,1);
-    \draw (13,0) rectangle +(1,1);
-    \draw (15,0) rectangle +(3,1);
-    \draw[dashed,->] (13,4) -- (15,1);
-    \draw[dashed,->] (15,4) -- (17,1);
-    \draw[dashed] (17,1) -- (17,0);
-  \end{tikzpicture}
-  \caption{External calls and memory injections.
-    The source and target memory states are
-    depicted at the top and bottom
-    of the figure. Arrows describe the injection mapping.
-    Memory blocks to the right of the dashed line
-    are allocated during the call,
-    which adds a new entry to the injection mapping.
-    The shaded areas must not be modified by the call.
-  }
-  \label{fig:injp}
-\end{figure}
-%}}}
-
-Passes which alter the block structure of the memory
-use \emph{memory injections} (\S\ref{sec:meminj}).
-The convention \kw{inj} can be used for incoming calls,
-but it is insufficient for outgoing calls.
-
-Consider the \kw{SimplLocals} pass,
-which removes local variables whose addresses are not taken
-from the memory.
-The corresponding values are instead stored
-as temporaries in the target function's local environment,
-and the correspondance between the two
-is enforced by the simulation relation.
-To maintain it,
-we need to know that
-external calls do not modify
-the corresponding source memory blocks.
-
-More generally,
-as depicted in Fig.~\ref{fig:injp},
-injection passes expect external calls
-to leave regions outside of the injection's footprint untouched.
-This expectation is reasonable because
-external calls
-should behave uniformly between the source and target executions.
-%An external function acting on the memory state
-%should not forge block identifiers and pointers,
-%but can only follow pointers passed as arguments
-%or fetched from the memory itself
-%(as explained in \S\ref{sec:cklr},
-%this is a form of parametricity).
-These requirements can be formalized as the
-following CompCert Kripke logical relation:
-\begin{gather*}
-  \kw{injp} :=
-    \langle
-      \kw{meminj} \times \kw{mem} \times \kw{mem}, \:
-      {\leadsto_\kw{injp}}, \:
-      \pi_1, \:
-      R^\kw{mem}_\kw{injp}
-    \rangle
-  \\
-  \AxiomC{$f \Vdash m_1 \hookrightarrow_\kw{m} m_2$}
-  \UnaryInfC{$(f, m_1, m_2) \Vdash m_1 \mathrel{R^\kw{mem}_\kw{injp}} m_2$}
-  \DisplayProof
-\end{gather*}
-where $(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$
-ensures that $f \subseteq f'$ and that the memory states
-satisfy the constraints in Fig.~\ref{fig:injp}
-(for details,
-see \texttt{cc\_injp} in \texttt{common/LanguageInterface.v}).
-
-%}}}
+For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
+we construct more specific simulation conventions
+which express the correspondance between
+the higher-level and lower-level representations
+of function calls and returns.
 
 \subsection{The \kw{Allocation} pass} %{{{
 
 The \kw{Allocation} pass from \kw{RTL} to \kw{LTL}
 is the first pass to modify the interface of function calls.
-
 \kw{LTL} uses \emph{abstract locations}
-meant to represent the stack slots and machine registers
-used at the assembly level.
-Their values are stored in a \emph{location map},
+which represent the stack slots and machine registers
+eventually used in the target assembly program.
+Abstract locations contain arguments, temporaries and return values.
+The contents are stored in a \emph{location map},
 passed across components by the interface $\mathcal{L}$
 alongside memory states.
-Up to \kw{RTL},
-arguments are passed as standalone values,
-but in \kw{LTL}
-they are mapped to locations.
+%Up to \kw{RTL},
+%arguments are passed as standalone values,
+%but in \kw{LTL}
+%they are mapped to locations.
 The compiler also expects the values of
-locations designated as \emph{callee-save}
+abstract locations designated as \emph{callee-save}
 to be preserved by function calls.
-This is codified in the $\kw{alloc}$
-simulation convention, defined as follows:
+
+To express the simulation convention used by the \kw{Allocation} pass,
+we will use the following notations.
+For a signature $\mathit{sg}$ and a location map $\mathit{ls}$,
+we write $\kw{args}(\mathit{sg}, \mathit{ls})$
+to represent the argument values stored in $\mathit{ls}$.
+Likewise,
+$\kw{retval}(\mathit{sg}, \mathit{ls})$ extracts
+the contents of locations used to store the return value.
+The relation $\equiv_\kw{CS}$ asserts that
+two location maps agree on callee-save locations.
+
+The simulation convention
+$\kw{alloc} : \mathcal{C} \Leftrightarrow \mathcal{L}$
+uses its worlds to remember the initial location map
+and the signature associated with a call,
+and can then be defined by:
 \[
   \kw{alloc} := \langle
       \kw{signature} \times \kw{locmap}, \:
@@ -3659,13 +3653,6 @@ simulation convention, defined as follows:
       ls'@m_2'$}
   \DisplayProof
 \]
-where $\kw{args}(\mathit{sg}, \mathit{ls})$ extracts the values of arguments
-stored in the location map $\mathit{ls}$ given
-a function call signature $\mathit{sg}$,
-$\kw{retval}(\mathit{sg}, \mathit{ls})$ likewise extracts the
-values returned by the function call, and
-$\equiv_\kw{CS}$ relates location maps whose contents agree
-on callee-save locations.
 
 %}}}
 
@@ -3674,43 +3661,84 @@ on callee-save locations.
 The \kw{Stacking} pass
 consolidates the information which
 \kw{Linear} stores in abstract stack locations
-into the in-memory stack frames of \kw{Mach}.
-The simulation uses a memory injection,
+into in-memory stack frames.
+The simulation proof uses a memory injection,
 and involves maintaining separation properties
 ensuring that the source memory and
-the various regions of stack frames
-are mapped to disjoint areas of the target memory.
+the regions of stack frames
+introduced by \kw{Stacking}
+occupy disjoint areas of the target memory.
 
 With regards to the memory state,
 the \kw{stacking} simulation convention
 is essentially identical to \kw{injp}.
-Since all new sections of stack frames
+Since the new regions of stack frames
 are outside the image of source memory,
 and most of them are local to
-their function activation,
+function activations,
 the properties of \kw{injp}
 are largely sufficient for the proof.
 
 The exception to the rule pertains to argument passing.
-Reads from a function's argument locations
+Loads from a function's argument locations
 access the caller's stack frame.
-The \kw{stacking} simulation convention
-asserts that the values of argument locations
+The simulation convention
+$\kw{stacking} : \mathcal{L} \Leftrightarrow \mathcal{M}$
+asserts that the contents of argument locations
 are indeed stored into corresponding stack slots
 within the target memory,
 and additionally
 requires that the region of the target memory
 used to store arguments within the caller's stack
 must be disjoint from the injection image of the source memory.
+For details,
+see \texttt{cc\_stacking} in \texttt{backend/Mach.v}.
 
 %}}}
 
 \subsection{The \kw{Asmgen} pass} %{{{
 
-\kw{Asm} introduces explicit
-program counter, stack pointer and return address registers.
 The \kw{Asmgen} pass from \kw{Mach} to \kw{Asm}
-uses the following simluation convention:
+uses a memory extension.
+\kw{Asm} introduces explicit registers for the
+program counter, stack pointer and return address.
+The corresponding simulation convention
+$\kw{asmgen} : \mathcal{M} \Leftrightarrow \mathcal{A}$
+ensures that the appropriate components of
+\kw{Mach}-level queries are mapped to the new registers.
+In addition,
+we must ensure that the call returns the stack pointer
+to its original value,
+and set the program counter to the return address
+specified by the caller.
+
+\begin{color}{gray}
+[XXX: we don't talk about nextblock in our simplified
+exposition of the memory model]
+A more complex challenge is that the $\kw{Asm}$ language
+does not have a control stack,
+but instead executes instruction after instruction
+in a ``flat'' manner,
+making it difficult to distinguish final states.
+To address this,
+we keep track of the initial value $\mathit{nb}_0$ of
+the memory's $\kw{nextblock}$ counter,
+and use it to distinguish between inner and outer
+stack pointers.
+When $\mathit{rs}[\kw{sp}] \ge \mathit{nb}_0$,
+we interpret the \kw{ret} instruction as an \emph{internal} return
+and simply jump to the location pointed to by $\mathit{rs}[\kw{ra}]$.
+However, when $\mathit{rs}[\kw{sp}] < \mathit{nb}_0$,
+we intepret \kw{ret} as a top-level return to the environment,
+and model its behavior as a final state
+rather than an internal step.
+In addition,
+the simulation convention $\kw{asmgen}$
+must ensure that the initial value of the stack pointer
+points to a valid block of the initial memory.
+\end{color}
+
+This is expressed as:
 \begin{gather*}
   \kw{asmgen} := \langle \kw{val} \times \kw{val},
     R_\kw{asmgen}^\que, R_\kw{asmgen}^\ans \rangle
