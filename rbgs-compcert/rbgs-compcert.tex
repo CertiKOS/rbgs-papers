@@ -627,22 +627,6 @@ in the context of heterogenous systems \cite{cspgs}.
 
 \paragraph{Games} \label{sec:mainideas:gs:games} %{{{
 
-\begin{figure} % fig:abc {{{
-  \tt
-  \begin{tabular}{p{2em}l}
-    \hline
-    A.c & static int c = 0; \\
-        & int count(int n) \{ return c += n; \} \\
-    \hline
-    B.c & int count(int); \\
-        & int toggle(void) \{ return count(1) \% 2; \} \\
-    \hline
-  \end{tabular}
-  \caption{Two simple C compilation units}
-  \label{fig:abc}
-\end{figure}
-%}}}
-
 A game is defined by a set $M$ of moves
 players will choose from,
 as well as a stipulation of which
@@ -658,20 +642,7 @@ For chess,
 moves are taken in the set $\{a1 \ldots h8\} \times \{a1 \ldots h8\}$,
 and a valid sequence of moves may look like:
 \[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{d7d5} \cdots \]
-Referring to Fig.~\ref{fig:abc},
-a simplified model of the behavior of $\textsf{B.c}$
-as it interacts with $\textsf{A.c}$
-could use plays of the form:
-\begin{align*}
-  \mathsf{toggle}() &\cdot
-    \underline{\mathsf{count}(1)} \cdot 7 \cdot \underline{1} \\
-  \mathsf{toggle}() &\cdot
-    \underline{\mathsf{count}(1)} \cdot 8 \cdot \underline{0} \,.
-\end{align*}
-%\[ \mathsf{count}(2) \cdot \underline{2} \cdot
-%   \mathsf{count}(5) \cdot \underline{8} \cdots \]
-To be more explicit,
-the games we use to model low-level components
+The games we use to model low-level components
 will rely on the following constructions.
 
 %Most game semantics
@@ -738,6 +709,113 @@ performing a series of external calls $x_1 \ldots x_k$
 yielding the results $y_1 \ldots y_k$
 and finally returning from the top-level call
 with the result $r$.
+
+\begin{figure} % fig:abc {{{
+  \tt
+  \begin{tabular}{ll @{\hspace{3em}} rrl}
+    \hline
+    \underline{A.c} & int mult(int n, int p) \{ &
+    \underline{A.s} & mult: & \%eax := \%ebx \\
+                    & \quad return n * p; &
+                    & & \%eax *= \%ecx \\
+                    & \} &
+                    & & ret \\
+    \hline
+    \underline{B.c} & int sqr(int n) \{ &
+    \underline{B.s} & sqr: & \%ecx := \%ebx \\
+                    & \quad return mult(n, n); &
+                    & & call mult \\
+                    & \} &
+                    & L1: & ret \\
+    \hline
+  \end{tabular}
+  \caption{Two simple C compilation units and corresponding assembly code.
+    For this example,
+    the calling convention stores arguments in
+    the registers
+    \texttt{\%ebx} and \texttt{\%ecx},
+    and return values in
+    the register
+    \texttt{\%eax}.}
+  \label{fig:abc}
+\end{figure}
+%}}}
+
+\begin{example} \label{ex:abc} %{{{
+Consider the program components in Fig.~\ref{fig:abc}.
+We will use a simplified version of C and assembly
+to illustrate some of the principles behind our model.
+For example, the behavior of $\textsf{B.c}$
+as it interacts with $\textsf{A.c}$
+uses plays of the form:
+\begin{equation} \label{eqn:cplay}
+  \mathsf{sqr}(3) \cdot
+    \underline{\mathsf{mult}(3,3)} \cdot 9 \cdot \underline{9}
+\end{equation}
+This corresponds to the game $\mathcal{L} \rightarrow \mathcal{L}$
+for a simple language interface
+$\mathcal{L} := \langle \kw{ident} \times \kw{val}^*, \kw{val} \rangle$.
+Questions carry the name of the function to invoke
+and argument values;
+answers carry the value returned by the function.
+
+To describe the behavior of \texttt{A.s} and \texttt{B.s},
+we use a set of registers
+$R := \{ \kw{\%eax}, \kw{\%ebx}, \kw{\%ecx},
+         \kw{\%pc} \}$,
+where $\kw{\%pc}$ denotes the program counter,
+together with a stack of pending return addresses.
+The corresponding language interface can be defined as
+$\mathcal{L}' :=
+ \langle \kw{val}^R \times \kw{val}^*,
+         \kw{val}^R \times \kw{val}^* \rangle$.
+A possible execution of \texttt{B.s}
+is described by the play:
+\begin{equation} \label{eqn:splay}
+  \left[
+    \begin{array}{l@{{} \mapsto {}}r}
+      \kw{\%pc}  & \kw{sqr} \\
+      \kw{\%eax} & 42 \\
+      \kw{\%ebx} & 3 \\
+      \kw{\%ecx} & 7 \\
+      \kw{stack} & x \cdot \vec{k}
+    \end{array}
+  \right] \cdot
+  \underline{
+    \left[
+      \begin{array}{l@{{} \mapsto {}}r}
+        \kw{\%pc}  & \kw{mult} \\
+        \kw{\%eax} & 42 \\
+        \kw{\%ebx} & 3 \\
+        \kw{\%ecx} & 3 \\
+        \kw{stack} & \kw{L1} \cdot x \cdot \vec{k}
+      \end{array}
+    \right]} \cdot
+  \left[
+    \begin{array}{l@{{} \mapsto {}}r}
+      \kw{\%pc}  & \kw{L1} \\
+      \kw{\%eax} & 9 \\
+      \kw{\%ebx} & 3 \\
+      \kw{\%ecx} & 3 \\
+      \kw{stack} & x \cdot \vec{k}
+    \end{array}
+  \right] \cdot
+  \underline{
+    \left[
+      \begin{array}{l@{{} \mapsto {}}r}
+        \kw{\%pc}  & x \\
+        \kw{\%eax} & 9 \\
+        \kw{\%ebx} & 3 \\
+        \kw{\%ecx} & 3 \\
+        \kw{stack} & \vec{k}
+      \end{array}
+    \right]}
+\end{equation}
+The correspondance between (\ref{eqn:cplay}) and (\ref{eqn:splay})
+is determined by the C calling convention in use.
+We will discuss this point in more detail in \S X.
+\end{example}
+%}}}
 
 %}}}
 
@@ -1141,6 +1219,49 @@ will often be defined from
 more elementary relations,
 following the internal structure of questions, answers, and states
 (see \S\ref{sec:cklr}).
+
+\begin{example} %{{{
+The calling convention we used in Example~\ref{ex:abc}
+can be formalized as a simulation convention
+$\mathbb{L} :=
+  \langle \kw{val}^*, \mathbb{L}^\que, \mathbb{L}^\ans \rangle :
+    \mathcal{L} \Leftrightarrow \mathcal{L}'$.
+We use the set of worlds $\kw{val}^*$
+to remember the state of the stack between
+assembly-level questions and their corresponding answers.
+The relations $\mathbb{L}^\que, \mathbb{L}^\ans$
+can be expressed using the rules:
+\[
+  \AxiomC{$\mathit{regs}[\kw{\%pc}] = f$}
+  \AxiomC{$\vec{v} \text{ is a prefix of } \mathit{regs}[\kw{\%ebx}, \kw{\%ecx}]$}
+  \BinaryInfC{$
+    \vec{k} \Vdash
+    f(\vec{v}) \mathrel{\mathbb{L}^\que} \mathit{regs}@\vec{k}
+  $}
+  \DisplayProof
+  \quad
+  \AxiomC{$\mathit{regs}[\kw{\%eax}] = v'$}
+  \AxiomC{$\mathit{regs}[\kw{\%pc}] = x$}
+  \BinaryInfC{$
+    x \vec{k}' \Vdash
+    v' \mathrel{\mathbb{L}^\ans} \mathit{regs}@\vec{k}'
+  $}
+  \DisplayProof
+\]
+For a C-level function invocation $f(\vec{v})$,
+we expect the register $\kw{\%pc}$ to point to
+the beginning of the function $f$,
+and the registers $\kw{\%ebx}$ and $\kw{\%ecx}$
+to contain if first and second arguments (if applicable).
+Other registers may contain arbitrary values.
+The stack $\vec{k}$ has no corresponding components in the C question,
+however the assembly answer is expected to pop the return address
+and branch to it, setting the program counter $\kw{\%pc}$ accordingly.
+In addition,
+the C-level return value $v'$ must be stored
+in the register $\kw{\%eax}$.
+\end{example}
+%}}}
 
 \begin{table} % tbl:notations {{{
   \begin{tabular}{lcl}
