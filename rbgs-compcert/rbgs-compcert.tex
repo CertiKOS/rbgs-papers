@@ -306,7 +306,7 @@ with its environment directly.
 
 \subsection{Requirements for CompCert}
 
-To handle uses cases like the one we have presented above,
+To handle use cases like the one we have presented above,
 the compiler's correctness proof
 should satisfy the following requirements:
 \begin{enumerate}
@@ -316,11 +316,11 @@ should satisfy the following requirements:
   in terms of their interactions with the rest of the program.
 \item \label{req:opensim}
   The correctness theorem
-  should go beyond refinement under a fixed notion of context, and relate
+  should go beyond refinement under a fixed notion of program context, and relate
   the interactions of the source and target modules directly.
 \item \label{req:openabs}
   The abstraction gap between C and assembly-level
-  interactions should be explicit.
+  interactions should be made explicit.
 \item \label{req:linking}
   Some form of certified \emph{linking}
   should be provided as well as certified compilation.
@@ -813,7 +813,7 @@ is described by the play:
 \end{equation}
 The correspondance between (\ref{eqn:cplay}) and (\ref{eqn:splay})
 is determined by the C calling convention in use.
-We will discuss this point in more detail in \S X.
+We will discuss this point in more detail in \S\ref{sec:simconv}.
 \end{example}
 %}}}
 
@@ -933,8 +933,8 @@ the source and target programs of each compilation pass.
 The internal details of simulation relations
 have no bearing on this correspondance,
 so these details can remain hidden
-to fit a uniform and transitive notion of pass correctness,
-making it easy to derive the correctness
+to fit a uniform and transitive notion of pass correctness.
+This makes it easy to derive the correctness
 of the whole compiler
 from the correctness of each pass.
 
@@ -948,11 +948,11 @@ Since many passes transform
 these interactions in
 %non-trivial and
 specialized ways,
-exposing them breaks the uniformity
+this breaks the uniformity
 of pass correctness properties.
 
 Existing work attempts to recover this uniformity,
-either by developping a general notion of correctness
+either by developing a general notion of correctness
 covering all passes
 \cite{compcompcert,compcertm},
 or by delaying pass composition so that
@@ -1140,8 +1140,8 @@ We use the following notations.
 \begin{definition} \label{def:klr} %{{{
 A \emph{Kripke} relation is
 a family of relations $(R_w)_{w \in W}$.
-We write $R \in \mathcal{R}_W(S_1, S_2)$
-for a Kripke relation between the sets $S_1$ and $S_2$.
+We write $R \in \mathcal{R}_W(A, B)$
+for a Kripke relation between the sets $A$ and $B$.
 For $w \in W$ we write:
 \[
 \begin{array}{c@{\qquad}c}
@@ -1186,7 +1186,7 @@ and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
 
 %}}}
 
-\subsection{Simulation algebra} %{{{
+\subsection{Simulation conventions} \label{sec:simconv} %{{{
 
 The framework of Kripke relations allows us
 to define simulation conventions as follows.
@@ -1199,6 +1199,13 @@ is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$
 with $\mathbb{R}^\que \in \mathcal{R}_W(M_{A_1}^\que, M_{A_2}^\que)$
 and $\mathbb{R}^\ans \in \mathcal{R}_W(M_{A_1}^\ans, M_{A_2}^\ans)$.
 We will write $\mathbb{R} : A_1 \Leftrightarrow A_2$.
+In particular,
+for a language interface $A$,
+the \emph{identity} simulation convention
+is defined as
+$\kw{id}_A := \langle \mathbbm{1}, {=}, {=} \rangle
+  : A \Leftrightarrow A$.
+We will usually omit the subscript $A$.
 \end{definition}
 %}}}
 
@@ -1214,8 +1221,8 @@ relating the corresponding language interfaces.
 We write
 $L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$
 (notations are summarized in Table~\ref{tbl:notations}).
-Simulation conventions and simulation relations
-will often be defined from
+Simulation conventions
+will often be derived from
 more elementary relations,
 following the internal structure of questions, answers, and states
 (see \S\ref{sec:cklr}).
@@ -1232,19 +1239,19 @@ assembly-level questions and their corresponding answers.
 The relations $\mathbb{L}^\que, \mathbb{L}^\ans$
 can be expressed using the rules:
 \[
-  \AxiomC{$\mathit{regs}[\kw{\%pc}] = f$}
-  \AxiomC{$\vec{v} \text{ is a prefix of } \mathit{regs}[\kw{\%ebx}, \kw{\%ecx}]$}
+  \AxiomC{$\mathit{rs}[\kw{\%pc}] = f$}
+  \AxiomC{$\vec{v} \text{ is a prefix of } \mathit{rs}[\kw{\%ebx}, \kw{\%ecx}]$}
   \BinaryInfC{$
-    \vec{k} \Vdash
-    f(\vec{v}) \mathrel{\mathbb{L}^\que} \mathit{regs}@\vec{k}
+    x \vec{k} \Vdash
+    f(\vec{v}) \mathrel{\mathbb{L}^\que} \mathit{rs}@ x \vec{k}
   $}
   \DisplayProof
   \quad
-  \AxiomC{$\mathit{regs}[\kw{\%eax}] = v'$}
-  \AxiomC{$\mathit{regs}[\kw{\%pc}] = x$}
+  \AxiomC{$\mathit{rs}[\kw{\%eax}] = v'$}
+  \AxiomC{$\mathit{rs}[\kw{\%pc}] = x$}
   \BinaryInfC{$
-    x \vec{k}' \Vdash
-    v' \mathrel{\mathbb{L}^\ans} \mathit{regs}@\vec{k}'
+    x \vec{k} \Vdash
+    v' \mathrel{\mathbb{L}^\ans} \mathit{rs}@\vec{k}
   $}
   \DisplayProof
 \]
@@ -1252,9 +1259,10 @@ For a C-level function invocation $f(\vec{v})$,
 we expect the register $\kw{\%pc}$ to point to
 the beginning of the function $f$,
 and the registers $\kw{\%ebx}$ and $\kw{\%ecx}$
-to contain if first and second arguments (if applicable).
+to contain the first and second arguments (if applicable).
 Other registers may contain arbitrary values.
-The stack $\vec{k}$ has no corresponding components in the C question,
+Likewise,
+the stack $x \vec{k}$ has no corresponding components in the C question,
 however the assembly answer is expected to pop the return address
 and branch to it, setting the program counter $\kw{\%pc}$ accordingly.
 In addition,
@@ -1315,75 +1323,8 @@ Instead of forcing all passes into a single one-size-fits-all mold,
 we can choose conventions matching
 the simulation relation and invariants
 used in each pass.
-The simulation conventions
-used for the various passes of CompCertO
-are shown in Table~\ref{tbl:passes}.
-As outlined in Fig.~\ref{fig:simcomp},
-the corresponding proofs can be composed in a natural way.
-
-\begin{table} % tbl:passes Passes of CompCertO %{{{
-  \begin{tabular}{lr@{$\: \twoheadrightarrow \:$}lr@{\ }r}
-    \hline
-    Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC} \\
-    \hline
-    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
-    \color{gray} \emph{Thm.~\ref{thm:param}} &
-      \color{gray} $(\kw{ext} + \kw{injp})^*$ &
-      \color{gray} $(\kw{ext} + \kw{injp})^*$ \\
-    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -1 & (-0\%) \\
-    \kw{Cshmgen} & \kw{id} & \kw{id} & +2 & (+0\%) \\
-    \hline
-    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+4\%) \\
-    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ & -18 & (-1\%) \\
-    \hline
-    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
-    \kw{Selection} & $\kw{wt} \cdot \kw{ext}$ & $\kw{wt} \cdot \kw{ext}$ & +33 & (+1\%) \\
-    \hline
-    \textbf{CminorSel} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+3\%) \\
-    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ & $+5$ & (+0\%) \\
-    \hline
-    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ & +11 & (+3\%) \\
-    $\kw{Tailcall}^?$ & $\kw{ext}$ & $\kw{ext}$ & +1 & (+0\%) \\
-    \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ \\
-    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -12 & (-6\%) \\
-    \color{gray} \emph{Thm.~\ref{thm:param}} &
-      \color{gray} $\kw{inj}$ &
-      \color{gray} $\kw{inj}$ \\
-    $\kw{Constprop}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
-    $\kw{CSE}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
-    $\kw{Deadcode}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
-    \st{Unusedglob} & $\kw{injp}$ & $\kw{inj}$ \\
-    \kw{Allocation} & $\kw{wt} \cdot \kw{alloc}$ & $\kw{wt} \cdot \kw{alloc}$ & +6 & (+0\%) \\
-    \hline
-    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ & +15 & (+7\%) \\
-    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ & +4 & (+1\%) \\
-    \kw{Linearize} & \kw{id} & \kw{id} & -13 & (-2\%) \\
-    \hline
-    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ & +16 & (+8\%) \\
-    \kw{CleanupLabels} & \kw{id} & \kw{id} & -8 & (-3\%) \\
-    \kw{Debugvar} & \kw{id} & \kw{id} & -9 & (-2\%) \\
-    \kw{Stacking} & \kw{stacking} & \kw{stacking} & +302 & (+12\%) \\
-    \hline
-    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ & +100 & (+27\%) \\
-    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} & +170 & (+6\%) \\
-    \hline
-    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +43 & (+4\%) \\
-    \hline
-  \end{tabular}
-  \caption{Languages and passes of CompCertO.
-    Passes are grouped by their source language.
-    Question marks indicate optional passes.
-    To handle the asymmetry of injection passes
-    ($\kw{injp} \twoheadrightarrow \kw{inj}$),
-    self-simulation properties are inserted as pseudo-passes,
-    allowing us to use the framework describe in \S X to
-    rewrite the compiler's overall simulation convention
-    into a symmetric one.
-    Significant lines of code (SLOC) measured by \texttt{coqwc},
-    compared to CompCert v3.6.}
-  \label{tbl:passes}
-\end{table}
-%}}}
+Simulations for each pass can then be composed
+in the way shown in Fig.~\ref{fig:simcomp}.
 
 \begin{figure} % fig:simcomp {{{
   $\begin{array}{c}
@@ -1427,28 +1368,65 @@ the corresponding proofs can be composed in a natural way.
 \end{figure}
 %}}}
 
+%}}}
+
+\subsection{Simulation algebra} \label{sec:mainideas:simalg} %{{{
+
+CompCert's \emph{injection} passes (see \S\ref{sec:cklr})
+pose a particular challenge,
+already encountered
+in the work on Compositional CompCert:
+injection passes
+make stronger assumptions on external calls
+than they guarantee for incoming calls
+\cite{compcompcert}.
+Our framework
+allows us to express this situation by using
+different simulation conventions
+for external and incoming calls
+($\kw{injp} \twoheadrightarrow \kw{inj}$).
 However,
-this yields a composite simulation convention
-for the overall compiler which is unsatisfactory in two ways.
-First, the overall simulation convention
-will be sensitive to the inclusion of optional passes.
-Secondly, injection passes
-($\kw{injp} \twoheadrightarrow \kw{inj}$)
-have asymmetric conventions:
-their requirements on outgoing calls ($\kw{injp}$)
-are stronger than
-the guarantees they provide for incoming calls ($\kw{inj}$),
-breaking horizontal compositionality.
+since
+the external calls of one component and
+the incoming calls of another
+will not be related in compatible ways,
+this asymmetry breaks the simulation's
+\emph{horizontal} compositionality (Thm.~\ref{thm:fsim-hcomp}),
 
-We remedy this by
-introducing a notion of simulation convention refinement $\scref$,
-which means a convention can replace another
-in all simulation statements.
-We can then construct a Kleene algebra
-based on the composition and refinement of simulation conventions.
+In CompCertO,
+we rectify this imbalance \emph{outside}
+of the simulation proof itself.
+Simulations for individual passes are not always
+horizontally compositional,
+but we are able to derive a symmetric simulation convention
+for the compiler as a whole:
+properties of the $\kw{Clight}$ and $\kw{RTL}$ languages
+allow us to strengthen the correctness proof.
+These properties are formulated as self-simulations
+and inserted as pseudo-passes.
+We can then perform algebraic manipulations
+on simulation statements
+to rewrite the overall simulation convention
+used by the compiler into a symmetric one.
 
-These techniques allow us to formulate an overall
-simulation convention
+These algebraic manipulations are
+based on a notion of
+simulation convention refinement ($\scref$)
+which states that a simulation convention
+can be replaced by another in all simulation statements.
+We construct a typed Kleene algebra \cite{tka}
+involving this partial order and
+the composition $\mathbb{R} \cdot \mathbb{S}$
+of simulation conventions.
+We then use this Kleene algebra to ensure that
+our compiler correctness statement
+uses a simulation convention which is both
+compositional,
+and insensitive to the inclusion of optional optimization passes.
+
+The passes of CompCertO are shown in Table~\ref{tbl:passes}.
+The techniques outlined above allow us to formulate
+a simulation convention
 $\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
 for the compiler, %which is both compositional
 %and independent of the exact sequence of passes
@@ -1462,65 +1440,77 @@ the following simulation property holds:
     \kw{Asm}(p') \,.
 \]
 
-[Need to add a few words about what else the sim. conv. algebra
-can do for us.
-Maybe talk about invariants (wt, va),
-and self-simulations.
-Give a concrete example of sim. conv. refinement.]
+%}}}
 
-%In Compositional CompCert,
-%this is achieved independently for each compilation pass.
-%Stated in our terms,
-%Compositional CompCert
-%employs a fixed interface $\mathcal{C}$,
-%and \emph{structured injections} define a refinement convention
-%$\mathbb{S} : \mathcal{C} \Leftrightarrow \mathcal{C}$.
-%A theorem similar to (\ref{eqn:correctness}) is proved for each pass,
-%and structured injections are shown to compose
-%($\mathbb{S} \cdot \mathbb{S} \equiv \mathbb{S}$),
-%so that a theorem can be derived for the whole compiler.
-
-%A major challenge encountered in this context
-%is the asymmetry of requirements vs. guarantees
-%present in the existing proofs:
-%while CompCert imposes strong requirements
-%on the semantics of external functions,
-%the simulation relations used by its correctness proofs
-%are too weak to establish corresponding guarantees
-%for a module's own function executions,
-%preventing horizontal compositionality.
-%Because of this,
-%Compositional CompCert required significant changes
-%to all compilation passes,
-%strengthening their simulation relations
-%to conform to $\mathbb{S}$.
-
-%Our explicit treatment of abstraction
-%and reified notion of simulation convention
-%makes another approach possible.
-%Existing proofs can be adapted to establish
-%for each pass:
-%\begin{equation}
-%    \label{correctness-alt}
-%    \llbracket p_t \rrbracket
-%    \le_{\mathbb{R} \rightarrow \mathbb{R}'}
-%    \llbracket p_s \rrbracket \,,
-%\end{equation}
-%where the simulation conventions $\mathbb{R}$ and $\mathbb{R}'$
-%characterize the assumptions and guarantees of the proof.
-%In addition,
-%relevant properties of key source, target, and intermediate languages
-%can be expressed in relational form,
-%and can be used to strengthen the resulting theorem:
-%by composing these proofs together,
-%and using algebraic properties of
-%the simulation conventions involved,
-%we are able to bridge the gap
-%between the domain and codomain simulation conventions
-%and prove a correctness statement
-%in the form of (\ref{eqn:correctness}),
-%enabling horizontal compositionality.
-
+\begin{table} % tbl:passes Passes of CompCertO %{{{
+  \begin{tabular}{lr@{$\: \twoheadrightarrow \:$}lr@{\ }r}
+    \hline
+    Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC} \\
+    \hline
+    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
+    \emph{Thm.~\ref{thm:param}} &
+      $(\kw{ext} + \kw{injp})^*$ &
+      $(\kw{ext} + \kw{injp})^*$ \\
+    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -1 & (-0\%) \\
+    \kw{Cshmgen} & \kw{id} & \kw{id} & +2 & (+0\%) \\
+    \hline
+    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+4\%) \\
+    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ & -18 & (-1\%) \\
+    \hline
+    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
+    \kw{Selection} & $\kw{wt} \cdot \kw{ext}$ & $\kw{wt} \cdot \kw{ext}$ & +33 & (+1\%) \\
+    \hline
+    \textbf{CminorSel} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+3\%) \\
+    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ & $+5$ & (+0\%) \\
+    \hline
+    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ & +11 & (+3\%) \\
+    $\kw{Tailcall}^?$ & $\kw{ext}$ & $\kw{ext}$ & +1 & (+0\%) \\
+    \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ \\
+    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -12 & (-6\%) \\
+    \emph{Thm.~\ref{thm:param}} &
+      $\kw{inj}$ &
+      $\kw{inj}$ \\
+    $\kw{Constprop}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
+    $\kw{CSE}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
+    $\kw{Deadcode}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
+    \st{Unusedglob} \\
+    \kw{Allocation} & $\kw{wt} \cdot \kw{alloc}$ & $\kw{wt} \cdot \kw{alloc}$ & +6 & (+0\%) \\
+    \hline
+    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ & +15 & (+7\%) \\
+    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ & +4 & (+1\%) \\
+    \kw{Linearize} & \kw{id} & \kw{id} & -13 & (-2\%) \\
+    \hline
+    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ & +16 & (+8\%) \\
+    \kw{CleanupLabels} & \kw{id} & \kw{id} & -8 & (-3\%) \\
+    \kw{Debugvar} & \kw{id} & \kw{id} & -9 & (-2\%) \\
+    \kw{Stacking} & \kw{stacking} & \kw{stacking} & +302 & (+12\%) \\
+    \hline
+    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ & +100 & (+27\%) \\
+    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} & +170 & (+6\%) \\
+    \hline
+    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +43 & (+4\%) \\
+    \hline
+  \end{tabular}
+  \caption{Languages and passes of CompCertO.
+    Passes are grouped by their source language.
+    Question marks indicate optional passes.
+    The framework used to express
+    language semantics and pass correctness properties
+    is explained in \S\ref{sec:sem}.
+    The simulation conventions $\kw{ext}, \kw{inj}, \kw{injp}$
+    are explained in \S\ref{sec:cklr}.
+    The invariants $\kw{wt}, \kw{va}$
+    are explained in \S\ref{sec:inv}.
+    To handle the asymmetry of injection passes
+    ($\kw{injp} \twoheadrightarrow \kw{inj}$),
+    self-simulation properties are inserted as pseudo-passes
+    (Thm.~\ref{thm:param}),
+    allowing us to rewrite the compiler's overall simulation convention
+    into a symmetric one.
+    Significant lines of code (SLOC) measured by \texttt{coqwc},
+    compared to CompCert v3.6.}
+  \label{tbl:passes}
+\end{table}
 %}}}
 
 %}}}
@@ -1775,40 +1765,6 @@ To keep our exposition concise and clear,
 we gloss over the technical details
 associated with modular arithmetic and overflow constraints.
 
-The memory is organized into a finite number of \emph{blocks}.
-Each memory block has a unique identifier $b \in \kw{block}$
-%represented as a positive integer,
-and is equipped with its own linear address space.
-Block identifiers and offsets are often manipulated together
-as pointers $p = (b, o) \in \kw{ptr} = \kw{block} \times \mathbb{Z}$.
-New blocks are created with prescribed boundaries
-using the primitive $\kw{alloc}$.
-
-A runtime value $v \in \kw{val}$ can be stored at
-a given address using the primitive \kw{store},
-and retreived using the primitive \kw{load}.
-Values can be integers (\kw{int}, \kw{long}) and
-floating point numbers (\kw{float}, \kw{single})
-of different sizes,
-as well as pointers (\kw{vptr}).
-The special value \kw{undef}
-represents an undefined value.
-Simulation relations
-often allow $\kw{undef}$
-to be refined into a more concrete value;
-we write value refinement as:
-\[
-    {\vref} := \{(\kw{undef}, v), (v, v) \mid v \in \kw{val}\} \,.
-\]
-
-The memory model is shared by all of the languages in CompCert.
-States always consist of
-a memory component $m \in \kw{mem}$,
-alongside language-specific components
-which may contain additional values ($\kw{val}$).
-
-%}}}
-
 \begin{figure} % fig:mm (The CompCert memory model) {{{
   \begin{align*}
     v \in \kw{val} ::= {} &
@@ -1848,6 +1804,40 @@ which may contain additional values ($\kw{val}$).
   \caption{Outline of the CompCert memory model}
   \label{fig:mm}
 \end{figure}
+%}}}
+
+The memory is organized into a finite number of \emph{blocks}.
+Each memory block has a unique identifier $b \in \kw{block}$
+%represented as a positive integer,
+and is equipped with its own linear address space.
+Block identifiers and offsets are often manipulated together
+as pointers $p = (b, o) \in \kw{ptr} = \kw{block} \times \mathbb{Z}$.
+New blocks are created with prescribed boundaries
+using the primitive $\kw{alloc}$.
+
+A runtime value $v \in \kw{val}$ can be stored at
+a given address using the primitive \kw{store},
+and retreived using the primitive \kw{load}.
+Values can be integers (\kw{int}, \kw{long}) and
+floating point numbers (\kw{float}, \kw{single})
+of different sizes,
+as well as pointers (\kw{vptr}).
+The special value \kw{undef}
+represents an undefined value.
+Simulation relations
+often allow $\kw{undef}$
+to be refined into a more concrete value;
+we write value refinement as:
+\[
+    {\vref} := \{(\kw{undef}, v), (v, v) \mid v \in \kw{val}\} \,.
+\]
+
+The memory model is shared by all of the languages in CompCert.
+States always consist of
+a memory component $m \in \kw{mem}$,
+alongside language-specific components
+which may contain additional values ($\kw{val}$).
+
 %}}}
 
 %}}}
@@ -2191,7 +2181,7 @@ the rules shown in Fig.~\ref{fig:hcomp}.
 
 %}}}
 
-\subsection{Simulations} \label{sec:sem:ref} %{{{
+\subsection{Open simulations} \label{sec:sem:ref} %{{{
 
 CompCert is proved correct using a simulation
 between the transition semantics of the source and target programs.
@@ -2420,7 +2410,7 @@ the two halves of the callers' simulation property
 described in Fig.~\ref{fig:fsim-ext}.
 This can be formalized as follows.
 
-\begin{theorem}[Horizontal composition of simulations] \label{thm:simlinking} %{{{
+\begin{theorem}[Horizontal composition of simulations] \label{thm:fsim-hcomp} %{{{
 For a simulation convention
 $\mathbb{R} : A_1 \Leftrightarrow A_2$
 and transition systems
@@ -2466,25 +2456,6 @@ See \texttt{x86/AsmLinking.v} in the Coq development.
 
 %}}}
 
-\paragraph{Vertical composition} %{{{
-
-The diagrams shown in Figs.~\ref{fig:fsim} and~\ref{fig:fsim-ext}
-can also be pasted to compose simulations vertically.
-This allows us to further decompose the verification of a component
-into several steps.
-For compilation,
-these steps will correspond to the various passes of CompCertO,
-shown in Table~\ref{tbl:passes}.
-The conventions used by the resulting simulation
-can be described as follows.
-
-\begin{definition}[Composition of simulation conventions]
-For a language interface $A$,
-we define the simulation convention 
-\end{definition}
-
-%}}}
-
 %}}}
 
 %\subsection{Loaders} \label{sec:sem:loader} %{{{
@@ -2502,32 +2473,109 @@ we define the simulation convention
 %
 %}}}
 
+\subsection{Simulation algebra} %{{{
+
+We now describe the way in which
+the simulation proofs of CompCertO
+are combined into
+a whole-compiler simulation.
+The first step is to compose
+the simulations of successive passes.
+The convention used by the resulting simulation
+can be described as follows.
+
+\begin{definition}[Composition of simulation conventions] %{{{
+The composition of two Kripke relations
+$R \in \mathcal{R}_{W_R}(X, Y)$ and
+$S \in \mathcal{R}_{W_S}(Y, Z)$
+is the Kripke relation
+$R \cdot S \in \mathcal{R}_{W_R \times W_S}(A, C)$
+defined by:
+\[
+  (w_R, w_S) \Vdash x \ifr{R \cdot S} z \Leftrightarrow
+  \exists y \in Y \,.\,
+    w_R \Vdash x \mathrel{R} y \wedge
+    w_S \Vdash y \mathrel{R} z \,.
+\]
+Then for the simulation conventions
+$\mathbb{R} : A \Leftrightarrow B$ and
+$\mathbb{S} : B \Leftrightarrow C$,
+we define
+$\mathbb{R} \cdot \mathbb{S} : A \Leftrightarrow C$ as:
+\[
+  \mathbb{R} \cdot \mathbb{S} :=
+  \langle
+    W_\mathbb{R} \times W_\mathbb{S}, \:
+    \mathbb{R}^\que \cdot \mathbb{S}^\que, \:
+    \mathbb{R}^\ans \cdot \mathbb{S}^\ans
+  \rangle
+\]
+\end{definition}
 %}}}
 
-\section{Simulation algebra} \label{sec:simalg} %{{{
+\begin{theorem} \label{thm:fsim-vcomp} %{{{
+Simulations compose vertically
+in the way depicted in Fig.~\ref{fig:simcomp}.
+\begin{proof}
+Visually speaking,
+the diagrams shown in Figs.~\ref{fig:fsim} and~\ref{fig:fsim-ext}
+can be pasted vertically.
+For details,
+see the Coq proofs
+\texttt{identity\_forward\_simulation}
+and \texttt{compose\_forward\_simulations}
+in the file \texttt{common/Smallstep.v}.
+\end{proof}
+\end{theorem}
+%}}}
 
-[XXX reorganize / move stuff around]
+%\begin{theorem}[Vertical composition of simulations] \label{thm:simcomp} %{{{
+%For the transition systems
+%$L_1 : A_1 \twoheadrightarrow B_1$,
+%$L_2 : A_2 \twoheadrightarrow B_2$,
+%$L_3 : A_3 \twoheadrightarrow B_3$,
+%and the simulation conventions
+%$\mathbb{R}_A : A_1 \Leftrightarrow A_2$,
+%$\mathbb{R}_B : B_1 \Leftrightarrow B_2$,
+%$\mathbb{S}_A : A_2 \Leftrightarrow A_3$, and
+%$\mathbb{S}_B : B_2 \Leftrightarrow B_3$,
+%the following holds:
+%\[
+%  \AxiomC{$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$}
+%  \AxiomC{$L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3$}
+%  \BinaryInfC{
+%    $L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
+%                   \mathbb{R}_B \cdot \mathbb{S}_B} L_3$}
+%  \DisplayProof
+%\]
+%\begin{proof}
+%\texttt{compose\_open\_fsim} in \texttt{common/Smallstep.v}.
+%\end{proof}
+%\end{theorem}
+%%}}}
 
-This appendix details
-the algebraic manipulations we use
-in the proof of Thm.~\ref{thm:compc}
-to transform the simulation
-obtain by composing passes
-into a standard form.
+\paragraph{Refinement} %{{{
 
-At the core of our simulation algebra is
+As discussed in \S\ref{sec:mainideas:simalg},
+the composite simulation conventions obtained
+when we composing the passes of CompCertO
+are not immediately satisfactory.
+In the remainder of this section,
+we introduce the algebraic infrastructure we use
+to rewrite them into an acceptable form.
+Its core is
 a notion of refinement for simulation conventions.
-The refinement relation $\mathbb{R} \scref \mathbb{S}$
-captures the idea that the convention $\mathbb{R}$
-is more general than the convention $\mathbb{S}$,
-so that any simulation accepting $\mathbb{R}$ as its
-incoming convention will accept $\mathbb{S}$ as well.
+A refinement $\mathbb{R} \scref \mathbb{S}$
+captures the idea that the convention $\mathbb{S}$
+is more general than the convention $\mathbb{R}$,
+so that any simulation accepting $\mathbb{S}$ as its
+incoming convention will accept $\mathbb{R}$ as well.
 
 \begin{definition}[Simulation convention refinement] %{{{
 Given two simulation conventions
 $\mathbb{R}, \mathbb{S} : A_1 \Leftrightarrow A_2$,
 we say that
-$\mathbb{S}$ refines $\mathbb{R}$ and write
+$\mathbb{R}$ refines $\mathbb{S}$ and write
 $\mathbb{R} \scref \mathbb{S}$
 when the following holds:
 \[
@@ -2549,29 +2597,6 @@ $\mathbb{S} \scref \mathbb{R}$.
 \end{definition}
 %}}}
 
-The following theorem states the relationship between
-simulation convention refinement and forward simulations.
-
-\begin{theorem} %{{{
-For
-$\mathbb{R}' \scref \mathbb{R} : A_1 \Leftrightarrow A_2$ and
-$\mathbb{S} \scref \mathbb{S}' : B_1 \Leftrightarrow B_2$,
-the following holds for all
-$L_1 : A_1 \twoheadrightarrow B_1$ and $L_2 : A_2 \twoheadrightarrow B_2$:
-\[
-      L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2
-      \: \Rightarrow \:
-      L_1 \le_{\mathbb{R}' \twoheadrightarrow \mathbb{S}'} L_2 \,.
-\]
-\begin{proof}
-See \texttt{open\_fsim\_ccref} in \texttt{CallconvAlgebra.v}.
-\end{proof}
-\end{theorem}
-%}}}
-
-Refinement can be used to state many interesting properties,
-which can then be used to transform simulations.
-
 \begin{theorem} % assoc, id, monot {{{
 For
 $\mathbb{R} : A_1 \Leftrightarrow A_2$,
@@ -2589,6 +2614,91 @@ the following properties hold:
   \mathbb{R}
 \end{gather*}
 \end{theorem}
+%}}}
+
+%The following theorem states the relationship between
+%simulation convention refinement and forward simulations.
+
+\begin{theorem} %{{{
+For
+$\mathbb{R} \scref \mathbb{R}' : A_1 \Leftrightarrow A_2$ and
+$\mathbb{S}' \scref \mathbb{S} : B_1 \Leftrightarrow B_2$,
+the following holds for all
+$L_1 : A_1 \twoheadrightarrow B_1$ and $L_2 : A_2 \twoheadrightarrow B_2$:
+\[
+      L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2
+      \: \Rightarrow \:
+      L_1 \le_{\mathbb{R}' \twoheadrightarrow \mathbb{S}'} L_2 \,.
+\]
+\begin{proof}
+See \texttt{open\_fsim\_ccref} in \texttt{common/CallconvAlgebra.v}.
+\end{proof}
+\end{theorem}
+%}}}
+
+%}}}
+
+\paragraph{Kleene algebra} %{{{
+
+Given a collection of simulation conventions,
+it is possible to combine them
+by allowing questions to be related by any one of them.
+This is the additive operation of our Kleene algebra.
+The Kleene star combines all possible finite iterations
+of a simulation convention.
+
+This construction is key in our treatment of
+asymmetric injection passes
+($\kw{injp} \twoheadrightarrow \kw{inj}$).
+The details of $\kw{inj}$ and $\kw{injp}$
+are discussed in \S\ref{sec:cklr},
+but are not an essential part of the technique.
+Schematically,
+by pre- and post- composing injection passes
+with self-simulations of types
+$\kw{injp}^* \twoheadrightarrow \kw{injp}^*$ and
+$\kw{inj} \twoheadrightarrow \kw{inj}$,
+we obtain the simulation conventions:
+\[
+  \kw{injp}^* \cdot \kw{injp} \cdot \kw{inj}
+  \twoheadrightarrow
+  \kw{injp}^* \cdot \kw{inj} \cdot \kw{inj}
+\]
+The property $\kw{injp}^* \cdot \kw{injp} \scref \kw{injp}^*$
+on the left-hand side,
+and the idempotency of $\kw{inj}$
+on the right-hand side
+allow us to rewrite the above into
+a symmetric simulation convention.
+
+\begin{definition} \label{def:joins} % joins and Kleene star {{{
+Consider $(\mathbb{R}_i)_{i \in I}$
+a family of conventions
+with
+$\mathbb{R}_i = \langle W_i, R_i^\que, R_i^\ans \rangle
+  : A_1 \Leftrightarrow A_2$
+for all $i \in I$.
+We define the simulation convention
+$\sum_{i \in I} \mathbb{R}_i := \langle W, R^\que, R^\ans \rangle$,
+where:
+\[
+  W := \sum_{i \in I} W_i  \qquad
+  \begin{array}{l}
+  (i, w) \Vdash R^\que \: := \: w \Vdash R_i^\que \\[1ex]
+  (i, w) \Vdash R^\ans \: := \: w \Vdash R_i^\ans \,.
+  \end{array}
+\]
+We will write $\mathbb{R}_1 + \cdots + \mathbb{R}_n$
+for the finitary case $\sum_{i=1}^n \mathbb{R}_i$.
+Then for $\mathbb{R} : A_1 \Leftrightarrow A_2$,
+we define
+$\mathbb{R}^* := \sum_{n \in \mathbb{N}} \mathbb{R}^n$,
+where:
+\[
+  \mathbb{R}^0 := \kw{id} \qquad
+  \mathbb{R}^{n+1} := \mathbb{R}^n \cdot \mathbb{R} \,.
+\]
+\end{definition}
 %}}}
 
 \begin{theorem}[Addition and Kleene iteration of simulations] \label{thm:simk} %{{{
@@ -2613,6 +2723,10 @@ in \texttt{common/CallconvAlgebra.v}.
 \end{proof}
 \end{theorem}
 %}}}
+
+%}}}
+
+\paragraph{XXX later}
 
 These properties can be used to construct
 the self-simulations which are used
@@ -3594,7 +3708,7 @@ compiled and linked to
 $\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$,
 we can use
 Thms.~\ref{thm:asmlinking},
-\ref{thm:simlinking} and
+\ref{thm:fsim-hcomp} and
 \ref{thm:compc}
 to establish the following separate compilation property:
 \begin{equation}
@@ -3623,7 +3737,7 @@ along the lines of the program's components:
 \]
 Then for each module, we prove that
 $\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
-This can be combined with Thm.~\ref{thm:simlinking} and Eqn.~\ref{eqn:sepcomp}
+This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
 to establish:
 \[
     \Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{M.s}) \,.
@@ -3854,7 +3968,7 @@ similar to our horizontal composition
 (\S\ref{sec:sem:linker}).
 As in our case,
 semantic linking is shown to preserve simulations
-(Thm.~\ref{thm:simlinking}),
+(Thm.~\ref{thm:fsim-hcomp}),
 however semantic linking is not related to
 syntactic linking of assembly programs,
 and this was later shown to be problematic \cite{compcertm}.
