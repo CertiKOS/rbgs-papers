@@ -2558,12 +2558,12 @@ in the file \texttt{common/Smallstep.v}.
 
 As discussed in \S\ref{sec:mainideas:simalg},
 the composite simulation conventions obtained
-when we composing the passes of CompCertO
+when we compose the passes of CompCertO
 are not immediately satisfactory.
 In the remainder of this section,
 we introduce the algebraic infrastructure we use
 to rewrite them into an acceptable form.
-Its core is
+At its core is
 a notion of refinement for simulation conventions.
 A refinement $\mathbb{R} \scref \mathbb{S}$
 captures the idea that the convention $\mathbb{S}$
@@ -2771,18 +2771,14 @@ found under \texttt{cklr/}.
 
 %}}}
 
+%}}}
+
 \section{Logical relations for CompCert} \label{sec:cklr} %{{{
 
-Language interfaces reveal the information
-associated with function calls and returns
-at different levels of abstraction.
-Simulation conventions
-reveal corresponding aspects of the simulation relations
-used in CompCert's proofs.
-%
-The states of CompCert languages all contain
+The questions, answers and states
+used to describe the semantics of CompCert languages all contain
 a memory state and surrounding runtime values.
-Likewise, simulation relations
+Likewise, simulation conventions and relations
 are constructed around \emph{memory transformations}
 and relate the surrounding components in ways that %,
 %in addition to reflecting any structural changes
@@ -3137,60 +3133,200 @@ In CompCertO,
 this must be expressed as part of the simulation conventions
 used by compilation passes.
 
-Invariants are a special case of simluation conventions
+\subsection{Invariants and language interfaces} %{{{
+
+First, we define a sort of ``invariant convention'',
+which describes how a given invariant impacts the queries and replies
+of the language under consideration.
+
+\begin{definition}
+An \emph{invariant for a language interface} $A$
+is a tuple
+$\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$,
+where $W$ is a set of worlds
+and $\mathbb{P}^\que, \mathbb{P}^\ans$
+are families of predicates respectively on $M_A^\que, M_A^\ans$
+indexed by $W$.
+
+\end{definition}
+
+\begin{example}
+Typing constraints for the language interface $\mathcal{C}$
+can be expressed as the invariant:
+\begin{gather*}
+  \kw{wt}_\mathcal{C} :=
+    \langle
+      \kw{sig},
+      \mathbb{P}_\kw{wt}^\que,
+      \mathbb{P}_\kw{wt}^\ans
+    \rangle
+  \\
+  \AxiomC{$\vec{v} <: \mathit{sg}.\kw{args}$}
+  \UnaryInfC{$\mathit{sg} \Vdash
+    \mathit{vf}[\mathit{sg}](\vec{v})@m \in \mathbb{P}_\kw{wt}^\que$}
+  \DisplayProof
+  \qquad
+  \AxiomC{$v' <: \mathit{sg}.\kw{res}$}
+  \UnaryInfC{$\mathit{sg} \Vdash
+    v'@m' \in \mathbb{P}_\kw{wt}^\ans$}
+  \DisplayProof
+\end{gather*}
+The proposition $\vec{v} <: \kw{args}(\mathit{sg})$
+asserts that the types of the arguments $\vec{v}$
+match those specified by the signature $\mathit{sg}$.
+The proposition $v' <: \kw{res}(\mathit{sg})$
+asserts a similar property for the return value $v'$.
+\end{example}
+
+Invariants can be seen as a special case of simulation convention
 which constrain the source and target questions and answers
 to be equal.
-This entails a number of useful properties:
-for instance,
-invariants commute with each other.
+This can be formalized as follows.
+
+\begin{definition}
+A $W$-indexed predicate $P$ on a set $X$
+can be promoted to a Kripke relation
+$\hat{P} \in \mathcal{R}_W(X, X)$
+defined by the rule:
+\[
+  \AxiomC{$w \Vdash x \in P$}
+  \UnaryInfC{$w \Vdash x \mathrel{\hat{P}} x$}
+  \DisplayProof
+\]
+Then an invariant
+$\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$
+can be propoted to a simulation convention:
+$\hat{\mathbb{P}} :=
+ \langle W, \hat{\mathbb{P}}^\que, \hat{\mathbb{P}}^\ans \rangle$.
+\end{definition}
+
+As simulation conventions,
+invariants satisfy a number of interesting properties.
+For instance,
+two invariants $P, Q$ always commute with each other,
+so that $P \cdot Q \equiv Q \cdot P$.
+Invariants can be duplicated
+so that $P \sqsubseteq P \cdots P$.
+Note that the converse relation does not hold
+because the worlds used in the different copies of $P$
+may be inconsistent.
 In addition,
-treating invariants as first-class objects
-enables new verification techniques
-outlined in this section.
+in some cases simulation conventions can propagate certain invariants.
+For example, in the case of $\kw{wt}_\mathcal{C}$,
+any simulation convention $\mathbb{R}$ consisting of
+a non-empty sequence of CKLRs satsifies the property
+$\mathbb{R} \cdot \kw{wt} \equiv
+ \kw{wt} \cdot \mathbb{R} \cdot \kw{wt}$.
 
-In the following, [\ldots]
+%}}}
 
-\begin{tikzcd}[execute at end picture={
-    \begin{scope}[radius=0.25, on background layer]
-    \draw (node cs:name=I1,anchor=center) circle;
-    \draw[dashed] (node cs:name=I2,anchor=center) circle;
-    \draw (node cs:name=R1,anchor=center) circle;
-    \draw[dashed] (node cs:name=R2,anchor=center) circle;
-    \draw (node cs:name=X1,anchor=center) circle;
-    \draw[dashed] (node cs:name=X2,anchor=center) circle;
-    \draw (node cs:name=Y1,anchor=center) circle;
-    \draw[dashed] (node cs:name=Y2,anchor=center) circle;
-    \draw (node cs:name=F1,anchor=center) circle;
-    \draw[dashed] (node cs:name=F2,anchor=center) circle;
-    \end{scope}
-  }]
-%
-  |[alias=I1]| q_1 \ar[r, "I_1"] &
-  |[alias=I2]| s_1 &
-  |[alias=R1]| s_1 \ar[r, "t"] &
-  |[alias=R2]| s_1' &
-  |[alias=X1]| s_1 \ar[r, "X_1"] &
-  |[alias=X2]| m_1 \ar[r, dotted, dash] &
-  |[alias=Y1]| n_1 \ar[r, "Y_1^{s_1}"] &
-  |[alias=Y2]| s_1' &
-  |[alias=F1]| s_1 \ar[r, "F_1"] &
-  |[alias=F2]| r_1
-  \\
-  |[circle,draw]| q \ar[d, "\mathbb{R}^\que", dash] \ar[r, "I"] &
-  |[circle,draw]| s \ar[d, "R", dash, dashed] &
-  |[circle,draw]| s \ar[d, "R", dash] \ar[r, "t"] &
-  |[circle,draw]| s' \ar[d, "R", dash, dashed]
-  \\
-  q_2 \ar[r, "I", dashed] &
-  s_2 &
-  s_2 \ar[r, "t", dashed] &
-  \!\!\! {}^* \: s_2'
-\end{tikzcd}
+\begin{figure} % fig:fsim-inv {{{
+  \[
+    \begin{tikzcd}[execute at end picture={
+        \begin{scope}[radius=0.25, on background layer]
+        \draw (node cs:name=I1,anchor=center) circle;
+        \draw[dashed] (node cs:name=I2,anchor=center) circle;
+        \draw (node cs:name=R1,anchor=center) circle;
+        \draw[dashed] (node cs:name=R2,anchor=center) circle;
+        \draw (node cs:name=X1,anchor=center) circle;
+        \draw[dashed] (node cs:name=X2,anchor=center) circle;
+        \draw (node cs:name=Y1,anchor=center) circle;
+        \draw[dashed] (node cs:name=Y2,anchor=center) circle;
+        \draw (node cs:name=F1,anchor=center) circle;
+        \draw[dashed] (node cs:name=F2,anchor=center) circle;
+        \draw (node cs:name=I11,anchor=center) circle;
+        \draw (node cs:name=I21,anchor=center) circle;
+        \draw (node cs:name=R11,anchor=center) circle;
+        \draw (node cs:name=R21,anchor=center) circle;
+        \draw (node cs:name=X11,anchor=center) circle;
+        \draw (node cs:name=X21,anchor=center) circle;
+        \draw (node cs:name=Y11,anchor=center) circle;
+        \draw (node cs:name=Y21,anchor=center) circle;
+        \draw (node cs:name=F11,anchor=center) circle;
+        \draw (node cs:name=F21,anchor=center) circle;
+        \end{scope}
+      }]
+    %
+      |[alias=I1]| q_1 \ar[r, "I_1"] &
+      |[alias=I2]| s_1 &
+      |[alias=R1]| s_1 \ar[r, "t"] &
+      |[alias=R2]| s_1' &
+      |[alias=X1]| s_1 \ar[r, "X_1"] &
+      |[alias=X2]| m_1 \ar[r, dotted, dash] &
+      |[alias=Y1]| n_1 \ar[r, "Y_1^{s_1}"] &
+      |[alias=Y2]| s_1' &
+      |[alias=F1]| s_1 \ar[r, "F_1"] &
+      |[alias=F2]| r_1
+      \\
+      |[alias=I11]| q_1 \ar[r, "I_1"] \ar[d, dash] &
+      |[alias=I21]| s_1 \ar[d, dashed, dash] &
+      |[alias=R11]| s_1 \ar[r, "t"] \ar[d, dash] &
+      |[alias=R21]| s_1' \ar[d, dashed, dash] &
+      |[alias=X11]| s_1 \ar[r, "X_1"] \ar[d, dash] &
+      |[alias=X21]| m_1 \ar[r, dotted, dash] \ar[d, dashed, dash] &
+      |[alias=Y11]| n_1 \ar[r, "Y_1^{s_1}"] \ar[d, dash] &
+      |[alias=Y21]| s_1' \ar[d, dashed, dash] &
+      |[alias=F11]| s_1 \ar[r, "F_1"] \ar[d, dash] &
+      |[alias=F21]| r_1 \ar[d, dashed, dash]
+      \\
+      |[alias=I12]| q_2 \ar[r, "I_2"', dashed] &
+      |[alias=I22]| s_2 &
+      |[alias=R12]| s_2 \ar[r, "t"', dashed] &
+      |[alias=R22]| \!\!\! {}^* \: s_2' &
+      |[alias=X12]| s_2 \ar[r, "X_2"', dashed] &
+      |[alias=X22]| m_2 \ar[r, dotted, dash] &
+      |[alias=Y12]| n_2 \ar[r, "Y_2^{s_2}"', dashed] &
+      |[alias=Y22]| s_2' &
+      |[alias=F12]| s_2 \ar[r, "F_1"', dashed] &
+      |[alias=F22]| r_2
+    \end{tikzcd}
+  \]
+  \caption{Simulation with invariants (see \S\ref{sec:fsim-inv}).
+    Circles indicate questions, answers and states
+    which satisfy the appropriate invariants.
+    When the transition system $L_1$ preserves the invariants
+    in the way shown in the top row,
+    a simulation of $L_1$ by $L_2$ can be established through
+    the weakened diagrams shown in the bottom row.
+    The resulting simulation uses the convention
+    $\mathbb{P}_A \cdot \mathbb{R}_A \twoheadrightarrow
+     \mathbb{P}_B \cdot \mathbb{R}_B$,
+    ensuring that the environment
+    establishes and preserves the appropriate invariants
+    on questions and answers.
+    The simulation relation $P \cdot R$ then ensures that
+    the strengthened assumptions used by the
+    weakened simulation diagrams can be satisfied.}
+  \label{fig:fsim-inv}
+\end{figure}
+%}}}
 
-\subsection{Invariants}
+\subsection{Simulations modulo invariants} \label{sec:fsim-inv} %{{{
 
-[Definition, invariants as simulation conventions,
-preservation, self-simulation]
+The top row in Fig.~\ref{fig:fsim-inv}
+illustrates the preservation of invariants by transition systems.
+In the context of a transition system
+$L_1 : A_1 \rightarrow B_1$,
+we consider three invariants working together:
+\begin{itemize}
+  \item an invariant $\mathbb{P}_A$ for the language interface $A$;
+  \item an invariant $\mathbb{P}_B$ for the language interface $B$;
+  \item a $W_B$-indexed predicate $P$ on the states of $L_1$.
+\end{itemize}
+The preservation of
+$\langle \mathbb{P}_A, \mathbb{P}_B, P \rangle$
+is then analogous to a unary simulation property,
+where $\mathbb{P}_A \twoheadrightarrow \mathbb{P}_B$
+play the roles of the simulation conventions,
+and $P$ plays the role of the simulation relation.
+In fact,
+when $L_1$ preserves these invariants,
+the following property holds:
+\[
+    L_1 \le_{\hat{\mathbb{P}}_A \twoheadrightarrow \hat{\mathbb{P}}_B} L_1
+\]
+
+%}}}
 
 \subsection{Typing invariants}
 
@@ -3543,112 +3679,6 @@ by our notions of language interface and simulation convention.
 
 \subsection{Composing passes} \label{sec:comppass} %{{{
 
-We now describe the way in which
-the simulation proofs of CompCertO
-are combined into
-a whole-compiler simulation.
-
-%XXX KLR composition not defined
-\begin{definition}[Composition of simulation conventions] %{{{
-Given the language interfaces $A_1, A_2, A_3$
-and the simulation conventions
-$\mathbb{R} : A_1 \Leftrightarrow A_2$ and
-$\mathbb{S} : A_2 \Leftrightarrow A_3$,
-the composite simulation convention
-$\mathbb{R} \cdot \mathbb{S} : A_1 \Leftrightarrow A_3$ is defined as:
-\[
-    \mathbb{R} \cdot \mathbb{S} :=
-      \langle
-        W_R \times W_S, \:
-        R^\que \cdot S^\que, \:
-        R^\ans \cdot S^\ans
-      \rangle \,.
-\]
-\end{definition}
-%}}}
-
-\begin{theorem}[Vertical composition of simulations] \label{thm:simcomp} %{{{
-For the transition systems
-$L_1 : A_1 \twoheadrightarrow B_1$,
-$L_2 : A_2 \twoheadrightarrow B_2$,
-$L_3 : A_3 \twoheadrightarrow B_3$,
-and the simulation conventions
-$\mathbb{R}_A : A_1 \Leftrightarrow A_2$,
-$\mathbb{R}_B : B_1 \Leftrightarrow B_2$,
-$\mathbb{S}_A : A_2 \Leftrightarrow A_3$, and
-$\mathbb{S}_B : B_2 \Leftrightarrow B_3$,
-the following holds:
-\[
-  \AxiomC{$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$}
-  \AxiomC{$L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3$}
-  \BinaryInfC{
-    $L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
-                   \mathbb{R}_B \cdot \mathbb{S}_B} L_3$}
-  \DisplayProof
-\]
-\begin{proof}
-\texttt{compose\_open\_fsim} in \texttt{common/Smallstep.v}.
-\end{proof}
-\end{theorem}
-%}}}
-
-Unfortunately,
-using vertical composition naively
-to compose all passes
-does not yield an acceptable result.
-For one thing,
-the simulation convention we obtain
-is highly sensitive to the passes we choose to include.
-Enabling different optimizations
-will result in different simulation conventions.
-Worse yet,
-it inherits the asymmetry of the type 
-$\kw{injp} \twoheadrightarrow \kw{inj}$
-used by injection passes.
-This breaks horizontal compositionality
-as Thm.~\ref{thm:simlinking} is no longer applicable.
-
-We address this issue in the following way.
-As shown in Table~\ref{tbl:passes},
-when carrying out vertical composition
-we include self-simulations
-derived from Thm.~\ref{thm:param}.
-This embeds properties of
-\kw{Clight} and \kw{RTL}
-which can then be used to tranform the composite simulation
-through a series of algebraic manipulations.
-We will use the following constructions
-to express the compiler's final simulation convention.
-
-\begin{definition} \label{def:joins} % joins and Kleene star {{{
-Consider $(\mathbb{R}_i)_{i \in I}$
-a family of conventions
-with
-$\mathbb{R}_i = \langle W_i, R_i^\que, R_i^\ans \rangle
-  : A_1 \Leftrightarrow A_2$
-for all $i \in I$.
-We define the simulation convention
-$\sum_{i \in I} \mathbb{R}_i := \langle W, R^\que, R^\ans \rangle$,
-where:
-\[
-  W := \sum_{i \in I} W_i  \qquad
-  \begin{array}{l}
-  (i, w) \Vdash R^\que \: := \: w \Vdash R_i^\que \\[1ex]
-  (i, w) \Vdash R^\ans \: := \: w \Vdash R_i^\ans \,.
-  \end{array}
-\]
-We will write $\mathbb{R}_1 + \cdots + \mathbb{R}_n$
-for the finitary case $\sum_{i=1}^n \mathbb{R}_i$.
-Then for $\mathbb{R} : A_1 \Leftrightarrow A_2$,
-we define
-$\mathbb{R}^* := \sum_{n \in \mathbb{N}} \mathbb{R}^n$,
-where:
-\[
-  \mathbb{R}^0 := \kw{id} \qquad
-  \mathbb{R}^{n+1} := \mathbb{R}^n \cdot \mathbb{R} \,.
-\]
-\end{definition}
-%}}}
 
 We can now present our central result,
 which establishes the correctness of CompCertO
