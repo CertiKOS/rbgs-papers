@@ -1300,7 +1300,7 @@ in the register $\kw{\%eax}$.
       Simulation convention (Def.~\ref{def:simconv}) \\
     $L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$ &
       Thm.~\ref{thm:compc} &
-      Simulation property (Def.~\ref{def:sim}) \\
+      Simulation property (Def.~\ref{def:fsim}) \\
     $L_1 \oplus L_2$ & &
       Horizontal composition (Def.~\ref{def:hcomp}) \\
     %$p_1 + p_2$ & &
@@ -2369,7 +2369,7 @@ will be related at that world.
 \end{figure}
 %}}}
 
-\begin{definition}[Forward simulation] \label{def:sim} %{{{
+\begin{definition}[Forward simulation] \label{def:fsim} %{{{
 Given
 two simulation conventions
 $\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
@@ -3111,35 +3111,56 @@ in particular \texttt{cklr/Clightrel.v} and \texttt{cklr/RTLrel.v}.
 
 %}}}
 
-\section{Invariants} %{{{
+\section{Invariants} \label{sec:inv} %{{{
+
+% preamble {{{
 
 Several passes of CompCert
 rely on the preservation of invariants
 by their source program.
-The constructions described in this section
-can be used to decouple preservation and simulation proofs,
-and to introduce simulation conventions
-characterizing the invariant at module boundaries.
+This situation is illustrated in Fig.~\ref{fig:fsim-inv}:
+if we show that the semantics of a given language
+preserves a given invariant,
+then the associated properties can be used to assist
+in proving forward simulations
+using the language as their source.
+This allows us to decompose the simulation proof,
+and in the case of $\kw{RTL}$
+the preservation proofs can be reused for multiple passes.
 
-The $\kw{Selection}$, $\kw{Allocation}$, and $\kw{Stacking}$
-passes rely on typing invariants,
-whereas the $\kw{Constprop}$, $\kw{CSE}$, $\kw{Deadcode}$
-rely invariants tracked using CompCert's value analysis framework.
-These invariants must be maintained by external calls.
 In CompCert,
-this is achieved through contraints placed on
-the external call semantics.
+this technique is deployed in an ad-hoc manner:
+for each pass using an invariant,
+the simulation relation is strengthened to assert that
+the invariant holds on the source state,
+and the preservation properties for the source language
+are used explicitly in the simulation proof
+to maintain this invariant.
 In CompCertO,
-this must be expressed as part of the simulation conventions
-used by compilation passes.
+this becomes more involved,
+because the simulation convention must be altered
+to ensure that invariants are preserved
+by external calls.
+
+On the other hand,
+our simulation infrastructure offers the opportunity
+to capture and reason about invariants explicitly,
+and to further decouple preservation and simulation proofs.
+In this section,
+we give an overview of our treatment of invariants.
+For details,
+see \texttt{common/Invariant.v}
+in the Coq development.
+
+%}}}
 
 \subsection{Invariants and language interfaces} %{{{
 
 First, we define a sort of ``invariant convention'',
-which describes how a given invariant impacts the queries and replies
+which describes how a given invariant impacts the questions and answers
 of the language under consideration.
 
-\begin{definition}
+\begin{definition} % Invariant for a language interface {{{
 An \emph{invariant for a language interface} $A$
 is a tuple
 $\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$,
@@ -3147,14 +3168,14 @@ where $W$ is a set of worlds
 and $\mathbb{P}^\que, \mathbb{P}^\ans$
 are families of predicates respectively on $M_A^\que, M_A^\ans$
 indexed by $W$.
-
 \end{definition}
+%}}}
 
-\begin{example}
+\begin{example} \label{ex:wt} %{{{
 Typing constraints for the language interface $\mathcal{C}$
 can be expressed as the invariant:
 \begin{gather*}
-  \kw{wt}_\mathcal{C} :=
+  \kw{wt} :=
     \langle
       \kw{sig},
       \mathbb{P}_\kw{wt}^\que,
@@ -3177,13 +3198,14 @@ match those specified by the signature $\mathit{sg}$.
 The proposition $v' <: \kw{res}(\mathit{sg})$
 asserts a similar property for the return value $v'$.
 \end{example}
+%}}}
 
 Invariants can be seen as a special case of simulation convention
 which constrain the source and target questions and answers
 to be equal.
 This can be formalized as follows.
 
-\begin{definition}
+\begin{definition}[Simulation conventions for invariants]
 A $W$-indexed predicate $P$ on a set $X$
 can be promoted to a Kripke relation
 $\hat{P} \in \mathcal{R}_W(X, X)$
@@ -3195,28 +3217,10 @@ defined by the rule:
 \]
 Then an invariant
 $\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$
-can be propoted to a simulation convention:
+can be promoted to a simulation convention:
 $\hat{\mathbb{P}} :=
  \langle W, \hat{\mathbb{P}}^\que, \hat{\mathbb{P}}^\ans \rangle$.
 \end{definition}
-
-As simulation conventions,
-invariants satisfy a number of interesting properties.
-For instance,
-two invariants $P, Q$ always commute with each other,
-so that $P \cdot Q \equiv Q \cdot P$.
-Invariants can be duplicated
-so that $P \sqsubseteq P \cdots P$.
-Note that the converse relation does not hold
-because the worlds used in the different copies of $P$
-may be inconsistent.
-In addition,
-in some cases simulation conventions can propagate certain invariants.
-For example, in the case of $\kw{wt}_\mathcal{C}$,
-any simulation convention $\mathbb{R}$ consisting of
-a non-empty sequence of CKLRs satsifies the property
-$\mathbb{R} \cdot \kw{wt} \equiv
- \kw{wt} \cdot \mathbb{R} \cdot \kw{wt}$.
 
 %}}}
 
@@ -3319,42 +3323,111 @@ is then analogous to a unary simulation property,
 where $\mathbb{P}_A \twoheadrightarrow \mathbb{P}_B$
 play the roles of the simulation conventions,
 and $P$ plays the role of the simulation relation.
-In fact,
-when $L_1$ preserves these invariants,
-the following property holds:
+%In fact,
+%when $L_1$ preserves these invariants,
+%the following property holds:
+%\[
+%    L_1 \le_{\hat{\mathbb{P}}_A \twoheadrightarrow \hat{\mathbb{P}}_B} L_1
+%\]
+
+Once we have established that
+the source language preserves the invariants,
+we wish to use this fact to help prove the forward simulation
+for a given pass.
+To this end,
+we define a \emph{strengthened} transition system
+$L_1^\mathbb{P} : A_1 \twoheadrightarrow B_1$,
+with the property that:
 \[
-    L_1 \le_{\hat{\mathbb{P}}_A \twoheadrightarrow \hat{\mathbb{P}}_B} L_1
+   L_1 \le_{\hat{\mathbb{P}}_A \twoheadrightarrow \hat{\mathbb{P}}_B}
+   L_1^\mathbb{P}
 \]
+For a target transition system $L_2 : A_2 \twoheadrightarrow B_2$,
+it then suffices to show that
+$
+  L_1^\mathbb{P}
+  \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+  L_2
+$
+to establish:
+\[
+  L_1
+  \le_{\hat{\mathbb{P}}_A \cdot \mathbb{R}_A \twoheadrightarrow
+       \hat{\mathbb{P}}_B \cdot \mathbb{R}_B}
+  L_2 \,.
+\]
+Simulations from $L_1^\mathbb{P}$
+are easier to prove,
+because $L_1^\mathbb{P}$
+provides assumption that the invariants hold
+on all source questions, answers and states.
+The simulation diagrams
+reduce to those shown in the bottom row of
+Fig.~\ref{fig:fsim-inv},
+but since they are formulated in terms of
+Def.~\ref{def:fsim},
+the standard forward simultion techniques
+defined by CompCert
+in \texttt{Smallstep.v}
+remain available.
 
 %}}}
 
-\subsection{Typing invariants}
+\subsection{Typing invariants} %{{{
 
-Explain $\kw{wt}$.
+The typing invariant described in Ex.~\ref{ex:wt}
+is used by the $\kw{Selection}$ and $\kw{Allocation}$ passes.
+We have updated their correctness proofs,
+as well as the preservation proofs in
+$\texttt{Cminortyping.v}$ and $\texttt{RTLtyping.v}$
+to use our framework.
 
-\subsection{Value analyses}
+The invariant $\kw{wt}$ satisfies one key property:
+when a simulation convention $\mathbb{R}$
+consists of a sequence of CKLRs and other invariants,
+the following property holds:
+\[
+  \kw{wt} \cdot \mathbb{R} \cdot \kw{wt} \equiv
+  \mathbb{R} \cdot \kw{wt}
+\]
+This means CompCertO's overall simulation convention
+can eliminate the typing invariant for the $\kw{Selection}$ pass,
+retaining only that used for $\kw{Allocation}$.
+In turn, this facilitates the simplification of the convention for
+the passes $\kw{Clight} \ldots \kw{Inlining}$.
 
-Explain $\kw{va}$.
+%}}}
 
-\subsection{Simulations modulo invariants}
+\subsection{Value analysis} %{{{
 
-Simulation diagrams modulo invariants.
+The passes
+$\kw{Constprop}$, $\kw{CSE}$ and $\kw{Deadcode}$
+use CompCert's value analysis framework.
+Abstract interpretation is performed %at compilation time
+on their source program,
+and the resulting information is used to carry out
+the corresponding optimizations.
+The correctness proofs for these passes then rely
+on the invariant $\kw{va}$,
+which asserts that the concrete runtime states
+satisfy the constraints encoded in the corresponding
+abstract states.
 
-Explosion problem if we want 3 versions of
-each one of CompCert's simulation diagram.
+We have updated the value analysis framework
+and associated pass correctness proofs
+to fit the invariant infrastructure described in this section.
+Value analysis passes use the convention
+$\kw{va} \cdot \kw{ext} \twoheadrightarrow \kw{va} \cdot \kw{ext}$.
+Unfortunately,
+because it combines constraints with mixed variance,
+the invariant $\kw{va}$ does not propagate in the same way as $\kw{wt}$,
+so the compiler's simulation convention must retain
+the component $(\kw{va} \cdot \kw{ext})^3$ as-is.
+When some of the corresponding optimization passes are disabled,
+we use self-simulations of the $\kw{RTL}$ language
+to match this convention nonetheless.
 
-Adjoint transformations of transition systems
-for simulations modulo invariants.
-
-\subsection{Algebraic properties}
-
-Commutation, duplication.
-
-\subsection{Propagation of invariants}
-
-Propagation of query and reply invariants,
-going through composition / identity / Kleene star,
-corresponding simulation convention refinements.
+%}}}
 
 %}}}
 
