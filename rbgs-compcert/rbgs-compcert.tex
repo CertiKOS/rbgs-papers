@@ -2759,7 +2759,7 @@ where the simulation convention $\mathbb{C}$ is defined as:
       \kw{asmgen}
 \]
 \begin{proof}
-Use Thm.~\ref{thm:simcomp} to compose
+Use Thm.~\ref{thm:fsim-vcomp} to compose
 the correctness proofs of the compiler passes and
 self-simulations shown in Table~\ref{tbl:passes}.
 By properties of the Kleene star,
@@ -2776,6 +2776,85 @@ and \texttt{driver/Compiler.v}.
 \end{proof}
 \end{theorem}
 %%}}}
+
+%}}}
+
+\subsection{Compositional compilation and verification} \label{sec:cver} %{{{
+
+Recalling Fig.~\ref{fig:process},
+consider the units
+$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
+compiled and linked to
+$\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
+We~can use
+Thms.~\ref{thm:fsim-hcomp},
+\ref{thm:asmlinking} and
+\ref{thm:compc}
+to establish the following separate compilation property:
+\begin{equation}
+  \label{eqn:sepcomp}
+  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+  \kw{Asm}(\mathtt{M.s})
+\end{equation}
+That is,
+the linked \kw{Asm} program
+$\mathtt{M.s}$
+faithfully implements
+the horizontal composition of the source modules' behaviors,
+following the simulation convention $\mathbb{C}$.
+
+Additionally,
+suppose we wish to verify that the overall program
+satisfies a specification $\Sigma$,
+also expressed as a transition system
+for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
+We must first show that $\Sigma$ can be decomposed
+along the lines of the program's components:
+\[
+    \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
+    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
+\]
+Then for each module, we prove that
+$\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
+This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
+to establish:
+\[
+    \Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{M.s}) \,.
+\]
+
+Note that Eqn.~\ref{eqn:sepcomp} can be established
+as long as the property
+$\kw{Clight}(\mathtt{Mi.c})
+ \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+ \kw{Asm}(\mathtt{Mi.s})$
+holds independently for each module.
+It is possible for the different $\mathtt{Mi.s}$
+to be obtained by different compilers,
+as long as each one satisfies a correctness property
+following the simulation convention in Thm.~\ref{thm:compc}.
+Indeed this is the case for versions of CompCertO
+obtained by enabling different optimization passes.
+Moreover, if some of the $\mathtt{Mi.s}$
+are hand-written assembly modules satisfying
+$\mathcal{C}$-style specifications,
+then we can prove on a case-by-case basis that
+$\Sigma_i \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{Mi.s})$
+and proceed with the rest of the proof as before.
+
+Using C functions from
+arbitrary assembly contexts is also possible,
+because the compiler's simulation convention $\mathbb{C}$
+captures all of the guarantees provided by CompCertO and
+directly specifies the behavior of the compiled assembly code.
+A proof involving an arbitrary assembly context
+invoking a function compiled by CompCertO
+must establish that the call is performed
+according to the C calling convention.
+Then the compiler's correctness theorem
+can be used to reason about the behavior of the call
+in terms of the semantics of the source code
+or a $\mathcal{C}$ specification that it satisfies.
 
 %}}}
 
@@ -3826,86 +3905,6 @@ by our notions of language interface and simulation convention.
 
 We now discuss the possible uses of the theorems we have proved,
 and the proof effort involved in our development.
-
-\subsection{Compositional compilation and verification} \label{sec:cver} %{{{
-
-Referring back to Fig.~\ref{fig:process},
-consider the modules
-$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
-compiled and linked to
-$\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$,
-we can use
-Thms.~\ref{thm:asmlinking},
-\ref{thm:fsim-hcomp} and
-\ref{thm:compc}
-to establish the following separate compilation property:
-\begin{equation}
-  \label{eqn:sepcomp}
-  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
-  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-  \kw{Asm}(\mathtt{M.s})
-\end{equation}
-That is,
-the linked \kw{Asm} program
-$\mathtt{M.s}$
-faithfully implements
-the horizontal composition of the source modules' behaviors,
-following the simulation convention $\mathbb{C}$.
-
-Additionally,
-suppose we wish to verify that the overall program
-satisfies a specification $\Sigma$,
-also expressed as a transition system
-for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
-We must first show that $\Sigma$ can be decomposed
-along the lines of the program's components:
-\[
-    \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
-    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
-\]
-Then for each module, we prove that
-$\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
-This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
-to establish:
-\[
-    \Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{M.s}) \,.
-\]
-
-Note that Eqn.~\ref{eqn:sepcomp} can be established
-as long as the property
-$\kw{Clight}(\mathtt{Mi.c})
- \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
- \kw{Asm}(\mathtt{Mi.s})$
-holds independently for each module.
-It is possible for the different $\mathtt{Mi.s}$
-to be obtained by different compilers,
-as long as each one satisfies a correctness property
-following the simulation convention in Thm.~\ref{thm:compc}.
-Indeed this is the case of the versions of CompCertO
-obtained by enabling different optimization passes.
-
-If some of the $\mathtt{Mi.s}$
-are hand-written assembly modules satisfying
-$\mathcal{C}$-style specifications,
-then we can prove on a case-by-case basis that
-$\Sigma_i \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{Mi.s})$
-and proceed with the rest of the proof as before.
-
-Using C functions from
-arbitrary assembly contexts is also possible,
-because the compiler's simulation convention $\mathbb{C}$
-captures all of the guarantees provided by CompCert and
-directly specifies the behavior of the compiled assembly code.
-A proof involving an arbitrary assembly context
-invoking a function compiled by CompCert
-must establish that the call is performed
-according to the C calling convention.
-Then the compiler's correctness theorem
-can be used to reason about the behavior of the call
-in terms of the semantics of the source code
-or a $\mathcal{C}$ specification that it satisfies.
-
-%}}}
 
 \subsection{Proof effort} \label{sec:effort} %{{{
 
