@@ -19,7 +19,7 @@
 \usepackage{calc}
 \usepackage{bbm}
 \usepackage{soul}
-\usepackage{booktabs}
+\usepackage{booktabs,colortbl}
 \usepackage{listings}
 \usepackage{comment}
 % }}}
@@ -35,6 +35,10 @@
 % Whether to show optional content
 \newif\ifopt
 \opttrue
+
+% Whether to anonymize the text
+\newif\ifanon
+\anontrue
 
 % Macros {{{
 
@@ -70,7 +74,13 @@
 \newcommand{\vref}{\le_\kw{v}}
 \newcommand{\mext}{\le_\kw{m}}
 \newcommand{\refby}{\preceq}
-\newcommand{\scref}{\sqsubseteq}
+\newcommand{\scref}{\sqsupseteq}
+
+\ifanon
+  \newcommand{\anon}[2]{#1}
+\else
+  \newcommand{\anon}[2]{#2}
+\fi
 
 \ifopt
   \newenvironment{optional}{\begin{color}{gray}}{\end{color}}
@@ -124,8 +134,8 @@
 Since the introduction of CompCert,
 researchers have been refining
 its language semantics and correctness theorem,
-and used them in
-large-scale software verification efforts.
+and used them as components
+in software verification efforts.
 Meanwhile,
 artifacts ranging from CPU designs to network protocols
 have been successfully verified,
@@ -135,14 +145,14 @@ to tackle end-to-end verification
 at an even larger scale.
 
 To that end,
-we believe that
+\anon{it has been proposed}{we believe} that
 a synthesis of existing research on
 game semantics,
 refinement-based methods, and
 abstraction layers
 has the potential to serve as a common theory
-of certified components,
-and that integrating CompCert to such a theory
+of certified components.
+Integrating CompCert to such a theory
 is a critical goal.
 However,
 the requirements we have identified for
@@ -190,9 +200,10 @@ between the correctness proofs of various components,
 covering a range of abstraction levels.
 %XXX anonymize in submission
 To~this end,
-\textcolor{red}{we} have proposed
+\anon{}{we have proposed}
 a synthesis of game semantics and the refinement calculus
 \cite{rbgs-cal}
+\anon{has been proposed}{}
 as a common setting
 in which various
 certified component could be embedded and
@@ -248,7 +259,7 @@ the horizon is a completed program to be run as a user-level process.
 %at various levels of abstraction.
 %In the context of the verification of heterogenous systems
 %where software and hardware component
-This becomes a limitation when we consider heterogenous systems.
+This becomes a limitation in the context of heterogenous systems.
 
 For example,
 consider the problem of verifying
@@ -282,14 +293,14 @@ would be specified as additional components:
   \sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}
 \]
 By reasoning about their interaction,
-it should be possible to establish a relationship between
+it would be possible to establish a relationship between
 the overall specification $\sigma$ and
 the composition
 $\sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC}$.
 Then a \emph{compiler of certified components}
 would help us transport specifications and proofs
-obtained with respect to the C implementation of the driver code
-to the lower-level system operating at the assembly level:
+obtained with respect to the driver's C code
+to the compiled code operating at the level of assembly:
 \[
   \sigma' : \kw{Net} \rightarrow \mathcal{A} \,.
 \]
@@ -373,15 +384,16 @@ all of these requirements simultaneously.
 We generalize CompCert semantics
 to express interactions between components (\S\ref{sec:sem}),
 using \emph{language interfaces}
-to describe the form of these interactions (\S\ref{sec:sem:open}),
+to describe the form of these interactions
 and \emph{simulation conventions}
-to relate the language interfaces
-of the source and target programs (\S\ref{sec:sem:ref}).
-The intended behavior of
+to describe the correspondance between the interfaces
+of the source and target language.
+The behavior of
 composite programs is specified by a
 \emph{horizontal composition} operator (\S\ref{sec:sem:linker}),
 which is shown to be correctly implemented
-by the existing linking operator for assembly programs.
+by the existing linking operator for assembly programs
+(\S\ref{sec:sem:ref}).
 
 To facilitate reasoning about
 simulation conventions,
@@ -609,18 +621,17 @@ of the programming language PCF \cite{pcfajm,pcfho}.
 %In this section,
 %we give an overview of this line of research
 %and how it can be applied in the context of CompCert.
-
 Typically,
 game semantics interpret
 types as two-player games
 and terms as strategies for these games.
-Games specify the form of the interaction
-between a program component of the corresponding type
+Games describe the form of the interaction
+between a program component %of the corresponding type
 (the \emph{system})
 and its execution context
 (the \emph{environment}).
 Strategies
-indicate which move the system plays
+specify which move the system plays
 for all relevant positions in the game.
 
 Positions are usually identified with sequences of moves,
@@ -675,9 +686,8 @@ will rely on the following constructions.
 %While the game $\mathcal{C}$
 %is extremely simple,
 The expressive power of game semantics
-comes from the way in which complex games can be derived from simple ones,
+comes from the ways in which complex games can be derived from simple ones,
 and used to interpret compound types.
-
 For example,
 in the game $A \times B$
 the environment initially chooses whether to play
@@ -702,9 +712,9 @@ a language interface is defined as follows.
 
 \begin{definition} \label{def:li}
 A \emph{language interface} is a tuple
-$A = \langle M_A^\que, M_A^\ans \rangle$, where
-$M_A^\que$ is a set of \emph{questions} and
-$M_A^\ans$ is a set of \emph{answers}.
+$A = \langle A^\que, A^\ans \rangle$, where
+$A^\que$ is a set of \emph{questions} and
+$A^\ans$ is a set of \emph{answers}.
 \end{definition}
 
 We focus on games of the form $A \rightarrow B$,
@@ -713,15 +723,15 @@ In this setting,
 the valid positions of $A \rightarrow B$ are
 sequences of the form:
 \[
-  q \cdot \underline{x_1} \cdot y_1 \cdots
-          \underline{x_k} \cdot y_k \cdot \underline{r} \in
-  M_B^\que ( {M_A^\que} M_A^\ans )^* {M_B^\ans}
+  q \cdot \underline{m_1} \cdot n_1 \cdots
+          \underline{m_k} \cdot n_k \cdot \underline{r} \in
+  B^\que ( {A^\que} A^\ans )^* {B^\ans}
 \]
 and all their prefixes.
 This describes a component responding to
 the initial call $q$ by
-performing a series of external calls $x_1 \ldots x_k$
-yielding the results $y_1 \ldots y_k$
+performing a series of external calls $m_1 \ldots m_k$
+yielding the results $n_1 \ldots n_k$
 and finally returning from the top-level call
 with the result $r$.
 
@@ -767,9 +777,11 @@ uses plays of the form:
   \mathsf{sqr}(3) \cdot
     \underline{\mathsf{mult}(3,3)} \cdot 9 \cdot \underline{9}
 \end{equation}
-This corresponds to the game $\mathcal{L} \rightarrow \mathcal{L}$
+This corresponds to the game
+$\tilde{\mathcal{C}} \rightarrow \tilde{\mathcal{C}}$
 for a simple language interface
-$\mathcal{L} := \langle \kw{ident} \times \kw{val}^*, \kw{val} \rangle$.
+$\tilde{\mathcal{C}} :=
+ \langle \kw{ident} \times \kw{val}^*, \kw{val} \rangle$.
 Questions carry the name of the function to invoke
 and argument values;
 answers carry the value returned by the function.
@@ -781,8 +793,8 @@ $R := \{ \kw{\%eax}, \kw{\%ebx}, \kw{\%ecx},
 where $\kw{\%pc}$ denotes the program counter,
 together with a stack of pending return addresses.
 The corresponding language interface can be defined as
-$\mathcal{L}' :=
- \langle \kw{val}^R \times \kw{val}^*,
+$\tilde{\mathcal{A}} :=
+ \langle \kw{val}^R \times \kw{val}^*, \,
          \kw{val}^R \times \kw{val}^* \rangle$.
 A possible execution of \texttt{B.s}
 is described by the play:
@@ -793,7 +805,7 @@ is described by the play:
       \kw{\%eax} & 42 \\
       \kw{\%ebx} & 3 \\
       \kw{\%ecx} & 7 \\
-      \kw{stack} & x \cdot \vec{k}
+      \multicolumn{2}{c}{\textit{stack: } \hfill x \cdot \vec{k}}
     \end{array}
   \right] \cdot
   \underline{
@@ -803,7 +815,7 @@ is described by the play:
         \kw{\%eax} & 42 \\
         \kw{\%ebx} & 3 \\
         \kw{\%ecx} & 3 \\
-        \kw{stack} & \kw{L1} \cdot x \cdot \vec{k}
+        \multicolumn{2}{c}{\textit{stack: } \: \kw{L1} \cdot x \cdot \vec{k}}
       \end{array}
     \right]} \cdot
   \left[
@@ -812,7 +824,7 @@ is described by the play:
       \kw{\%eax} & 9 \\
       \kw{\%ebx} & 3 \\
       \kw{\%ecx} & 3 \\
-      \kw{stack} & x \cdot \vec{k}
+      \multicolumn{2}{c}{\textit{stack: } \hfill x \cdot \vec{k}}
     \end{array}
   \right] \cdot
   \underline{
@@ -822,7 +834,7 @@ is described by the play:
         \kw{\%eax} & 9 \\
         \kw{\%ebx} & 3 \\
         \kw{\%ecx} & 3 \\
-        \kw{stack} & \vec{k}
+        \multicolumn{2}{c}{\textit{stack: } \hfill \vec{k}}
       \end{array}
     \right]}
 \end{equation}
@@ -886,15 +898,15 @@ The semantic model of CompCert corresponds to
 the game $\mathcal{E} \rightarrow \mathcal{W}$.
 Programs are run without any parameters,
 and produce a single integer denoting their exit status.
-This is described by the game $\mathcal{W}$
-whose plays are $\{ * \cdot \underline{r} \mid r \in \kw{int} \}$
-(we write $\mathbbm{1} := \{ * \}$ for the unit set
-and $\kw{int}$ for machine integers).
+This is described by the language interface
+$\mathcal{W} := \langle \mathbbm{1}, \kw{int} \rangle$,
+where $\mathbbm{1} = \{ * \}$ is the unit set
+and $\kw{int}$ is the set of machine integers.
 Interaction with the environment
 is captured as a trace of events from a predefined set,
-each with output and input components.
+each with an output and input component.
 These events,
-described by the game $\mathcal{E}$,
+described by the language interface $\mathcal{E}$,
 correspond to system calls and accesses to volatile variables.
 
 \paragraph{Semantic model} %{{{
@@ -1005,7 +1017,7 @@ because they do not suffer from the same problems
 in the presence of mixed-variance constructions,
 such as the function arrow $\rightarrow$ \cite{lrp}.
 In the context of typed languages,
-this means type-indexed logical relations
+this means that type-indexed logical relations
 can be defined by recursion over the structure of types.
 
 %Logical relations have found widespread use in programming language theory.
@@ -1023,7 +1035,7 @@ can be defined by recursion over the structure of types.
 %all terms of a given parametric type must satisfy.
 
 Logical relations can be of any arity,
-but here
+but
 we restrict our attention to
 binary logical relations.
 Given an algebraic structure $\mathcal{S}$,
@@ -1077,13 +1089,13 @@ In this framework, the proposition (\ref{eqn:monoidrel}) can be reformulated as:
 
 \begin{example} \label{ex:simrel}
 Simulation relations can be seen as
-logical relations between transition systems.
+logical relations of transition systems.
 Consider the simple transition systems
 $\alpha : A \rightarrow \mathcal{P}(A)$ and
 $\beta : B \rightarrow \mathcal{P}(B)$.
 A simulation relation $R \in \mathcal{R}(A, B)$
 satisfies the property:
-\begin{equation}
+\[
   \begin{tikzcd}
     s_1 \arrow[r, "\alpha"]
         \arrow[d, dash, "R"'] &
@@ -1095,11 +1107,12 @@ satisfies the property:
   \label{eqn:simrel}
   \begin{array}{r@{\,.\,}l}
     \forall s_1 \, s_2 \, s_1' &
-      \alpha(s_1) \ni s_1' \wedge s_1 \mathrel{R} s_2 \Rightarrow \\
+      \alpha(s_1) \ni s_1' \wedge s_1 \mathrel{R} s_2 \Rightarrow
+    \\[0.25ex]
     \exists s_2' &
       \beta(s_2) \ni s_2' \wedge s_1' \mathrel{R} s_2'
   \end{array}
-\end{equation}
+\]
 Using the relators in Fig.~\ref{fig:relators},
 we can express the same property
 concisely and compositionally as:
@@ -1208,11 +1221,11 @@ to define simulation conventions as follows.
 
 \begin{definition} \label{def:simconv} % Simulation convention %{{{
 A \emph{simulation convention} between the language interfaces
-$A_1 = \langle M_{A_1}^\que, M_{A_1}^\ans \rangle$ and
-$A_2 = \langle M_{A_2}^\que, M_{A_2}^\ans \rangle$
+$A_1 = \langle A_1^\que, A_1^\ans \rangle$ and
+$A_2 = \langle A_2^\que, A_2^\ans \rangle$
 is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$
-with $\mathbb{R}^\que \in \mathcal{R}_W(M_{A_1}^\que, M_{A_2}^\que)$
-and $\mathbb{R}^\ans \in \mathcal{R}_W(M_{A_1}^\ans, M_{A_2}^\ans)$.
+with $\mathbb{R}^\que \in \mathcal{R}_W(A_1^\que, A_2^\que)$
+and $\mathbb{R}^\ans \in \mathcal{R}_W(A_1^\ans, A_2^\ans)$.
 We will write $\mathbb{R} : A_1 \Leftrightarrow A_2$.
 In particular,
 for a language interface $A$,
@@ -1234,12 +1247,14 @@ $\mathbb{R}_B : B_1 \Leftrightarrow B_2$
 are simulation conventions
 relating the corresponding language interfaces.
 We write
-$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$
-(notations are summarized in Table~\ref{tbl:notations}).
+$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
+
+Table~\ref{tbl:notations} presents a summary of notations.
+%(notations are summarized in Table~\ref{tbl:notations}.
 Simulation conventions
 will often be derived from
 more elementary relations,
-following the internal structure of questions, answers, and states
+following the internal structure of questions and answers
 (see \S\ref{sec:cklr}).
 
 \begin{example} %{{{
@@ -1247,7 +1262,7 @@ The calling convention we used in Example~\ref{ex:abc}
 can be formalized as a simulation convention
 $\mathbb{L} :=
   \langle \kw{val}^*, \mathbb{L}^\que, \mathbb{L}^\ans \rangle :
-    \mathcal{L} \Leftrightarrow \mathcal{L}'$.
+    \tilde{\mathcal{C}} \Leftrightarrow \tilde{\mathcal{A}}$.
 We use the set of worlds $\kw{val}^*$
 to remember the state of the stack between
 assembly-level questions and their corresponding answers.
@@ -1276,10 +1291,9 @@ the beginning of the function $f$,
 and the registers $\kw{\%ebx}$ and $\kw{\%ecx}$
 to contain the first and second arguments (if applicable).
 Other registers may contain arbitrary values.
-Likewise,
-the stack $x \vec{k}$ has no corresponding components in the C question,
-however the assembly answer is expected to pop the return address
-and branch to it, setting the program counter $\kw{\%pc}$ accordingly.
+The stack $x \vec{k}$ has no corresponding components in the C question,
+however the assembly answer is expected to have popped the return address
+and branched to it, setting the program counter $\kw{\%pc}$ accordingly.
 In addition,
 the C-level return value $v'$ must be stored
 in the register $\kw{\%eax}$.
@@ -1332,8 +1346,7 @@ in the register $\kw{\%eax}$.
 
 The expressive power of simulation conventions
 makes the adaptation of existing correctness proofs
-for the various passes of CompCert
-fairly straightforward (see \S\ref{sec:passes}).
+for the various passes of CompCert straightforward.
 Instead of forcing all passes into a single one-size-fits-all mold,
 we can choose conventions matching
 the simulation relation and invariants
@@ -1470,6 +1483,7 @@ then linked together
 into an executable binary
 loaded by the system.
 
+\begin{optional}
 \begin{figure} % fig:process {{{
     \begin{tikzpicture}[scale=1.25]
         \tt
@@ -1506,6 +1520,7 @@ loaded by the system.
     \label{fig:process}
 \end{figure}
 %}}}
+\end{optional}
 
 %Finally, the system loads the executable into memory
 %where initialization code sets up the process
@@ -1513,16 +1528,18 @@ loaded by the system.
 %Since CompCert is a compiler from C to assembly,
 %but does not include an assembler or linker,
 The model used for verifying CompCert accounts for
-this in the way
-depicted in Fig.~\ref{fig:process}.
+this in the following way%
+\begin{optional}
+, depicted in Fig.~\ref{fig:process}%
+\end{optional}.
 %The lowest-level objects considered
 %are CompCert \kw{Asm} programs.
 Linking is approximated by
 merging programs, seen as sets of global definitions.
 The execution
-of a program composed of modules
+of a program composed of the translation units
 $\texttt{M1.c} \ldots \texttt{M$n$.c}$
-which have been compiled to
+which compile to
 $\texttt{M1.s} \ldots \texttt{M$n$.s}$
 is modeled as:
 \[
@@ -1563,7 +1580,7 @@ for the language $\kw{Clight}$,%
 allowing the desired behavior to be specified as:
 \[
     L_\kw{src} :=
-    \kw{Clight}(\texttt{M1.c} + \cdots + \texttt{Mn.c}) \,.
+    \kw{Clight}(\texttt{M1.c} + \cdots + \texttt{M$n$.c}) \,.
 \]
 The correctness of CompCert
 can then be stated as $L_\kw{src} \refby L_\kw{tgt}$.
@@ -1694,22 +1711,23 @@ we gloss over the technical details
 associated with modular arithmetic and overflow constraints.
 
 \begin{figure} % fig:mm (The CompCert memory model) {{{
-  \begin{align*}
-    v \in \kw{val} ::= {} &
+  \small
+  \[
+    v \in \kw{val} ::=
           \kw{undef} \alt
           \kw{int}(n) \alt
-          \kw{long}(n) \alt \\ &
+          \kw{long}(n) \alt
           \kw{float}(x) \alt
           \kw{single}(x) \alt
           \kw{vptr}(b, o)
-  \end{align*}
-  \begin{align*}
-    (b, o) &\in \kw{ptr} =
+  \]
+  \[
+    (b, o) \in \kw{ptr} =
       \kw{block} \times \mathbb{Z}
-    \\
-    (b, l, h) &\in \kw{ptrrange} =
+    \qquad
+    (b, l, h) \in \kw{ptrrange} =
       \kw{block} \times \mathbb{Z} \times \mathbb{Z}
-  \end{align*}
+  \]
   \begin{align*}
     \kw{alloc} &:
       \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
@@ -1725,9 +1743,9 @@ associated with modular arithmetic and overflow constraints.
     \\
     \kw{store} &:
       \kw{mem} \rightarrow \kw{ptr} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{mem})
-    \\
-    \kw{perm} &:
-      \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
+%    \\
+%    \kw{perm} &:
+%      \kw{mem} \rightarrow \kw{ptr} \rightarrow \mathcal{P}(\kw{perm})
   \end{align*}
   \caption{Outline of the CompCert memory model}
   \label{fig:mm}
@@ -1755,10 +1773,8 @@ represents an undefined value.
 Simulation relations
 often allow $\kw{undef}$
 to be refined into a more concrete value;
-we write value refinement as:
-\[
-    {\vref} := \{(\kw{undef}, v), (v, v) \mid v \in \kw{val}\} \,.
-\]
+we write value refinement as
+${\vref} := \{(\kw{undef}, v), (v, v) \mid v \in \kw{val}\}$.
 
 The memory model is shared by all of the languages in CompCert.
 States always consist of
@@ -1773,9 +1789,9 @@ which may contain additional values ($\kw{val}$).
 \subsection{Open semantics in CompCertO} \label{sec:sem:open} %{{{
 
 The memory model also plays a central role
-when describing interactions between program modules.
-Under our approach to module semantics,
-the memory state is passed back-and-forth
+when describing interactions between program components.
+In our approach, %to compositional semantics,
+the memory state is passed %back-and-forth
 alongside all control transfers.
 
 \paragraph{Language interfaces} %{{{
@@ -1808,11 +1824,11 @@ alongside all control transfers.
 \end{table}
 %}}}
 
-Our models of cross-module interactions in CompCert languages
+Our models of cross-component interactions in CompCert languages
 are shown in Table~\ref{tbl:li}.
 At the source level ($\mathcal{C}$),
 questions consist of
-the address of the invoked function
+the address of the function being invoked
 ($\mathit{vf} \in \kw{val}$),
 its signature
 ($\mathit{sg} \in \kw{signature}$),
@@ -1834,9 +1850,9 @@ and the state of the memory at the point of exit.
 %asking questions and expecting answers
 %in the left-hand side $\mathcal{C}$ game.
 This language interface is used for \kw{Clight} and
-for the majority of CompCert's intermediate languages,
-including \kw{RTL} which is used to perform
-most of the compiler's optimizations.
+for the majority of CompCert's intermediate languages.
+%including \kw{RTL} which is used to perform
+%most of the compiler's optimizations.
 
 As we move towards lower-level languages,
 this is reflected in the language interfaces we use:
@@ -1854,6 +1870,7 @@ which is reflected in its interface $\mathcal{A}$.
 The interface of whole-program execution
 can also be described in this setting:
 the language interface $\mathbf{1}$ contains no move;
+per \S\ref{sec:mainideas:compcerto},
 the interface $\mathcal{W}$ has a single trivial question $*$,
 and the answers $r \in \kw{int}$
 give the exit status of a process.
@@ -1884,17 +1901,17 @@ is a tuple $L = \langle S, \rightarrow, D, I, X, Y, F \rangle$.
 The relation
 ${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$ is
 a \emph{transition relation} on the set of states $S$.
-The set $D \subseteq M_B^\que$ specifies which
+The set $D \subseteq B^\que$ specifies which
 questions the component accepts;
 $I \subseteq D \times S$ then
 assigns to each one a set of \emph{initial states}.
-$F \subseteq S \times M_B^\ans$
+$F \subseteq S \times B^\ans$
 designates \emph{final states} together with corresponding answers.
 External calls are specified by
-$X \subseteq S \times M_A^\que$,
+$X \subseteq S \times A^\que$,
 which designates \emph{interacting states} together with
 a question of $A$, and
-$Y \subseteq S \times M_A^\ans \times S$,
+$Y \subseteq S \times A^\ans \times S$,
 which is used to select a \emph{resumption state}
 to follow an interacting state
 based on the answer provided by the environment.
@@ -1908,7 +1925,7 @@ with interactions over the game $A$
 as a new source of observable actions.
 The main reason for treating
 events $e \in \mathbb{E}$ and
-external calls $m n \in M_A^\que \times M_A^\ans$
+external calls $m n \in A^\que A^\ans$
 differently is that
 while events are expected to be the same
 between the source and target programs,
@@ -1972,8 +1989,8 @@ we need to express the external behavior
 of a collection of components
 in terms of the behaviors of
 individual components.
-This section describes the
-operator we use for this purpose.
+The operator we use for this purpose
+can be described in the following way.
 
 Consider the components $L_1, L_2 : A \twoheadrightarrow A$.
 When $L_1$ is running and performs an external call
@@ -1992,6 +2009,8 @@ Therefore,
 in addition to the state of the active component,
 we need to maintain a \emph{stack} of suspended states
 for component instances awaiting resumption.
+The corresponding transition system
+is described in Fig.~\ref{fig:hcomp}.
 
 \begin{figure} % fig:hcomp {{{
   \small
@@ -2068,7 +2087,8 @@ for component instances awaiting resumption.
   \end{minipage}
     \caption{Horizontal composition of open semantics.
       The state is a stack of alternating activations
-      of the two components.
+      of the two components,
+      initialized as a singleton ($\kw{inc}^\que$).
       During normal execution ($\kw{run}$),
       the top-level state is updated.
       Calls to functions provided by the other component ($\kw{push}$)
@@ -2366,9 +2386,9 @@ into the verification of its parts.
 To establish the correctness of the linked assembly program,
 we can then use the following result.
 
-\begin{theorem}[Correctness of linking] \label{thm:asmlinking} %{{{
-For \kw{Asm} programs,
-linking is a correct implementation of
+\begin{theorem} \label{thm:asmlinking} %{{{
+Linking \kw{Asm} programs
+yields a correct implementation of
 horizontal composition:
 \[
     \forall p_1 p_2 \,.\,
@@ -2405,15 +2425,17 @@ See \texttt{x86/AsmLinking.v} in the Coq development.
 
 \section{Simulation algebra} %{{{
 
-We now describe the way in which
-the simulation proofs of CompCertO
-are combined into
-a whole-compiler simulation.
+Now that we have described the structures we use
+to model and relate the execution of program components,
+we shift our attention to the techniques we use
+to derive a correctness statement for the whole compiler
+from the correctness properties of each pass.
 
 \subsection{Vertical composition} %{{{
 
-The first step is to compose
-the simulations of successive passes.
+The first step is to combine the
+simulation properties for successive compilation passes
+into a single one.
 The convention used by the resulting simulation
 can be described as follows.
 
@@ -2489,7 +2511,7 @@ in the file \texttt{common/Smallstep.v}.
 
 %}}}
 
-\subsection{Refinement} %{{{
+\subsection{Refinement of simulation conventions} %{{{
 
 As discussed in \S\ref{sec:mainideas:simalg},
 the composite simulation conventions obtained
@@ -2497,14 +2519,21 @@ when we compose the passes of CompCertO
 are not immediately satisfactory.
 In the remainder of this section,
 we introduce the algebraic infrastructure we use
-to rewrite them into an acceptable form.
-At its core is
+to rewrite them into an acceptable form,
+centered around
 a notion of refinement for simulation conventions.
+
 A refinement $\mathbb{R} \scref \mathbb{S}$
 captures the idea that the convention $\mathbb{S}$
-is more general than the convention $\mathbb{R}$,
+is more general than $\mathbb{R}$,
 so that any simulation accepting $\mathbb{S}$ as its
-incoming convention will accept $\mathbb{R}$ as well.
+incoming convention can accept $\mathbb{R}$ as well.
+The shape of the symbol illustrates its meaning:
+related questions of $\mathbb{R}$ can be transported to
+related question of $\mathbb{S}$;
+when we get a response, the
+related answers of $\mathbb{S}$ can be transported back to
+related answers of $\mathbb{R}$.
 
 \begin{definition}[Simulation convention refinement] %{{{
 Given two simulation conventions
@@ -2540,7 +2569,7 @@ $\mathbb{T} : A_3 \Leftrightarrow A_4$,
 the following properties hold:
 \begin{gather*}
   ({\cdot}) :: {{\scref} \times {\scref} \rightarrow {\scref}}
-  \\
+  \qquad
   (\mathbb{R} \cdot \mathbb{S}) \cdot \mathbb{T} \equiv
     \mathbb{R} \cdot (\mathbb{S} \cdot \mathbb{T})
   \qquad
@@ -2548,17 +2577,10 @@ the following properties hold:
   \kw{id} \cdot \mathbb{R} \equiv
   \mathbb{R}
 \end{gather*}
-\end{theorem}
-%}}}
-
-%The following theorem states the relationship between
-%simulation convention refinement and forward simulations.
-
-\begin{theorem} %{{{
-For
+In addition, when
 $\mathbb{R} \scref \mathbb{R}' : A_1 \Leftrightarrow A_2$ and
 $\mathbb{S}' \scref \mathbb{S} : B_1 \Leftrightarrow B_2$,
-the following holds for all
+for all
 $L_1 : A_1 \twoheadrightarrow B_1$ and $L_2 : A_2 \twoheadrightarrow B_2$:
 \[
       L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2
@@ -2577,7 +2599,8 @@ the passes \kw{Cshmgen}, \kw{Renumber}, \kw{Linearize},
 restrict the source and target
 memory states and values to be identical.
 Their simulation proofs require very few changes
-and can be assigned the convention $\kw{id} \twoheadrightarrow \kw{id}$.
+and can be assigned the convention $\kw{id} \twoheadrightarrow \kw{id}$
+(see Table~\ref{tbl:passes}).
 The properties above ensure that these passes
 have no impact on the overall simulation convention
 of CompCertO.
@@ -2600,7 +2623,7 @@ The details of $\kw{inj}$ and $\kw{injp}$
 are discussed in \S\ref{sec:cklr},
 but are not an essential part of the technique.
 Schematically,
-by pre- and post- composing injection passes
+by pre- and post-composing injection passes
 with self-simulations of types
 $\kw{injp}^* \twoheadrightarrow \kw{injp}^*$ and
 $\kw{inj} \twoheadrightarrow \kw{inj}$,
@@ -2613,7 +2636,7 @@ we obtain the simulation conventions:
 The property $\kw{injp}^* \cdot \kw{injp} \scref \kw{injp}^*$
 on the left-hand side,
 and the idempotency of $\kw{inj}$
-on the right-hand side
+on the right-hand side (Thm.~\ref{thm:cklr-props})
 allow us to rewrite the above into
 a symmetric simulation convention.
 
@@ -2680,7 +2703,7 @@ in \texttt{common/CallconvAlgebra.v}.
     Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC} \\
     \hline
     \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
-    \emph{Thm.~\ref{thm:param}} &
+    \emph{Thm.~\ref{thm:cklr-props}} &
       $(\kw{ext} + \kw{injp})^*$ &
       $(\kw{ext} + \kw{injp})^*$ \\
     \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -1 & (-0\%) \\
@@ -2699,7 +2722,7 @@ in \texttt{common/CallconvAlgebra.v}.
     $\kw{Tailcall}^?$ & $\kw{ext}$ & $\kw{ext}$ & +1 & (+0\%) \\
     \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ \\
     \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -12 & (-6\%) \\
-    \emph{Thm.~\ref{thm:param}} &
+    \emph{Thm.~\ref{thm:cklr-props}} &
       $\kw{inj}$ &
       $\kw{inj}$ \\
     $\kw{Constprop}^?$ & $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ \\
@@ -2722,6 +2745,7 @@ in \texttt{common/CallconvAlgebra.v}.
     \hline
     \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +43 & (+4\%) \\
     \hline
+    \multicolumn{3}{r}{Total:} & +XXX & (+X\%)
   \end{tabular}
   \caption{Languages and passes of CompCertO.
     Passes are grouped by their source language.
@@ -2786,8 +2810,7 @@ Likewise, by properties of $\kw{inj}$ and $\kw{ext}$,
 their incoming simulation conventions
 can be folded into $\kw{inj}$
 to obtain the overall incoming convention $\mathbb{C}$.
-For details, please refer to the appendix
-and \texttt{driver/Compiler.v}.
+For details, see \texttt{driver/Compiler.v}.
 \end{proof}
 \end{theorem}
 %%}}}
@@ -2796,8 +2819,8 @@ and \texttt{driver/Compiler.v}.
 
 \subsection{Compositional compilation and verification} \label{sec:cver} %{{{
 
-Recalling Fig.~\ref{fig:process},
-consider the units
+%Recalling Fig.~\ref{fig:process},
+Consider the translation units
 $\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
 compiled and linked to
 $\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
@@ -2824,8 +2847,9 @@ suppose we wish to verify that the overall program
 satisfies a specification $\Sigma$,
 also expressed as a transition system
 for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
-We must first show that $\Sigma$ can be decomposed
-along the lines of the program's components:
+We must first decompose $\Sigma$
+%along the lines of the program's components:
+into:
 \[
     \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
     \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
@@ -2833,10 +2857,9 @@ along the lines of the program's components:
 Then for each module, we prove that
 $\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
 This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
-to establish:
-\[
-    \Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{M.s}) \,.
-\]
+to establish the correctness property
+$\Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+        \kw{Asm}(\mathtt{M.s})$.
 
 Note that Eqn.~\ref{eqn:sepcomp} can be established
 as long as the property
@@ -2866,7 +2889,7 @@ A proof involving an arbitrary assembly context
 invoking a function compiled by CompCertO
 must establish that the call is performed
 according to the C calling convention.
-Then the compiler's correctness theorem
+Then Thm.~\ref{thm:compc}
 can be used to reason about the behavior of the call
 in terms of the semantics of the source code
 or a $\mathcal{C}$ specification that it satisfies.
@@ -2876,6 +2899,14 @@ or a $\mathcal{C}$ specification that it satisfies.
 %}}}
 
 \section{Logical relations for CompCert} \label{sec:cklr} %{{{
+
+In the next few sections,
+we examine the correctness properties
+and simulation conventions
+at the level of individual passes.
+In this section,
+we focus on simulations which use
+$\kw{ext}$, $\kw{inj}$ and $\kw{injp}$.
 
 The questions, answers and states
 used to describe the semantics of CompCert languages all contain
@@ -3097,9 +3128,9 @@ if the properties shown in Fig.~\ref{fig:cklr-def} are satisfied.
       \kw{store} ::
         &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow R^\kw{val} \rightarrow
         \kw{option}^\le(\Diamond R^\kw{mem})
-      \\
-      \kw{perm} ::
-        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow {\subseteq}
+%      \\
+%      \kw{perm} ::
+%        &\Vdash R^\kw{mem} \rightarrow R^\kw{ptr} \rightarrow {\subseteq}
   \end{align*}
   \caption{Defining properties of CKLRs.
     Note the correspondance with
@@ -3269,7 +3300,7 @@ The convention \kw{inj} can be used for incoming calls,
 but it is insufficient for outgoing calls.
 
 Consider the \kw{SimplLocals} pass,
-which removes local variables whose addresses are not taken
+which removes some local variables %whose addresses are not taken
 from the memory.
 The corresponding values are instead stored
 as temporaries in the target function's local environment,
@@ -3365,11 +3396,10 @@ Several passes of CompCert
 rely on the preservation of invariants
 by their source program.
 This situation is illustrated in Fig.~\ref{fig:fsim-inv}:
-if we show that the semantics of a given language
-preserves a given invariant,
-then the associated properties can be used to assist
+when the semantics of a language preserves an invariant,
+the preservation properties can assist
 in proving forward simulations
-using the language as their source.
+which use the language as their source.
 This allows us to decompose the simulation proof,
 and in the case of $\kw{RTL}$
 the preservation proofs can be reused for multiple passes.
@@ -3412,7 +3442,7 @@ is a tuple
 $\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$,
 where $W$ is a set of worlds
 and $\mathbb{P}^\que, \mathbb{P}^\ans$
-are families of predicates respectively on $M_A^\que, M_A^\ans$
+are families of predicates respectively on $A^\que, A^\ans$
 indexed by $W$.
 \end{definition}
 %}}}
@@ -3868,7 +3898,7 @@ This is expressed as:
 This concludes the exposition of the techniques
 used in CompCertO.
 In this section,
-we discuss the significance of our result.
+we discuss the significance of our results.
 To place them in context,
 we first summarize some related work.
 
