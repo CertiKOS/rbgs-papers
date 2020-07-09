@@ -52,6 +52,32 @@
 \newcommand{\refby}{\preceq}
 \newcommand{\scref}{\sqsupseteq}
 
+% Pointers for justified sequences %{{{
+
+% Parameters
+\newcommand{\pshift}{1.6ex}
+\newcommand{\pcdist}{2.5}
+\newcommand{\pcangle}{60}
+
+% Pointer hook
+\newcommand{\ph}[1]{%
+  \tikz[remember picture]{\coordinate (#1);}}
+
+% Pointer to
+\newcommand{\pt}[1]{%
+  \rule{0pt}{1.4em}%
+  \tikz[remember picture, overlay]{
+    \draw[->,gray]
+      let \p{dest} = (#1),
+          \n1 = {ln(veclen(\x{dest}, \y{dest}) + 1)},
+          \p1 = ($(0,0)+(0,\pshift)$),
+          \p4 = ($(#1)+(0,\pshift)$),
+          \p2 = ($(\p1)!\n1*\pcdist!-\pcangle:(\p4)$),
+          \p3 = ($(\p4)!\n1*\pcdist!+\pcangle:(\p1)$) in
+        (\p1) .. controls (\p2) and (\p3) .. (\p4);}}
+
+%}}}
+
 \ifopt
   \newcommand{\anon}[2]{#2}
   \newcommand{\opt}[2]{#1}
@@ -311,9 +337,6 @@ each of these requirements is fulfilled
 by some exisiting CompCert extension,
 however none satisfies them all.
 %
-This paper introduces CompCertO,
-the first extension of CompCert to address
-all of these requirements simultaneously.
 
 %With each step,
 %the user can gain more confidence in the reliability of CompCert:
@@ -332,28 +355,28 @@ all of these requirements simultaneously.
 
 \begin{table} % tbl:compcerts {{{
   \small
-  \begin{tabular}{l@{\qquad}c@{\qquad}c@{\:}c@{\:}c@{\:}c@{\:}c}
+  \begin{tabular}{l@{\qquad}r@{}l@{\qquad}c@{\:}c@{\:}c@{\:}c@{\:}c}
     \hline
     Variant & Semantic model & (1) & (2) & (3) & (4) & (5) \\
     \hline
     (Sep)CompCert \cite{compcert,sepcompcert} &
       $\chi : \mathbf{1} \twoheadrightarrow \mathcal{C}
-       \vdash \mathbf{1} \twoheadrightarrow \mathcal{W}$ &
+      \vdash \mathbf{1} $ & ${} \twoheadrightarrow \mathcal{W}$ &
       & & & $\checkmark$ & $\checkmark$ \\
     CompCertX \cite{popl15} &
-      $\chi : \mathbf{1} \twoheadrightarrow \mathcal{C} %\times \mathcal{A}
+      $\chi : \mathbf{1} \twoheadrightarrow \mathcal{C} \times \mathcal{A}
        \vdash
-       \mathbf{1} \twoheadrightarrow \mathcal{C} $%\times \mathcal{A}$
-      & & & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
+       \mathbf{1} $ & ${} \twoheadrightarrow \mathcal{C} \times \mathcal{A}$
+      & & & $\sim$ & $\checkmark$ & $\checkmark$ \\
     Compositional CompCert \cite{compcompcert} &
-      $\mathcal{C} \rightarrow \mathcal{C}$ &
+      $\mathcal{C}$ & ${} \twoheadrightarrow \mathcal{C}$ &
       $\checkmark$ & $\checkmark$ & & & \\
     CompCertM \cite{compcertm} &
-      $\mathcal{C} \times \mathcal{A} \twoheadrightarrow
+      $\mathcal{C} \times \mathcal{A} $ & ${}\twoheadrightarrow
        \mathcal{C} \times \mathcal{A}$ &
-      $\checkmark$ & & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
+      $\checkmark$ & & $\sim$ & $\checkmark$ & $\checkmark$ \\
     CompCertO &
-      $A \twoheadrightarrow A \quad
+      $A $ & ${}\twoheadrightarrow A \quad
       (A \in \mathbb{L})$ &
       $\checkmark$&$\checkmark$&$\checkmark$&$\checkmark$&$\checkmark$ \\
     \hline
@@ -361,6 +384,7 @@ all of these requirements simultaneously.
   \caption{Taxonomy of CompCert extensions
     in terms of the corresponding game models (\S\ref{sec:gamesem})
     and the requirements they satisfy (\S\ref{sec:compcertreq}).
+    See \S\ref{sec:rw} for details.
     The parameter $\chi : \mathbf{1} \twoheadrightarrow \mathcal{C}$
     pre-specifies the behavior of external functions,
     whereas games on the left of arrows
@@ -383,6 +407,14 @@ all of these requirements simultaneously.
 %}}}
 
 \subsection{Contributions} %{{{
+
+This paper introduces CompCertO,
+the first extension of CompCert to address
+all of these requirements simultaneously.
+
+[XXX highlight more technical novelties /
+ket point /
+secret ingredients]
 
 We generalize CompCert semantics
 to express interactions between components (\S\ref{sec:sem}),
@@ -722,8 +754,10 @@ In this setting,
 the valid positions of $A \rightarrow B$ are
 sequences of the form:
 \[
-  q \cdot \underline{m_1} \cdot n_1 \cdots
-          \underline{m_k} \cdot n_k \cdot \underline{r} \in
+  q\ph{qpos} \cdot
+    \underline{m_1}\ph{m1pos} \cdot \pt{m1pos}n_1 \cdots
+    \underline{m_k}\ph{m2pos} \cdot \pt{m2pos}n_k \cdot
+    \pt{qpos}\underline{r} \in
   B^\que ( {A^\que} A^\ans )^* {B^\ans}
 \]
 and all their prefixes.
@@ -734,6 +768,10 @@ The component performs a series of external calls $m_1 \ldots m_k$
 yielding the results $n_1 \ldots n_k$,
 and finally returns from the top-level call
 with the result $r$.
+\begin{color}{blue}
+Arrows illustrate the correspondance between questions and answers
+in a play of this form.
+\end{color}
 
 \begin{figure} % fig:abc {{{
   \figsize
@@ -1222,6 +1260,10 @@ and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
 
 The framework of Kripke relations allows us
 to define simulation conventions as follows.
+\begin{color}{blue}
+The worlds ensure that corresponding pairs of
+questions and answers are related consistently.
+\end{color}
 
 \begin{definition} \label{def:simconv} % Simulation convention %{{{
 A \emph{simulation convention} between the language interfaces
@@ -1275,7 +1317,7 @@ are defined by:
 %can be expressed using the rules:
 \[
   \AxiomC{$\mathit{rs}[\kw{pc}] = f$}
-  \AxiomC{$\vec{v} \text{ is a prefix of } \mathit{rs}[\kw{ebx}, \kw{ecx}]$}
+  \AxiomC{$\vec{v} \text{ is is contained in } \mathit{rs}[\kw{ebx}, \kw{ecx}]$}
   \BinaryInfC{$
     x \vec{k} \Vdash
     f(\vec{v}) \mathrel{\tilde{\mathbb{C}}^\que} \mathit{rs}@ x \vec{k}
@@ -2357,7 +2399,6 @@ the simulation property for the new components
 can be stitched in-between
 the two halves of the callers' simulation property
 described in Fig.~\ref{fig:fsim-ext}.
-This can be formalized as follows.
 
 \begin{theorem}[Horizontal composition of simulations] \label{thm:fsim-hcomp} %{{{
 For a simulation convention
@@ -2380,6 +2421,32 @@ in the Coq development.
 \end{proof}
 \end{theorem}
 %}}}
+
+\begin{color}{blue}
+One interesting and novel aspect of the proof
+is the way worlds are managed.
+Externally,
+only the worlds corresponding to incoming and outgoing
+questions and answers are observed.
+Internally,
+the proof of Thm.~\ref{thm:fsim-hcomp}
+maintains a \emph{stack} of
+simulation relations and worlds
+to relate the corresponding stack of activations
+in the source and target composite semantics.
+At cross-component calls,
+the world is chosen by the caller.
+The callee's simulation property
+guarantees that its eventual answers
+will be related at the exact same world,
+regardless of any nested calls and
+of the method used by the callee's (private) simulation relation
+to enforce this outcome.
+This allows us to encode CompCert's original and
+``instantaneous'' assumptions about external calls directly,
+and existing simulation proofs relying on them
+can be updated with almost no changes.
+\end{color}
 
 Horizontal composition of simulations
 allows us to decompose the verification of a complex program
