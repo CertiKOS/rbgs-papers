@@ -2441,21 +2441,10 @@ questions and answers are observed.
 Internally,
 the proof of Thm.~\ref{thm:fsim-hcomp}
 maintains a \emph{stack} of
-simulation relations and worlds
+worlds
 to relate the corresponding stack of activations
 in the source and target composite semantics.
-At cross-component calls,
-the world is chosen by the caller.
-The callee's simulation property
-guarantees that its eventual answers
-will be related at the exact same world,
-regardless of any nested calls and
-of the method used by the callee's (private) simulation relation
-to enforce this outcome.
-This allows us to encode CompCert's original and
-``instantaneous'' assumptions about external calls directly,
-and existing simulation proofs relying on them
-can be updated with almost no changes.
+See also \S\ref{sec:cklr-worlds}.
 
 Horizontal composition of simulations
 allows us to decompose the verification of a complex program
@@ -3479,46 +3468,7 @@ see \texttt{cc\_injp} in \texttt{common/LanguageInterface.v}).
 
 %}}}
 
-\subsection{Properties} \label{sec:cklr-props} %{{{
-
-Finally,
-we state some properties which are used
-to derive Thm.~\ref{thm:compc}.
-
-\begin{theorem} \label{thm:cklr-props}
-For all $\kw{Clight}$ and $\kw{RTL}$ programs:
-\begin{gather*}
-\forall \, p \,.\,
-  \kw{Clight}(p)
-  \le_{(\kw{ext} + \kw{injp})^* \twoheadrightarrow (\kw{ext} + \kw{injp})^*}
-  \kw{Clight}(p) \\
-\forall \, p \,.\,
-  \kw{RTL}(p)
-  \le_{\kw{inj} \twoheadrightarrow \kw{inj}}
-  \kw{RTL}(p)
-\end{gather*}
-In addition,
-the simulation relations derived from $\kw{ext}$ and $\kw{inj}$
-compose in the following way:
-\[
-  \kw{ext} \cdot \kw{inj} \equiv
-  \kw{inj} \cdot \kw{ext} \equiv
-  \kw{inj} \cdot \kw{inj} \equiv
-  \kw{inj} \,.
-\]
-\begin{proof}
-The first statement is derived from
-Thms.~\ref{thm:simk} and~\ref{thm:param};
-see \texttt{driver/Compiler.v}.
-For the second statement, see
-\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj}
-found under \texttt{cklr/}.
-\end{proof}
-\end{theorem}
-
-%}}}
-
-\subsection{Discussion} \label{sec:cklr-worlds} %{{{
+\subsection{Discussion: world transitions and compositionality} \label{sec:cklr-worlds} %{{{
 
 The $\kw{injp}$ convention
 illustrates a key novelty
@@ -3526,15 +3476,8 @@ in the granularity at which we deploy Kripke worlds.
 In previous work,
 Kripke worlds are usually assumed to evolve linearly
 with the execution.
-To enable horizontal compositionality,
-the challenge is then to construct worlds,
-accessibility relations, and simulation relations
-which are sophisticated enough
-to express ownership constraints
-such as the ones above
-which evolve and shift as the execution
-switches between components.
-Writing $s_i$ for internal states:
+Writing $s_i$ for internal states,
+this can be depicted as:
 \[
   q\ph{qh} \cdot
     \bpt{qh}\underline{s_1\ph{s1} \cdot
@@ -3547,28 +3490,38 @@ Writing $s_i$ for internal states:
     s_k\ph{sn} \cdot
     \bpt{sn}r}
 \]
+To enable horizontal compositionality,
+the challenge is then to construct worlds,
+accessibility relations, and simulation relations
+which are sophisticated enough
+to express ownership constraints
+like the ones discussed in \S\ref{sec:injp},
+which evolve and shift as the execution
+switches between components.
+
 In our open simulations,
 worlds can be deployed
 independently for incoming and outgoing calls,
-in a way which follows the structure of plays:
+in a way which follows the structure of plays,
+as depicted here:
 \[
   q\ph{qpos} \cdot
     \underline{m_1}\ph{m1pos} \cdot \ptc{m1pos}{black}n_1 \cdots
     \underline{m_k}\ph{m2pos} \cdot \ptc{m2pos}{black}n_k \cdot
     \ptc{qpos}{black}\underline{r}
 \]
-
 Internal steps
 are not part of a component's observable behavior,
 and individual simulation proofs are free to use any
-simulation relation which establishes
+simulation relation establishing
 the simulation convention at interaction sites.
-For instance,
-as explained in \S\ref{sec:sem:ref},
+
+Two examples illustrate this flexibility.
+First, as explained in \S\ref{sec:sem:ref},
 to handle nested cross-component calls,
 composite simulations
-\emph{internally} use a corresponding stack of worlds.
-A situation where $m_1$ and $m_2$ are internal
+use an internal stack of worlds.
+A situation where $m_1$ and $m_2$ are
 cross-component calls and $m_3$ is an external call
 can be described as:
 \[
@@ -3581,10 +3534,12 @@ can be described as:
     \pt{m1pos}n_1 \cdot
     \ptc{qpos}{black}r}
 \]
-In simulations which use CKLRs,
+Second,
+in simulations which use CKLRs,
 the simulation relation can simply
 be qualified as $w_B \Vdash \Diamond R$
-to allow the world to evolve as the execution progresses:
+to allow the world to evolve as the execution progresses.
+The corresponding shape is:
 \[
   q\ph{qh} \cdot
     \pt{qh}\underline{s_1\ph{s1} \cdot
@@ -3629,6 +3584,55 @@ since the stack frame is a \emph{new}
 memory block allocated after a function is called,
 these steps do maintain $\leadsto_\kw{injp}$
 with repect to the initial world.
+This allows us to encode CompCert's original and
+``instantaneous'' assumptions about external calls directly,
+and existing simulation proofs relying on them
+can be updated with almost no changes.
+
+Combined together,
+the two examples above are sufficient to express
+ownership constraints which require
+sophisticated permission maps in other approaches,
+by using conditions already present in CompCert.
+
+%}}}
+
+\subsection{Properties} \label{sec:cklr-props} %{{{
+
+Finally,
+we state some properties which are used
+to derive Thm.~\ref{thm:compc}.
+
+\begin{theorem} \label{thm:cklr-props}
+For all $\kw{Clight}$ and $\kw{RTL}$ programs:
+\begin{gather*}
+\forall \, p \,.\,
+  \kw{Clight}(p)
+  \le_{(\kw{ext} + \kw{injp})^* \twoheadrightarrow (\kw{ext} + \kw{injp})^*}
+  \kw{Clight}(p) \\
+\forall \, p \,.\,
+  \kw{RTL}(p)
+  \le_{\kw{inj} \twoheadrightarrow \kw{inj}}
+  \kw{RTL}(p)
+\end{gather*}
+In addition,
+the simulation relations derived from $\kw{ext}$ and $\kw{inj}$
+compose in the following way:
+\[
+  \kw{ext} \cdot \kw{inj} \equiv
+  \kw{inj} \cdot \kw{ext} \equiv
+  \kw{inj} \cdot \kw{inj} \equiv
+  \kw{inj} \,.
+\]
+\begin{proof}
+The first statement is derived from
+Thms.~\ref{thm:simk} and~\ref{thm:param};
+see \texttt{driver/Compiler.v}.
+For the second statement, see
+\texttt{ext\_inj}, \texttt{inj\_ext}, \texttt{inj\_inj}
+found under \texttt{cklr/}.
+\end{proof}
+\end{theorem}
 
 %}}}
 
