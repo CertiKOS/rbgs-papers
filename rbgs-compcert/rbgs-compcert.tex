@@ -1,7 +1,7 @@
 \documentclass[acmsmall,screen,review,anonymous]{acmart}
 
 % Enable/disable optional sections here
-\newif\ifopt \opttrue
+\newif\ifopt \optfalse
 
 % Packages {{{
 \usepackage{bbm}
@@ -3973,6 +3973,8 @@ we construct more specific simulation conventions
 which express the correspondance between
 the higher-level and lower-level representations
 of function calls and returns.
+These passes use identical conventions for
+incoming and external calls.
 
 \subsection{The \kw{Allocation} pass} \label{sec:alloc} %{{{
 
@@ -4054,27 +4056,57 @@ occupy disjoint areas of the target memory.
 
 With regards to the memory state,
 the \kw{stacking} simulation convention
-is essentially identical to \kw{injp}
+is essentially identical to \kw{injp}.
 Since the new regions of stack frames
 are outside the image of source memory,
 and most of them are local to
 function activations,
 the properties of \kw{injp}
-are largely sufficient for the proof.
+are largely sufficient
 (see also \S\ref{sec:cklr-worlds}).
 
 The exception to the rule pertains to argument passing.
 Loads from a function's argument locations
 access the caller's stack frame.
-The simulation convention
-$\kw{stacking} : \mathcal{L} \Leftrightarrow \mathcal{M}$
+If the area used to store arguments
+overlaps with the injected source memory state,
+then the source program and external calls
+may alter them in unexpected ways.
+In previous CompCert extensions,
+sophisticated techniques were required
+to prevent this from happening.
+
+In our model,
+we simply encode the required separation condition
+in the simulation convention
+$\kw{stacking} : \mathcal{L} \Leftrightarrow \mathcal{M}$.
+The convention
 asserts that the contents of argument locations
-are indeed stored into corresponding stack slots
+are stored into corresponding stack slots
 within the target memory,
-and additionally
+but additionally
 requires that the region of the target memory
 used to store arguments within the caller's stack
-must be disjoint from the injection image of the source memory.
+must be disjoint from the injection image of the source memory:
+\[
+  \begin{tikzpicture}[scale=0.4,>=stealth]
+    \draw ( 1,3) rectangle +(3,1); \node[left] at (1,3.5) {$m_1$};
+    \draw ( 0,0) rectangle +(9,1); \node[left] at (0,0.5) {$m_2$};
+    \node (V1) at (6.5,3.5) {$\vec{v}_1$};
+    \node (V2) at (2.5,0.5) {$\vec{v}_2$};
+    \draw[->] (1,4) -- (1,1); \draw[dotted] (1,1) -- (1,0); \draw[dotted] (4,4) -- (4,0);
+    \draw[->] (V1) -- (V2);
+  \end{tikzpicture}
+  \qquad
+  \begin{tikzpicture}[scale=0.4,>=stealth]
+    \draw ( 1,3) rectangle +(3,1); \node[left] at (1,3.5) {$m_1$};
+    \draw ( 0,0) rectangle +(9,1); \node[left] at (0,0.5) {$m_2$};
+    \node (V1) at (6.5,3.5) {$\vec{v}_1$};
+    \node (V2) at (6.5,0.5) {$\vec{v}_2$};
+    \draw[->] (1,4) -- (1,1); \draw[dotted] (1,1) -- (1,0); \draw[dotted] (4,4) -- (4,0);
+    \draw[->] (V1) -- (V2);
+  \end{tikzpicture}
+\]
 For details,
 see \texttt{cc\_stacking} in \texttt{backend/Mach.v}.
 
