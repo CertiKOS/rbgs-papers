@@ -1,6 +1,6 @@
 CRUFT = aux pdf bbl blg log snm nav out toc
 
-all: thesis.pdf
+all: thesis.pdf slides.pdf
 
 %.aux: %.tex
 	pdflatex $* </dev/null || true
@@ -16,7 +16,6 @@ all: thesis.pdf
 	markdown $< > $@
 
 clean:
-	$(RM) $(patsubst %,thesis.%,$(CRUFT))
+	$(RM) $(patsubst %,thesis.%,$(CRUFT)) $(patsubst %,slides.%,$(CRUFT))
 
-thesis.aux: abstract.tex intro.tex rbgs.tex compcerto.tex
 thesis.pdf: thesis.bbl
