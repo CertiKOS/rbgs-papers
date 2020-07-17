@@ -1908,6 +1908,8 @@ and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
 
 \section{Algebraic effects} % {{{
 
+% preamble {{{
+
 The framework of \emph{algebraic effects}~\citep{effadq}
 models computations as terms in an algebra
 whose operations represent effects:
@@ -1941,7 +1943,9 @@ of operations indexed by the parameters' values,
 so that there is a $\kw{print}[s]$
 operation for every $s \in \kw{string}$.
 
-\subsection{Effects and algebraic theories}
+%}}}
+
+\subsection{Effects and algebraic theories} %{{{
 
 Under this approach,
 effects can be described as algebraic theories:
@@ -1972,7 +1976,9 @@ into another signature,
 modeling a limited form of
 \emph{effect handlers} \citep{eff}.
 
-\subsection{Effect signatures}
+%}}}
+
+\subsection{Effect signatures} %{{{
 
 \begin{definition} \label{def:esig}
 An \emph{effect signature}
@@ -1998,20 +2004,193 @@ use effects from the following signature:
      \kw{done} : \varnothing \mid
      s \in \kw{string} \}
 \]
+Since the construction
+$\{ m[x] : B \mid x \in A \}$
+is very common,
+I will sometimes use the syntactic sugar
+$\{ m : A \rightarrow B \}$
+so that the signature above can be described as:
+\[
+  E_\kw{io} =
+  \{ \kw{readbit} : \mathbbm{2}, \:
+     \kw{print} : \kw{string} \rightarrow \mathbbm{1}, \:
+     \kw{done} : \varnothing \}
+\]
+
+%}}}
+
+\subsection{Algebra} %{{{
 
 The most direct way to interpret an effect signature
 is the algebraic point of view,
 in which it induces a set of terms
 built out of the signature's operations.
+A term represents a computation which proceeds inward
+from the top-level operation
+towards the leaves of the term,
+namely the constants $(c : \varnothing) \in E$.
+Terms representing partial computations may also involve variables.
+In that case,
+the variables may be thought of as placeholders,
+each one representing a possible intermediate outcome,
+which may later be replaced by a subcomputation.
+Terms are defined as follows.
 
-\subsection{Monads} \label{sec:freemon}
+\begin{definition}[Terms over a signature]
+The set of \emph{terms} associated with
+a signature $E$ and a set of variables $A$
+is defined as:
+\[
+  x \in \mathcal{F}_E(A) ::= v \mid m(x_n)_{n \in N}
+  \qquad
+  \text{where } v \in A, (m : N) \in E
+\]
+\end{definition}
+
+A term of the form $m(x_i)_{i \in N}$,
+where $m : N$ is an operation in the signature $E$,
+first triggers the effect $m$.
+The effect's outcome $n \in N$ then resumes the computation
+as prescribed by the subterm $x_n \in \mathcal{F}_E(A)$.
+Terms of the form $v \in A$ correspond to a computation
+which immediately terminates with the corresponding outcome.
+A variable substitution
+morphisms $f : A \rightarrow \mathcal{F}_E(B)$
+can then specify how the computation is to be continued.
+As we will see,
+$\mathcal{F}_E$ is the \emph{free monad}
+for the signature $E$ (\S\ref{sec:freemon}).
+Variable substitution will then correspond to
+Kleisi extension.
+
+\begin{definition}[Variable substitution]
+For a term $x \in \mathcal{F}_E(A)$ and
+a substitution $f : A \rightarrow \mathcal{F}_E(B)$,
+the term $f^*(x)$ is defined recursively by:
+\begin{align*}
+  f^*(v) &:= f(v) & v &\in A \\
+  f^*(m(x_n)_{n \in N}) &:= m(f^*(x_n))_{n \in N} & (m:N) &\in E
+\end{align*}
+\end{definition}
+
+To give a semantics for the effects of $E$ is
+to define an interpretation for the signature.
+
+\begin{definition}
+An \emph{interpretation}
+for the effect signature $E$
+over a set $A$
+is a family of functions:
+\[
+  \varphi_m : A^N \rightarrow A
+  \qquad \text{where} \quad
+  (m : N) \in E \,.
+\]
+Then we can define the function
+$f_\varphi : \mathcal{F}_E(A) \rightarrow A$
+which recursively applies $\varphi$ to a term:
+\begin{align*}
+  f_\varphi(v) &:= v & v &\in A \\
+  f_\varphi(m(x_n)_{n \in N}) &:= \varphi_m(f_\varphi(x_n))_{n \in N}
+    & (m : N) &\in E
+\end{align*}
+\end{definition}
+
+%}}}
+
+\subsection{Monads} \label{sec:freemon} %{{{
+
+The concepts discussed above admit an elegant
+categorical formulation \citep{freemon}.
+This allows us to generalize them
+to categories other than $\mathbf{Set}$,
+and to establish a connection with
+the monadic approach to modeling effectful computations.
+
+\begin{definition}
+The \emph{functor} associated to an effect signature $E$
+is $\hat{E} : \mathbf{Set} \rightarrow \mathbf{Set}$,
+defined as:
+\[
+    \hat{E}(X) := \sum_{(m : N) \in E} X^N \,.
+\]
+Then an interpretation of $E$ is also
+an algebra for the endofunctor $\hat{E}$,
+that is an object $A \in \mathbf{Set}$
+together with a morphism $\phi : \hat{E}(A) \rightarrow A$.
+\end{definition}
+
+The interpretations of $E$ form a category $\mathbf{Int}_E$.
+Homomorphisms of interpretations are
+function $f : A \rightarrow B$ between the carrier sets
+of the interpretations $(A, \varphi^A)$ and $(B, \varphi^B)$
+such that:
+\[
+  \begin{tikzcd}
+    \hat{E} A \ar[r, "\varphi^A"] \ar[d, "\hat{E} f"'] & A \ar[d, "f"] \\
+    \hat{E} B \ar[r, "\varphi^B"']                     & B
+  \end{tikzcd}
+\]
+In other words, for each operation $(m:N) \in E$
+and argument tuple $x \in A^N$:
+\[
+  f(\varphi^A_m(x_n)_{n \in N}) = \varphi^B_m(f(x_n))_{n \in N} \,.
+\]
+The forgetful functor $U_E : \mathbf{Int}_E \rightarrow \mathbf{Set}$
+retains the underlying set $A$ of an interpretation $(A, \varphi^A)$,
+and the underlying function $f$ of homomorphisms.
+Then $\mathcal{F}_E$ can be characterized as the left adjoint
+$\mathcal{F}_E \dashv U_E$
+where $\mathcal{F}_E(A) \in \mathbf{Int}_E$
+is equipped with the interpretation:
+\[
+  \varphi_m(x_n)_{n \in N} := m(x_n)_{n \in N}
+  \qquad
+  \text{for all }
+  (m:N) \in E \,,
+\]
+where the adjunction's unit $\eta : \mathbf{1} \rightarrow U_E \mathcal{F}_E$
+is defined as:
+\[
+    \eta_A(v) := v \qquad v \in A
+\]
+and the counit
+$\epsilon : \mathcal{F}_E U_E \rightarrow \mathbf{1}$
+is defined as:
+\begin{align*}
+  \epsilon_{(A, \varphi^A)}(v) &:= v & v &\in A \\
+  \epsilon_{(A, \varphi^A)}(m(x_n)_{n \in N}) &:=
+    \varphi^A_m(x_n)_{n \in N} & (m:N) &\in E
+\end{align*}
+In other words,
+a defining property of $\mathcal{F}_E$ is that
+for a set of variables $A$, an interpretation $(B, \varphi^B)$,
+and a valuation $\rho : A \rightarrow B$,
+there exists a unique homomorphism
+$\rho^* : \mathcal{F}_E(A) \rightarrow (B, \varphi^B)$:
+\[
+  \begin{tikzcd}[sep=large]
+    A \ar[r, "\eta_E"] \ar[dr, "\rho"'] &
+      \mathcal{F}_E(A) \ar[d, "!"', "\rho^*", dashed] &
+      \hat{E} \, \mathcal{F}_E (A) \ar[l, "\varphi"'] \ar[d, "\hat{E} \rho^*"] \\
+    & B  & \hat{E} B \ar[l, "\varphi^B"']
+  \end{tikzcd}
+\]
+This homomorphism uses $\rho$ to interpret variables
+and $\varphi^B$ to interpret operations:
+\begin{align*}
+  \rho^*(v) &:= \rho(v) & v &\in A \\
+  \rho^*(m(x_n)_{n \in N}) &:=
+    \varphi^B(\rho^*(x_n))_{n \in N} & (m:N) &\in E
+\end{align*}
 
 % XXX discuss the free monad more
 
-An effect signature can also be used
-for describing the interface of a monad $T$,
-where each effect $e \in E$ corresponds to
-a computation of type $T(\kw{ar}(e))$.
+but an effect signature can also be used
+for describing the interface of a monad $T$.
+In that context,
+each effect $(m : N) \in E$ corresponds to
+a monadic operation $m \in T(N)$.
 Presented as a monadic expression of type $T(\varnothing)$,
 the example above corresponds to:
 \[
@@ -2020,21 +2199,56 @@ the example above corresponds to:
   \kw{done}
 \]
 where $s_0 = "\text{Hello}"$ and $s_1 = "\text{World}"$.
-Monads which offer this structure
-include the \emph{free monad} on the signature $E$,
-which leaves effects entirely uninterpreted;
-roughly, its computations of type $A$
-correspond to terms over the signature
-$E \uplus \{ v : \varnothing \mid v \in A \}$.
-%\zhong{Should we use a more distinct syntax such as the retv($v$) event?}
-%\jk{Since this is a throw-away remark and
-%  never used again, I am reluctant to introduce new syntax
-%  which the user might attempt to understand / remember.
-%  We could just remove this remark if this is confusing.}
-The interaction specification monad $\mathcal{I}_E$
-presented in \S\ref{sec:intspec} is a version of the free monad
-which combines the dual nondeterminism of $\mathbf{FCD}$ with
-uninterpreted effects taken in the signature $E$.
+
+\begin{definition}
+A \emph{monadic interpretation}
+for the effect signature $E$
+is a monad $(T, \eta, \mu)$
+together with a family of operations:
+\[
+    \phi_m^A : T(A)^N \rightarrow T(A)
+\]
+\end{definition}
+
+%Monads which offer this structure
+%include the \emph{free monad} on the signature $E$,
+%which leaves effects entirely uninterpreted;
+%roughly, its computations of type $A$
+%correspond to terms over the signature
+%$E \uplus \{ v : \varnothing \mid v \in A \}$.
+%%\zhong{Should we use a more distinct syntax such as the retv($v$) event?}
+%%\jk{Since this is a throw-away remark and
+%%  never used again, I am reluctant to introduce new syntax
+%%  which the user might attempt to understand / remember.
+%%  We could just remove this remark if this is confusing.}
+%The interaction specification monad $\mathcal{I}_E$
+%presented in \S\ref{sec:intspec} is a version of the free monad
+%which combines the dual nondeterminism of $\mathbf{FCD}$ with
+%uninterpreted effects taken in the signature $E$.
+%
+%The defining property of the free monad
+%is that for any other monad $T$
+%equipped with an interpretation
+%$f^m \in T(N)$ for each $(m : N) \in E$,
+%there is a unique transformation
+%$[f] : \mathcal{F} \rightarrow T$
+%which preserves the monadic structure.
+%In particular:
+%\[
+%  \begin{tikzcd}[sep=large]
+%    A \ar[dr, "\eta_T"'] \ar[r, "\eta_\mathcal{F}"] &
+%    \mathcal{F}(A) \ar[d, dashed, "{[f]_A}"] \\
+%    & T(A)
+%  \end{tikzcd}
+%\]
+%I will write $x[f] \in T(A)$
+%for the image by $[f]$ of $x \in \mathcal{F}(A)$.
+%This transformation uses the interpretation
+%and the monad's multiplication
+%to replace every operation $m$ in the term $x$
+%by its interpretation $f^m$,
+%and the monad's unit every variable $v \in A$
+%by $\eta_T(v)$:
 
 \subsection{Games}
 
@@ -2482,46 +2696,22 @@ is a term built out of the operations of $E$ and
 the elements of $A$ regarded as variables,
 representing a computation which proceeds inward
 from the top-level operation
-towards the leaves of the term:
-\[
-  x \in \mathcal{F}_E(A) ::= v \mid m(x_n)_{n \in N}
-  \qquad
-  \text{where } v \in A, (m : N) \in E
-\]
-Terms of the form $v$ correspond to a computation
-which immediately terminates with the corresponding results.
-Terms of the form $m(x_i)_{i \in N}$,
-where $m : N$ is an operation in the signature $E$,
-first invoke the primitive $m$.
-The outcome $n \in N$ then resumes the computation
-as prescribed by the subterm $x_n \in \mathcal{F}_E(A)$.
+towards the leaves of the term.
 
-
-
-The defining property of the free monad
-is that for any other monad $T$
-equipped with an interpretation
-$f^m \in T(N)$ for each $(m : N) \in E$,
-there is a unique transformation
-$[f] : \mathcal{F} \rightarrow T$
-which preserves the monadic structure.
-In particular:
-\[
-  \begin{tikzcd}[sep=large]
-    A \ar[dr, "\eta_T"'] \ar[r, "\eta_\mathcal{F}"] &
-    \mathcal{F}(A) \ar[d, dashed, "{[f]_A}"] \\
-    & T(A)
-  \end{tikzcd}
-\]
-I will write $x[f] \in T(A)$
-for the image by $[f]$ of $x \in \mathcal{F}(A)$.
-This transformation uses the interpretation
-and the monad's multiplication
-to replace every operation $m$ in the term $x$
-by its interpretation $f^m$,
-and the monad's unit every variable $v \in A$
-by $\eta_T(v)$:
-
+Using the underlay interface,
+we can define an interpretation
+$(\varphi^L_m)_{(m:N) \in E}$
+of the signature $E$ into the monad $\mathcal{L}$
+where for each operation $(m:N) \in E$:
+\begin{align*}
+  \varphi^L_m &: \mathcal{L}(A)^N \rightarrow \mathcal{L}(A) \\
+  \varphi^L_m(x_n)_{n \in N} &:=
+    n \mathop{\leftarrow} \sigma_m \mathop{;} x_n
+\end{align*}
+Then $\varphi^L$ can be extended to
+interpret any client code $x \in \mathcal{F}_E(A)$
+in terms of the underlay state
+as $x[L] \in \mathcal{L}_E(A) := \varphi^L(x)$.
 
 %}}}
 
@@ -2588,7 +2778,7 @@ For a signature $E$,
 two layer interfaces
 $L_1 = \langle E, S_1, \sigma_1 \rangle$ and
 $L_2 = \langle E, S_2, \sigma_2 \rangle$,
-and a relation $R \subseteq S_2 \times S_2$,
+and a relation $R \subseteq S_2 \times S_1$,
 we say that $L_2$ is \emph{simulated by} $L_1$
 and write $L_2 \le_R L_1$ when
 the following simulation property holds
