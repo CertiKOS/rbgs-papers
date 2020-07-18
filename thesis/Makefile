@@ -1,6 +1,10 @@
 CRUFT = aux pdf bbl blg log snm nav out toc
+EPSFIGS = element hcomp vcomp overview
 
 all: thesis.pdf slides.pdf
+
+%.eps: %.dia
+	dia -e $@ $<
 
 %.aux: %.tex
 	pdflatex $* </dev/null || true
@@ -16,6 +20,8 @@ all: thesis.pdf slides.pdf
 	markdown $< > $@
 
 clean:
-	$(RM) $(patsubst %,thesis.%,$(CRUFT)) $(patsubst %,slides.%,$(CRUFT))
+	$(RM) $(patsubst %,thesis.%,$(CRUFT)) \
+              $(patsubst %,slides.%,$(CRUFT)) \
+              $(patsubst %,fig/%.eps,$(EPSFIGS))
 
-thesis.pdf: thesis.bbl
+thesis.pdf: thesis.bbl $(patsubst %,fig/%.eps,$(EPSFIGS))
