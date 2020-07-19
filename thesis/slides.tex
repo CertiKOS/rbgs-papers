@@ -99,7 +99,6 @@
 
 \setbeamertemplate{bibliography entry location}{}
 \setbeamertemplate{bibliography entry title}{}
-%\setbeamertemplate{bibliography item}[online]
 \setbeamerfont{bibliography entry author}{size=\footnotesize}
 
 %\begin{frame}[fragile]{CertiKOS} %{{{
@@ -161,62 +160,81 @@
 
 %\section{Introduction} {{{
 
-
-
-
-
-\begin{frame}{Scaling up certified software} %{{{
-  Certified software this past decade:
+\begin{frame}{Certified software} %{{{
+  Software reliability is usually ensured through \emph{testing}:
   \begin{itemize}
-    \item C compiler (CompCert) and program logic (VST)
-    \item Operating system kernel (CertiKOS), file system (FSCQ)
-    \item Processor designs (Bluespec), \ldots
+    \item run the program, see what happens;
+    \item fix the bugs and repeat.
   \end{itemize}
+  Better testing practices give better results,
+  but no guarantees.
 
-  \pause
-  To scale up verification further, we need a compositional glue:
+  \vfill \pause
+  By contrast, \emph{certified software} comes with:
   \begin{itemize}
-    \item Heterogenous: general-purpose model, embed various components
-    \item Composition and abstraction: high-level algebraic structures
+    \item a mathematical specification,
+    \item a formal proof of correctness.
   \end{itemize}
-  %The DeepSpec project seeks to build:
-  %\begin{itemize}
-  %  \pause \item Large-scale, heterogenous systems
-  %  \pause \item Certified end-to-end in a general-purpose proof assistant
-  %  \pause \item Constructed from off-the-shelf certified components.
-  %\end{itemize}
+  Ideally, they are mechanized in a general-purpose proof assistant. \\
+  Then we only need to trust the specification.
 \end{frame}
 %}}}
 
-\begin{frame}{Case study: CertiKOS} %{{{
-  Software systems use abstraction layers. In CertiKOS:
+\begin{frame}{CompCert} %{{{
+  The introduction of the cerified compiler \emph{CompCert}
+  (10--15 years ago) \\
+  was a breakthrough in scale for certified software.
+
+  \pause
+  The secret ingredient is decomposition:
+  \[
+    \begin{prooftree}
+      \infer0[$\kw{Clight}$]{\module{\kw{SimplLocals}} }
+      \infer1{\module{\kw{Cshmgen}} }
+      \infer1[$\kw{Csharpminor}$]{\vdots}
+      \infer1[$\kw{Mach}$]{\module{\kw{Asmgen}} }
+      \infer1[$\kw{Asm}$]{}
+    \end{prooftree}
+  \]
+  The correctness theorem:
+  \[
+    \kw{CompCert}(p) = p' \quad \Rightarrow \quad
+    \kw{Clight}[p] \le \kw{Asm}[p']
+  \]
+  can be obtained by composing similar theorems for each pass.
+\end{frame}
+%}}}
+
+\begin{frame}{CertiKOS} %{{{
+  Our certified kernel CertiKOS uses a similar approach, \\
+  decomposing the code into \emph{certified abstraction layers}:
   \[
     \begin{prooftree}
       \hypo{C}
-      \infer1[$L_n$]{\fbox{$\qquad M_n \qquad$}}
+      \infer1[$L_n$]{\module{M_n}}
       \infer1[$L_{n-1}$]{\vdots}
-      \infer1[$L_1$]{\fbox{$\qquad M_1 \qquad$}}
-      \infer1[$L_0$]{}
+      \infer1[$L_1$]{\module{M_1}}
+      \infer1[$L_0$]{C + M_n + \cdots + M_1}
     \end{prooftree}
     \qquad
     \vcenter{\hbox{\includegraphics[scale=0.55]{layers} }}
   \]
 
   \pause
-  Our verification effort uses
-  \emph{certified abstraction layers}:
+  For each layer we prove a compositional
+  \emph{contextual refinement} property:
   \[
     \begin{prooftree}
       \hypo{C}
-      \infer1[$L_2$]{\begin{array}{c}R \\ \fbox{$\qquad M \qquad$}\end{array}}
-      \infer1[$L_1$]{}
+      \infer1[$L_2$]{\smodule{M}}
+      \infer1[$L_1$]{C + M}
     \end{prooftree}
     \qquad
     \begin{array}{c}
       \fbox{$L_1 \vdash M : L_2$} \\[1em]
       \forall C \: \bdot \:
-      \llbracket C \rrbracket_{L_2} \le_R
-      \llbracket C \oplus M \rrbracket_{L_1}
+      C [L_2] \le_R
+      (C + M)[L_1]
     \end{array}
   \]
 %
@@ -241,119 +259,175 @@
 \end{frame}
 %}}}
 
-\begin{frame}{Great research not used in large-scale verification} %{{{
-  \textbf{Good news:}
-  There is lot of research that we can draw from!
-
-  \textbf{Bad news:}
-  Few applications to
-  large-scale verification.
-
-  \vfill
-  \begin{center}
-    \begin{tabular}{cc}
-      \hline
-      Semantics research &
-      Typical verification project
-      \\
-      \hline
-      \\[-1ex]
-      %\parbox{.4\textwidth}{
-      %  \centering
-      %  Game semantics \\ Linear logic
-      %} &
-      \parbox{10em}{\centering Game semantics \\ Linear logic} &
-      Transition systems \\[1em]
-      Refinement calculus &
-      Simulations \\[1em]
-      Logical relations &
-      Hoare logic \\[1em]
-      Algebraic effects &
-      Closed systems \\[1em]
-      \hline
-    \end{tabular}
-  \end{center}
+\begin{frame}{The DeepSpec NSF expedition project} %{{{
+  Researchers have built many other
+  certified system components. \\
+  The \emph{DeepSpec} project proposes to use
+  specifications as \emph{interfaces}:
+  \[
+    \includegraphics[scale=0.5]{deepspec}
+  \]
 \end{frame}
 %}}}
 
-\begin{frame}{Why this gap?} %{{{
-  Challenges:
-  \begin{itemize}
-    \item Sophisticated models hard to mechanize in proof assistants
-    \item Not clear how these techniques can work together
-  \end{itemize}
-
-  For example:
-  \begin{itemize}
-    \item Game semantics: not much emphasis on refinement
-    \item Refinement calculus: imperative programming and specification
-  \end{itemize}
-\end{frame}  
-%}}}
-
-\begin{frame}{Contributions} %{{{
-We combine various paradigms to introduce:
-\begin{center}
-\textbf{Refinement-Based Game Semantics}
-\end{center}
-
-\pause
-Our models provide:
-\begin{itemize}
-  \item \textbf{Compositionality:}
-    categories with symmetric monoidal structures
-  \item \textbf{Refinement:}
-    uniform treatment of programs and specifications
-  \item \textbf{Dual nondeterminism:}
-    for expressivity and data abstraction
-  %\item \emph{Symmetric monoidal categories} for compositionality;
-  %\item \emph{Strategy specifications} to support stepwise refinement;
-  %\item \emph{Dual nondeterminism} for open systems and data abstraction.
-\end{itemize}
-
-\pause
-Key insights:
-\begin{itemize}
-  \item Reinterpret strategies as inherently nondeterministic
-  \item Upgrade to dual nondeterminism and lift all restrictions
-\end{itemize}
-
-%Based on a new approach to
-%nondeterminism in game semantics,
-%we introduce \emph{refinement-based game semantics}:
-%%syntesizing techniques from game semantics and stepwise refinement,
-%%and apply them to simple game models:
+%\begin{frame}{Scaling up certified software} %{{{
+%  Certified software this past decade:
+%  \begin{itemize}
+%    \item C compiler (CompCert) and program logic (VST)
+%    \item Operating system kernel (CertiKOS), file system (FSCQ)
+%    \item Processor designs (Bluespec), \ldots
+%  \end{itemize}
+%
+%  \pause
+%  To scale up verification further, we need a compositional glue:
+%  \begin{itemize}
+%    \item Heterogenous: general-purpose model, embed various components
+%    \item Composition and abstraction: high-level algebraic structures
+%  \end{itemize}
+%  %The DeepSpec project seeks to build:
+%  %\begin{itemize}
+%  %  \pause \item Large-scale, heterogenous systems
+%  %  \pause \item Certified end-to-end in a general-purpose proof assistant
+%  %  \pause \item Constructed from off-the-shelf certified components.
+%  %\end{itemize}
+%\end{frame}
+%%}}}
+%
+%\begin{frame}{Great research not used in large-scale verification} %{{{
+%  \textbf{Good news:}
+%  There is lot of research that we can draw from!
+%
+%  \textbf{Bad news:}
+%  Few applications to
+%  large-scale verification.
+%
+%  \vfill
+%  \begin{center}
+%    \begin{tabular}{cc}
+%      \hline
+%      Semantics research &
+%      Typical verification project
+%      \\
+%      \hline
+%      \\[-1ex]
+%      %\parbox{.4\textwidth}{
+%      %  \centering
+%      %  Game semantics \\ Linear logic
+%      %} &
+%      \parbox{10em}{\centering Game semantics \\ Linear logic} &
+%      Transition systems \\[1em]
+%      Refinement calculus &
+%      Simulations \\[1em]
+%      Logical relations &
+%      Hoare logic \\[1em]
+%      Algebraic effects &
+%      Closed systems \\[1em]
+%      \hline
+%    \end{tabular}
+%  \end{center}
+%\end{frame}
+%%}}}
+%
+%\begin{frame}{Why this gap?} %{{{
+%  Challenges:
+%  \begin{itemize}
+%    \item Sophisticated models hard to mechanize in proof assistants
+%    \item Not clear how these techniques can work together
+%  \end{itemize}
+%
+%  For example:
+%  \begin{itemize}
+%    \item Game semantics: not much emphasis on refinement
+%    \item Refinement calculus: imperative programming and specification
+%  \end{itemize}
+%\end{frame}  
+%%}}}
+%
+%\begin{frame}{Contributions} %{{{
+%We combine various paradigms to introduce:
+%\begin{center}
+%\textbf{Refinement-Based Game Semantics}
+%\end{center}
+%
 %\pause
+%Our models provide:
 %\begin{itemize}
-%  \item Games are first-order signatures $E, F$;
-%  \item \emph{Strategy specifications} are morphisms $f : E \rightarrow F$;
-%  \item They are equipped with complete lattices,
-%    representing \emph{dual nondeterminism}
+%  \item \textbf{Compositionality:}
+%    categories with symmetric monoidal structures
+%  \item \textbf{Refinement:}
+%    uniform treatment of programs and specifications
+%  \item \textbf{Dual nondeterminism:}
+%    for expressivity and data abstraction
+%  %\item \emph{Symmetric monoidal categories} for compositionality;
+%  %\item \emph{Strategy specifications} to support stepwise refinement;
+%  %\item \emph{Dual nondeterminism} for open systems and data abstraction.
 %\end{itemize}
-
+%
 %\pause
-%The result is a very expressive framework,
-%which nevertheless remains simple enough to
-%formalize in a proof assistant.
+%Key insights:
+%\begin{itemize}
+%  \item Reinterpret strategies as inherently nondeterministic
+%  \item Upgrade to dual nondeterminism and lift all restrictions
+%\end{itemize}
+%
+%%Based on a new approach to
+%%nondeterminism in game semantics,
+%%we introduce \emph{refinement-based game semantics}:
+%%%syntesizing techniques from game semantics and stepwise refinement,
+%%%and apply them to simple game models:
+%%\pause
+%%\begin{itemize}
+%%  \item Games are first-order signatures $E, F$;
+%%  \item \emph{Strategy specifications} are morphisms $f : E \rightarrow F$;
+%%  \item They are equipped with complete lattices,
+%%    representing \emph{dual nondeterminism}
+%%\end{itemize}
+%
+%%\pause
+%%The result is a very expressive framework,
+%%which nevertheless remains simple enough to
+%%formalize in a proof assistant.
+%
+%%\pause
+%%In particular,
+%%our models are rich enough to embed
+%%certified abstraction layers
+%%and a compositional semantics for CompCert.
+%\end{frame}
+%%}}}
 
-%\pause
-%In particular,
-%our models are rich enough to embed
-%certified abstraction layers
-%and a compositional semantics for CompCert.
+\begin{frame}{Challenges}
+  Key to composition in CompCert and CertiKOS is uniformity but:
+  \begin{itemize}
+    \item DeepSpec projects use their own semantic models;
+    \item often fine-tuned to the verification techniques used;
+    \item operating at various abstraction levels.
+  \end{itemize}
+  \pause
+  Therefore, we need a general-purpose model which:
+  \begin{itemize}
+    \item can embed all of them;
+    \item provides a high-level compositional glue.
+  \end{itemize}
+
+  \pause
+  The ultimate goal of my work:
+
+  \centering \bf
+  Extend certified abstraction layers to provide this model
 \end{frame}
-%}}}
 
-\begin{frame}{Outline} %{{{
+\begin{frame}{This talk} %{{{
   \tableofcontents
 \end{frame}
 %}}}
 
 %}}}
 
-\section[Chronological overview]{Chronological overview of my work} %{{{
+\section[Overview]{Overview of my work} %{{{
 
-\begin{frame}{Capturing patterns in layers (\S\ref{sec:cal})} %{{{
+\begin{frame}{Capturing patterns in layers} %{{{
+  In CertiKOS, individual layers follow common patterns (\S\ref{sec:cal}):
   \begin{center}
     \small
     \begin{tabular}{lc@{\qquad}c}
@@ -361,8 +435,8 @@ Key insights:
       Elementary proof &
       \rule{0pt}{5ex}
       {\begin{prooftree}
-        \hypo{\kw{CP}(L, R, \kappa, \sigma)}
-        \infer1{\jg{L}{R}{i \mapsto \kappa}{i \mapsto \sigma}}
+        \hypo{\sigma \le_R \kappa[L]}
+        \infer1{\jg{L}{R}{m \mapsto \kappa}{m \mapsto \sigma}}
       \end{prooftree}} &
       \begin{minipage}[c]{.1\textwidth}
       \includegraphics[scale=.15]{fig/element}
@@ -373,7 +447,7 @@ Key insights:
       {\begin{prooftree}
         \hypo{\jg{L}{R}{M_1}{L_1}}
         \hypo{\jg{L}{R}{M_2}{L_2}}
-        \infer2{\jg{L}{R}{M_1 \oplus M_2}{L_1 \oplus L_2}}
+        \infer2{\jg{L}{R}{\langle M_1 , M_2 \rangle}{L_1 \times L_2}}
       \end{prooftree}} &
       \begin{minipage}[c]{.1\textwidth}
       \includegraphics[scale=.15]{fig/hcomp}
@@ -384,7 +458,7 @@ Key insights:
       {\begin{prooftree}
         \hypo{\jg{L_1}{R}{M}{L_2}}
         \hypo{\jg{L_2}{S}{N}{L_3}}
-        \infer2{\jg{L_1}{R \circ S}{M \oplus N}{L_3}}
+        \infer2{\jg{L_1}{R \circ S}{N \circ M}{L_3}}
       \end{prooftree}} &
       \begin{minipage}[c]{.1\textwidth}
       \includegraphics[scale=.15]{fig/vcomp}
@@ -394,8 +468,7 @@ Key insights:
       \rule{0pt}{5ex}
       {\begin{prooftree}
         \hypo{\jg{L_1}{R}{M}{L_2}}
-        \infer1{\forall P . \llbracket P \oplus M \rrbracket_{L_1} \sqsubseteq
-                      \llbracket P \rrbracket_{L_2}}
+        \infer1{\forall C \bdot C[L_2] \le_R C[M][L_1]}
       \end{prooftree}} &
       \tiny
       \hspace{-1.5em}
@@ -474,30 +547,35 @@ Key insights:
       \hypo{\module{\text{Client code} }}
       \infer1{\module{\text{CertiKOS spec} }}
     \end{prooftree}
-    \quad \sqsubseteq \quad
+    \quad \le \quad
     \begin{prooftree}
       \hypo{\module{\text{Client + CertiKOS code} }}
       \infer1{\module{\text{Machine model} }}
     \end{prooftree}
   \]
-  We would prefer to characterize layers as components
-  through their observable interactions:
+  \pause
+  We would prefer to characterize layers
+  through their interactions:
   \[
     \begin{prooftree}
-      \hypo{\downarrow \qquad \uparrow}
+      \hypo{\downarrow \quad \uparrow \quad \cdots \quad
+            \downarrow \quad \uparrow}
       \infer1{\module{\text{Layer specification} }}
-      \infer1{\downarrow \qquad \uparrow}
+      \infer1{\downarrow \quad \uparrow \quad \cdots \quad
+            \downarrow \quad \uparrow}
     \end{prooftree}
-    \quad \sqsubseteq \quad
+    \quad \le \quad
     \begin{prooftree}
-      \hypo{\downarrow \qquad \uparrow}
+      \hypo{\downarrow \quad \uparrow \quad \cdots \quad
+            \downarrow \quad \uparrow}
       \infer1{\module{\text{Layer implementation} }}
-      \infer1{\downarrow \qquad \uparrow}
+      \infer1{\downarrow \quad \uparrow \quad \cdots \quad
+            \downarrow \quad \uparrow}
     \end{prooftree}
   \]
-  I combined \emph{game semantics} and the \emph{refinement calculus}
-  to create \\ a framework where this is possible and more.
-  \vfill
+  \pause
+  I combined \emph{game semantics} and the \emph{refinement calculus} \\
+  to create a framework where this is possible and more.
   \begin{thebibliography}{10}
     \setbeamertemplate{bibliography item}[online]
     \bibitem{rbgs-code}
@@ -520,8 +598,9 @@ Key insights:
     \item Originally: a whole-program compiler that \emph{is} certified
     \item What we need: a compiler \emph{of} certified components
   \end{itemize}
-  This has happened progressively over the past decade; \\
-  my work is the first to satisfy all of our requirements:
+  \pause
+  This has happened progressively over the past decade. \\
+  My work is the first to satisfy all of our requirements:
   \begin{center}
     \small
     \begin{tabular}{l@{\qquad}cccc}
@@ -546,7 +625,6 @@ Key insights:
     (3)~calling convention;
     (4)~certified linking.
   \end{center}
-
   \begin{thebibliography}{10}
     \setbeamertemplate{bibliography item}[online]
     \bibitem{compcerto-code}
@@ -655,10 +733,10 @@ Key insights:
         \multicolumn{2}{c}{$
           L_\kw{q} := \langle E_\kw{q}, V^*, \sigma_q \rangle$} \\[1ex]
         L_\kw{q}.{\kw{enq}[v]}(\vec{q}) &:= \{ * @ \vec{q} v \} &
-          \kw{enq}[4](123) &\leadsto *@1234 \\
+          \kw{enq}[\mathtt{d}](\mathtt{abc}) &\leadsto *@\mathtt{abcd} \\
         L_\kw{q}.{\kw{deq}}(\vec{q}) &:=
           \{ v@\vec{p} \mid v \vec{p} = \vec{q} \} &
-          \kw{deq}(1234) &\leadsto 1@234 \\
+          \kw{deq}(\mathtt{abcd}) &\leadsto \mathtt{a}@\mathtt{bcd} \\
         & & \kw{deq}(\epsilon) &\leadsto {?} \\
       \end{align*}
     \end{example}
