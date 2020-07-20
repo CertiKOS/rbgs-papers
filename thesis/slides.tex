@@ -27,10 +27,15 @@
   \frame{\sectionpage}
 }
 
+\AtBeginSubsection{
+  \frame{\subsectionpage}
+}
+
 \addtobeamertemplate{navigation symbols}{}{%
   \usebeamerfont{footline}%
   \usebeamercolor[fg]{footline}%
   \hspace{1em}%
+  \color{black}
   \raisebox{0.5ex}{\insertframenumber/\inserttotalframenumber}
 }
 %}}}
@@ -45,7 +50,8 @@
 \newcommand{\me}{\textbf{J. K.}}
 \newcommand{\module}[1]{\framebox[\layerwidth]{\ensuremath{#1}} }
 \newcommand{\smodule}[1]{\framebox[0.435\layerwidth]{\ensuremath{#1}} }
-\newcommand{\gmodule}[1]{\framebox[0.435\layerwidth]{\ensuremath{#1}} }
+\newcommand{\gmodule}[1]{\fcolorbox{black}{lightgray}{\makebox[0.38\layerwidth]{\ensuremath{#1}}%
+}}
 %}}}
 
 % Pictures %{{{
@@ -68,6 +74,7 @@
 
 \newcommand{\deqpic}[3]{%
   \begin{tikzpicture}[scale=0.4]
+    \draw[->] (-6,0) -- node[above] {$\kw{deq}$} (-4,0);
     \draw (-4,-1) rectangle (4,1);
     \node (x) at (0,0) {$#1$};
     \draw[->] (-3, -1) -- (-3, -2);
@@ -101,63 +108,6 @@
 \setbeamertemplate{bibliography entry title}{}
 \setbeamerfont{bibliography entry author}{size=\footnotesize}
 
-%\begin{frame}[fragile]{CertiKOS} %{{{
-%CertiKOS is a certified operating system kernel:
-%its assembly code comes with a computer-checked,
-%mathematical proof of correctness.
-%
-%We show the following \emph{contextual refinement} property:
-%\[
-%    \forall P \,.\,
-%        \llbracket P \oplus \kw{CertiKOS} \rrbracket_{\kw{x86}}
-%        \sqsubseteq
-%        \llbracket P \rrbracket_{\kw{TSyscall}}
-%\]
-%Schematically:
-%\[
-%  \begin{prooftree}
-%    \hypo{P}
-%    \infer1[$\kw{TSysCall}$]{\text{\module{ \kw{CertiKOS} }} }
-%    \infer1[$\kw{x86}$]{}
-%  \end{prooftree}
-%\]
-%If the layer interfaces are seen as \emph{languages},
-%adding the code of \kw{CertiKOS} to a program can be seen as
-%a special case of \emph{certified compilation}.
-%\end{frame}
-%%}}}
-%
-%\begin{frame}{Layered decomposition} %{{{
-%Because contextual refinement is transitive,
-%we can split \kw{CertiKOS} into \emph{layers}:
-%\[
-%    \kw{CertiKOS} =
-%        M_\kw{Container} \oplus M_\kw{ALInit} \oplus \ldots \oplus M_\kw{SysCall}
-%\]
-%\[
-%  \begin{prooftree}
-%    \hypo{}
-%    \infer1[$\kw{TSysCall}$]{\module{M_\kw{SysCall} }}
-%    \infer1[$\kw{TDispatch}$]{\vdots}
-%    \infer1[$\kw{MALInit}$]{\module{M_\kw{ALInit} }}
-%    \infer1[$\kw{MContainer}$]{\module{M_\kw{Container} }}
-%    \infer1[$\kw{MBoot}$]{}
-%  \end{prooftree}
-%\]
-%
-%At each layer,
-%a \emph{module} $M$ implements
-%an \emph{overlay interface} $L_2$ in terms of
-%an \emph{underlay interface} $L_1$.
-%\end{frame}
-%%}}}
-%
-%\begin{frame}{DeepSpec: Certified heterogenous systems}
-%\end{frame}
-%
-%\begin{frame}{Modeling open systems}
-%\end{frame}
-
 %\section{Introduction} {{{
 
 \begin{frame}{Certified software} %{{{
@@ -181,62 +131,80 @@
 %}}}
 
 \begin{frame}{CompCert} %{{{
-  The introduction of the cerified compiler \emph{CompCert}
+  The introduction of the certified compiler \emph{CompCert}
   (10--15 years ago) \\
   was a breakthrough in scale for certified software.
+
+  Specifically CompCert comes with a proof that:
+  \[
+    \kw{CompCert}(p) = p' \quad \Rightarrow \quad
+    \kw{Clight}[p] \supseteq
+    \kw{Asm}[p']
+  \]
+  CompCert and its proof are written in the Coq proof assistant.
 
   \pause
   The secret ingredient is decomposition:
   \[
     \begin{prooftree}
-      \infer0[$\kw{Clight}$]{\module{\kw{SimplLocals}} }
-      \infer1{\module{\kw{Cshmgen}} }
-      \infer1[$\kw{Csharpminor}$]{\vdots}
-      \infer1[$\kw{Mach}$]{\module{\kw{Asmgen}} }
-      \infer1[$\kw{Asm}$]{}
+      \hypo{p}
+      \only<-2>{
+        \infer1[$\kw{Clight}$]{\module{\rule[-2.2em]{0pt}{5.07em}\kw{CompCert}} }
+      } 
+      \only<3>{
+        \infer1[$\kw{Clight}$]{\module{\kw{SimplLocals}} }
+        \infer1[$\kw{Clight}$]{\vdots}
+        \infer1[$\kw{Mach}$]{\module{\kw{Asmgen}} }
+      }
+      \infer1[$\kw{Asm}$]{p'}
     \end{prooftree}
   \]
-  The correctness theorem:
-  \[
-    \kw{CompCert}(p) = p' \quad \Rightarrow \quad
-    \kw{Clight}[p] \le \kw{Asm}[p']
-  \]
-  can be obtained by composing similar theorems for each pass.
 \end{frame}
 %}}}
 
 \begin{frame}{CertiKOS} %{{{
-  Our certified kernel CertiKOS uses a similar approach, \\
-  decomposing the code into \emph{certified abstraction layers}:
+  Our certified OS kernel CertiKOS uses a similar approach \\
+  to prove the \emph{contextual refinement} property:
+  \[
+    \forall C \: \bdot \:
+    \kw{Asm}[C, \kw{TSyscall}] \supseteq
+    \kw{Asm}[C + \kw{CertiKOS}, \kw{MBoot}]
+  \]
+  \pause 
+  We decompose the code into 37
+  \emph{certified abstraction layers}:
   \[
     \begin{prooftree}
       \hypo{C}
-      \infer1[$L_n$]{\module{M_n}}
-      \infer1[$L_{n-1}$]{\vdots}
-      \infer1[$L_1$]{\module{M_1}}
-      \infer1[$L_0$]{C + M_n + \cdots + M_1}
+      \only<-2>{
+        \infer1[$\kw{TSyscall}$\quad]{\module{\rule[-2.2em]{0pt}{5.07em} \kw{CertiKOS}} }
+      }
+      \only<3->{
+        \infer1[$\kw{TSyscall}$\quad]{\module{M_n} }
+        \infer1[$\kw{TTrap}$]{\vdots}
+        \infer1[$\kw{MATIntro}$]{\module{M_1} }
+      }
+      \infer1[$\kw{MBoot}$]{C +
+        \only<-2>{\kw{CertiKOS}}
+        \only<3->{M_n + \cdots + M_1} }
     \end{prooftree}
-    \qquad
-    \vcenter{\hbox{\includegraphics[scale=0.55]{layers} }}
   \]
 
-  \pause
-  For each layer we prove a compositional
-  \emph{contextual refinement} property:
-  \[
-    \begin{prooftree}
-      \hypo{C}
-      \infer1[$L_2$]{\smodule{M}}
-      \infer1[$L_1$]{C + M}
-    \end{prooftree}
-    \qquad
-    \begin{array}{c}
-      \fbox{$L_1 \vdash M : L_2$} \\[1em]
-      \forall C \: \bdot \:
-      C [L_2] \le_R
-      (C + M)[L_1]
-    \end{array}
-  \]
+%  \[
+%    \begin{prooftree}
+%      \hypo{C}
+%      \infer1[$L_n$]{\module{M_n}}
+%      \infer1[$L_{n-1}$]{\vdots}
+%      \infer1[$L_1$]{\module{M_1}}
+%      \infer1[$L_0$]{C + M_n + \cdots + M_1}
+%    \end{prooftree}
+%    \qquad
+%    \vcenter{\hbox{\includegraphics[scale=0.55]{layers} }}
+%  \]
+
+%  \pause
+%  For each layer we prove a compositional
+%  \emph{contextual refinement} property:
 %
 %  \pause
 %  Using transitivity we achieve compositional verification:
@@ -270,133 +238,7 @@
 \end{frame}
 %}}}
 
-%\begin{frame}{Scaling up certified software} %{{{
-%  Certified software this past decade:
-%  \begin{itemize}
-%    \item C compiler (CompCert) and program logic (VST)
-%    \item Operating system kernel (CertiKOS), file system (FSCQ)
-%    \item Processor designs (Bluespec), \ldots
-%  \end{itemize}
-%
-%  \pause
-%  To scale up verification further, we need a compositional glue:
-%  \begin{itemize}
-%    \item Heterogenous: general-purpose model, embed various components
-%    \item Composition and abstraction: high-level algebraic structures
-%  \end{itemize}
-%  %The DeepSpec project seeks to build:
-%  %\begin{itemize}
-%  %  \pause \item Large-scale, heterogenous systems
-%  %  \pause \item Certified end-to-end in a general-purpose proof assistant
-%  %  \pause \item Constructed from off-the-shelf certified components.
-%  %\end{itemize}
-%\end{frame}
-%%}}}
-%
-%\begin{frame}{Great research not used in large-scale verification} %{{{
-%  \textbf{Good news:}
-%  There is lot of research that we can draw from!
-%
-%  \textbf{Bad news:}
-%  Few applications to
-%  large-scale verification.
-%
-%  \vfill
-%  \begin{center}
-%    \begin{tabular}{cc}
-%      \hline
-%      Semantics research &
-%      Typical verification project
-%      \\
-%      \hline
-%      \\[-1ex]
-%      %\parbox{.4\textwidth}{
-%      %  \centering
-%      %  Game semantics \\ Linear logic
-%      %} &
-%      \parbox{10em}{\centering Game semantics \\ Linear logic} &
-%      Transition systems \\[1em]
-%      Refinement calculus &
-%      Simulations \\[1em]
-%      Logical relations &
-%      Hoare logic \\[1em]
-%      Algebraic effects &
-%      Closed systems \\[1em]
-%      \hline
-%    \end{tabular}
-%  \end{center}
-%\end{frame}
-%%}}}
-%
-%\begin{frame}{Why this gap?} %{{{
-%  Challenges:
-%  \begin{itemize}
-%    \item Sophisticated models hard to mechanize in proof assistants
-%    \item Not clear how these techniques can work together
-%  \end{itemize}
-%
-%  For example:
-%  \begin{itemize}
-%    \item Game semantics: not much emphasis on refinement
-%    \item Refinement calculus: imperative programming and specification
-%  \end{itemize}
-%\end{frame}  
-%%}}}
-%
-%\begin{frame}{Contributions} %{{{
-%We combine various paradigms to introduce:
-%\begin{center}
-%\textbf{Refinement-Based Game Semantics}
-%\end{center}
-%
-%\pause
-%Our models provide:
-%\begin{itemize}
-%  \item \textbf{Compositionality:}
-%    categories with symmetric monoidal structures
-%  \item \textbf{Refinement:}
-%    uniform treatment of programs and specifications
-%  \item \textbf{Dual nondeterminism:}
-%    for expressivity and data abstraction
-%  %\item \emph{Symmetric monoidal categories} for compositionality;
-%  %\item \emph{Strategy specifications} to support stepwise refinement;
-%  %\item \emph{Dual nondeterminism} for open systems and data abstraction.
-%\end{itemize}
-%
-%\pause
-%Key insights:
-%\begin{itemize}
-%  \item Reinterpret strategies as inherently nondeterministic
-%  \item Upgrade to dual nondeterminism and lift all restrictions
-%\end{itemize}
-%
-%%Based on a new approach to
-%%nondeterminism in game semantics,
-%%we introduce \emph{refinement-based game semantics}:
-%%%syntesizing techniques from game semantics and stepwise refinement,
-%%%and apply them to simple game models:
-%%\pause
-%%\begin{itemize}
-%%  \item Games are first-order signatures $E, F$;
-%%  \item \emph{Strategy specifications} are morphisms $f : E \rightarrow F$;
-%%  \item They are equipped with complete lattices,
-%%    representing \emph{dual nondeterminism}
-%%\end{itemize}
-%
-%%\pause
-%%The result is a very expressive framework,
-%%which nevertheless remains simple enough to
-%%formalize in a proof assistant.
-%
-%%\pause
-%%In particular,
-%%our models are rich enough to embed
-%%certified abstraction layers
-%%and a compositional semantics for CompCert.
-%\end{frame}
-%%}}}
-
-\begin{frame}{Challenges}
+\begin{frame}{Challenges} %{{{
   Key to composition in CompCert and CertiKOS is uniformity but:
   \begin{itemize}
     \item DeepSpec projects use their own semantic models;
@@ -416,6 +258,7 @@
   \centering \bf
   Extend certified abstraction layers to provide this model
 \end{frame}
+%}}}
 
 \begin{frame}{This talk} %{{{
   \tableofcontents
@@ -426,8 +269,8 @@
 
 \section[Overview]{Overview of my work} %{{{
 
-\begin{frame}{Capturing patterns in layers} %{{{
-  In CertiKOS, individual layers follow common patterns (\S\ref{sec:cal}):
+\begin{frame}{Layer calculus} %{{{
+  In CertiKOS, individual layers can be decomposed further:
   \begin{center}
     \small
     \begin{tabular}{lc@{\qquad}c}
@@ -468,14 +311,14 @@
       \rule{0pt}{5ex}
       {\begin{prooftree}
         \hypo{\jg{L_1}{R}{M}{L_2}}
-        \infer1{\forall C \bdot C[L_2] \le_R C[M][L_1]}
+        \infer1{\forall C \bdot \kw{Asm}[C, L_2] \supseteq \kw{Asm}[C + M, L_1]}
       \end{prooftree}} &
-      \tiny
-      \hspace{-1.5em}
-      $C[-] \sqsubseteq C[-]$
+      %\tiny
+      %\hspace{-1.5em}
+      %$C[-] \sqsubseteq C[-]$
     \end{tabular}
   \end{center}
-  %\vfill
+  \pause
   \begin{thebibliography}{10}
     \bibitem{popl15}
       Ronghui~Gu, \fme,
@@ -490,11 +333,13 @@
 %}}}
 
 \begin{frame}{Automating relational reasoning in Coq} %{{{
-  CompCert semantics are complicated.
-  But our soundness can be simple:
+  The soundness proof was particularly challenging.
+  \pause
+  New approach:
   \begin{center}
     \includegraphics[scale=0.35]{fig/overview}
   \end{center}
+  \pause
   \begin{thebibliography}{10}
     \setbeamertemplate{bibliography item}[online]
     \bibitem{coqrel-code}
@@ -510,47 +355,13 @@
 \end{frame}
 %}}}
 
-\begin{frame}{Concurrent layers and oracles} %{{{
-  Thread linking in concurrent CertiKOS:
-  \[
-    \begin{prooftree}
-      \hypo{\smodule{\kw{TSyscall} }}
-      \infer1{\vdots}
-      \infer1{\smodule{\kw{PThread} }}
-      \hypo{\gmodule{\kw{TSyscall} }}
-      \infer1{\color{gray}\vdots}
-      \infer1{\gmodule{\kw{PThread} }}
-      \infer2{\module{\kw{PThread} }}
-      \infer1{\vdots}
-      \infer1{\module{\text{Per-core services} }}
-    \end{prooftree}
-  \]
-  \vfill
-  \begin{thebibliography}{10}
-    \bibitem{ccal}
-      Ronghui~Gu, Zhong~Shao, Jieung~Kim, Xiongnan~(Newman)~Wu,
-      \me, Vilhelm~Sj\"oberg, Hao~Chen,
-      David~Costanzo, Tahina~Ramananandro.
-      \newblock \\
-      Certified Concurrent Abstraction Layers.
-      \newblock
-      PLDI '18.
-  \end{thebibliography}
-\end{frame}
-%}}}
-
-\begin{frame}{Refinement-based game semantics (\S\ref{sec:rbgs})} %{{{
-  All of this work is based on
-  primitive calls within a closed model:
+\begin{frame}{Refinement-based game semantics} %{{{
+  All of this is based on
+  primitive calls in a closed model $\kw{Asm}[-,-]$:
   \[
     \begin{prooftree}
       \hypo{\module{\text{Client code} }}
-      \infer1{\module{\text{CertiKOS spec} }}
-    \end{prooftree}
-    \quad \le \quad
-    \begin{prooftree}
-      \hypo{\module{\text{Client + CertiKOS code} }}
-      \infer1{\module{\text{Machine model} }}
+      \infer1{\module{\text{Layer spec} }}
     \end{prooftree}
   \]
   \pause
@@ -591,7 +402,7 @@
 \end{frame}
 %}}}
 
-\begin{frame}{CompCertO (\S\ref{sec:compcerto})} %{{{
+\begin{frame}{CompCertO} %{{{
   Using CompCert for heterogenous verification
   is a paradigm shift:
   \begin{itemize}
@@ -640,35 +451,354 @@
 \end{frame}
 %}}}
 
-\begin{frame}{Other work} %{{{
-  \begin{thebibliography}{10}
-    \bibitem{otf}
-      Joan Feigenbaum, \fme.
-      \newblock \\
-      On the Feasability of
-      a Technological Response to the Surveillance Morass.
-      \newblock \\
-      Cambridge Int'l Workshop on Security Protocols 2014.
-    \bibitem{rbp}
-      Omid Alipourfard, Jiaqi Gao, \me,
-      Chris~Harshaw, Amin~Vahdat, Minlan~Yu.
-      \newblock
-      Risk-based Planning of Network Changes in Evolving Data Centers.
-      \newblock \\
-      SOSP '19.
-  \end{thebibliography}
+%}}}
+
+%\section{Certified abstraction layers} \label{sec:cal} %{{{
+%
+%\subsection{Basic setup}
+%
+%
+%\begin{frame}{Layer interfaces} %{{{
+%  \begin{definition}[Layer interface]
+%    A tuple $L = \langle E, S, \sigma \rangle$ with:
+%    \begin{itemize}
+%      \item a signature $E$,
+%      \item a set of states $S$,
+%      \item a specification
+%        $\sigma^m : S \rightarrow \mathcal{P}^1(N \times S)$
+%        for each $(m:N) \in E$ 
+%    \end{itemize}
+%    Note: I will write $L.q$ for $\sigma^q$ and $v@k$ for $(v, k)$
+%    when $k$ is a state.
+%  \end{definition}
+%  \pause
+%  \only<1-2>{
+%    \begin{example}[Queue layer interface]
+%      \vspace{-\baselineskip}
+%      \begin{align*}
+%        \multicolumn{2}{c}{$
+%          L_\kw{q} := \langle E_\kw{q}, V^*, \sigma_q \rangle$} \\[1ex]
+%        L_\kw{q}.{\kw{enq}[v]}(\vec{q}) &:= \{ * @ \vec{q} v \} &
+%          \kw{enq}[\mathtt{d}](\mathtt{abc}) &\leadsto *@\mathtt{abcd} \\
+%        L_\kw{q}.{\kw{deq}}(\vec{q}) &:=
+%          \{ v@\vec{p} \mid v \vec{p} = \vec{q} \} &
+%          \kw{deq}(\mathtt{abcd}) &\leadsto \mathtt{a}@\mathtt{bcd} \\
+%        & & \kw{deq}(\epsilon) &\leadsto {?} \\
+%      \end{align*}
+%    \end{example}
+%  }
+%  \only<3>{
+%    \begin{example}[Array layer interface]
+%      \vspace{-\baselineskip}
+%      \begin{align*}
+%        \multicolumn{2}{c}{$
+%          L_\kw{a} := \langle E_\kw{a}, V^\mathbb{N} \times \mathbb{N}
+%            \times \mathbb{N}, \sigma_a \rangle$} \\[1ex]
+%        L_\kw{a}.{\kw{get}[i]}(t, c_1, c_2) &:= \{ t_i @ (t, c_1, c_2) \} \\
+%        L_\kw{a}.{\kw{set}[i,v]}(t, c_1, c_2) &:=
+%          \{ *@(t[i / v], c_1, c_2) \} \\
+%        L_\kw{a}.{\kw{inc}_1}(t, c_1, c_2) &:= \{ c_1@(t, c_1+1, c_2) \} \\
+%        L_\kw{a}.{\kw{inc}_2}(t, c_1, c_2) &:= \{ c_2@(t, c_1, c_2+1) \}
+%      \end{align*}
+%    \end{example}
+%  }
+%\end{frame}
+%%}}}
+%
+%\begin{frame}{Client code} %{{{
+%  \begin{block}{Monad}
+%    Client code for $L = \langle E, S, \sigma \rangle$
+%    can be interpreted in the monad:
+%    \begin{align*}
+%      T_L(V) &:= S \rightarrow \mathcal{P}^1(V \times S) \\
+%      \eta(v) &:= \lambda \, k \,.\, \{ v@k \} \\
+%      v \mathop{\leftarrow} x \mathop{;} f(v) &:=
+%        \lambda \, k \,.\, \{ r@k'' \mid
+%        \exists \, v \, k' \,.\, x(k) \ni v@k' \wedge f(v)(k') \ni r@k'' \}
+%    \end{align*}
+%    The specification $L.m \in T_L(N)$ of $(m : N) \in E$
+%    can be used directly.
+%  \end{block}
+%  \pause
+%  \begin{example}[Queue rotation]
+%    \vspace{-\baselineskip}
+%    \begin{gather*}
+%      \kw{rot} :=
+%      v \mathop{\leftarrow} \kw{deq} \mathop{;} \kw{enq}[v] \\
+%      \kw{rot}[L_\kw{q}] \in T_{L_\kw{q}}(\mathbbm{1}) =
+%      \lambda \vec{q} \bdot \{ *@\vec{p}v \mid v\vec{p} = \vec{q} \}
+%    \end{gather*}
+%  \end{example}
+%\end{frame}
+%%}}}
+%
+%\begin{frame}{Layer implementations} %{{{
+%  \begin{definition}[Layer implementation]
+%    A layer implementation $M : E \Rightarrow F$
+%    gives for each $(m : N) \in F$ \\
+%    a monadic expression with an outcome in $N$
+%    involving operations of $E$.
+%
+%    Evaluating $M : E \Rightarrow F$ on top of
+%    $L = \langle E, S, \sigma \rangle$ gives a layer interface:
+%    \[
+%        M[L] := \langle F, S, \sigma' \rangle
+%        \qquad
+%        M[L].m := M.m[L]
+%    \]
+%  \end{definition}
+%  \pause
+%  \begin{example}[Queue implementation]
+%    The queue implementation
+%    $M_\kw{q} : E_\kw{a} \Rightarrow E_\kw{q}$ is described by:
+%    \[
+%      \begin{array}{r@{}l}
+%        M_\kw{q}.\kw{enq}[v] & {} :=
+%          i \leftarrow \kw{inc}_2 \mathop{;} \kw{set}[i, v] \\
+%        M_\kw{q}.\kw{deq} & {} :=
+%          i \leftarrow \kw{inc}_1 \mathop{;} \kw{get}[i]
+%        \\[1ex]
+%        M_\kw{q}[L_\kw{a}].\kw{enq}[v](t, c_1, c_2) & {} :=
+%          \{ * @ (t[c_2/v], c_1, c_2+1) \} \\
+%        M_\kw{q}[L_\kw{a}].\kw{deq}(t, c_1, c_2) & {} :=
+%          \{ t_{c_1} \! @ (t, c_1+1, c_2) \}
+%      \end{array}
+%    \]
+%  \end{example}
+%\end{frame}
+%%}}}
+%
+%\begin{frame}[fragile]{Simulations} %{{{
+%To express that the specification is faithfully implemented:
+%\[
+%  L_\kw{q} = \langle
+%    E_\kw{q},
+%    V^*,
+%    \sigma_\kw{q}
+%  \rangle
+%  \quad ``\sqsubseteq" \quad
+%  M_\kw{q}[L_\kw{a}] = \langle
+%    E_\kw{q},
+%    V^\mathbb{N} \times \mathbb{N} \times \mathbb{N},
+%    \sigma'_\kw{q}
+%  \rangle
+%\]
+%we need to describe
+%how states of $L_\kw{q}$ are represented in $L_\kw{a}$:
+%\[
+%  \vec{q} \mathrel{R} (t, c_1, c_2)
+%  \quad \Leftrightarrow \quad
+%  \vec{q} = t_{c_1} \cdots t_{c_2-1}
+%\]
+%and establish for each $(m:N) \in E_\kw{q}$ the simulation:
+%\[
+%  \fbox{$L_\kw{q}.m \le_R M_\kw{q}[L_\kw{a}].m$}
+%  \qquad
+%  \begin{tikzcd}[sep=large]
+%    \vec{p} \ar[r, "L_\kw{q}.m"] \ar[d, "R"', dash] &
+%    v@\vec{q} \ar[d, "{=} \times R", dash, dashed] \\
+%    (t, c_1, c_2) \ar[r, "{M_\kw{q}[L_\kw{a}].m}"', dashed] &
+%    v@(t', c_1', c_2')
+%  \end{tikzcd}
+%\]
+%\end{frame}
+%%}}}
+%
+%\begin{frame}{Layer correctness} %{{{
+%  \begin{definition}[Layer correctness]
+%    For $L_1 = \langle E_1, S_1, \sigma_1 \rangle$,
+%    $L_2 = \langle E_2, S_2, \sigma_2 \rangle$, and
+%    $R \subseteq S_2 \times S_1$,
+%    we write:
+%    \[
+%      \fbox{$L_1 \vdash_R M : L_2$} \quad \Leftrightarrow \quad
+%      \forall (m:N) \in E \bdot L_2.m \le_R M[L_1].m
+%    \]
+%  \end{definition}
+%  \begin{theorem}[Soundness]
+%    \vspace{-0.5\baselineskip}
+%    \[
+%      L_1 \vdash_R M : L_2 \quad \Rightarrow \quad
+%      \forall C \bdot C[L_2] \le_R C[M][L_1]
+%    \]
+%  \end{theorem}
+%  \pause
+%  \begin{example}[Queue rotation in arrays]
+%    From the correctness of the queue implementation we derive:
+%    \[
+%      L_\kw{a} \vdash_R M_\kw{q} : L_\kw{q}
+%      \quad \Rightarrow \quad
+%      \kw{rot}[L_\kw{q}] \le_R \kw{rot}[M_\kw{q}][L_\kw{a}]
+%    \]
+%    \[
+%      \kw{rot}[M_\kw{q}] =
+%        i \mathop{\leftarrow} \kw{inc}_1 \mathop{;}
+%        v \mathop{\leftarrow} \kw{get}[i] \mathop{;}
+%        j \mathop{\leftarrow} \kw{inc}_2 \mathop{;}
+%        \kw{set}[j, v]
+%    \]
+%  \end{example}
+%\end{frame}
+%%}}}
+%
+%\subsection{Composition principles}
+%
+%\begin{frame}{Vertical composition}
+%
+%\end{frame}
+%
+%\begin{frame}{Horizontal composition}
+%
+%\end{frame}
+%
+%\begin{frame}{Conclusion}
+%
+%\end{frame}
+%
+%%}}}
+
+\section{Refinement-based game semantics} \label{sec:rbgs} %{{{
+
+%\begin{frame}{Scaling up certified software} %{{{
+%  Certified software this past decade:
+%  \begin{itemize}
+%    \item C compiler (CompCert) and program logic (VST)
+%    \item Operating system kernel (CertiKOS), file system (FSCQ)
+%    \item Processor designs (Bluespec), \ldots
+%  \end{itemize}
+%
+%  \pause
+%  To scale up verification further, we need a compositional glue:
+%  \begin{itemize}
+%    \item Heterogenous: general-purpose model, embed various components
+%    \item Composition and abstraction: high-level algebraic structures
+%  \end{itemize}
+%  %The DeepSpec project seeks to build:
+%  %\begin{itemize}
+%  %  \pause \item Large-scale, heterogenous systems
+%  %  \pause \item Certified end-to-end in a general-purpose proof assistant
+%  %  \pause \item Constructed from off-the-shelf certified components.
+%  %\end{itemize}
+%\end{frame}
+%%}}}
+
+\begin{frame}{Great research not used in large-scale verification} %{{{
+  \textbf{Good news:}
+  There is lot of research that we can draw from!
+
+  \textbf{Bad news:}
+  Few applications to
+  large-scale verification.
+
+  \vfill
+  \begin{center}
+    \begin{tabular}{cc}
+      \hline
+      Semantics research &
+      Typical verification project
+      \\
+      \hline
+      \\[-1ex]
+      %\parbox{.4\textwidth}{
+      %  \centering
+      %  Game semantics \\ Linear logic
+      %} &
+      \parbox{10em}{\centering Game semantics \\ Linear logic} &
+      Transition systems \\[1em]
+      Refinement calculus &
+      Simulations \\[1em]
+      Logical relations &
+      Hoare logic \\[1em]
+      Algebraic effects &
+      Closed systems \\[1em]
+      \hline
+    \end{tabular}
+  \end{center}
 \end{frame}
 %}}}
 
+\begin{frame}{Why this gap?} %{{{
+  Challenges:
+  \begin{itemize}
+    \item Sophisticated models hard to mechanize in proof assistants
+    \item Not clear how these techniques can work together
+  \end{itemize}
+
+  For example:
+  \begin{itemize}
+    \item Game semantics: not much emphasis on refinement
+    \item Refinement calculus: imperative programming and specification
+  \end{itemize}
+\end{frame}  
 %}}}
 
-\section{Certified abstraction layers} \label{sec:cal} %{{{
+\begin{frame}{Contributions} %{{{
+  I combined various paradigms to introduce:
+  \begin{center}
+  \textbf{Refinement-Based Game Semantics}
+  \end{center}
 
-\subsection{Basic setup}
+  \pause
+  My models provide:
+  \begin{itemize}
+    \item \textbf{Compositionality:}
+      categories with symmetric monoidal structures
+    \item \textbf{Refinement:}
+      uniform treatment of programs and specifications
+    \item \textbf{Dual nondeterminism:}
+      for expressivity and data abstraction
+    %\item \emph{Symmetric monoidal categories} for compositionality;
+    %\item \emph{Strategy specifications} to support stepwise refinement;
+    %\item \emph{Dual nondeterminism} for open systems and data abstraction.
+  \end{itemize}
 
-\begin{frame}{Layer signatures} %{{{
+  \pause
+  Key insights:
+  \begin{itemize}
+    \item Reinterpret strategies as inherently nondeterministic
+    \item Upgrade to dual nondeterminism and lift all restrictions
+  \end{itemize}
+\end{frame}
+%}}}
+
+\subsection{Game semantics}
+
+\begin{frame}{Game semantics} %{{{
+  In game semantics:
+  \begin{itemize}
+    \item Types are interpreted as \emph{games};
+    \item Terms are interpreted as \emph{strategies}.
+  \end{itemize}
+
+  The \emph{plays} of a game are sequences of moves,
+  often alternating between the two players.
+  One play for $\kw{x := 2 * x}$ could be:
+  \[
+      \kw{run} \cdot
+      \underline{\kw{rd}_\kw{x}} \cdot 3 \cdot
+      \underline{\kw{wr}_\kw{x}[6]} \cdot \kw{ok} \cdot
+      \underline{\kw{done}}
+  \]
+
+  Then stragies are represented as the set of plays
+  which are \\ possible executions of a component,
+  similar to trace semantics:
+  \[
+    \llbracket \kw{x := 2 * x} \rrbracket =
+    \{
+      \kw{run} \cdot
+      \underline{\kw{rd}_\kw{x}} \cdot n \cdot
+      \underline{\kw{wr}_\kw{x}[2n]} \cdot \kw{ok} \cdot
+      \underline{\kw{done}}
+      \mid n \in \mathbb{Z}
+    \}
+  \]
+\end{frame}
+%}}}
+
+\begin{frame}{Signatures as games} %{{{
   \begin{definition}[Signature]
-  Set of primitive names and the types of their outcomes:
+  Enumerate operations and the types of their outcomes:
   \[
     E = \{ m_1 \mathop{:} N_1, \ldots, m_j \mathop{:} N_j \}
   \]
@@ -712,206 +842,162 @@
 \end{frame}
 %}}}
 
+\begin{frame}{Abstraction layers} %{{{
+
+%Abstraction layers \emph{use} operations from a signature $E$
+%and \emph{provide} operations in a signature $F$.
+
+\begin{definition}[Plays]
+A strategy $\sigma : E \Rightarrow F$ uses plays of the form:
+\[
+    q
+    \underline{m}_1 n_1
+    \cdots
+    \underline{m}_j n_j
+    \underline{r}
+  \qquad
+  (q \mathop{:} R) \in F, (m_i \mathop{:} N_i) \in E, n_i \in N_i, r \in R
+\]
+\end{definition}
+\pause
+\begin{example}[Dequeuing from an array]
+  The following scenario:
+  \[
+    \deqpic{M_\kw{q} : E_\kw{a} \Rightarrow E_\kw{q}}{3}{\mathtt{a}}
+    \vspace{-0.5\baselineskip}
+  \]
+  corresponds to the play:
+  \[
+    \kw{deq} \cdot
+    \underline{\kw{inc}_1} \cdot 3 \cdot
+    \underline{\kw{get}[3]} \cdot \mathtt{a} \cdot
+    \underline{\mathtt{a}}
+  \]
+\end{example}
+\end{frame}
+%}}}
+
 \begin{frame}{Layer interfaces} %{{{
-  \begin{definition}[Layer interface]
-    A tuple $L = \langle E, S, \sigma \rangle$ with:
-    \begin{itemize}
-      \item a signature $E$,
-      \item a set of states $S$,
-      \item a specification
-        $\sigma^m : S \rightarrow \mathcal{P}^1(N \times S)$
-        for each $(m:N) \in E$ 
-    \end{itemize}
-    Note: I will write $L.q$ for $\sigma^q$ and $v@k$ for $(v, k)$
-    when $k$ is a state.
+  \begin{definition}[Extending a signature with state]
+    We can annotate all calls and returns in $E$ with a state $k \in S$:
+    \[
+      E@S :=
+        \{ m@k : N \times S \mid
+           m {:} N \in E, k \in S \}
+    \]
+    Note that $\sigma : E \Rightarrow F$ can be lifted to
+    $\sigma@S : E@S \Rightarrow F@S$.
   \end{definition}
   \pause
   \only<1-2>{
-    \begin{example}[Queue layer interface]
-      \vspace{-\baselineskip}
-      \begin{align*}
-        \multicolumn{2}{c}{$
-          L_\kw{q} := \langle E_\kw{q}, V^*, \sigma_q \rangle$} \\[1ex]
-        L_\kw{q}.{\kw{enq}[v]}(\vec{q}) &:= \{ * @ \vec{q} v \} &
-          \kw{enq}[\mathtt{d}](\mathtt{abc}) &\leadsto *@\mathtt{abcd} \\
-        L_\kw{q}.{\kw{deq}}(\vec{q}) &:=
-          \{ v@\vec{p} \mid v \vec{p} = \vec{q} \} &
-          \kw{deq}(\mathtt{abcd}) &\leadsto \mathtt{a}@\mathtt{bcd} \\
-        & & \kw{deq}(\epsilon) &\leadsto {?} \\
-      \end{align*}
-    \end{example}
+  \begin{example}[Queue layer interface]
+    The queue layer is specified by:
+    \[
+      L_\kw{q} : \varnothing \Rightarrow E_\kw{q}@S_\kw{q}
+      \qquad
+      S_\kw{q} := V^*
+    \]
+    Its plays are of the form:
+    \begin{align*}
+      \kw{enq}[v]@\vec{q} &\mathrel{\cdot} \underline{*@\vec{q}v} \\[1ex]
+      \kw{deq}@v\vec{q} &\mathrel{\cdot} \underline{v@\vec{q}}
+    \end{align*}
+    \vspace{1.5ex}
+  \end{example}
   }
   \only<3>{
-    \begin{example}[Array layer interface]
-      \vspace{-\baselineskip}
-      \begin{align*}
-        \multicolumn{2}{c}{$
-          L_\kw{a} := \langle E_\kw{a}, V^\mathbb{N} \times \mathbb{N}
-            \times \mathbb{N}, \sigma_a \rangle$} \\[1ex]
-        L_\kw{a}.{\kw{get}[i]}(t, c_1, c_2) &:= \{ t_i @ (t, c_1, c_2) \} \\
-        L_\kw{a}.{\kw{set}[i,v]}(t, c_1, c_2) &:=
-          \{ *@(t[i / v], c_1, c_2) \} \\
-        L_\kw{a}.{\kw{inc}_1}(t, c_1, c_2) &:= \{ c_1@(t, c_1+1, c_2) \} \\
-        L_\kw{a}.{\kw{inc}_2}(t, c_1, c_2) &:= \{ c_2@(t, c_1, c_2+1) \}
-      \end{align*}
-    \end{example}
+  \begin{example}[Array layer interface]
+    The array layer is specified by:
+    \[
+      L_\kw{a} : \varnothing \Rightarrow E_\kw{a}@S_\kw{a}
+      \qquad
+      S_\kw{a} := V^\mathbb{N} \times \mathbb{N} \times \mathbb{N}
+    \]
+    Its plays are of the form:
+    \small
+    \begin{align*}
+      \kw{get}[i]@(t, c_1, c_2) &\mathrel{\cdot} t_i@(t, c_1, c_2) \\
+      \kw{set}[i, v]@(t, c_1, c_2) &\mathrel{\cdot} *@(t[i \leftarrow v], c_1, c_2) \\
+      \kw{inc}_1@(t, c_1, c_2) &\mathrel{\cdot} c_1@(t, c_1 + 1, c_2) \\
+      \kw{inc}_2@(t, c_1, c_2) &\mathrel{\cdot} c_2@(t, c_1, c_2 + 1)
+    \end{align*}
+  \end{example}
   }
 \end{frame}
 %}}}
 
-\begin{frame}{Client code} %{{{
-  \begin{block}{Monad}
-    Client code for $L = \langle E, S, \sigma \rangle$
-    can be interpreted in the monad:
-    \begin{align*}
-      T_L(V) &:= S \rightarrow \mathcal{P}^1(V \times S) \\
-      \eta(v) &:= \lambda \, k \,.\, \{ v@k \} \\
-      v \mathop{\leftarrow} x \mathop{;} f(v) &:=
-        \lambda \, k \,.\, \{ r@k'' \mid
-        \exists \, v \, k' \,.\, x(k) \ni v@k' \wedge f(v)(k') \ni r@k'' \}
-    \end{align*}
-    The specification $L.m \in T_L(N)$ of $(m : N) \in E$
-    can be used directly.
+\begin{frame}{Composition} %{{{
+  \begin{block}{Composition of strategies}
+    To compose $\sigma : E \Rightarrow F$ and
+    $\tau : F \Rightarrow G$ into
+    $\tau \circ \sigma : E \Rightarrow G$:
+    \[
+    \begin{tikzpicture}[scale=0.3]
+      \draw[->] (-15, 3) -- (-13, 3);
+      \draw[->] (13, 3) -- (15, 3);
+      \draw (-13, 2) rectangle (13, 4);
+      \node at (0, 3) {$\tau : F \Rightarrow G$};
+      \begin{scope}[xshift=-7cm]
+        \draw (-4,-1) rectangle (4,1);
+        \draw[->] (-5, 2) |- (-4,0);
+        \draw[->] (4,0) -| (5,2);
+        \node (f) at (0,0) {$\sigma : E \Rightarrow F$};
+        \draw[->] (-3, -1) -- (-3, -2);
+        \draw[->] (-2, -2) -- (-2, -1);
+        \node[below] at (0, -1) {$\cdots$};
+        \draw[->] (2, -1) -- (2, -2);
+        \draw[->] (3, -2) -- (3, -1);
+      \end{scope}
+      \node at (0, 0) {$\cdots$};
+      \begin{scope}[xshift=7cm]
+        \draw (-4,-1) rectangle (4,1);
+        \draw[->] (-5, 2) |- (-4,0);
+        \draw[->] (4,0) -| (5,2);
+        \node (f) at (0,0) {$\sigma : E \Rightarrow F$};
+        \draw[->] (-3, -1) -- (-3, -2);
+        \draw[->] (-2, -2) -- (-2, -1);
+        \node[below] at (0, -1) {$\cdots$};
+        \draw[->] (2, -1) -- (2, -2);
+        \draw[->] (3, -2) -- (3, -1);
+      \end{scope}
+      \node at (-14,  4) {$G$};
+      \node at (-14,  1) {$F$};
+      \node at (-14, -2) {$E$};
+    \end{tikzpicture}
+    \]
   \end{block}
   \pause
-  \begin{example}[Queue rotation]
-    \vspace{-\baselineskip}
-    \begin{gather*}
-      \kw{rot} :=
-      v \mathop{\leftarrow} \kw{deq} \mathop{;} \kw{enq}[v] \\
-      \kw{rot}[L_\kw{q}] \in T_{L_\kw{q}}(\mathbbm{1}) =
-      \lambda \vec{q} \bdot \{ *@\vec{p}v \mid v\vec{p} = \vec{q} \}
-    \end{gather*}
-  \end{example}
-\end{frame}
-%}}}
-
-\begin{frame}{Layer implementations} %{{{
-  \begin{definition}[Layer implementation]
-    A layer implementation $M : E \Rightarrow F$
-    gives for each $(m : N) \in F$ \\
-    a monadic expression with an outcome in $N$
-    involving operations of $E$.
-
-    Evaluating $M : E \Rightarrow F$ on top of
-    $L = \langle E, S, \sigma \rangle$ gives a layer interface:
+  \begin{example}[Evaluating the queue implementation]
+    We can compose:
     \[
-        M[L] := \langle F, S, \sigma' \rangle
-        \qquad
-        M[L].m := M.m[L]
+      M_\kw{q}@S_\kw{a} :
+        E_\kw{a}@S_\kw{a} \Rightarrow E_\kw{q}@S_\kw{a}
+      \qquad \text{and} \qquad
+      L_\kw{a} : \varnothing \Rightarrow E_\kw{a}@S_\kw{a}
     \]
-  \end{definition}
-  \pause
-  \begin{example}[Queue implementation]
-    The queue implementation
-    $M_\kw{q} : E_\kw{a} \Rightarrow E_\kw{q}$ is described by:
+    to obtain:
     \[
-      \begin{array}{r@{}l}
-        M_\kw{q}.\kw{enq}[v] & {} :=
-          i \leftarrow \kw{inc}_2 \mathop{;} \kw{set}[i, v] \\
-        M_\kw{q}.\kw{deq} & {} :=
-          i \leftarrow \kw{inc}_1 \mathop{;} \kw{get}[i]
-        \\[1ex]
-        M_\kw{q}[L_\kw{a}].\kw{enq}[v](t, c_1, c_2) & {} :=
-          \{ * @ (t[c_2/v], c_1, c_2+1) \} \\
-        M_\kw{q}[L_\kw{a}].\kw{deq}(t, c_1, c_2) & {} :=
-          \{ t_{c_1} \! @ (t, c_1+1, c_2) \}
-      \end{array}
+      M_\kw{q}@S_\kw{a} \circ L_\kw{a} :
+        \varnothing \Rightarrow E_\kw{q}@S_\kw{a}
+      \qquad \text{vs.} \qquad
+      L_\kw{q} : \varnothing \Rightarrow E_\kw{q}@S_\kw{q}
     \]
   \end{example}
+%  \pause
+%  \begin{example}[Queue rotation]
+%    \vspace{-1em}
+%    \[ \begin{array}{r@{{} \in {}}c@{\quad := \quad}l}
+%      \kw{rot} & \mathcal{I}_{E_\kw{q}}(\mathbbm{1}) &
+%        v \mathop{\leftarrow} \kw{deq} \mathop{;} \kw{enq}[v] \\
+%      \kw{rot}[M_\kw{q}] & \mathcal{I}_{E_\kw{a}}(\mathbbm{1}) &
+%        i \mathop{\leftarrow} \kw{inc}_1 \mathop{;}
+%        v \mathop{\leftarrow} \kw{get}[i] \mathop{;}
+%        j \mathop{\leftarrow} \kw{inc}_2 \mathop{;}
+%        \kw{set}[j, v]
+%    \end{array} \]
+%  \end{example}
 \end{frame}
 %}}}
-
-\begin{frame}[fragile]{Simulations} %{{{
-To express that the specification is faithfully implemented:
-\[
-  L_\kw{q} = \langle
-    E_\kw{q},
-    V^*,
-    \sigma_\kw{q}
-  \rangle
-  \quad ``\sqsubseteq" \quad
-  M_\kw{q}[L_\kw{a}] = \langle
-    E_\kw{q},
-    V^\mathbb{N} \times \mathbb{N} \times \mathbb{N},
-    \sigma'_\kw{q}
-  \rangle
-\]
-we need to describe
-how states of $L_\kw{q}$ are represented in $L_\kw{a}$:
-\[
-  \vec{q} \mathrel{R} (t, c_1, c_2)
-  \quad \Leftrightarrow \quad
-  \vec{q} = t_{c_1} \cdots t_{c_2-1}
-\]
-and establish for each $(m:N) \in E_\kw{q}$ the simulation:
-\[
-  \fbox{$L_\kw{q}.m \le_R M_\kw{q}[L_\kw{a}].m$}
-  \qquad
-  \begin{tikzcd}[sep=large]
-    \vec{p} \ar[r, "L_\kw{q}.m"] \ar[d, "R"', dash] &
-    v@\vec{q} \ar[d, "{=} \times R", dash, dashed] \\
-    (t, c_1, c_2) \ar[r, "{M_\kw{q}[L_\kw{a}].m}"', dashed] &
-    v@(t', c_1', c_2')
-  \end{tikzcd}
-\]
-\end{frame}
-%}}}
-
-\begin{frame}{Layer correctness} %{{{
-  \begin{definition}[Layer correctness]
-    For $L_1 = \langle E_1, S_1, \sigma_1 \rangle$,
-    $L_2 = \langle E_2, S_2, \sigma_2 \rangle$, and
-    $R \subseteq S_2 \times S_1$,
-    we write:
-    \[
-      \fbox{$L_1 \vdash_R M : L_2$} \quad \Leftrightarrow \quad
-      \forall (m:N) \in E \bdot L_2.m \le_R M[L_1].m
-    \]
-  \end{definition}
-  \begin{theorem}[Soundness]
-    \vspace{-0.5\baselineskip}
-    \[
-      L_1 \vdash_R M : L_2 \quad \Rightarrow \quad
-      \forall C \bdot C[L_2] \le_R C[M][L_1]
-    \]
-  \end{theorem}
-  \pause
-  \begin{example}[Queue rotation in arrays]
-    From the correctness of the queue implementation we derive:
-    \[
-      L_\kw{a} \vdash_R M_\kw{q} : L_\kw{q}
-      \quad \Rightarrow \quad
-      \kw{rot}[L_\kw{q}] \le_R \kw{rot}[M_\kw{q}][L_\kw{a}]
-    \]
-    \[
-      \kw{rot}[M_\kw{q}] =
-        i \mathop{\leftarrow} \kw{inc}_1 \mathop{;}
-        v \mathop{\leftarrow} \kw{get}[i] \mathop{;}
-        j \mathop{\leftarrow} \kw{inc}_2 \mathop{;}
-        \kw{set}[j, v]
-    \]
-  \end{example}
-\end{frame}
-%}}}
-
-\subsection{Composition principles}
-
-\begin{frame}{Vertical composition}
-
-\end{frame}
-
-\begin{frame}{Horizontal composition}
-
-\end{frame}
-
-\begin{frame}{Conclusion}
-
-\end{frame}
-
-%}}}
-
-\section{Refinement-based game semantics} \label{sec:rbgs} %{{{
 
 \subsection{Dual nondeterminism}
 
@@ -1055,7 +1141,7 @@ The function $f(x) := 2x$ statisfies the specifications:
   \]
   \onslide<3->
   With dual nondeterminism:
-  \only<1-3>{
+  %\only<1-3>{
   \begin{align*}
       R^*(f) &\sqsubseteq g &
       R^*(f) &:=
@@ -1063,10 +1149,12 @@ The function $f(x) := 2x$ statisfies the specifications:
       \bigsqcup_{x \, \mathrel{R} \, n} \,
       \bigsqcap_{m \, \mathrel{R^{-1}} \, f(x)}
       (n \mapsto m)
-  \end{align*}
-  }
-  \only<4>{
-  \begin{align*}
+  %\end{align*}
+  %}
+  %\only<4>{
+  %\begin{align*}
+  \\
+    \Leftrightarrow
     f &\sqsubseteq R_*(g) &
     R_*(g) &:=
     \bigsqcup_{x \in \mathbb{Z}} \:
@@ -1074,7 +1162,7 @@ The function $f(x) := 2x$ statisfies the specifications:
     \bigsqcup_{y \, \mathrel{R} \, g(n)}
     (x \mapsto y)
   \end{align*}
-  }
+  %}
 \end{frame}
 %}}}
 
@@ -1114,6 +1202,453 @@ Instead, we embrace unrestricted dual nondeterminism:
 \end{frame}
 %}}}
 
+\subsection{Strategy specifications}
+
+%\begin{frame}{Two-sided strategies} %{{{
+%  \begin{definition}
+%    A morphism $f : E \Rightarrow F$ is a family:
+%    \[
+%      f \in \prod_{(q : R) \in F} \mathcal{I}_E(R)
+%    \]
+%    \[
+%      \begin{tikzpicture}[scale=0.4]
+%        \draw[->] (-5,0) node[left] {$(q \mathop{:} R) \in F$} -- (-4,0);
+%        \draw (-4,-1) rectangle (4,1);
+%        \draw[->] (4,0) -- (5,0) node[right] {$r \in R$};
+%        \node (f) at (0,0) {$f : E \Rightarrow F$};
+%        \draw[->] (-3, -1) -- (-3, -2);
+%        \draw[->] (-2, -2) -- (-2, -1);
+%        \node[below] at (0, -1) {$\cdots$};
+%        \draw[->] (2, -1) -- (2, -2);
+%        \draw[->] (3, -2) -- (3, -1);
+%        \node[below] at (-2.5, -2) {$E$};
+%        \node[below] at ( 2.5, -2) {$E$};
+%      \end{tikzpicture}
+%      \qquad
+%    \]
+%  \end{definition}
+%  \pause
+%  \begin{example}[Queue implementation]
+%    The morphism $M_\kw{q} : E_\kw{a} \Rightarrow E_\kw{q}$ is defined by:
+%    \[
+%      \begin{array}{l@{}l}
+%        \kw{enq}[v] & {} :=
+%          i \leftarrow \kw{inc}_2 \mathop{;} \kw{set}[i, v] \\
+%        \kw{deq} & {} :=
+%          i \leftarrow \kw{inc}_1 \mathop{;} \kw{get}[i]
+%      \end{array}
+%    \]
+%  \end{example}
+%\end{frame}
+%%}}}
+
+\begin{frame}{Data abstraction} %{{{
+  \begin{definition}
+    A simulation relation $R \subseteq S_2 \times S_1$
+    can be encoded as a morphism:
+    \[
+      \begin{array}{ccc}
+        %L_2 : \varnothing \Rightarrow E@S_2 & &
+        %L_1 : \varnothing \Rightarrow E@S_1 \\[1ex]
+        R^*_E : E@S_2 \Rightarrow E@S_1 & &
+        R_*^E : E@S_1 \Rightarrow E@S_2 \\[1ex]
+        R^*_E \circ L_2 \sqsubseteq L_1 &
+        \Leftrightarrow &
+        L_2 \sqsubseteq R_*^E \circ L_1
+      \end{array}
+    \]
+  \end{definition}
+  \pause
+  \begin{example}[Translating between array and queue states]
+    The layer interface
+    $R^*_{E_q} \circ L_q : \varnothing \Rightarrow E_\kw{q}@S_\kw{a}$
+    becomes:
+    \begin{gather*}
+      \vec{q} \mathrel{R} (t, c_1, c_2)
+      \quad \Leftrightarrow \quad
+      c_1 \le c_2 \:\wedge\:
+      \vec{q} = t_{c_1} \cdots t_{c_2 - 1} \\[1ex]
+      \bigsqcup_{\vec{q} = t_{c_1}\cdots t_{c_2}} \:
+      \bigsqcap_{(t', c_1', c_2') | \vec{q}v = t'_{c_1'} \cdots t'_{c_2'}} \:
+      \kw{enq}[v]@(t, c_1, c_2) \mathrel{\cdot}
+        *@(t', c_1', c_2') \\
+        \bigsqcup_{v\vec{q} = t_{c_1}\cdots t_{c_2}} \:
+        \bigsqcap_{(t', c_1', c_2') | \vec{q} = t'_{c_1'} \cdots t'_{c_2'}} \:
+      \kw{deq}@(t, c_1, c_2) \mathrel{\cdot}
+        v@(t', c_1', c_2')
+    \end{gather*}
+  \end{example}
+\end{frame}
+%}}}
+
+\begin{frame}[fragile]{Certified abstraction layers} %{{{
+    \[
+        L_\kw{a} \vdash_R M_\kw{q} : L_\kw{q}
+        \qquad \qquad \quad \:\:
+        R^*_{E_\kw{q}} \circ L_\kw{q} \sqsubseteq
+          M_\kw{q}@S_\kw{a} \circ L_\kw{a}
+        \quad
+    \]
+    \vspace{1em}
+    \[
+      \begin{prooftree}
+        %\hypo{C}
+        \infer0[$L_\kw{q}$]{
+          \begin{array}{c}
+            R \\
+            \fbox{$\qquad M_\kw{q} \qquad$}
+          \end{array}}
+        \infer1[$L_\kw{a}$]{}
+      \end{prooftree}
+      \qquad \qquad
+      \begin{tikzpicture}[xscale=2,yscale=1.5,baseline=0.66cm]
+        \node (O) at (0,0) {$\varnothing$};
+        \node (Lq) at (0,1) {$E_\kw{q}@S_\kw{q}$};
+        \node (La) at (1,0) {$E_\kw{a}@S_\kw{a}$};
+        \draw[->] (O) -- node[left] {\small $L_\kw{q}$} (Lq);
+        \draw[->] (O) -- node[below] {\small $L_\kw{a}$} (La);
+        \only<2->{
+          \begin{scope}[overlay]
+            \node (Eq) at (2,1) {$E_\kw{q}$};
+            \node (Ea) at (2,0) {$E_\kw{a}$};
+            \draw[->] (Ea) -- node[right] {\small $M_\kw{q}$} (Eq);
+          \end{scope}
+        }
+        \only<3->{
+          \node (Lqa) at (1,1) {$E_\kw{q}@S_\kw{a}$};
+          \draw[->,dashed,overlay] (La) -- node[right]
+            {\small $M_\kw{q}@S_\kw{a}$} (Lqa);
+        }
+        \only<4->{
+          \draw[->,overlay] (Lq) -- node[above] {\small $R^*_{E_\kw{q}}$} (Lqa);
+        }
+        \only<5->{
+          \node at (0.5,0.5) {$\sqsubseteq$};
+        }
+      \end{tikzpicture}
+      \qquad
+    \]
+\end{frame}
+%}}}
+
+\begin{frame}{Summary} %{{{
+  Game semantics and dual nondeterminism go hand-in-hand:
+  \begin{itemize}
+    \item Angelic nondeterminism is already present in strategies
+    \item Unrestricted dual nondeterminism completes the symmetry
+  \end{itemize}
+
+  Refinement-based game introduces several innovations:
+  \begin{itemize}
+    \item Combine game semantics and the refinement calculus
+    \item Nondeterminism decoupled from the structure of plays
+    \item Supports heterogenous components and data abstraction
+  \end{itemize}
+\end{frame}
+%}}}
+
+%}}}
+
+\section{CompCertO} \label{sec:compcerto} %{{{
+
+\begin{frame}{Contributions} %{{{
+  The correctness theorem of CompCert
+  is about closed programs.
+
+  CompCertO is the first extension of CompCert
+  suitable \\ for building large-scale heterogenous certified systems:
+  \begin{itemize}[<+->]
+    \item \emph{open} semantics for program components;
+    \item correctness in terms of component interactions;
+    \item an explicit description of the calling convention;
+    \item certified linking of assembly programs;
+    \item limited changes to existing proofs.
+  \end{itemize}
+  %\onslide<+->
+  %To achive this, I adapted some of the
+  %ideas used in game semantics and certified abstraction layers.
+\end{frame}
+%}}}
+
+\begin{frame}{Challenge} %{{{
+  The main challenge we need to address is the following:
+  \begin{itemize}
+    \item Close semantics: source and target have identical behaviors.
+    \item Open semantics: reveals details
+      about component interactions.
+  \end{itemize}
+  \pause
+  The problem is:
+  \begin{itemize}
+    \item The source and target interactions are \emph{different}.
+    \item The way they are related varies across compiler passes.
+    \item This breaks the uniformity of the model
+      and easy pass composition.
+  \end{itemize}
+  \pause
+  Previous approaches try to recover this uniformity. \\
+  Instead, we capture the variation and reason about it.
+\end{frame}
+%}}}
+
+\begin{frame}{Semantic model} %{{{
+  The transition systems of CompCert are extended \\ to model
+  cross-component interactions, described by a signature.
+
+  Each language has a type $A \twoheadrightarrow B$
+  where $A, B$ are signatures:
+  \begin{itemize}
+    \item $A$ describes the form of outgoing calls;
+    \item $B$ describes the form of incoming calls.
+  \end{itemize}
+
+  \pause
+  Then \emph{simulation conventions} specify the correspondance \\
+  between source and target interactions.
+
+  \pause
+  The compiler's correctness theorem is formulated as:
+  \[
+    \kw{Clight}(p) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+    \kw{Asm}(p')
+    \qquad
+    \begin{tikzpicture}[baseline=0.7cm,scale=0.8]
+      \node (A1) at (-1,  2) {$\mathcal{C}$};
+      \node (A2) at (-1,  0) {$\mathcal{A}$};
+      \node (B1) at ( 1,  2) {$\mathcal{C}$};
+      \node (B2) at ( 1,  0) {$\mathcal{A}$};
+      \draw (A1) edge[->>] node[auto] {$\kw{Clight}(p)$} (B1);
+      \draw (A2) edge[->>] node[below] {$\kw{Asm}(p')$} (B2);
+      \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
+        \draw (A1) edge[double] node[auto,swap] {$\mathbb{C}$} (A2);
+        \draw (B1) edge[double] node[auto] {$\mathbb{C}$} (B2);
+      \end{scope}
+    \end{tikzpicture}
+  \]
+\end{frame}
+%}}}
+
+\begin{frame}{Compilation passes} %{{{
+  Each pass of CompCert
+  is assigned a type matching the existing proof:
+
+  \tiny
+  \centering
+  \begin{tabular}{l r @{$\: \twoheadrightarrow \:$} l r @{\ } r}
+    \hline
+    Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC}
+      \\
+    \hline
+    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
+    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -4 & (-1\%) \\
+    \kw{Cshmgen} & \kw{id} & \kw{id} & +0 & (+0\%) \\
+    \hline
+    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+4\%) \\
+    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ & -21 & (-2\%) \\
+    \hline
+    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ & +27 & (+3\%) \\
+    \kw{Selection} & $\kw{wt} \cdot \kw{ext}$ & $\kw{wt} \cdot \kw{ext}$ &
+      +43 & (+0\%) \\
+    \hline
+    \textbf{CminorSel} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+3\%) \\
+    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ & +8 & (+0\%) \\
+    \hline
+    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ & +11 & (+2\%) \\
+    $\kw{Tailcall}^\dagger$ & $\kw{ext}$ & $\kw{ext}$ & -1 & (-1\%) \\
+    \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ & +58 & (+3\%) \\
+    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -14 & (-7\%) \\
+    $\kw{Constprop}^\dagger$ &
+      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
+      -17 & (-2\%) \\
+    $\kw{CSE}^\dagger$ &
+      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
+      +3 & (+0\%) \\
+    $\kw{Deadcode}^\dagger$ &
+      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
+      -7 & (-1\%) \\
+    %\st{Unusedglob} \\
+    \kw{Allocation} &
+      $\kw{wt} \cdot \kw{alloc}$ & $\kw{wt} \cdot \kw{alloc}$ &
+      +13 & (+0\%) \\
+    \hline
+    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ & +15 & (+6\%) \\
+    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ & +2 & (+0\%) \\
+    \kw{Linearize} & \kw{id} & \kw{id} & -15 & (-3\%) \\
+    \hline
+    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ & +16 & (+7\%) \\
+    \kw{CleanupLabels} & \kw{id} & \kw{id} & -10 & (-4\%) \\
+    \kw{Debugvar} & \kw{id} & \kw{id} & -12 & (-3\%) \\
+    \kw{Stacking} & \kw{stacking} & \kw{stacking} & +291 & (+11\%) \\
+    \hline
+    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ & +100 & (+26\%) \\
+    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} & +179 & (+6\%) \\
+    \hline
+    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +53 & (+5\%) \\
+    \hline
+    \multicolumn{3}{r}{Total:} & +765 & (+2\%)
+  \end{tabular}
+\end{frame}
+%}}}
+
+\begin{frame}{Simulations} %{{{
+  Simulation conventions compose in the expected way:
+
+  \centering
+  $\begin{array}{c}
+    \kw{id} : A \Leftrightarrow A
+    \qquad
+    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
+    \\[2em]
+    {\begin{prooftree}
+      \hypo{\mathbb{R} : A_1 \Leftrightarrow A_2}
+      \hypo{\mathbb{S} : A_2 \Leftrightarrow A_3}
+      \infer2{\mathbb{R} \cdot \mathbb{S} : A_1 \Leftrightarrow A_3}
+    \end{prooftree}}
+    \\[2em]
+    {\begin{prooftree}
+      \hypo{L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2}
+      \hypo{L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3}
+      \infer2{
+        L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
+                 \mathbb{R}_B \cdot \mathbb{S}_B} L_3}
+    \end{prooftree}}
+  \end{array}
+  \qquad
+  \begin{tikzpicture}[baseline,scale=1]
+    \node (A1) at (-1,  2) {$A_1$};
+    \node (A2) at (-1,  0) {$A_2$};
+    \node (A3) at (-1, -2) {$A_3$};
+    \node (B1) at ( 1,  2) {$B_1$};
+    \node (B2) at ( 1,  0) {$B_2$};
+    \node (B3) at ( 1, -2) {$B_3$};
+    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
+    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
+    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
+    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
+      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_A$} (A2);
+      \draw (B1) edge[double] node[auto] {$\mathbb{R}_B$} (B2);
+      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_A$} (A3);
+      \draw (B2) edge[double] node[auto] {$\mathbb{S}_B$} (B3);
+    \end{scope}
+  \end{tikzpicture}
+  $
+
+  \flushleft \pause
+  However, the result for the whole compiler is not satisfactory.
+
+  To fix it, we reason \emph{externally} about the composite simulation \\
+  using a \emph{Kleene algebra} for simulation conventions.
+\end{frame}
+%}}}
+
+\begin{frame}{Linking} %{{{
+  We model \emph{linking} with a
+  \emph{horizontal composition} operator:
+  \[
+    L_1, L_2 : A \twoheadrightarrow A
+    \quad \vdash \quad
+    L_1 \oplus L_2 : A \twoheadrightarrow A
+  \]
+  \pause
+  Linking preserves simulations with compatible conventions:
+  \[
+    \begin{prooftree}
+      \hypo{L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2}
+      \hypo{L_1' \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2'}
+      \infer2{L_1 \oplus L_1'
+        \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}}
+        L_2 \oplus L_2'}
+    \end{prooftree}
+  \]
+  \pause
+  We show the correctness of $\kw{Asm}$ linking:
+  \[
+    \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
+    \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
+    \kw{Asm}(p_1 + p_2)
+  \]
+  Then one application of correctness is to prove:
+  \[
+    \kw{Clight}(p_1) \oplus \kw{Clight}(p_2)
+    \: \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \:
+    \kw{Asm}(p_1 + p_2)
+  \]
+\end{frame}
+%}}}
+
+%}}}
+
+\section{Conclusion} %{{{
+
+\begin{frame}{Other work} %{{{
+  \begin{thebibliography}{10}
+    \bibitem{otf}
+      Joan Feigenbaum, \fme.
+      \newblock \\
+      On the Feasability of
+      a Technological Response to the Surveillance Morass.
+      \newblock \\
+      Cambridge Int'l Workshop on Security Protocols 2014.
+    \bibitem{ccal}
+      Ronghui~Gu, Zhong~Shao, Jieung~Kim, Xiongnan~(Newman)~Wu,
+      \me, Vilhelm~Sj\"oberg, Hao~Chen,
+      David~Costanzo, Tahina~Ramananandro.
+      \newblock \\
+      Certified Concurrent Abstraction Layers.
+      \newblock
+      PLDI '18.
+    \bibitem{rbp}
+      Omid Alipourfard, Jiaqi Gao, \me,
+      Chris~Harshaw, Amin~Vahdat, Minlan~Yu.
+      \newblock
+      Risk-based Planning of Network Changes in Evolving Data Centers.
+      \newblock \\
+      SOSP '19.
+  \end{thebibliography}
+\end{frame}
+%}}}
+
+%}}}
+
+\begin{frame}{}
+  \begin{center}
+    Thank you!
+  \end{center}
+\end{frame}
+
+%}}}
+
+\appendix
+
+\begin{frame}{Concurrent layers and oracles} %{{{
+  Thread linking in concurrent CertiKOS:
+  \[
+    \begin{prooftree}
+      \hypo{\smodule{\kw{TSyscall} }}
+      \infer1{\vdots}
+      \infer1{\smodule{\kw{PThread} }}
+      \hypo{\gmodule{\kw{TSyscall} }}
+      \infer1{\vdots}
+      \infer1{\gmodule{\kw{PThread} }}
+      \infer2{\module{\kw{PThread} }}
+      \infer1{\vdots}
+      \infer1{\module{\text{Per-core services} }}
+    \end{prooftree}
+  \]
+  \vfill
+  \begin{thebibliography}{10}
+    \bibitem{ccal}
+      Ronghui~Gu, Zhong~Shao, Jieung~Kim, Xiongnan~(Newman)~Wu,
+      \me, Vilhelm~Sj\"oberg, Hao~Chen,
+      David~Costanzo, Tahina~Ramananandro.
+      \newblock \\
+      Certified Concurrent Abstraction Layers.
+      \newblock
+      PLDI '18.
+  \end{thebibliography}
+\end{frame}
+%}}}
+
 \begin{frame}{Dual nondeterminism as an effect} %{{{
 The $\mathbf{FCD}$ monad extends any poset with dual nondeterminism.
 
@@ -1144,39 +1679,6 @@ The monadic structure is:
 \end{frame}
 %}}}
 
-\subsection{Interaction specifications}
-
-\begin{frame}{Individual interactions} %{{{
-\begin{definition}[Plays]
-We use \textbf{odd-length} plays $s \in P_E(A)$ of the form:
-\[
-  s \: \sqsubseteq_\kw{odd} \:
-    \underline{m}_1 n_1
-    \cdots
-    \underline{m}_j n_j
-    \underline{v}
-  \qquad
-  (m_i \mathop{:} N_i \in E, n_i \in N_i, v \in A)
-\]
-\end{definition}
-\pause
-\begin{example}[Dequeuing from an array]
-  The play:
-  \[
-    s :=
-    \underline{\kw{inc}_1} \cdot 3 \cdot
-    \underline{\kw{get}[3]} \cdot \mathtt{a} \cdot
-    \underline{\mathtt{a}}
-  \]
-  can be depicted as:
-  \[
-    \qquad
-    \deqpic{s \in {P}_{E_\kw{rb}}(\mathbb{Z})}{3}{\mathtt{a}}
-  \]
-\end{example}
-\end{frame}
-%}}}
-
 \begin{frame}{Interaction specifications} %{{{
   \begin{definition}[Interaction specifications]
     For a signature $E$ and a set $A$:
@@ -1188,14 +1690,14 @@ We use \textbf{odd-length} plays $s \in P_E(A)$ of the form:
   \begin{example}[Dequeuing from an array]
     Implementing $\kw{deq}$ in terms of $E_\kw{a}$:
     \[
+      \deqpic{\kw{deq} \in \mathcal{I}_{E_\kw{rb}}(V)}{i}{v}
+    \]
+    \[
       \kw{deq} :=
         \bigsqcup_{i \in \mathbb{N}}
         \bigsqcup_{v \in V}
           \, \underline{\kw{inc}_1} \cdot i \cdot
              \underline{\kw{get}[i]} \cdot v \cdot \underline{v}
-    \]
-    \[
-      \deqpic{\kw{deq} \in \mathcal{I}_{E_\kw{rb}}(V)}{i}{v}
     \]
   \end{example}
 \end{frame}
@@ -1310,403 +1812,8 @@ We use \textbf{odd-length} plays $s \in P_E(A)$ of the form:
 \end{frame}
 %}}}
 
-\begin{frame}{Two-sided strategies} %{{{
-  \begin{definition}
-    A morphism $f : E \Rightarrow F$ is a family:
-    \[
-      f \in \prod_{(q : R) \in F} \mathcal{I}_E(R)
-    \]
-    \[
-      \begin{tikzpicture}[scale=0.4]
-        \draw[->] (-5,0) node[left] {$(q \mathop{:} R) \in F$} -- (-4,0);
-        \draw (-4,-1) rectangle (4,1);
-        \draw[->] (4,0) -- (5,0) node[right] {$r \in R$};
-        \node (f) at (0,0) {$f : E \Rightarrow F$};
-        \draw[->] (-3, -1) -- (-3, -2);
-        \draw[->] (-2, -2) -- (-2, -1);
-        \node[below] at (0, -1) {$\cdots$};
-        \draw[->] (2, -1) -- (2, -2);
-        \draw[->] (3, -2) -- (3, -1);
-        \node[below] at (-2.5, -2) {$E$};
-        \node[below] at ( 2.5, -2) {$E$};
-      \end{tikzpicture}
-      \qquad
-    \]
-  \end{definition}
-  \pause
-  \begin{example}[Queue implementation]
-    The morphism $M_\kw{q} : E_\kw{a} \Rightarrow E_\kw{q}$ is defined by:
-    \[
-      \begin{array}{l@{}l}
-        \kw{enq}[v] & {} :=
-          i \leftarrow \kw{inc}_2 \mathop{;} \kw{set}[i, v] \\
-        \kw{deq} & {} :=
-          i \leftarrow \kw{inc}_1 \mathop{;} \kw{get}[i]
-      \end{array}
-    \]
-  \end{example}
-\end{frame}
-%}}}
 
-\begin{frame}{Composition} %{{{
-  \begin{block}{Substitution}
-    The substitution $x[f]$ has the shape:
-    \[
-    \begin{tikzpicture}[scale=0.4]
-      \draw[->] (13, 3) -- (15, 3);
-      \draw (-13, 2) rectangle (13, 4);
-      \node at (0, 3) {$x \in \mathcal{I}_F(A)$};
-      \begin{scope}[xshift=-7cm]
-        \draw (-4,-1) rectangle (4,1);
-        \draw[->] (-5, 2) |- (-4,0);
-        \draw[->] (4,0) -| (5,2);
-        \node (f) at (0,0) {$f : E \Rightarrow F$};
-        \draw[->] (-3, -1) -- (-3, -2);
-        \draw[->] (-2, -2) -- (-2, -1);
-        \node[below] at (0, -1) {$\cdots$};
-        \draw[->] (2, -1) -- (2, -2);
-        \draw[->] (3, -2) -- (3, -1);
-      \end{scope}
-      \node at (0, 0) {$\cdots$};
-      \begin{scope}[xshift=7cm]
-        \draw (-4,-1) rectangle (4,1);
-        \draw[->] (-5, 2) |- (-4,0);
-        \draw[->] (4,0) -| (5,2);
-        \node (f) at (0,0) {$f : E \Rightarrow F$};
-        \draw[->] (-3, -1) -- (-3, -2);
-        \draw[->] (-2, -2) -- (-2, -1);
-        \node[below] at (0, -1) {$\cdots$};
-        \draw[->] (2, -1) -- (2, -2);
-        \draw[->] (3, -2) -- (3, -1);
-      \end{scope}
-      \node at (-14,  1) {$F$};
-      \node at (-14, -2) {$E$};
-    \end{tikzpicture}
-    \]
-    It can be used to define composition of morphisms.
-  \end{block}
-  \pause
-  \begin{example}[Queue rotation]
-    \vspace{-1em}
-    \[ \begin{array}{r@{{} \in {}}c@{\quad := \quad}l}
-      \kw{rot} & \mathcal{I}_{E_\kw{q}}(\mathbbm{1}) &
-        v \mathop{\leftarrow} \kw{deq} \mathop{;} \kw{enq}[v] \\
-      \kw{rot}[M_\kw{q}] & \mathcal{I}_{E_\kw{a}}(\mathbbm{1}) &
-        i \mathop{\leftarrow} \kw{inc}_1 \mathop{;}
-        v \mathop{\leftarrow} \kw{get}[i] \mathop{;}
-        j \mathop{\leftarrow} \kw{inc}_2 \mathop{;}
-        \kw{set}[j, v]
-    \end{array} \]
-  \end{example}
-\end{frame}
-%}}}
 
-\begin{frame}{State} %{{{
-  \begin{definition}[Extending a signature with state]
-    We can annotate all calls and returns in $E$ with a state $k \in S$:
-    \[
-      E@S :=
-        \{ m@k : N \times S \mid
-           m {:} N \in E, k \in S \}
-    \]
-  \end{definition}
-  \pause
-  \only<1-2>{
-  \begin{example}[Queue layer interface]
-    {}
-    \[
-      S_\kw{q} := V^* \qquad
-      L_\kw{q} : \varnothing \Rightarrow E_\kw{q}@S_\kw{q}
-    \]
-    \vspace{-1em}
-    \[\begin{array}{r@{\:}l}
-      \kw{enq}[v]@\vec{q} &:= \eta(*@\vec{q}v) \\
-      \kw{deq}@\vec{q} &:=
-        \bigsqcup_{v \! \vec{p} = \vec{q}} \eta(v@\vec{p})
-    \end{array}\]
-    {}
-    \[
-      \kw{rot}@S_\kw{q} :
-        S_\kw{q} \rightarrow
-        \mathcal{I}_{E_\kw{q}@S_\kw{q}}(\mathbbm{1} \times S_\kw{q})
-    \] \[
-      \kw{rot}@S_\kw{q}[L_\kw{q}] :
-        S_\kw{q} \rightarrow
-        \mathcal{I}_\varnothing(\mathbbm{1} \times S_\kw{q})
-      \vspace{1ex}
-    \]
-  \end{example}
-  }
-  \only<3>{
-  \begin{example}[Array layer interface]
-    \[
-      S_\kw{a} := V^\mathbb{N} \times \mathbb{N} \times \mathbb{N}
-      \qquad
-      L_\kw{a} : \varnothing \Rightarrow E_\kw{a}@S_\kw{a}
-    \]
-    \vspace{-1em}
-    \[\begin{array}{r@{\:}l}
-      \kw{get}[i]@(t, c_1, c_2) &:= \eta(t_i@(t, c_1, c_2))
-      \\
-      \kw{set}[i, v]@(t, c_1, c_2) &:= \eta(*@(t[i \leftarrow v], c_1, c_2))
-      \\
-      \kw{inc}_1@(t, c_1, c_2) &:= \eta(c_1@(t, c_1 + 1, c_2))
-      \\
-      \kw{inc}_2@(t, c_1, c_2) &:= \eta(c_2@(t, c_1, c_2 + 1))
-    \end{array}\]
-    {}
-    \[
-      M_\kw{q}@S_\kw{a} :
-        E_\kw{a}@S_\kw{a} \Rightarrow E_\kw{q}@S_\kw{a}
-      \qquad
-      M_\kw{q}@S_\kw{a} \circ L_\kw{a} :
-        \varnothing \Rightarrow E_\kw{q}@S_\kw{a}
-    \]
-  \end{example}
-  }
-\end{frame}
-%}}}
-
-\begin{frame}{Data abstraction} %{{{
-  \begin{definition}
-    A simulation relation $R \subseteq S_2 \times S_1$
-    can be encoded as a morphism:
-    \[
-      \begin{array}{ccc}
-        %L_2 : \varnothing \Rightarrow E@S_2 & &
-        %L_1 : \varnothing \Rightarrow E@S_1 \\[1ex]
-        R^*_E : E@S_2 \Rightarrow E@S_1 & &
-        R_*^E : E@S_1 \Rightarrow E@S_2 \\[1ex]
-        R^*_E \circ L_2 \sqsubseteq L_1 &
-        \Leftrightarrow &
-        L_2 \sqsubseteq R_*^E \circ L_1
-      \end{array}
-    \]
-  \end{definition}
-  \pause
-  \begin{example}[Translating between array and queue states]
-    \[
-      \vec{q} \mathrel{R} (t, c_1, c_2)
-      \quad \Leftrightarrow \quad
-      c_1 \le c_2 \:\wedge\:
-      \vec{q} = t_{c_1} \cdots t_{c_2 - 1}
-    \]
-    The layer interface
-    $R^*_{E_q} \circ L_q : \varnothing \Rightarrow E_\kw{q}@S_\kw{a}$
-    becomes:
-    \begin{align*}
-      \kw{enq}[v]@(t, c_1, c_2) &:=
-        \bigsqcup_{\vec{q} = t_{c_1}\cdots t_{c_2}} \:
-        \bigsqcap_{(t', c_1', c_2') | \vec{q}v = t'_{c_1'} \cdots t'_{c_2'}}
-        \eta(*@(t', c_1', c_2')) \\
-      \kw{deq}@(t, c_1, c_2) &:=
-        \bigsqcup_{v\vec{q} = t_{c_1}\cdots t_{c_2}} \:
-        \bigsqcap_{(t', c_1', c_2') | \vec{q} = t'_{c_1'} \cdots t'_{c_2'}}
-        \eta(v@(t', c_1', c_2'))
-    \end{align*}
-  \end{example}
-\end{frame}
-%}}}
-
-\begin{frame}[fragile]{Certified abstraction layers} %{{{
-    \[
-        L_\kw{a} \vdash M_\kw{q} : L_\kw{q}
-        \qquad \qquad \quad \:\:
-        R^*_{E_\kw{q}} \circ L_\kw{q} \sqsubseteq
-          M_\kw{q}@S_\kw{a} \circ L_\kw{a}
-        \quad
-    \]
-    \vspace{1em}
-    \[
-      \begin{prooftree}
-        %\hypo{C}
-        \infer0[$L_\kw{q}$]{
-          \begin{array}{c}
-            R \\
-            \fbox{$\qquad M_\kw{q} \qquad$}
-          \end{array}}
-        \infer1[$L_\kw{a}$]{}
-      \end{prooftree}
-      \qquad \qquad
-      \begin{tikzpicture}[xscale=2,yscale=1.5,baseline=0.66cm]
-        \node (O) at (0,0) {$\varnothing$};
-        \node (Lq) at (0,1) {$E_\kw{q}@S_\kw{q}$};
-        \node (La) at (1,0) {$E_\kw{a}@S_\kw{a}$};
-        \draw[->] (O) -- node[left] {\small $L_\kw{q}$} (Lq);
-        \draw[->] (O) -- node[below] {\small $L_\kw{a}$} (La);
-        \only<2->{
-          \begin{scope}[overlay]
-            \node (Eq) at (2,1) {$E_\kw{q}$};
-            \node (Ea) at (2,0) {$E_\kw{a}$};
-            \draw[->] (Ea) -- node[right] {\small $M_\kw{q}$} (Eq);
-          \end{scope}
-        }
-        \only<3->{
-          \node (Lqa) at (1,1) {$E_\kw{q}@S_\kw{a}$};
-          \draw[->,dashed,overlay] (La) -- node[right]
-            {\small $M_\kw{q}@S_\kw{a}$} (Lqa);
-        }
-        \only<4->{
-          \draw[->,overlay] (Lq) -- node[above] {\small $R^*_{E_\kw{q}}$} (Lqa);
-        }
-        \only<5->{
-          \node at (0.5,0.5) {$\sqsubseteq$};
-        }
-      \end{tikzpicture}
-      \qquad
-    \]
-\end{frame}
-%}}}
-
-%}}}
-
-\section{CompCertO} \label{sec:compcerto} %{{{
-
-\begin{frame}{Semantic model}
-\end{frame}
-
-\begin{frame}{Simulations}
-\end{frame}
-
-\begin{frame}{Vertical composition}
-  \centering
-  $\begin{array}{c}
-    \kw{id} : A \Leftrightarrow A
-    \qquad
-    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
-    \\[2em]
-    {\begin{prooftree}
-      \hypo{\mathbb{R} : A_1 \Leftrightarrow A_2}
-      \hypo{\mathbb{S} : A_2 \Leftrightarrow A_3}
-      \infer2{\mathbb{R} \cdot \mathbb{S} : A_1 \Leftrightarrow A_3}
-    \end{prooftree}}
-    \\[2em]
-    {\begin{prooftree}
-      \hypo{L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2}
-      \hypo{L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3}
-      \infer2{
-        L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
-                 \mathbb{R}_B \cdot \mathbb{S}_B} L_3}
-    \end{prooftree}}
-  \end{array}
-  \qquad
-  \begin{tikzpicture}[baseline,scale=1]
-    \node (A1) at (-1,  2) {$A_1$};
-    \node (A2) at (-1,  0) {$A_2$};
-    \node (A3) at (-1, -2) {$A_3$};
-    \node (B1) at ( 1,  2) {$B_1$};
-    \node (B2) at ( 1,  0) {$B_2$};
-    \node (B3) at ( 1, -2) {$B_3$};
-    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
-    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
-    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
-    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
-      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_A$} (A2);
-      \draw (B1) edge[double] node[auto] {$\mathbb{R}_B$} (B2);
-      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_A$} (A3);
-      \draw (B2) edge[double] node[auto] {$\mathbb{S}_B$} (B3);
-    \end{scope}
-  \end{tikzpicture}
-  $
-\end{frame}
-
-\begin{frame}{Horizontal composition}
-\end{frame}
-
-\begin{frame}{Compilation passes}
-  \tiny
-  \centering
-  \begin{tabular}{l r @{$\: \twoheadrightarrow \:$} l r @{\ } r}
-    \hline
-    Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC}
-      \\
-    \hline
-    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
-    \emph{Thm.~\ref{thm:cklr-props}} &
-      $(\kw{ext} + \kw{injp})^*$ &
-      $(\kw{ext} + \kw{injp})^*$ &
-      & \\
-    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -4 & (-1\%) \\
-    \kw{Cshmgen} & \kw{id} & \kw{id} & +0 & (+0\%) \\
-    \hline
-    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+4\%) \\
-    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ & -21 & (-2\%) \\
-    \hline
-    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ & +27 & (+3\%) \\
-    \kw{Selection} & $\kw{wt} \cdot \kw{ext}$ & $\kw{wt} \cdot \kw{ext}$ &
-      +43 & (+0\%) \\
-    \hline
-    \textbf{CminorSel} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+3\%) \\
-    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ & +8 & (+0\%) \\
-    \hline
-    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ & +11 & (+2\%) \\
-    $\kw{Tailcall}^\dagger$ & $\kw{ext}$ & $\kw{ext}$ & -1 & (-1\%) \\
-    \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ & +58 & (+3\%) \\
-    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -14 & (-7\%) \\
-    \emph{Thm.~\ref{thm:cklr-props}} &
-      $\kw{inj}$ &
-      $\kw{inj}$ &
-      & \\
-    $\kw{Constprop}^\dagger$ &
-      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
-      -17 & (-2\%) \\
-    $\kw{CSE}^\dagger$ &
-      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
-      +3 & (+0\%) \\
-    $\kw{Deadcode}^\dagger$ &
-      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
-      -7 & (-1\%) \\
-    %\st{Unusedglob} \\
-    \kw{Allocation} &
-      $\kw{wt} \cdot \kw{alloc}$ & $\kw{wt} \cdot \kw{alloc}$ &
-      +13 & (+0\%) \\
-    \hline
-    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ & +15 & (+6\%) \\
-    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ & +2 & (+0\%) \\
-    \kw{Linearize} & \kw{id} & \kw{id} & -15 & (-3\%) \\
-    \hline
-    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ & +16 & (+7\%) \\
-    \kw{CleanupLabels} & \kw{id} & \kw{id} & -10 & (-4\%) \\
-    \kw{Debugvar} & \kw{id} & \kw{id} & -12 & (-3\%) \\
-    \kw{Stacking} & \kw{stacking} & \kw{stacking} & +291 & (+11\%) \\
-    \hline
-    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ & +100 & (+26\%) \\
-    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} & +179 & (+6\%) \\
-    \hline
-    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +53 & (+5\%) \\
-    \hline
-    \multicolumn{3}{r}{Total:} & +765 & (+2\%)
-  \end{tabular}
-\end{frame}
-
-%}}}
-
-\section{Conclusion} %{{{
-
-\begin{frame}{Conclusion}
-  Game semantics and dual nondeterminism go hand-in-hand:
-  \begin{itemize}
-    \item Angelic nondeterminism is already present in strategies
-    \item Unrestricted dual nondeterminism completes the symmetry
-  \end{itemize}
-
-  Refinement-based game introduces several innovations:
-  \begin{itemize}
-    \item Combine game semantics and the refinement calculus
-    \item Nondeterminism decoupled from the structure of plays
-    \item Supports heterogenous components and data abstraction
-  \end{itemize}
-\end{frame}
-
-%}}}
-
-\begin{frame}{}
-  \begin{center}
-    Thank you!
-  \end{center}
-\end{frame}
-
-%}}}
 
 %\appendix %{{{
 %
