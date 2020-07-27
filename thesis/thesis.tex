@@ -39,6 +39,11 @@
 %\usepackage{listings}
 % }}}
 
+% Parameters {{{
+\newlength{\layerwidth}
+\setlength{\layerwidth}{.3\textwidth}
+% }}}
+
 % Macros {{{
 
 \newtheorem{theorem}{Theorem}[chapter]
@@ -67,6 +72,8 @@
 \newcommand{\pref}{\sqsubseteq_\kw{p}}  % prefix relation
 \newcommand{\scref}{\sqsubseteq} % simulation convention refinement
 \newcommand{\figsize}{}
+\newcommand{\module}[1]{\framebox[\layerwidth]{\ensuremath{#1}} }
+\newcommand{\smodule}[1]{\framebox[0.435\layerwidth]{\ensuremath{#1}} }
 
 % Moves {{{
 
@@ -310,8 +317,8 @@ into larger certified systems.
 
 \subsection{The DeepSpec project} %{{{
 
-This is exemplified by the DeepSpec project \citep{deepspec},
-which seeks to connect various components
+For example, the DeepSpec project \citep{deepspec}
+seeks to connect various components
 specified and verified in the Coq proof assistant.
 The key idea behind DeepSpec
 is to use specifications as \emph{interfaces}
@@ -324,7 +331,7 @@ Standardizing this process would make it possible
 to construct large-scale certified systems
 by assembling off-the-shelf certified components.
 
-This approach would provides benefits
+This approach promises benefits
 beyond the potential increase in the scale of
 practical certified systems.
 As it stands,
@@ -355,40 +362,45 @@ to establish guarantees about the overall system.
 
 %}}}
 
-\subsection{CompCert and CertiKOS} %{{{
+\subsection{CompCert} %{{{
 
 To an extent,
 these principles are already demonstrated in the structure of the
 certified C compiler CompCert \citep{compcert}.
+In addition to the code of the compiler itself,
+CompCert comes with a proof of correctness
+showing that if the compiler successfully transforms
+a source program $p$ into a target program $p'$,
+then the behavior of $p'$ refines that of $p$:
+\[
+  \begin{prooftree}
+    \hypo{\kw{CompCert}(p) = p'}
+    \infer1{\kw{Clight}[p] \supseteq \kw{Asm}[p']}
+  \end{prooftree}
+\]
+In the statement above,
+the semantics of the source and target programs
+are expressed as the sets of traces
+$\kw{Clight}[p]$ and $\kw{Asm}[p']$.
+Each trace record a possible execution of the corresponding program
+as a sequence of events.
+The trace containment property
+$\kw{Clight}[p] \supseteq \kw{Asm}[p']$
+expresses that any possible behavior of
+the target program~$p'$
+is a possible behavior of the source program~$p$.
+Like other components considered by the DeepSpec project,
+CompCert was written, specified and verified
+in the Coq proof assistant.
 
-The introduction of CompCert a decade ago
-represented a breakthrough
-in the scale and feasability of
-certified software.
-Meanwhile,
-CompCert itself
-has been used as a platform other projects have built upon.
-For example,
-verification tools have been created with soundness proofs
-connecting to CompCert \citep{vst,verasco}.
-The composition techniques used to verify CompCert
-have been extended in various directions
-\citep{compcompcert,sepcompcert,compcertm}
-and have provided a blueprint in the formalization of
-the \emph{certified abstraction layers}
-used to verify the operating system kernel CertiKOS
-\citep{popl15,ccal,osdi16}.
-
-In CompCert,
-the semantics of intermediate languages
-serve as intermediate specifications for each compilation pass.
-The correctness of each pass is established by
-proving that the behavior of its target program
-refines that of its source program,
-which serves in this case as the specification.
-As passes are composed to obtain the overall
-C-to-assembly compiler,
-their correctness proofs are composed as well
+The key to this achievement
+was the decomposition of CompCert
+into compilation passes,
+which were then specified an verified individually.
+When passes are composed to obtain the overall
+C-to-assembly compiler
+(Fig.~\ref{fig:compcert}),
+their correctness proofs can be composed as well
 to construct a proof for the whole compiler.
 The final theorem does not mention the intermediate
 programs or language semantics,
@@ -396,22 +408,189 @@ so that a user only needs to trust
 the accuracy of the C and assembly semantics,
 and the soundness of the proof assistant.
 
-Likewise,
-the CertiKOS verification effort
-divided the kernel into several dozen abstraction layers
-which were then specified and verified individually.
+\begin{figure}
+  \[
+    \begin{prooftree}
+      \hypo{p}
+      \infer1[$\kw{Clight}$]{\module{\kw{SimplLocals}} }
+      \infer1[$\kw{Clight}$]{\module{\kw{Cshmgen}} }
+      \infer1[$\kw{Csharpminor}$]{\rule[-1em]{0pt}{3em}\vdots}
+      \infer1[$\kw{Linear}$]{\module{\kw{Linarize}} }
+      \infer1[$\kw{Mach}$]{\module{\kw{Asmgen}} }
+      \infer1[$\kw{Asm}$]{p'}
+    \end{prooftree}
+    \qquad \Rightarrow \qquad
+    \begin{prooftree}
+      \hypo{p}
+      \infer1[$\kw{Clight}$]{\module{\rule[-5em]{0pt}{11em}\kw{CompCert}} }
+      \infer1[$\kw{Asm}$]{p'}
+    \end{prooftree}
+  \]
+  \caption{Structure of the certified compiler CompCert.
+    The source program $p$ is progressively transformed
+    into the target program $p'$ by successive compilation passes,
+    depicted here as rectangular boxes.
+    The horizontal line above each compilation pass
+    depicts its source language,
+    and the one below depicts its target language.
+    Two passes %and their semantic preservation properties
+    can be composed when the target language of the first one
+    corresponds to the source language of the second one.
+    See also Table~\ref{tbl:passes}.}
+  \label{fig:compcert}
+\end{figure}
+
+The introduction of CompCert a decade ago
+represented a breakthrough
+in the scale and feasability of
+certified software.
+Since then,
+CompCert itself
+has been used as a platform other projects have built upon.
+For example,
+verification tools have been created with soundness proofs
+connecting to CompCert \citep{vst,verasco}, and
+the composition techniques used to verify CompCert
+have been extended in various directions
+\citep{compcompcert,sepcompcert,compcertm}.
+
+%}}}
+
+\subsection{CertiKOS} %{{{
+
+The techniques used in CompCert
+also provided a blueprint for the verification of
+the operating system kernel CertiKOS
+\citep{popl15,ccal,osdi16}.
+CertiKOS is divided into
+several dozen \emph{certified abstraction layers},
+which we specified and verified individually.
+
 Layer specifications provide
 an abstract view of a layer's functionality,
 hiding the procedural details and low-level data representations
 involved in its implementation.
+These \emph{layer interfaces}
+enumerate the primitives implemented by the layer
+and describes their behavior.
 Client code can be verified in terms of
 this abstract view
 in order to build higher-level layers.
-Certified layers
+
+To make this possible,
+we extended the CompCert semantics
+to be parametrized by a layer interface:
+the expression $\kw{Asm}[C, L]$
+denotes the set of traces generated by the client program $C$
+running on top of the layer interface $L$.
+Then a layer $M$
+implements an \emph{overlay} interface $L_2$
+on top of an \emph{underlay} interface $L_1$,
+when the following \emph{contextual refinement}
+property holds:
+\[
+  \forall \, C \, \bdot \,
+    \kw{Asm}[C, L_2] \supseteq \kw{Asm}[C + M, L_1] \,.
+\]
+Here,
+the execution of the client code $C$ on top of the overlay $L_2$
+serves as the specification.
+The property shows that this specification
+can be implemented
+by running $C$ together with the layer implementation $M$
+on top of the underlay interface $L_1$.
+
+\begin{figure}
+  \[
+    \begin{prooftree}
+      \hypo{C}
+      \infer1[$\kw{TSyscall}$]{\module{M_n}}
+      \infer1[$\kw{TTrap}$]{\module{M_{n-1}} }
+      \infer1[$\kw{TTrapArg}$]{\rule[-1em]{0pt}{3em}\vdots}
+      \infer1[$\kw{MATOp}$]{\module{M_2}}
+      \infer1[$\kw{MATIntro}$]{\module{M_1}}
+      \infer1[$\kw{PreInit}$]{C + M_n + \cdots + M_1}
+    \end{prooftree}
+    \qquad \Rightarrow \qquad
+    \begin{prooftree}
+      \hypo{C}
+      \infer1[$\kw{TSyscall}$]{\module{\rule[-5em]{0pt}{11em}\kw{CertiKOS}} }
+      \infer1[$\kw{PreInit}$]{C + \kw{CertiKOS}}
+    \end{prooftree}
+  \]
+  \caption{Structure of the certified OS kernel CertiKOS.
+    Here, boxes represent certified abstraction layers
+    and horiontal lines represent layer interfaces.
+    The high-level user program $C$ is transformed
+    into the complete low-level program $C + \kw{CertiKOS}$
+    by composing it with the successive certified abstraction layers
+    of CertiKOS.
+    As before, the correctness properties of layers can be composed
+    to derive a correctness property for the whole system.}
+  \label{fig:certikos}
+\end{figure}
+
+Certified abstraction layers
 with compatible interfaces can then be chained together
 in the way passes of a compiler
 can be composed when the target language of one
-corresponds to the source language of the other.
+corresponds to the source language of the other,
+allowing us to derive a contextual refinement property
+for the whole kernel (Fig.~\ref{fig:certikos}).
+The system call interface of CertiKOS is specified
+by the topmost layer interface $\kw{TSyscall}$,
+and the basic facilities offered by the hardware
+are formalized by bottom layer interface $\kw{PreInit}$.
+Then decomposing $\kw{CertiKOS} = M_n + \cdots + M_1$
+into 37 certified abstraction layers,
+we were able to derive the overall theorem:
+\[
+  \forall \, C \, \bdot \,
+    \kw{Asm}[C, \kw{TSyscall}]
+    \supseteq
+    \kw{Asm}[C + \kw{CertiKOS}, \kw{PreInit}] \,.
+\]
+
+%}}}
+
+\subsection{Horizontal composition} %{{{
+
+In addition to
+the \emph{vertical} composition principles presented above,
+CompCert and CertiKOS provide limited forms of
+\emph{horizontal} composition,
+which allow individual programs and layer implementations
+to be decomposed futher.
+
+In CompCert,
+this is used to model \emph{separate compilation}.
+While the original correctness theorem of CompCert
+only characterized the compilation of a whole program,
+in practice C programs are usually made up of
+several \texttt{.c} files, known as \emph{compilation units}.
+These program components are compiled independently,
+and the results are then linked together to build
+an executable image.
+To reflect this,
+\citet{sepcompcert} generalized the correctness theorem of CompCert
+to the separate compilation property:
+\[
+  \begin{prooftree}
+    \hypo{\forall \, 1 \le i \le k \, \bdot \,
+      \kw{CompCert}(p_i) = p_i'}
+    \infer1{\kw{Clight}[p_1 + \cdots + p_k] \supseteq
+      \kw{Asm}[p_1' + \cdots + p_k']}
+  \end{prooftree}
+\]
+
+Likewise,
+in CertiKOS the verification of a given
+certified abstraction layer
+can be further decomposed into
+the verification of the individual functions
+which constitute the layer's implementation.
+This is achived through the \emph{layer calculus}
+which I present in \S\ref{sec:cal}.
 
 %}}}
 
@@ -469,30 +648,121 @@ Fortunately,
 there is a wealth of semantics research to draw from
 when attempting to design models for this task.
 
-\subsection{Symmetric monoidal categories}
+\subsection{Symmetric monoidal categories} %{{{
 
-The framework of
-symmetric monoidal categories,
-which allows components to be
-connected in series~($\circ$) and in parallel~($\otimes$),
-captures structures found
-in various kinds of systems and processes \citep{rosetta},
-and appears in different forms
+As a whole,
+category theory provides a general study
+and taxonomy for
+compositional structures found
+across mathematics (\S\ref{sec:cat}).
+In a category,
+components (morphisms) can be chained together when
+the target interface (object) of one matches
+the source interface of another.
+For example,
+compilation passes and certified abstraction layers
+both constitute categories.
+
+\emph{Symmetric monoidal categories}
+additionally provide a \emph{tensor product} construction,
+which allows components to be connected
+both in series~($\circ$) and in parallel~($\otimes$):
+\[
+  \begin{prooftree}
+    \hypo{f : A \rightarrow B}
+    \hypo{g : B \rightarrow C}
+    \infer2{g \circ f : A \rightarrow C}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{f_1 : A_1 \rightarrow B_1}
+    \hypo{f_2 : A_2 \rightarrow B_2}
+    \infer2{f_1 \otimes f_2 : A_1 \otimes A_2 \rightarrow B_1 \otimes B_2}
+  \end{prooftree}
+\]
+As such,
+symmetric monoidal categories capture structures found
+in various kinds of systems and processes \citep{rosetta}.
+This basic setup can be refined by introducing additional structures,
+for instance modeling
+feedback loops (traced monoidal categories) or allowing
+wires to run in both directions
+(closed monoidal categories).
+
+Symmetric monoidal categories appear in different forms
 in many approaches to logic and programming language semantics.
+For example,
+\emph{cartesian closed categories}
+correspond
+to models of the simply typed lambda calculus,
+and are a special case of symmetric monoidal categories.
+However,
+%in contrast with the stronger notion of
+%cartesian closed category,
+symmetric monoidal categories in general do not require
+multiple components to be able to connect to the same interface
+($\Delta : A \rightarrow A \otimes A$),
+giving us more freedom to model access to shared resources.
+In the same way the simply-typed lambda calculus provides
+an internal language for cartesian closed categories,
+various fragments of \emph{linear logic} provide
+internal languages for various kinds of symmetric monoidal categories.
 
-\subsection{Game semantics}
+For our purposes,
+the theory of symmetric monoidal categories
+constitutes a repository of algebraic structures
+formalizing the compositional aspects of
+all kinds of systems,
+and can be used as a blueprint
+as we attempt to design general models
+for certified heterogenous systems.
 
-A particularly expressive instance of this phenomenon
-is realized in \emph{game semantics} \citep{cspgs},
-an approach to compositional semantics
-which uses two-player games to model
-the interaction between a component and its environment,
+%}}}
+
+\subsection{Game semantics} %{{{
+
+A specific way to construct symmetric monoidal categories
+is provided by \emph{game semantics} \citep{cspgs},
+which uses two-player games to describe
+the interaction between a program component and its environment,
 and represents the externally observable behavior
 of the component as a strategy in this game.
-The generality of games as
-descriptions of the possible interactions of components
-makes this approach broadly applicable,
-and the typed aspect of the resulting models
+
+Game semantics represents a synthesis
+of various approaches to programming language semantics.
+Game semantics is a form of \emph{denotation semantics},
+providing compositional models for programming languages.
+However,
+since it models components
+in terms of their interactions across time,
+game semantics also provides a strong \emph{operational} flavor.
+Finally,
+the usual construction of strategies in game semantics
+shares many characteristics with the \emph{trace semantics}
+often used for example in the context of process algebra
+or concurrent semantics.
+
+An early success of this approach
+was the formulation of the first
+fully complete models for
+the functional programming language PCF \citep{pcfajm,pcfho}.
+Since then,
+game semantics have provided fully complete models
+for a wide variety of other languages,
+incorporating features such as
+state \citep{gsia},
+control \citep{gscontrol},
+general references \citep{gsgr},
+concurrency \citep{gsconcur}
+and more.
+There are deep connections between
+game semantics and linear logic \citep{gsnecessary},
+and hence symmetric monoidal categories,
+hinting to its promise
+as a general approach for modeling the behavior of
+various kinds of systems and processes.
+In particular,
+the typed aspect of the resulting models
 makes it ideal to the task of
 describing the behavior of heterogeneous systems.
 
@@ -502,7 +772,9 @@ often translates to a fair amount of complexity,
 which imposes a high barrier to entry for practitioners
 and makes them difficult to formalize in a proof assistant.
 
-\subsection{Algebraic effects}
+%}}}
+
+\subsection{Algebraic effects} %{{{
 
 While more restricted,
 the framework of \emph{algebraic effects} \citep{effadq}
@@ -511,15 +783,48 @@ fits within the well-known monadic approach
 to effectful and interactive computations,
 and can be adapted into a particularly simple version
 of game semantics.
+
+In this framework,
+computations are modeled as \emph{terms}
+in an algebra whose operations correspond to
+the available effects (\S\ref{sec:eff}).
+The computation proceeds inward,
+with each function symbol representing an occurence of an effect,
+and each argument representing a possible way
+for the computation to be continued
+after the effect has been triggered.
+
+One major advantage of this approach is that
+the methods and results of universal algebra
+become available to reason about effectful computations.
+Equational theories can be used to characterize
+the behavior of effects, and \emph{interpretations}
+of one effect algebra into another can be used to model
+\emph{effect handlers} \citep{eff}.
+The \emph{free monad} associated to an algebra
+can be used to recover the more familiar
+monadic model of computational effects \citep{monads}.
 Along these lines,
 \emph{interaction trees} \citep{itree}
 have been developed for use in and across
 several DeepSpec projects.
 
+Alegbraic effects can also be understood as
+a limited form of game semantics:
+signatures can be interpreted as simple games,
+and the abstract syntax trees of terms
+can be interpreted as strategies.
+However,
+the restriction to first-order computation
+make them easier to formalize and reason about
+than more general notions of games.
+
 %\section{General formulations for correctness proofs}
 %\label{ssec:genform}
 
-\subsection{The refinement calculus}
+%}}}
+
+\subsection{The refinement calculus} %{{{
 
 Finally,
 while game models have been proposed
@@ -529,11 +834,10 @@ on specifications and correctness properties.
 %in the context of game semantics.
 By contrast,
 the general approach of \emph{stepwise refinement}
-suggests a uniform treatment of programs, specifications
-and their relationships.
+suggests a uniform treatment of programs and specifications
+as well as their relationships.
 It has been studied extensively in the context of
-%Dijkstra's
-predicate transformer semantics \citep{gc}
+Dijkstra's predicate transformer semantics \citep{gc}
 and in the framework known as the \emph{refinement calculus} \citep{refcal}.
 
 In refinement-based approaches,
@@ -548,22 +852,22 @@ Language constructions are monotonic with respect to this relation,
 so that elementary refinement rules
 can be applied congruently within any program context.
 
-%To make it possible to express specifications,
-%the language is extended with non-executable constructions,
-%including in particular infinitary versions of both
-%\emph{angelic} and \emph{demonic} nondeterministic choice operators.
-%In its modern presentation,
-%the refinement calculus is formulated in a lattice-theoretic framework
-%where joins ($\sqcup$) and meets ($\sqcap$)
-%correspond respectively to angelic and demonic choices.
-%The resulting language is remarkably expressive
-%and requires very few additional primitive constructions.
-%The duality inherent in this approach
-%also lends itself to game-theoretic interpretations,
-%and indeed the semantics of the refinement calculus
-%can be expressed as a two-player game between
-%the angel and the demon \citep{refcal}.
-%
+To make it possible to express specifications,
+the language is extended with non-executable constructions,
+including in particular infinitary versions of both
+\emph{angelic} and \emph{demonic} nondeterministic choice operators.
+In its modern presentation,
+the refinement calculus is formulated in a lattice-theoretic framework
+where joins ($\sqcup$) and meets ($\sqcap$)
+correspond respectively to angelic and demonic choices.
+The resulting language is remarkably expressive
+and requires very few additional primitive constructions.
+The duality inherent in this approach
+also lends itself to game-theoretic interpretations,
+and indeed the semantics of the refinement calculus
+can be expressed as a two-player game between
+the angel and the demon \citep[\S 14]{refcal}.
+
 %Like all approaches in the lineage of Hoare logic
 %and predicate transformer semantics,
 %the refinement calculus is limited to
@@ -577,6 +881,8 @@ can be applied congruently within any program context.
 %and string properties).
 %More than one level of ``semantics''
 %Notions of ``syntax'' and ``semantics'' are relative concepts.]
+
+%}}}
 
 %}}}
 
@@ -679,7 +985,7 @@ these purposes:
   In \S\ref{sec:compcert-sem},
   I summarize the approach to semantics and correctness
   used in CompCert,
-  as well as the space extensions
+  as well as extensions
   which have been proposed
   to make the correctness theorem of CompCert
   more compositional.
@@ -695,8 +1001,8 @@ these purposes:
 \item
   The design of CompCertO is presented in \S\ref{sec:compcerto}.
   CompCertO is the first extension of CompCert which
-  satisfies all the requrements I have identified.
-  It generalize the CompCert semantic model
+  satisfies all of the requrements I have identified.
+  It generalizes the semantic model
   to express interactions between compilation units,
   using \emph{language interfaces}
   to describe the form of these interactions
@@ -718,15 +1024,15 @@ these purposes:
   unify CompCert's memory transformations
   as structure-preserving relations
   over the memory model.
-  They can be used to define the simulation conventions
-  used by most of the compiler's passes,
-  and derive parametricity theorems which capture
+  They can be used to define simulation conventions
+  for most of the compiler's passes,
+  and to derive parametricity theorems which capture
   important properties of CompCert languages.
 \item
   Several passes of CompCert use
-  typing and abstract interpretation soundness invariants.
-  \S\ref{sec:inv} explains how they fit
-  in the simulation framework of CompCertO
+  typing and soundness invariants.
+  \S\ref{sec:inv} explains how these invariants fit
+  into the simulation framework of CompCertO and
   how the techniques used to verify these passes
   can be reified into a notion of
   \emph{simulation modulo invariants}.
