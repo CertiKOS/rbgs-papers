@@ -1071,7 +1071,7 @@ in previous work.
 
 \section{Building certified systems} \label{sec:principles} %{{{
 
-% preamble {{{
+\subsection{Semantic domains} %{{{
 
 The goal of certified system design is
 to create a formal description of
@@ -1086,7 +1086,23 @@ to every system $p \in P$
 a mathematical object $\llbracket p \rrbracket \in \mathbb{D}$
 representing its behavior.
 We will call the set $\mathbb{D}$ a \emph{semantic domain}.
-In this section we elucidate
+
+\begin{example}[Trace semantics]
+In the original CompCert semantics,
+discussed in detail in \S\ref{sec:compcert-sem},
+the behaviors of programs are ultimately expressed
+as sets of \emph{traces}.
+Each trace records a possible execution of the program
+as a finite or infinite sequence of externally observable events
+taken from a set $\mathbb{E}$.
+In this case, the semantic domain can be defined as
+$
+  \mathbb{D}_\kw{CompCert} :=
+    \mathcal{P}(\mathbb{E}^* + \mathbb{E}^\omega)
+$.
+\end{example}
+
+In the remainder of this section we elucidate
 the structure and properties of $\mathbb{D}$
 necessary to the process of builing
 large-scale certified systems.
@@ -1108,10 +1124,46 @@ semantic domain $\mathbb{D}$,
 which is equipped with a \emph{refinement} preorder
 ${\refby} \subseteq \mathbb{D} \times \mathbb{D}$.
 The proposition $\sigma_1 \refby \sigma_2$
-asserts that $\sigma_2$ is a refinement of $\sigma_1$,
-and in particular a system description $p \in P$ is a correct implementation
-of $\sigma \in \mathbb{D}$ when
+asserts that $\sigma_1$ is refined by $\sigma_2$.
+The correctness of a system description $p \in P$
+with respect to a specification $\sigma \in \mathbb{D}$
+can then be formulated as
 $\sigma \refby \llbracket p \rrbracket$.
+
+Refinement is a correctness-preserving relation,
+in the sense that for a set
+$\mathbb{P} \subseteq \mathcal{P}(\mathbb{D})$
+of properties of interest
+and two semantic objects $\sigma_1, \sigma_2 \in \mathbb{D}$:
+\[
+  \sigma_1 \refby \sigma_2 \:\Rightarrow\:
+  \forall P \in \mathbb{P} \bdot
+    P(\sigma_1) \Rightarrow P(\sigma_2) \,.
+\]
+
+\begin{example}[Trace containment]
+In the trace semantics of CompCert,
+the set of traces associated with the source program
+is understood as a set of \emph{permissible} behaviors
+for the target program.
+The corresponding notion of refinement is
+\emph{trace containment},
+expressed by the superset relation $\supseteq$.
+For instance
+$\kw{Clight}[p] \in \mathbb{D}_\kw{CompCert}$
+is refined by
+$\kw{Asm}[p'] \in \mathbb{D}_\kw{CompCert}$
+when
+$
+  \kw{Clight}[p] \supseteq \kw{Asm}[p']
+$.
+
+Any property $P(\sigma)$
+asserting that \emph{all} traces
+$t \in \sigma$
+satisfy a given condition
+will be preserved by trace containment.
+\end{example}
 
 %}}}
 
@@ -1133,10 +1185,48 @@ if the language contains a binary operator
 ${+} : P \times P \rightarrow P$,
 then the semantic domain should be equipped with
 a corresponding operation
-${\oplus} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$
-such that
-$\llbracket p_1 + p_2 \rrbracket =
- \llbracket p_1 \rrbracket \oplus \llbracket p_2 \rrbracket$.
+${\oplus} : \mathbb{D} \times \mathbb{D} \rightarrow \mathbb{D}$.
+Ideally,
+the operation $\oplus$
+will characterize $+$ exactly:
+\begin{equation}
+  \llbracket p_1 \rrbracket \oplus \llbracket p_2 \rrbracket
+  =
+  \llbracket p_1 + p_2 \rrbracket
+  \,.
+  \label{eqn:compositionality}
+\end{equation}
+
+\begin{example}
+Denotational semantics are compositional by nature.
+The behavior of program components
+is defined recursively on their structure,
+so that (\ref{eqn:compositionality}) holds \emph{by definition}.
+\end{example}
+
+In the context of refinement-based verification,
+we can regard $\oplus$ as a \emph{specification} for $+$,
+and it is sufficient to establish that:
+\begin{equation}
+  \llbracket p_1 \rrbracket \oplus \llbracket p_2 \rrbracket
+  \refby
+  \llbracket p_1 + p_2 \rrbracket \,.
+  \label{eqn:compositional-correctness}
+\end{equation}
+
+\begin{example}[Linking in CompCertO]
+In the semantic model of CompCertO (\S\ref{sec:compcerto}),
+the horizontal composition operation $\oplus$ on component semantics
+provides a specification for
+CompCert's program linking operation $+$.
+This operation acts as a specification for linking.
+In particular, the correctness of assembly linking
+is established in Thm.~\ref{thm:asmlinking} as
+$
+  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2) \refby
+  \kw{Asm}(p_1 + p_2)
+$.
+\end{example}
 
 %}}}
 
@@ -1163,9 +1253,81 @@ $\sigma \refby \sigma_1 \oplus \llbracket p_2 \rrbracket$:
 \[
    \sigma \:\refby\:
    \sigma_1 \oplus \llbracket p_2 \rrbracket \:\refby\:
-   \llbracket p_1 \rrbracket \oplus \llbracket p_2 \rrbracket \:=\:
-   \llbracket p_1 + p_2 \rrbracket
+   \llbracket p_1 \rrbracket \oplus \llbracket p_2 \rrbracket \:\refby\:
+   \llbracket p_1 + p_2 \rrbracket \,.
 \]
+
+%}}}
+
+\subsection{Types} %{{{
+
+In most cases,
+systems are built out of components of various types
+which can only be composed when their types are compatible.
+Different semantic domains can then be used
+to interpret components of different types.
+
+Categories provide a principled algebraic framework
+to realize this separation.
+Instead of a single set $\mathbb{D}$,
+we use a category $\mathbf{D}$.
+The objects $A \in \mathbf{D}$ correspond to
+the possible types or interfaces alongside which
+components can be connected.
+The behavior of components which
+use an interface $A$ to
+implement an interface $B$
+can then be interpreted as morphisms
+of type $A \rightarrow B$.
+Category theory can then be a useful resource
+to formulate and characterize typed composition principles,
+and the theory of \emph{enriched categories}
+can be used to explore how these composition principles
+interact with the structure of the semantic domains
+$\mathbf{D}(A, B)$.
+
+%\begin{example}[Denotational semantics of type theories]
+%Categorical semantics of type theories
+%usually interpret types and typing contexts as objects,
+%and terms and substitutions as morphisms.
+%For instance,
+%consider a calculus with a base type $\mathbb{N}$
+%and a built-in addition operation
+%associated with the typing rule:
+%\[
+%  x : \mathbb{N}, y : \mathbb{N} \vdash x + y : \mathbb{N} \,.
+%\]
+%To give a semantics to the calculus,
+%we must first choose a category $\mathbf{C}$ with finite products.
+%Products are used to interpret contexts with multiple variables
+%($x : \mathbb{N}, y : \mathbb{N}$)
+%as well as product types when they are available
+%($\mathbb{N} \times \mathbb{N}$).
+%We then give an object
+%$\llbracket \mathbb{N} \rrbracket \in \mathbf{D}$
+%to interpret the type $\mathbb{N}$,
+%and a morphism
+%$\kw{plus} :
+% \llbracket \mathbb{N} \rrbracket \times
+% \llbracket \mathbb{N} \rrbracket \rightarrow
+% \llbracket \mathbb{N} \rrbracket$
+%to interpret the $+$ operation.
+%\end{example}
+
+\begin{example}[Signatures]
+The models introduced in this thesis use \emph{signatures}
+to enumerate the operations used and provided by program components.
+Consequently,
+the semantics of components are expressed in categories
+whose objects are signatures.
+Morphisms of type $E \rightarrow F$
+describe the behavior of components 
+which use the operations of $E$
+to implement the operations of $F$.
+Categorical structures can then be used to
+describe various composition principles
+(see \S\ref{sec:cal} for example).
+\end{example}
 
 %}}}
 
@@ -1174,79 +1336,232 @@ $\sigma \refby \sigma_1 \oplus \llbracket p_2 \rrbracket$:
 Large-scale systems operate across multiple levels of abstraction.
 Each level brings to its own understanding of the interaction
 between a component and its environment.
-To relate abstraction layers we need to give
-an explicit account of how their formulations of the interaction
+To reason across abstraction layers we need to give
+an explicit account of how these different views
+of a component's interactions
 correspond to one another.
 
-[XXX improve and expand:
-soundness relation in abstract interpretation,
-how it relates to the refinement relation,
-Galois connexions]
-One possibility is to define a heterogenous version
-of the refinement relation
-${\refby_\mathbb{R}} \subseteq
- \mathbb{D}_1 \times \mathbb{D}_2$ between
-the abstract domain $\mathbb{D}_1$ and
-the more concrete one $\mathbb{D}_2$, where
-$\mathbb{R}$ specifies a correspondance between
-the two views of the system.
-
-%In related work we show that for a sufficiently general
-%semantic domain, the simulation convention $\mathbb{R}$
-%defines a Galois connection
-%$(\mathbb{D}^\sharp, {\refby})
-% \galois{\gamma}{\alpha}
-% (\mathbb{D}^\natural, {\refby})$
-%between the abstract and concrete domains,
-%which allows refinement properties to be transferred between
-%the abstract and concrete domains through the defining property
+This is studied extensively
+in the context of abstract interpretation \citep{aif}.
+Suppose $\mathbb{D}_1$ is the concrete domain
+and $\mathbb{D}_2$ is the abstract one.
+To establish a correspondance between them,
+the most general approach is to define a \emph{soundness relation}
+$\rho \subseteq \mathbb{D}_2 \times \mathbb{D}_1$.
+%
+%\begin{example}[Calling conventions]
+%Abstraction is particularly relevant
+%in the context of compilers.
+%For example, between C and assembly,
+%interactions across compilation units
+%are understood very differently.
+%At the level of C,
+%cross-module interaction is defined in terms of
+%function calls;
+%invoking a function consists of assigning values
+%to the function's parameters,
+%initializing a new stack frame,
+%and finally executing the function's body.
+%At the assembly level, cross-module
+%interactions simply consist in branching to an address
+%outside of the current module with
+%a certain register state.
+%
+%In that context,
+%the correpondance between the source and target semantic domains
+%depends on the \emph{calling convention} used by the compiler.
+%The correctness property of a C-to-assembly compiler
+%can then be stated as:
 %$
-%    \gamma(\sigma^\sharp) \refby \sigma^\natural \Leftrightarrow
-%    \sigma^\sharp \refby \alpha(\sigma^\natural)
-%$.
+%  \llbracket p \rrbracket_s \mathrel{\rho}
+%  \llbracket C(p) \rrbracket_t
+%$,
+%where
+%$p$ is the source program, $C(p)$ the compiler's output,
+%$\llbracket - \rrbracket_s$ gives the semantics of the source language,
+%$\llbracket - \rrbracket_t$ gives the semantics of the target language,
+%and the soundness relation $\rho$ formalizes the C calling convention.
+%\end{example}
+
+Often there will be a more elementary description
+of the correspondance,
+based on the construction of the semantic domains,
+as illustrated by the following example.
+
+\begin{example}
+In the model of \emph{certified abstraction layers}
+presented in \S\ref{sec:cal},
+the semantic domain used to represent layer interfaces,
+is parametrized by a set of abstract states $S$.
+To compare a layer interface formulated in terms of
+a more concrete set of states $S_1$ with
+a layer interface formulated in terms of
+a more abstract set of states $S_2$,
+we will use a relation $R \subseteq S_2 \times S_1$.
+This relation can then be extended to the level of layer interfaces
+as a soundness relation
+${\le_R} \subseteq \mathbb{D}[S_2] \times \mathbb{D}[S_1]$,
+asserting that $R$ is a simulation relation between
+a layer interface in $\mathbb{D}[S_2]$ and
+a layer interface in $\mathbb{D}[S_1]$.
+\end{example}
+
+In any case,
+we expect $\rho$
+to be compatible with refinement:
+\[
+  \begin{prooftree}
+    \hypo{\sigma_2' \refby_2 \sigma_2}
+    \hypo{\sigma_2 \mathrel{\rho} \sigma_1}
+    \hypo{\sigma_1 \refby_1 \sigma_1'}
+    \infer3{\sigma_2' \mathrel{\rho} \sigma_1'}
+  \end{prooftree}
+\]
+In other words,
+if $\sigma_2$ is an abstraction which soundly approximates
+a concrete semantic object $\sigma_1$,
+making $\sigma_2$ less precise or $\sigma_1$ more precise
+preserves this relationship.
+
+In the case of categorical semantics
+where $\mathbb{D}_1 = \mathbf{D}(A_1, B_1)$
+and $\mathbb{D}_2 = \mathbf{D}(A_2, B_2)$
+are homsets,
+the constituents of the soundness relation
+may themselves be organized as a category
+with the same objects as $\mathbf{D}$.
+This induces a double category structure,
+where horizontal morphisms are the semantic objects,
+vertical morphisms are abstraction relationships,
+and 2-cells correspond to the soundness relation.
+
+When the semantic domains are rich enough,
+there will be a most precise $\sigma_2$
+corresponding to each $\sigma_1$,
+and a least precise $\sigma_1$
+corresponding to each $\sigma_2$,
+allowing us to define
+a concretization function
+$\gamma : \mathbb{D}_2 \rightarrow \mathbb{D}_1$
+and an abstraction function
+$\alpha : \mathbb{D}_1 \rightarrow \mathbb{D}_2$
+such that:
+\[
+  \gamma(\sigma_2) \refby_1 \sigma_1
+  \quad \Leftrightarrow \quad
+  \sigma_2 \mathrel{\rho} \sigma_1
+  \quad \Leftrightarrow \quad
+  \sigma_2 \refby_2 \alpha(\sigma_1) \,,
+\]
+This corresponds to
+the original formulation of abstract interpretation \citep{absint}
+in terms of Galois connections \citep{pgc}.
+
+\begin{example}[Simulation conventions in CompCertO]
+In the model used in CompCertO (\S\ref{sec:compcerto}),
+\emph{language interfaces} play the role of objects,
+and semantic domains assigned a type $A \rightarrow B$
+where $A$ and $B$ are language interfaces.
+In addition,
+a \emph{simulation convention}
+$\mathbb{R} : A \Leftrightarrow B$
+is used to formulate the correspondance between
+the high-level language interface $A$ and
+the low-level language interface $B$.
+A typical simulation property can be depicted as the 2-cell:
+\[
+  \begin{tikzpicture}[baseline,scale=0.66]
+    \node (A1) at (-1,  2) {$A_1$};
+    \node (A2) at (-1,  0) {$A_2$};
+    \node (B1) at ( 1,  2) {$B_1$};
+    \node (B2) at ( 1,  0) {$B_2$};
+    \draw (A1) edge[->] node[auto] {$L_1$} (B1);
+    \draw (A2) edge[->] node[below] {$L_2$} (B2);
+    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
+      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_A$} (A2);
+      \draw (B1) edge[double] node[auto] {$\mathbb{R}_B$} (B2);
+    \end{scope}
+  \end{tikzpicture}
+\]
+\end{example}
 
 %}}}
 
-\subsection{Compilers} %{{{
-
-Abstraction is particularly relevant
-in the context of compilers.
-For example, between C and assembly
-interactions across compilation units
-are understood very differently.
-At the level of C,
-cross-module interaction is defined in terms of
-function calls;
-invoking a function consists of assigning values
-to the function's parameters,
-initializing a new stack frame,
-and finally executing the function's body.
-At the assembly level, cross-module
-interactions simply consist in branching to an address
-outside the current module with
-a certain register state.
-
-In that context,
-the correpondance between the source and target semantic domains
-depends on the \emph{calling convention} used by the compiler.
-The correctness property of a C-to-assembly compiler
-can then be stated as:
-\[ \llbracket p \rrbracket_s \sqsubseteq_\mathbb{R}
-   \llbracket C(p) \rrbracket_t \,. \]
-where
-$p$ is the source program, $C(p)$ the compiler's output,
-$\llbracket - \rrbracket_s$ gives the semantics of the source language,
-$\llbracket - \rrbracket_t$ gives the semantics of the target language,
-and $\mathbb{R}$ formalizes the C calling convention.
-
-%%}}}
-
 \subsection{Embedding} %{{{
 
-[XXX: explain what it means for a model to embed in another,
-why we would want to do that,
-and return to the challenge of designing models
-suitable for a variety of verification paradigms]
+It is often useful to first interpret the semantics of a component
+in a more restricted domain,
+then embed this domain into a more general one:
+\[
+    p \in P \xrightarrow{\llbracket - \rrbracket}
+    \sigma \in \mathbb{D} \xrightarrow{|-|}
+    |\sigma| \in \mathbb{D}'
+\]
+The elements of the restricted domain $\mathbb{D}$
+will often have stronger properties,
+or be expressed in a way which makes certain
+proof methods more tractable.
+The more general domain $\mathbb{D}'$
+can then provide more expressivity
+and additional algebraic structures,
+and may embed the behaviors of different kinds of components,
+but may be less amenable to domain-specific reasoning.
+
+In this situation,
+we will want the embedding
+$|-| : \mathbb{D} \rightarrow \mathbb{D}'$
+to preserve any relevant structure present in both
+$\mathbb{D}$ and $\mathbb{D}'$.
+For example,
+in the case of categorical semantics,
+this embedding will be a functor
+of the appropriate kind.
+
+\begin{example}[Transition systems and trace semantics in CompCert] %{{{
+As previously mentioned,
+CompCert semantics
+ultimately characterize the behavior of programs
+in terms of traces.
+However,
+they are first defined as labelled transition systems,
+and the correctness properties of compilation passes
+are first proved as simulations.
+An embedding then assigns to each transition system $L$
+the set of traces $|L|$ characterizing
+its observable behavior,
+and a soundness proof shows that
+simulation properties $L_1 \le L_2$
+imply trace containment $|L_1| \supseteq |L_2|$.
+See \S\ref{sec:compcert-sem}.
+\end{example}
+%}}}
+
+\begin{example}[Certified abstraction layers] %{{{
+The theory of certified abstraction layers
+developped in \S\ref{sec:cal}
+only describes deterministic layer interfaces
+and implementations.
+In this theory,
+the simulation relations used to formulate abstraction
+are formalized as a distinct kind of object.
+In \S\ref{sec:intspec},
+I show how the theory of \S\ref{sec:cal}
+can be embedded into a more general framework
+which supports dual nondeterminism,
+allowing simulation relations
+to be internalized as regular morphisms,
+but making the notion of refinement more sophisticated.
+Finally in \S\ref{sec:gamesem},
+I outline a framework where the layers' states
+can be encapsulated and hidden from
+the descriptions of the layers' behaviors.
+This means simulation relations are no longer necessary at all,
+but prevents us from expressing the cartesian products of \S\ref{sec:cal}.
+However,
+each of these embeddings preserves categorical composition,
+refinement, and tensor products.
+\end{example}
+%}}}
 
 %}}}
 
@@ -2213,7 +2528,7 @@ and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
 
 %}}}
 
-\section{Algebraic effects} % {{{
+\section{Algebraic effects} \label{sec:eff} % {{{
 
 % preamble {{{
 
@@ -2620,7 +2935,7 @@ and edge labels as moves of the environment.
 
 %}}}
 
-\part{Refinement-based game semantics}
+\part{Refinement-based game semantics} \label{part:rbgs}
 
 \chapter{Certified abstraction layers} \label{sec:cal} %{{{
 
@@ -8455,9 +8770,52 @@ This is expressed as:
 
 %}}}
 
-\chapter{The Coqrel library} % {{{
+\part{Conclusion}
 
-% }}}
+\chapter{Conclusion and future work} %{{{
+
+The goal of this thesis is to demonstrate that
+the concepts and formalisms which underpin
+game semantics,
+the refinement calculus,
+algebraic effects and 
+other areas of programming language theory
+can be connected and unified in a fruitful manner.
+Their synthesis,
+which I call \emph{refinement-based game semantics},
+constitutes
+a plausible approach to the end-to-end verification
+of large-scale, heterogenous computer systems.
+
+Taking first steps in this direction,
+I have shown how a simple theory of certified abstraction layers
+can be embedded into increasingly expressive categorical models,
+and how the conceptual framework of refinement-based game semantics
+can be used to integrate CompCert into this hierarchy
+with minimal effort.
+A preliminary formalization in the Coq proof assistant
+of the game models presented in Part~\ref{part:rbgs}
+demonstrates the advantages of the techniques I have used
+[XXX enumerate].
+The work on CompCertO presented in Part~\ref{part:compcerto}
+has been fully formalized in the Coq proof assistant.
+
+\section{Categorical characterization}
+
+\section{Richer game models}
+
+\section{Classifying simple game models}
+
+\section{Linear logic}
+
+%}}}
+
+
+
+
+%\chapter{The Coqrel library} % {{{
+%
+%% }}}
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
