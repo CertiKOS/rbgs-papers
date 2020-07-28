@@ -1080,6 +1080,83 @@ in previous work.
 
 \chapter{Background} % {{{
 
+\section{Category theory} %{{{
+
+In general,
+I will avoid relying on category theory
+to describe the constructions and methods
+used in this thesis.
+Nevertheless,
+category theory ...
+
+Category theory is the general study of
+\emph{compositional structures}.
+The most basic example of this kind of structure
+is function composition.
+Two functions $f : A \rightarrow B$ and $g : B \rightarrow C$
+such that
+the codomain of the first coincides with
+the domain of the second
+can be combined to obtain a composite function:
+$g \circ f : A \rightarrow C$.
+This compositional structure is formalized
+by the notion of a \emph{category}, where:
+\begin{itemize}
+  \item a set of \emph{objects} (sets in the example above);
+  \item a set of \emph{morphisms} between any two objects (functions);
+  \item a \emph{composition} operation $\circ$
+    for morphisms whose source and target objects
+    coincide.
+\end{itemize}
+Sets and functions constitute the specific category
+called $\mathbf{Set}$,
+but this basic structure shows up in
+countless other contexts:
+\begin{itemize}
+  \item
+    In the context of abstract algebra,
+    objects correspond to instances of a particular structure
+    (say, a specific monoid),
+    and morphisms correspond to homomorphisms
+    (say, monoid homomorphisms).
+  \item
+    In the context of programming language semantics,
+    objects correspond to types
+    morphisms correspond to terms.
+  \item
+    In the context of system construction,
+    objects correspond to interfaces and
+    morphisms correspond to components
+    which \emph{use} one interface to \emph{provide} another.
+\end{itemize}
+
+In most cases,
+categories contain additional structure.
+For instance,
+given two sets $A$ and $B$
+we can construct the set of pairs $A \times B$
+or the set $B^A$ of functions from $A$ to $B$.
+Category theory formalizes this kind of structures
+in abstract terms involving only
+objects and morphisms,
+which can be given meaning in categories
+representing a broad range of mathematical structures.
+For example,
+the notion of \emph{cartesian closed category}
+gives a general formalization of tupling and exponentiation,
+which in the case of the category $\mathbf{Set}$
+characterizes set of pairs and sets of functions.
+
+By expressing all kinds of compositional structures
+in this general way,
+category theory provides an important \emph{taxonomical} framework,
+allowing us to classify mathematical structures
+according to the
+
+
+
+%}}}
+
 \section{Building certified systems} \label{sec:principles} %{{{
 
 \subsection{Semantic domains} %{{{
@@ -2782,7 +2859,8 @@ and edge labels as moves of the environment.
 Software is constructed in layers.
 The basic facilities provided by the programming environment
 are used to implement more abstract data structures and operations.
-The programmer can then forget the details of their implementation,
+The programmer can then forget the implementation details
+of these data structures and operations,
 and instead think of them as \emph{primitive} constructions
 when building the next layer of code.
 
@@ -2792,7 +2870,7 @@ where abstraction layers
 may transform the programming model significantly.
 For example,
 at the level of the bare metal,
-the memory address space must be managed explicitly,
+the memory address space must be manipulated explicitly,
 but the operating system's memory management layers
 provide a much more convenient view of the memory
 for higher-level code.
@@ -2808,7 +2886,7 @@ For most abstraction layers,
 the transformation of client code from
 high- to low-level is less expansive,
 consisting only in adding a layer's code.
-nevertheless they can be understood as a specific instance
+Nevertheless they can be understood as a specific instance
 of the more general phenomenon.
 
 %}}}
@@ -2947,19 +3025,15 @@ and more.
 
 A layer interface $L$ has three components.
 First, a \emph{signature} enumerates
-primitive operations together with their types,
-given as $\kw{op} : A \rightarrow B$
-where $A$ and $B$ are sets.
-In terms of Def.~\ref{def:esig},
-this corresponds to a family $\{ \kw{op}[a] : B \mid a \in A \}$.
+primitive operations together with their types
+(see Def.~\ref{def:esig}).
 Second,
 the set $S$ contains the \emph{abstract states} of the layer interface.
-Finally, for each primitive
-$\kw{op} : A \rightarrow B$,
+Finally, for each operation $m : N$,
 a \emph{specification}
 is given as a function:
 \[
-  L.\kw{op} : A \times S \rightarrow \mathcal{P}^1(B \times S) \,.
+  L.m : S \rightarrow \mathcal{P}^1( N \times S) \,.
 \]
 Throughout this thesis,
 the notation $v@k \in V \times S$ is used for a pair
@@ -2967,10 +3041,10 @@ containing the value $v \in V$ and the state $k \in S$.
 
 \subsection{Specification monad} %{{{
 
-In the type of $L.\kw{op}$ above,
+In the type of $L.m$ above,
 $\mathcal{P}^1$ corresponds to the \emph{maybe} monad:
 \[
-  \mathcal{P}^1(A) := \{ x \subseteq A : |x| \le 1 \} \,.
+  \mathcal{P}^1(A) := \{ x \subseteq A : |x| \le 1 \} \,,
 \]
 where a terminating computation producing
 the value $v \in A$ is represented as the singleton:
@@ -3026,7 +3100,7 @@ layer interfaces.
 
 \begin{definition}
 A \emph{layer interface} is a tuple
-$L = \langle E, S, \pi \rangle$,
+$L = \langle E, S, \sigma \rangle$,
 where $E$ is an effect signature,
 $S$ is a set of states,
 and $\sigma$ assigns to each operation
@@ -3151,10 +3225,10 @@ as a general representation for client code.
 As discussed in \S\ref{sec:freemon},
 a computation $x \in \mathcal{F}_E(A)$ in the free monad
 is a term built out of the operations of $E$ and
-the elements of $A$ regarded as variables,
-representing a computation which proceeds inward
+the elements of $A$ regarded as variables.
+These terms can be interpreted as a computation which proceeds inward
 from the top-level operation
-towards the leaves of the term.
+towards the leaves of the term (constants or variables).
 
 Using the underlay interface,
 we can define an interpretation
@@ -3572,7 +3646,206 @@ and work together.
 
 \chapter{Games and dual nondeterminism} \label{sec:games-dnd} %{{{
 
-\section{Dually nondeterministic functions} %{{{
+\section{Example: specifying functions} %{{{
+
+To illustrate the use of dual nondeterminism
+in the context of specifications and refinement,
+consider functions on integers.
+A function $f : \mathbb{Z} \rightarrow \mathbb{Z}$
+can be seen as a simple system,
+which accepts a single input and produces a single output:
+\[
+  \begin{tikzpicture}[scale=0.5]
+    \draw (-3, -1) rectangle (3, 1);
+    \node at (0,0) {$f : \mathbb{Z} \rightarrow \mathbb{Z}$};
+    \draw[->] (-5,0) -- node[above] {$x$} (-3,0);
+    \draw[->] (3,0) -- node[above] {$y$} (5,0);
+  \end{tikzpicture}
+\]
+
+\subsection{Elementary function specifications}
+
+To constrain the behavior of such a system,
+we can use an elementary specification of the form:
+\[
+  x \mapsto y
+\]
+The specification above asserts that
+whenever the function's input is $x \in \mathbb{Z}$,
+it should produce the output $y \in \mathbb{Z}$;
+in other words, $f(x) = y$.
+For example,
+the function defined by $f(x) := 2x$
+satisfies the following specifications:
+\[
+  0 \mapsto 0 \qquad
+  1 \mapsto 2 \qquad
+  -1 \mapsto -2 \qquad
+  2 \mapsto 4
+  \,.
+\]
+
+On their own,
+these specifications
+carry very limited information about the function
+they attempt to characterize.
+Like the plays of a game,
+they only give a snapshot of a single
+interaction between the system and its environment.
+However,
+by adding angelic and demonic nondeterminism,
+the model will become much more expressive.
+
+\subsection{Angelic and demonic choices}
+
+Angelic choice allows us to range over
+various possible choices of the environment,
+placing more constraint on the function and
+making the specification stronger.
+For example,
+the specification:
+\[
+    -1 \mapsto 1
+    \: \sqcap \:
+    0 \mapsto 0
+    \: \sqcap \:
+    1 \mapsto 1
+\]
+is satisfied by both of the functions
+$g(x) := x^2$ and $h(x) := |x|$,
+but not by $f$ although it satisfies the middle component.
+Infinite choice is even more expressive,
+so that for example
+the specification:
+\[
+  \hat{f} := \bigsqcup_{x \in \mathbb{Z}} x \mapsto 2x
+\]
+characterizes the function $f$ exactly.
+This allows $f$ to be represented as a specification,
+and the fact that $f$ satisfes $1 \mapsto 2$ to be expressed as:
+\[
+  1 \mapsto 2
+  \: \sqsubseteq \:
+  \bigsqcup_{x \in \mathbb{Z}} x \mapsto 2x
+  \: \sqsubseteq \:
+  \hat{f}
+  \,.
+\]
+This also illustrates that
+a specification can be made stronger
+and more precise by adding more angelic choices,
+although if we go too far it may not be possible to implement it.
+No function satisfies $0 \mapsto -1 \sqcup 0 \mapsto 1$.
+
+Conversely,
+demonic choice allows us to express
+implementation freedom and weaken specifications.
+For example:
+\[
+    1 \mapsto 1 \: \sqcap \: 1 \mapsto 2
+\]
+is satisfied the each one of the functions $f$, $g$, $h$.
+Using infinite choice,
+the specification:
+\[
+    \bigsqcap_{x \in \mathbb{Z}} x \mapsto x + 1
+\]
+expresses that there must be \emph{at least one} $x$
+mapped by the function to its successor.
+It can be refined by narrowing down the range
+of demonic choices:
+\[
+  \bigsqcap_{x \in \mathbb{Z}} x \mapsto x + 1
+  \: \refby \:
+  0 \mapsto 1
+  \: \sqcap \:
+  1 \mapsto 2
+  \,.
+\]
+This specification is satisfied by $f$,
+but not by $g$ or $h$.
+
+Angelic and demonic choices become even more powerful
+when they are used together.
+For example:
+\[
+  \bigsqcup_{x \text{ odd}} \:
+  \bigsqcap_{y \text{ even}} \:
+  (x \mapsto y)
+\]
+expresses the constraint that \emph{all} odd inputs 
+must be mapped to \emph{some} even output.
+Again $f$ satisfies this specification but $g$ and $h$ do not.
+
+To summarize,
+adding arbitrary angelic and demonic choices
+to a specification framework
+allows us to gain a significant amount of expressivity.
+When used in specifications,
+angelic choice corresponds to
+logical conjunction and the \emph{for all} quantifier,
+and demonic choice correponds to
+disjunction and \emph{there exists}.
+
+\subsection{Data abstraction}
+
+To illustrate the expressivity of the resulting model,
+consider the usual construction of integers
+as pairs of natural numbers.
+
+An integer is represented by a pair
+$n = (n_1, n_2) \in \mathbb{N} \times \mathbb{N}$,
+where
+$n_1$ is understood as the positive component,
+$n_2$ is understood as the negative component,
+and two integers $n = (n_1, n_2)$ and $m = (m_1, m_2)$
+in this form
+are considered equal when
+$n_1 + m_2 = n_2 + m_1$.
+The canonical embedding of natural numbers into integers
+can be realized as $n \mapsto (n, 0)$, and
+the standard arithmetic operations can be defined as:
+\begin{align*}
+  n + m &:= (n_1 + m_1, \: n_2 + m_2) \\
+  n - m &:= (n_1 + m_2, \: n_2 + m_1) \\
+  n \times m &:= (n_1 \times m_1 + n_2 \times m_2, \:
+    n_1 \times m_2 + n_2 \times m_1)
+  \,.
+\end{align*}
+
+This ``low-level'' representation can be connected
+to the more usual and abstract notion of integer
+by the relation
+$\rho \subseteq \mathbb{Z} \times (\mathbb{N} \times \mathbb{N})$
+defined by:
+\[
+  x \mathrel{\rho} (n_1, n_2)
+  \: \Leftrightarrow \:
+  x = n_1 - n_2
+  \,.
+\]
+Then a natural question to ask is:
+given a function
+$g : \mathbb{N} \times \mathbb{N} \rightarrow
+     \mathbb{N} \times \mathbb{N}$
+on the concrete representation,
+and a function
+$f : \mathbb{Z} \rightarrow \mathbb{Z}$
+expressed in the more abstract representation,
+what does it mean for $g$ to be a correct implementation of $f$?
+
+This situation is depicted by the simulation diagram below.
+Given related inputs $x \mathrel{\rho} n$,
+the functions $f$ and $g$ are expected to produce
+related outputs $f(x) \mathrel{\rho} g(n)$:
+
+
+%}}}
+
+\section{Dual nondeterminism and game semantics}
+
+
+\section{The dual nondeterminism monad} %{{{
 
 Morris and Tyrrell were able to extend
 the lattice-theoretic approach used in the refinement calculus
@@ -5114,7 +5387,7 @@ but remember it in order to adjoin it to the next incoming move.
 
 %}}}
 
-\part{CompCertO}
+\part{CompCertO} \label{part:compcerto}
 
 \chapter{Semantics in CompCert} \label{sec:compcert-sem} %{{{
 
@@ -7245,6 +7518,7 @@ of CompCertO.
 
 \begin{table} % tbl:passes Passes of CompCertO %{{{
   \figsize
+  \centering
   \begin{tabular}{l r @{$\: \twoheadrightarrow \:$} l r @{\ } r r}
     \hline
     Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC}
@@ -7328,7 +7602,7 @@ of CompCertO.
   \end{tabular}
   \caption{Languages and passes of CompCertO.
     Passes are grouped by their source language.
-    $\dagger$ indicates an optional optimization.
+    $\dagger$~\mbox{indicates} optional optimization passes.
     The simulation conventions $\kw{ext}, \kw{inj}, \kw{injp}$
     are explained in \S\ref{sec:cklr}.
     The invariants $\kw{wt}, \kw{va}$
