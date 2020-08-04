@@ -1083,6 +1083,8 @@ in previous work.
 
 % }}}
 
+\part{Preliminaries}
+
 \chapter{Background} % {{{
 
 \section{Building certified systems} \label{sec:principles} %{{{
@@ -3822,6 +3824,772 @@ Moreover, the functor $[L, {-}]$ has a left adjoint ${-} \otimes L$,
 
 %}}}
 
+\chapter{Games and dual nondeterminism} \label{sec:games-dnd} %{{{
+
+Using the lens of dual nondeterminism,
+\S\ref{sec:bg:gsnondet} outlined briefly some of the challenges
+associated with nondeterminism and refinement in game semantics.
+This section presents a new approach to address them,
+leading to the construction of \emph{strategy specifications}
+featuring dual nondeterminism and a form of alternating refinement.
+This approach decouples the nature of nondeterminism
+from the structure of plays,
+leading to more uniform and tractable theory.
+
+\section{Example: function specifications} \label{sec:fspec} %{{{
+
+To illustrate the use of dual nondeterminism
+in the context of specifications and refinement,
+I will use functions on integers.
+A function $f : \mathbb{Z} \rightarrow \mathbb{Z}$
+can be seen as a simple system,
+which accepts a single input and produces a single output:
+\[
+  \begin{tikzpicture}[scale=0.5]
+    \draw (-3, -1) rectangle (3, 1);
+    \node at (0,0) {$f : \mathbb{Z} \rightarrow \mathbb{Z}$};
+    \draw[->] (-5,0) -- node[above] {$x$} (-3,0);
+    \draw[->] (3,0) -- node[above] {$y$} (5,0);
+  \end{tikzpicture}
+\]
+
+\subsection{Elementary function specifications} %{{{
+
+To constrain the behavior of such a system,
+we can use an elementary specification of the form:
+\[
+  x \mapsto y
+\]
+The specification above asserts that
+whenever the function's input is $x \in \mathbb{Z}$,
+it should produce the output $y \in \mathbb{Z}$;
+in other words, $f(x) = y$.
+For example,
+the function defined by $f(x) := 2x$
+satisfies the following specifications:
+\[
+  0 \mapsto 0 \qquad
+  1 \mapsto 2 \qquad
+  -1 \mapsto -2 \qquad
+  2 \mapsto 4
+  \,.
+\]
+
+On their own,
+these specifications
+carry very limited information about the function
+they attempt to characterize.
+Like the plays of a game,
+they only give a snapshot of a single
+interaction between the system and its environment.
+However,
+by incorporating angelic and demonic nondeterminism,
+the model can be made much more expressive.
+
+%}}}
+
+\subsection{Angelic and demonic choices} %{{{
+
+Angelic choice allows us to range over
+various possible choices of the environment,
+placing more constraint on the function and
+making the specification stronger.
+For example,
+the specification:
+\[
+    -1 \mapsto 1
+    \: \sqcap \:
+    0 \mapsto 0
+    \: \sqcap \:
+    1 \mapsto 1
+\]
+is satisfied by both of the functions
+$g(x) := x^2$ and $h(x) := |x|$,
+but not by $f$ although it satisfies the middle component.
+Infinite choice allows us to formulate
+richer specifications:
+\[
+  \hat{f} := \bigsqcup_{x \in \mathbb{Z}} x \mapsto 2x
+\]
+The specification above characterizes the function $f$ exactly.
+This allows $f$ to be represented as a specification,
+and the fact that $f$ satisfes $1 \mapsto 2$ to be expressed as:
+\[
+  1 \mapsto 2
+  \: \sqsubseteq \:
+  \bigsqcup_{x \in \mathbb{Z}} x \mapsto 2x
+  \: = \:
+  \hat{f}
+  \,.
+\]
+This also illustrates that
+a specification can be made stronger
+and more precise by adding more angelic choices,
+although if we go too far it may not be possible to implement it;
+for example, no function satisfies:
+\[
+  0 \mapsto -1 \: \sqcup \: 0 \mapsto 1
+  \,.
+\]
+
+Conversely,
+demonic choice allows us to express
+implementation freedom and weaken specifications.
+For example:
+\[
+    1 \mapsto 1 \: \sqcap \: 1 \mapsto 2
+\]
+is satisfied the each one of the functions $f$, $g$, $h$.
+Using infinite choice,
+the specification:
+\[
+    \bigsqcap_{x \in \mathbb{Z}} x \mapsto x + 1
+\]
+expresses that there must be \emph{at least one} $x$
+mapped by the function to its successor.
+It can be refined by narrowing down the range
+of demonic choices:
+\[
+  \bigsqcap_{x \in \mathbb{Z}} x \mapsto x + 1
+  \: \refby \:
+  0 \mapsto 1
+  \: \sqcap \:
+  1 \mapsto 2
+  \,.
+\]
+This specification is satisfied by $f$,
+but not by $g$ or $h$.
+
+Angelic and demonic choices become even more powerful
+when they are used together.
+For example:
+\[
+  \bigsqcup_{x \text{ odd}} \:
+  \bigsqcap_{y \text{ even}} \:
+  (x \mapsto y)
+\]
+expresses the constraint that \emph{all} odd inputs 
+must be mapped to \emph{some} even output.
+Again $f$ satisfies this specification but $g$ and $h$ do not.
+
+To summarize,
+adding arbitrary angelic and demonic choices
+to a specification framework
+allows us to gain a significant amount of expressivity.
+When used in specifications,
+angelic choice corresponds to
+logical conjunction and the \emph{for all} quantifier,
+and demonic choice correponds to
+disjunction and \emph{there exists}.
+
+%}}}
+
+\subsection{Data abstraction} \label{sec:fspec-ab} %{{{
+
+To illustrate the expressivity of the resulting model,
+consider the usual construction of integers
+as pairs of natural numbers.
+
+An integer is represented by a pair
+$n = (n_1, n_2) \in \mathbb{N} \times \mathbb{N}$,
+where
+$n_1$ is understood as the positive component,
+$n_2$ is understood as the negative component,
+and two integers $n = (n_1, n_2)$ and $m = (m_1, m_2)$
+in this form
+are considered equal when
+$n_1 + m_2 = n_2 + m_1$.
+The canonical embedding of natural numbers into integers
+can be realized as $n \mapsto (n, 0)$, and
+the standard arithmetic operations can be defined as:
+\begin{align*}
+  n + m &:= (n_1 + m_1, \: n_2 + m_2) \\
+  n - m &:= (n_1 + m_2, \: n_2 + m_1) \\
+  n \times m &:= (n_1 \times m_1 + n_2 \times m_2, \:
+    n_1 \times m_2 + n_2 \times m_1)
+  \,.
+\end{align*}
+
+This ``low-level'' representation can be connected
+to the more usual and abstract notion of integer
+by the relation
+$\rho \subseteq \mathbb{Z} \times (\mathbb{N} \times \mathbb{N})$
+defined by:
+\[
+  x \mathrel{\rho} (n_1, n_2)
+  \: \Leftrightarrow \:
+  x = n_1 - n_2
+  \,.
+\]
+Then a natural question is:
+given a function
+$g : \mathbb{N} \times \mathbb{N} \rightarrow
+     \mathbb{N} \times \mathbb{N}$
+on the concrete representation,
+and a function
+$f : \mathbb{Z} \rightarrow \mathbb{Z}$
+expressed in the more abstract representation,
+what does it mean for $g$ to be a correct implementation of $f$?
+This situation is depicted by the simulation diagram below.
+Given related inputs $x \mathrel{\rho} n$,
+the functions $f$ and $g$ are expected to produce
+related outputs $f(x) \mathrel{\rho} g(n)$:
+\[
+  \begin{tikzcd}
+    x \ar[r, "f"] \ar[d, "(\forall) \qquad \rho"', dash] &
+    f(x) \ar[d, "\rho \qquad (\exists)", dash, dashed] \\
+    n \ar[r, "g"'] &
+    g(n)
+  \end{tikzcd}
+\]
+\[
+  f \ifr{\rho \rightarrow \rho} g
+\]
+However,
+since this involves objects of two different types,
+it is not obvious how this property can be formulated
+in the context of refinement.
+Dual nondeterminism makes it possible to define
+conceretization and abstraction functions:
+\[
+  \begin{array}{rcccc}
+    \gamma(f) := &
+      \displaystyle
+      \bigsqcup_{\mbox{$n \in \mathbb{N} \times \mathbb{N}$}} &
+      \displaystyle
+      \bigsqcup_{\mbox{$x \in \mathbb{Z} \mid x \mathrel{\rho} n$}} &
+      \displaystyle
+      \bigsqcap_{\mbox{$m \in \mathbb{N} \times \mathbb{N} \mid
+                 f(x) \mathrel{\rho} m$}} &
+      n \mapsto m \\
+    \alpha(g) := &
+      \displaystyle
+      \bigsqcup_{\mbox{$x \in \mathbb{Z}$}} &
+      \displaystyle
+      \bigsqcap_{\mbox{$n \in \mathbb{N} \times \mathbb{N} \mid
+        x \mathrel{\rho} n$}} &
+      \displaystyle
+      \bigsqcup_{\mbox{$y \in \mathbb{Z} \mid
+        y \mathrel{\rho} g(n)$}} &
+      x \mapsto y
+  \end{array}
+\]
+such that the correspondence of $f$ and $g$ to be stated as:
+\[
+  \gamma(f) \sqsubseteq \hat{g}
+  \quad \Leftrightarrow \quad
+  \hat{f} \refby \alpha(g)
+  \,.
+\]
+
+%}}}
+
+%}}}
+
+\section{Refinement in game semantics} %{{{
+
+Game semantics represents strategies as sets of plays.
+Each play records a possible interaction between
+the system and the environment.
+For instance,
+if we interpret the elementary function specification
+$x \mapsto y$
+as a simple play
+containing one move of the environment ($x$)
+followed by one move of the system ($y$),
+the strategy associated to $f : \mathbb{Z} \rightarrow \mathbb{Z}$
+can be represented as:
+\[
+  \sigma := \{ x \mapsto f(x) \mid x \in \mathbb{Z} \}
+  \,.
+\]
+
+\subsection{Strategies and refinement} %{{{
+
+In most game models,
+there are restrictions on the contents of $\sigma$.
+One common restriction is
+the exclusion of nondeterminitic choice
+involving moves of the system:
+\begin{equation}
+  x \mapsto y_1 \in \sigma \: \wedge \: x \mapsto y_2 \in \sigma
+  \quad \Rightarrow \quad
+  y_1 = y_2
+  \,.
+  \label{eqn:det-strat}
+\end{equation}
+Another common requirement is
+for $\sigma$ to range over all possible behaviors of the environment:
+\begin{equation}
+  \forall \, x \in \mathbb{Z} \, \bdot \,
+  \exists \, y \in \mathbb{Z} \, \bdot \,
+  x \mapsto y \in \sigma
+  \,.
+  \label{eqn:comp-strat}
+\end{equation}
+In our setting,
+these constraints restrict strategies to
+precisely describe functions.
+
+To obtain a richer model,
+we can relax these restrictions,
+allowing strategies such as:
+\[
+  \sigma' :=
+  \{ 0 \mapsto 0, \: 1 \mapsto 1 , \: 1 \mapsto -1 \}
+  \,.
+\]
+On one hand,
+the relaxation of (\ref{eqn:det-strat})
+permits some form of nondeterminism,
+for example between the elementary specifications
+$1 \mapsto 1$ and $1 \mapsto -1$
+in the example above.
+Indeed this was the approach taken in early work
+on nondeterminism in game semantics \citep{gsfnd}.
+On the other hand,
+the relaxation of (\ref{eqn:comp-strat})
+allows strategies which do not completely characterize
+functions.
+
+Yet even after these constraints have been relaxed,
+there is a choice to be made as to how
+this nondeterminism should be interpreted,
+which will in particular determine
+how the refinement ordering of strategies
+is to be constructed:
+\begin{itemize}
+  \item We can use an \emph{angelic} interpretation
+    and define refinement as set inclusion ($\subseteq$).
+    This is the original interpretation
+    and allows us to characterize a function completely
+    by ranging over the domain.
+    However, this prevents us from expressing a looser specification
+    permitting a range of outputs for a given input.
+    For example, the component
+    $1 \mapsto 1 \: \sqcup \: 1 \mapsto -1$ of $\sigma'$
+    results in an unimplementable specification,
+    since it requires both
+    $f(1) = 1$ and $f(1) = -1$.
+  \item If we use a \emph{demonic} interpretation
+    and define refinement as set containment ($\supseteq$),
+    we cannot formulate any specification
+    stronger than a single $x \mapsto y$.
+    In particular functions themselves cannot be represented as
+    sets of elementary specifications in this way.
+    A function $f$
+    which satisfies \emph{any one} of the conditions
+    $f(0) = 0$, $f(1) = 1$ or $f(1) = -1$ will
+    match $\sigma'$.
+  \item
+    To address these issues,
+    we can use an \emph{alternating} interpretation of nondeterminism,
+    which takes into account the polarity of moves,
+    so that $\sigma'$ above is interpreted as:
+    \[
+      0 \mapsto 0 \: \sqcup \:
+      (1 \mapsto 1 \: \sqcap 1 \mapsto -1)
+      \,,
+    \]
+    requiring that the function
+    map $0$ to $0$ and
+    map $1$ to either $-1$ or $1$.
+\end{itemize}
+
+The alternating interpretation of strategy nondeterminism
+is the one most in line with our goals.
+In the context of games,
+choices of the system and the environment must be distinguished,
+and it is natural to use the polarity of moves
+to make this distinction.
+However,
+the resulting refinement ordering
+is complex and unintuitive.
+In the case of function specifications,
+we get for example:
+\[
+  \{ 0 \mapsto 0 \}
+  \: \sqsubseteq \:
+  \{ 0 \mapsto 0, \: 1 \mapsto 1, \: 1 \mapsto -1 \}
+  \: \sqsubseteq \:
+  \{ 0 \mapsto 0, \: 1 \mapsto 1 \}
+\]
+In the more general case where plays consist of
+an unbounded alternation of input and outputs
+the refinement ordering becomes even more
+complex to describe.
+
+Another issue is incompleteness.
+For example, the nondeterministic choices:
+\[
+  \{ 0 \mapsto 1 \} \sqcup \{ 0 \mapsto -1 \}
+  \qquad
+  \{ 1 \mapsto 0 \} \sqcap \{ -1 \mapsto 0 \}
+\]
+cannot be represented in the model proposed above.
+This restriction may at first seem harmless.
+After all,
+the first specification above is unimplementable,
+and the second one is sufficiently weak
+that it is unclear whether
+it could ever find any practical use.
+However,
+from an algebraic point of view
+the loss of completeness is a significant shortcoming.
+It breaks the uniformity of the model
+and imposes a proliferation of side-conditions
+which the user must establish.
+
+Consider for example
+the case of data abstraction as dicussed in \S\ref{sec:fspec-ab}.
+The completely distributive lattice structure
+associated with dual nondeterminism
+allows us to use arbitrary abstraction relations.
+If the relation makes an abstract specifications
+impossible to implement,
+for instance because it involves abstract data
+with no concrete representation,
+or concrete data with an ambiguous high-level interpretation,
+the associated concretization function $\gamma$
+will simply generate an unimplementable
+low-level specification.
+
+If this is not possible because
+this low-level specification cannot be represented,
+we need instead to formulate, prove and track various restrictions
+on the abstraction relation or the specifications being manipulated.
+This is a particular concern in the context of
+formal proofs mechanized in a proof assistant,
+where even simple and intuitive side-conditions
+may interfere with usability.
+
+%}}}
+
+\subsection{Strategy specifications} %{{{
+
+Instead of retrofitting nondeterminism and refinement
+onto the usual notion of strategy,
+we can reexamine their construction altogether,
+taking the following approach:
+\begin{itemize}
+  \item Individual plays will be understood as
+    elementary specifications.
+    Like the elementary function specifications of \S\ref{sec:fspec},
+    they indicate how the system may react
+    to a specific behavior of the environment.
+    The prefix relation on plays
+    can then be understood as a notion of refinement,
+    with longer plays placing more precise constraints
+    on the system.
+  \item Sets of plays (strategies)
+    allow us to range over all possible choices of the environment,
+    understood as angelic nondeterminism.
+    They are ordered by inclusion ($\subseteq$).
+    By requiring them to be prefix-closed,
+    we can make sure they incorporate and preserve the refinement
+    ordering of plays.
+  \item Sets of strategies (strategy \emph{specifications})
+    additionally permits choices of the system,
+    understood as demonic nondeterminism.
+    They are ordered by containment ($\supseteq$).
+    By requiring them to be upward closed with respect to strategy inclusion,
+    we can once again incorporate strategy refinement
+    into this ordering.
+\end{itemize}
+Under this approach,
+dual nondeterminism is built into
+the construction of strategy specifications,
+allowing us to avoid the pitfalls of previous approaches.
+The model outlined above is complete and general
+in a precise way:
+this construction
+corresponds to the free completely distributive lattice
+generated by the underlying poset of plays.
+
+%}}}
+
+%}}}
+
+\section{Free completely distributive completions} %{{{
+
+Historically,
+dual nondeterminism in the refinement calculus
+only operates at the level of statements,
+in the context of imperative programming.
+More recently,
+Morris and Tyrrell were able to extend
+the lattice-theoretic approach used in the refinement calculus
+to functional programming
+\citep{augtyp,dndf,cspdnd}.
+
+In essence,
+their approach works by
+capturing dual nondeterminism as a \emph{monad}
+constructing free completely distributive lattices.
+Importantly,
+this monad operates on \emph{partially ordered sets},
+allowing it to incorporate
+any preexisting notion of refinement.
+This allows dual nondeterminism to be used
+in a variety of new contexts.
+
+\begin{definition}
+A completely distributive lattice $L$ is a
+\emph{free completely distributive completion} of
+a poset $C$ if there is
+a monotonic function $\phi : C \rightarrow L$
+such that
+for any completely distributive lattice $M$
+and monotonic function $f : C \rightarrow M$,
+there exists a unique complete homomorphism $f^*_\phi : L \rightarrow M$
+such that $f^*_\phi \circ \phi = f$:
+\[
+  \begin{tikzcd}[sep=large]
+    C \arrow[r, "\phi"] \arrow[rd, "f"'] &
+    L \arrow[d, "f^*_\phi", dashed] \\ & M
+  \end{tikzcd}
+\]
+A free completely distributive completion of a poset
+always exists and it is unique up to isomorphism.
+We write $\mathbf{FCD}(C)$ for
+the free completely distributive completion of $C$.
+\end{definition}
+
+\subsection{Construction}
+
+\citet{augtyp} gives the following constructions for
+the free completely distributive completion of
+a partially ordered set $(A, \le)$:
+\begin{align*}
+  \mathbf{FCD}(A, {\le}) &:= \mathcal{D} \mathcal{U}(A, {\le}) &
+  \mathbf{FCD}(A, {\le}) &:= \mathcal{U} \mathcal{D}(A, {\le}) \\
+  \phi(a) &:= {\downarrow}{\uparrow} a &
+  \phi(a) &:= {\uparrow}{\downarrow} a \,.
+\end{align*}
+In the expressions above,
+$\mathcal{D}$ and $\mathcal{U}$
+are themselves completions.
+A \emph{downset} of a poset $(A, {\le})$
+is a subset $x \subseteq A$ satisfying
+the \emph{downward closure} property:
+\[
+  \forall \, a, b \in A \bdot
+          a \le b \wedge b \in x \Rightarrow a \in x \,.
+\]
+Unions and intersections preserve downward closure,
+giving rise to the \emph{downset lattice} $\mathcal{D}(A, {\le})$.
+Its elements are the downsets of $(A, {\le})$,
+ordered by set inclusion (${\subseteq}$) with
+unions as joins and intersections as meets.
+The dual \emph{upset lattice} $\mathcal{U}(A, {\le})$
+is ordered by set containment (${\supseteq}$) with
+intersections as joins and unions as meets.
+
+\subsection{Categorical characterization}
+
+Categorically speaking,
+$\mathbf{FCD} : \mathbf{Poset} \rightarrow \mathbf{CDLat}$
+is the left adjoint to the forgetful functor
+$U : \mathbf{CDLat} \rightarrow \mathbf{Poset}$
+from the category $\mathbf{CDLat}$
+of completely distributive lattices and complete homomorphisms
+to the category $\mathbf{Poset}$
+of partially ordered sets and monotonic functions.
+As such, $U \! \circ \mathbf{FCD}$ is a monad over $\mathbf{Poset}$,
+and can be used to model dual nondeterminism
+as an effect.
+In the remainder of this thesis,
+I will identify $\mathbf{FCD}$ with
+the monad $U \! \circ \mathbf{FCD}$,
+and refer to the function
+$U(f_\phi^*)$ as the \emph{$\mathbf{FCD}$ extension} of $f$.
+
+\subsection{Computational interpretation}
+
+Computationally,
+the $\mathbf{FCD}$ monad can be used to interpret
+dual nondeterminism as an effect.
+As usual,
+$\phi(a) \in \mathbf{FCD}(a)$
+corresponds to a computation which
+terminates immediately with the outcome $a \in A$.
+%We will sometimes simply write $a$ for $\phi(a)$,
+%regarding values in the poset as
+%the corresponding elements of the completion.
+For a computation $x \in \mathbf{FCD}(A)$
+and for $f : A \rightarrow \mathbf{FCD}(B)$,
+the computation $f_\phi^*(x) \in \mathbf{FCD}(B)$
+replaces
+any outcome $a$ of $x$ with the computation $f(a)$.
+%We will sometimes extend $f$ implicitly and write $f(x)$.
+We will use the notation
+$a \leftarrow x ; f(a)$ for $f^*_\phi(x)$,
+or simply $x ; y$ when $f$ is constant with $f(a) = y$.
+
+A computation $x \in \mathbf{FCD}(a)$
+can be understood as
+a \emph{structured} collection of possible outcomes.
+More precisely,
+each element $x \in \mathbf{FCD}(A)$ can be written as
+$
+    x = \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} \phi(a_{ij})
+$
+where
+the index $i \in I$ ranges over possible demonic choices,
+the index $j \in J_i$ ranges over possible angelic choices,
+and $a_{ij} \in A$ is the corresponding outcome of the computation.
+Note that
+$f_\phi^*(x) = \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} f(a_{ij})$.
+
+The algebraic properties of lattices
+underlie the model's insensitivity to \emph{branching}.
+Complete distributivity:
+\[
+    \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} x_{i,j} =
+    \bigsqcup_{f \in (\prod_i J_i)} \bigsqcap_{i \in I} x_{i, f_i}
+\]
+further allows angelic and demonic choices to commute,
+and the status of $f^*_\phi$ as a complete homomorphism
+enables the following properties:
+\begin{align*}
+    a \leftarrow \left( \bigsqcup_{i \in I} x_i \right) ; M[a] &=
+      \bigsqcup_{i \in I} (a \leftarrow x_i ; M[a])
+    \\
+    a \leftarrow \left( \bigsqcap_{i \in I} x_i \right) ; M[a] &=
+      \bigsqcap_{i \in I} (a \leftarrow x_i ; M[a])
+    \\
+    a \leftarrow x ; b \leftarrow y ; M[a,b] &=
+    b \leftarrow y ; a \leftarrow x ; M[a,b]
+\end{align*}
+
+Finally,
+the least element $\bot := \bigsqcup \varnothing$,
+traditionally called $\kw{abort}$,
+merits some discussion.
+As a specification construct,
+it places no constraint on the implementation
+(it is refined by every element).
+As an implementation construct,
+we use it indiscriminately to interpret
+failure, silent divergence,
+and any other behavior
+which we want to exclude (it refines only itself).
+Writing again $\mathbbm{1} = \{ * \}$ for the unit set,
+the \emph{assertion} $\{P\} \in \mathbf{FCD}(\mathbbm{1})$ of a proposition $P$
+evaluates to the unit value $\phi(*)$ when the proposition is true
+and to $\bot$ otherwise.
+We will use it to formulate guards
+blocking a subset of angelic choices.
+
+%
+%As expected,
+%every element $x \in \mathbf{FCD}(C)$
+%in a free completely distributive lattice
+%can be written as a meet of joins of generators,
+%or conversely:
+%\begin{align*}
+%    x &= \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(c_{ij}) &
+%    x &= \bigsqcap_{i \in I'} \bigsqcup_{j \in J'_i} \phi(c'_{ij})
+%\end{align*}
+%Morphisms given by the universal property
+%have a corresponding expressions as:
+%\begin{align*}
+%  f^*_\phi(x) &=
+%    \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(c_{ij})
+%  \qquad
+%  f^*_\phi(x) &=
+%    \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(c_{ij})
+%\end{align*}
+%
+
+%}}}
+
+\section{Dually nondeterministic strategies} %{{{
+
+Our approach to demonic nondeterminism in game semantics
+will be to substitute $\mathbf{FCD}$ for $\mathcal{D}$
+in the construction of strategies presented earlier. 
+The more permissive \emph{strategy specification} $\sigma'$
+which we attempted to construct above
+can then be expressed as:
+\[
+  \sigma' :=
+    \bigsqcup_{n \in \mathbb{N}}
+    \bigsqcap_{-1 \le \delta \le 1}
+    \phi \big(
+        \kw{run} \cdot
+        \underline{\kw{rd}_\kw{x}} \cdot n \cdot
+        \underline{\kw{wr}_\kw{x}[2n + \delta]} \cdot \kw{ok} \cdot
+        \underline{\kw{done}} \big)
+\]
+Because of the properties of $\mathbf{FCD}$,
+the strategy specification $\sigma'$ will retain
+not only angelic choices,
+but demonic choices as well,
+%corresponding to the possible behaviors
+expressing possible behaviors
+of the system.
+
+For the construction $\mathbf{FCD} := \mathcal{U} \mathcal{D}$,
+strategy specifications correspond to
+sets of traditional strategies,
+ordered by containment ($\supseteq$).
+This outer set ranges over demonic choices.
+Writing
+$
+  s_{n,\delta} :=
+        \kw{run} \cdot
+        \underline{\kw{rd}_\kw{x}} \cdot n \cdot
+        \underline{\kw{wr}_\kw{x}[2n + \delta]} \cdot \kw{ok} \cdot
+        \underline{\kw{done}} %\,,
+$,
+the strategy specification $\sigma'$
+will be encoded as:
+\[
+  \sigma' =
+  \{ \sigma \in \mathcal{D}(P_G) \mid
+     \forall n \in \mathbb{N} \bdot
+     \exists \delta \in [-1,1] \bdot
+     s_{n,\delta} \in \sigma \} \,.
+\]
+Upward closure ensures that a strategy specification
+which contains a strategy $\sigma$
+contains all of its refinements as well.
+For instance,
+the only strategy specification
+containing the completely undefined strategy $\varnothing$
+is the maximally permissive strategy specification $\bot = \mathcal{D}(P_G)$.
+
+%In particular, we have that:
+%\[
+%    \sigma \nsqsubseteq \bigsqcup_{n \in \mathbb{N}} n
+%\]
+
+%\paragraph{Determinacy} %{{{
+%
+%How should we understand
+%the traditional strategy containing $\{ sm_1, sm_2 \}$
+%when $m_1$ and $m_2$ are system moves?
+%Under our interpretation,
+%this does not correspond to
+%system nondeterminism;
+%\emph{by construction},
+%such nondeterminism cannot occur,
+%and indeed
+%${\downarrow} s m_1 \cap {\downarrow} s m_2 =
+% {\downarrow} s \notni
+% s m_1, s m_2$.
+%Instead,
+%we interpret this as an \emph{unobservable}
+%environment choice
+%between the outcomes $s m_1$ and $s m_2$.
+%
+%%}}}
+
+%}}}
+
+% }}}
+
 \part{Refinement-based game semantics} \label{part:rbgs}
 
 \chapter{Certified abstraction layers} \label{sec:cal} %{{{
@@ -4617,772 +5385,6 @@ and work together.
 %}}}
 
 %}}}
-
-\chapter{Games and dual nondeterminism} \label{sec:games-dnd} %{{{
-
-Using the lens of dual nondeterminism,
-\S\ref{sec:bg:gsnondet} outlined briefly some of the challenges
-associated with nondeterminism and refinement in game semantics.
-This section presents a new approach to address them,
-leading to the construction of \emph{strategy specifications}
-featuring dual nondeterminism and a form of alternating refinement.
-This approach decouples the nature of nondeterminism
-from the structure of plays,
-leading to more uniform and tractable theory.
-
-\section{Example: function specifications} \label{sec:fspec} %{{{
-
-To illustrate the use of dual nondeterminism
-in the context of specifications and refinement,
-I will use functions on integers.
-A function $f : \mathbb{Z} \rightarrow \mathbb{Z}$
-can be seen as a simple system,
-which accepts a single input and produces a single output:
-\[
-  \begin{tikzpicture}[scale=0.5]
-    \draw (-3, -1) rectangle (3, 1);
-    \node at (0,0) {$f : \mathbb{Z} \rightarrow \mathbb{Z}$};
-    \draw[->] (-5,0) -- node[above] {$x$} (-3,0);
-    \draw[->] (3,0) -- node[above] {$y$} (5,0);
-  \end{tikzpicture}
-\]
-
-\subsection{Elementary function specifications} %{{{
-
-To constrain the behavior of such a system,
-we can use an elementary specification of the form:
-\[
-  x \mapsto y
-\]
-The specification above asserts that
-whenever the function's input is $x \in \mathbb{Z}$,
-it should produce the output $y \in \mathbb{Z}$;
-in other words, $f(x) = y$.
-For example,
-the function defined by $f(x) := 2x$
-satisfies the following specifications:
-\[
-  0 \mapsto 0 \qquad
-  1 \mapsto 2 \qquad
-  -1 \mapsto -2 \qquad
-  2 \mapsto 4
-  \,.
-\]
-
-On their own,
-these specifications
-carry very limited information about the function
-they attempt to characterize.
-Like the plays of a game,
-they only give a snapshot of a single
-interaction between the system and its environment.
-However,
-by incorporating angelic and demonic nondeterminism,
-the model can be made much more expressive.
-
-%}}}
-
-\subsection{Angelic and demonic choices} %{{{
-
-Angelic choice allows us to range over
-various possible choices of the environment,
-placing more constraint on the function and
-making the specification stronger.
-For example,
-the specification:
-\[
-    -1 \mapsto 1
-    \: \sqcap \:
-    0 \mapsto 0
-    \: \sqcap \:
-    1 \mapsto 1
-\]
-is satisfied by both of the functions
-$g(x) := x^2$ and $h(x) := |x|$,
-but not by $f$ although it satisfies the middle component.
-Infinite choice allows us to formulate
-richer specifications:
-\[
-  \hat{f} := \bigsqcup_{x \in \mathbb{Z}} x \mapsto 2x
-\]
-The specification above characterizes the function $f$ exactly.
-This allows $f$ to be represented as a specification,
-and the fact that $f$ satisfes $1 \mapsto 2$ to be expressed as:
-\[
-  1 \mapsto 2
-  \: \sqsubseteq \:
-  \bigsqcup_{x \in \mathbb{Z}} x \mapsto 2x
-  \: = \:
-  \hat{f}
-  \,.
-\]
-This also illustrates that
-a specification can be made stronger
-and more precise by adding more angelic choices,
-although if we go too far it may not be possible to implement it;
-for example, no function satisfies:
-\[
-  0 \mapsto -1 \: \sqcup \: 0 \mapsto 1
-  \,.
-\]
-
-Conversely,
-demonic choice allows us to express
-implementation freedom and weaken specifications.
-For example:
-\[
-    1 \mapsto 1 \: \sqcap \: 1 \mapsto 2
-\]
-is satisfied the each one of the functions $f$, $g$, $h$.
-Using infinite choice,
-the specification:
-\[
-    \bigsqcap_{x \in \mathbb{Z}} x \mapsto x + 1
-\]
-expresses that there must be \emph{at least one} $x$
-mapped by the function to its successor.
-It can be refined by narrowing down the range
-of demonic choices:
-\[
-  \bigsqcap_{x \in \mathbb{Z}} x \mapsto x + 1
-  \: \refby \:
-  0 \mapsto 1
-  \: \sqcap \:
-  1 \mapsto 2
-  \,.
-\]
-This specification is satisfied by $f$,
-but not by $g$ or $h$.
-
-Angelic and demonic choices become even more powerful
-when they are used together.
-For example:
-\[
-  \bigsqcup_{x \text{ odd}} \:
-  \bigsqcap_{y \text{ even}} \:
-  (x \mapsto y)
-\]
-expresses the constraint that \emph{all} odd inputs 
-must be mapped to \emph{some} even output.
-Again $f$ satisfies this specification but $g$ and $h$ do not.
-
-To summarize,
-adding arbitrary angelic and demonic choices
-to a specification framework
-allows us to gain a significant amount of expressivity.
-When used in specifications,
-angelic choice corresponds to
-logical conjunction and the \emph{for all} quantifier,
-and demonic choice correponds to
-disjunction and \emph{there exists}.
-
-%}}}
-
-\subsection{Data abstraction} \label{sec:fspec-ab} %{{{
-
-To illustrate the expressivity of the resulting model,
-consider the usual construction of integers
-as pairs of natural numbers.
-
-An integer is represented by a pair
-$n = (n_1, n_2) \in \mathbb{N} \times \mathbb{N}$,
-where
-$n_1$ is understood as the positive component,
-$n_2$ is understood as the negative component,
-and two integers $n = (n_1, n_2)$ and $m = (m_1, m_2)$
-in this form
-are considered equal when
-$n_1 + m_2 = n_2 + m_1$.
-The canonical embedding of natural numbers into integers
-can be realized as $n \mapsto (n, 0)$, and
-the standard arithmetic operations can be defined as:
-\begin{align*}
-  n + m &:= (n_1 + m_1, \: n_2 + m_2) \\
-  n - m &:= (n_1 + m_2, \: n_2 + m_1) \\
-  n \times m &:= (n_1 \times m_1 + n_2 \times m_2, \:
-    n_1 \times m_2 + n_2 \times m_1)
-  \,.
-\end{align*}
-
-This ``low-level'' representation can be connected
-to the more usual and abstract notion of integer
-by the relation
-$\rho \subseteq \mathbb{Z} \times (\mathbb{N} \times \mathbb{N})$
-defined by:
-\[
-  x \mathrel{\rho} (n_1, n_2)
-  \: \Leftrightarrow \:
-  x = n_1 - n_2
-  \,.
-\]
-Then a natural question is:
-given a function
-$g : \mathbb{N} \times \mathbb{N} \rightarrow
-     \mathbb{N} \times \mathbb{N}$
-on the concrete representation,
-and a function
-$f : \mathbb{Z} \rightarrow \mathbb{Z}$
-expressed in the more abstract representation,
-what does it mean for $g$ to be a correct implementation of $f$?
-This situation is depicted by the simulation diagram below.
-Given related inputs $x \mathrel{\rho} n$,
-the functions $f$ and $g$ are expected to produce
-related outputs $f(x) \mathrel{\rho} g(n)$:
-\[
-  \begin{tikzcd}
-    x \ar[r, "f"] \ar[d, "(\forall) \qquad \rho"', dash] &
-    f(x) \ar[d, "\rho \qquad (\exists)", dash, dashed] \\
-    n \ar[r, "g"'] &
-    g(n)
-  \end{tikzcd}
-\]
-\[
-  f \ifr{\rho \rightarrow \rho} g
-\]
-However,
-since this involves objects of two different types,
-it is not obvious how this property can be formulated
-in the context of refinement.
-Dual nondeterminism makes it possible to define
-conceretization and abstraction functions:
-\[
-  \begin{array}{rcccc}
-    \gamma(f) := &
-      \displaystyle
-      \bigsqcup_{\mbox{$n \in \mathbb{N} \times \mathbb{N}$}} &
-      \displaystyle
-      \bigsqcup_{\mbox{$x \in \mathbb{Z} \mid x \mathrel{\rho} n$}} &
-      \displaystyle
-      \bigsqcap_{\mbox{$m \in \mathbb{N} \times \mathbb{N} \mid
-                 f(x) \mathrel{\rho} m$}} &
-      n \mapsto m \\
-    \alpha(g) := &
-      \displaystyle
-      \bigsqcup_{\mbox{$x \in \mathbb{Z}$}} &
-      \displaystyle
-      \bigsqcap_{\mbox{$n \in \mathbb{N} \times \mathbb{N} \mid
-        x \mathrel{\rho} n$}} &
-      \displaystyle
-      \bigsqcup_{\mbox{$y \in \mathbb{Z} \mid
-        y \mathrel{\rho} g(n)$}} &
-      x \mapsto y
-  \end{array}
-\]
-such that the correspondence of $f$ and $g$ to be stated as:
-\[
-  \gamma(f) \sqsubseteq \hat{g}
-  \quad \Leftrightarrow \quad
-  \hat{f} \refby \alpha(g)
-  \,.
-\]
-
-%}}}
-
-%}}}
-
-\section{Refinement in game semantics} %{{{
-
-Game semantics represents strategies as sets of plays.
-Each play records a possible interaction between
-the system and the environment.
-For instance,
-if we interpret the elementary function specification
-$x \mapsto y$
-as a simple play
-containing one move of the environment ($x$)
-followed by one move of the system ($y$),
-the strategy associated to $f : \mathbb{Z} \rightarrow \mathbb{Z}$
-can be represented as:
-\[
-  \sigma := \{ x \mapsto f(x) \mid x \in \mathbb{Z} \}
-  \,.
-\]
-
-\subsection{Strategies and refinement} %{{{
-
-In most game models,
-there are restrictions on the contents of $\sigma$.
-One common restriction is
-the exclusion of nondeterminitic choice
-involving moves of the system:
-\begin{equation}
-  x \mapsto y_1 \in \sigma \: \wedge \: x \mapsto y_2 \in \sigma
-  \quad \Rightarrow \quad
-  y_1 = y_2
-  \,.
-  \label{eqn:det-strat}
-\end{equation}
-Another common requirement is
-for $\sigma$ to range over all possible behaviors of the environment:
-\begin{equation}
-  \forall \, x \in \mathbb{Z} \, \bdot \,
-  \exists \, y \in \mathbb{Z} \, \bdot \,
-  x \mapsto y \in \sigma
-  \,.
-  \label{eqn:comp-strat}
-\end{equation}
-In our setting,
-these constraints restrict strategies to
-precisely describe functions.
-
-To obtain a richer model,
-we can relax these restrictions,
-allowing strategies such as:
-\[
-  \sigma' :=
-  \{ 0 \mapsto 0, \: 1 \mapsto 1 , \: 1 \mapsto -1 \}
-  \,.
-\]
-On one hand,
-the relaxation of (\ref{eqn:det-strat})
-permits some form of nondeterminism,
-for example between the elementary specifications
-$1 \mapsto 1$ and $1 \mapsto -1$
-in the example above.
-Indeed this was the approach taken in early work
-on nondeterminism in game semantics \citep{gsfnd}.
-On the other hand,
-the relaxation of (\ref{eqn:comp-strat})
-allows strategies which do not completely characterize
-functions.
-
-Yet even after these constraints have been relaxed,
-there is a choice to be made as to how
-this nondeterminism should be interpreted,
-which will in particular determine
-how the refinement ordering of strategies
-is to be constructed:
-\begin{itemize}
-  \item We can use an \emph{angelic} interpretation
-    and define refinement as set inclusion ($\subseteq$).
-    This is the original interpretation
-    and allows us to characterize a function completely
-    by ranging over the domain.
-    However, this prevents us from expressing a looser specification
-    permitting a range of outputs for a given input.
-    For example, the component
-    $1 \mapsto 1 \: \sqcup \: 1 \mapsto -1$ of $\sigma'$
-    results in an unimplementable specification,
-    since it requires both
-    $f(1) = 1$ and $f(1) = -1$.
-  \item If we use a \emph{demonic} interpretation
-    and define refinement as set containment ($\supseteq$),
-    we cannot formulate any specification
-    stronger than a single $x \mapsto y$.
-    In particular functions themselves cannot be represented as
-    sets of elementary specifications in this way.
-    A function $f$
-    which satisfies \emph{any one} of the conditions
-    $f(0) = 0$, $f(1) = 1$ or $f(1) = -1$ will
-    match $\sigma'$.
-  \item
-    To address these issues,
-    we can use an \emph{alternating} interpretation of nondeterminism,
-    which takes into account the polarity of moves,
-    so that $\sigma'$ above is interpreted as:
-    \[
-      0 \mapsto 0 \: \sqcup \:
-      (1 \mapsto 1 \: \sqcap 1 \mapsto -1)
-      \,,
-    \]
-    requiring that the function
-    map $0$ to $0$ and
-    map $1$ to either $-1$ or $1$.
-\end{itemize}
-
-The alternating interpretation of strategy nondeterminism
-is the one most in line with our goals.
-In the context of games,
-choices of the system and the environment must be distinguished,
-and it is natural to use the polarity of moves
-to make this distinction.
-However,
-the resulting refinement ordering
-is complex and unintuitive.
-In the case of function specifications,
-we get for example:
-\[
-  \{ 0 \mapsto 0 \}
-  \: \sqsubseteq \:
-  \{ 0 \mapsto 0, \: 1 \mapsto 1, \: 1 \mapsto -1 \}
-  \: \sqsubseteq \:
-  \{ 0 \mapsto 0, \: 1 \mapsto 1 \}
-\]
-In the more general case where plays consist of
-an unbounded alternation of input and outputs
-the refinement ordering becomes even more
-complex to describe.
-
-Another issue is incompleteness.
-For example, the nondeterministic choices:
-\[
-  \{ 0 \mapsto 1 \} \sqcup \{ 0 \mapsto -1 \}
-  \qquad
-  \{ 1 \mapsto 0 \} \sqcap \{ -1 \mapsto 0 \}
-\]
-cannot be represented in the model proposed above.
-This restriction may at first seem harmless.
-After all,
-the first specification above is unimplementable,
-and the second one is sufficiently weak
-that it is unclear whether
-it could ever find any practical use.
-However,
-from an algebraic point of view
-the loss of completeness is a significant shortcoming.
-It breaks the uniformity of the model
-and imposes a proliferation of side-conditions
-which the user must establish.
-
-Consider for example
-the case of data abstraction as dicussed in \S\ref{sec:fspec-ab}.
-The completely distributive lattice structure
-associated with dual nondeterminism
-allows us to use arbitrary abstraction relations.
-If the relation makes an abstract specifications
-impossible to implement,
-for instance because it involves abstract data
-with no concrete representation,
-or concrete data with an ambiguous high-level interpretation,
-the associated concretization function $\gamma$
-will simply generate an unimplementable
-low-level specification.
-
-If this is not possible because
-this low-level specification cannot be represented,
-we need instead to formulate, prove and track various restrictions
-on the abstraction relation or the specifications being manipulated.
-This is a particular concern in the context of
-formal proofs mechanized in a proof assistant,
-where even simple and intuitive side-conditions
-may interfere with usability.
-
-%}}}
-
-\subsection{Strategy specifications} %{{{
-
-Instead of retrofitting nondeterminism and refinement
-onto the usual notion of strategy,
-we can reexamine their construction altogether,
-taking the following approach:
-\begin{itemize}
-  \item Individual plays will be understood as
-    elementary specifications.
-    Like the elementary function specifications of \S\ref{sec:fspec},
-    they indicate how the system may react
-    to a specific behavior of the environment.
-    The prefix relation on plays
-    can then be understood as a notion of refinement,
-    with longer plays placing more precise constraints
-    on the system.
-  \item Sets of plays (strategies)
-    allow us to range over all possible choices of the environment,
-    understood as angelic nondeterminism.
-    They are ordered by inclusion ($\subseteq$).
-    By requiring them to be prefix-closed,
-    we can make sure they incorporate and preserve the refinement
-    ordering of plays.
-  \item Sets of strategies (strategy \emph{specifications})
-    additionally permits choices of the system,
-    understood as demonic nondeterminism.
-    They are ordered by containment ($\supseteq$).
-    By requiring them to be upward closed with respect to strategy inclusion,
-    we can once again incorporate strategy refinement
-    into this ordering.
-\end{itemize}
-Under this approach,
-dual nondeterminism is built into
-the construction of strategy specifications,
-allowing us to avoid the pitfalls of previous approaches.
-The model outlined above is complete and general
-in a precise way:
-this construction
-corresponds to the free completely distributive lattice
-generated by the underlying poset of plays.
-
-%}}}
-
-%}}}
-
-\section{Free completely distributive completions} %{{{
-
-Historically,
-dual nondeterminism in the refinement calculus
-only operates at the level of statements,
-in the context of imperative programming.
-More recently,
-Morris and Tyrrell were able to extend
-the lattice-theoretic approach used in the refinement calculus
-to functional programming
-\citep{augtyp,dndf,cspdnd}.
-
-In essence,
-their approach works by
-capturing dual nondeterminism as a \emph{monad}
-constructing free completely distributive lattices.
-Importantly,
-this monad operates on \emph{partially ordered sets},
-allowing it to incorporate
-any preexisting notion of refinement.
-This allows dual nondeterminism to be used
-in a variety of new contexts.
-
-\begin{definition}
-A completely distributive lattice $L$ is a
-\emph{free completely distributive completion} of
-a poset $C$ if there is
-a monotonic function $\phi : C \rightarrow L$
-such that
-for any completely distributive lattice $M$
-and monotonic function $f : C \rightarrow M$,
-there exists a unique complete homomorphism $f^*_\phi : L \rightarrow M$
-such that $f^*_\phi \circ \phi = f$:
-\[
-  \begin{tikzcd}[sep=large]
-    C \arrow[r, "\phi"] \arrow[rd, "f"'] &
-    L \arrow[d, "f^*_\phi", dashed] \\ & M
-  \end{tikzcd}
-\]
-A free completely distributive completion of a poset
-always exists and it is unique up to isomorphism.
-We write $\mathbf{FCD}(C)$ for
-the free completely distributive completion of $C$.
-\end{definition}
-
-\subsection{Construction}
-
-\citet{augtyp} gives the following constructions for
-the free completely distributive completion of
-a partially ordered set $(A, \le)$:
-\begin{align*}
-  \mathbf{FCD}(A, {\le}) &:= \mathcal{D} \mathcal{U}(A, {\le}) &
-  \mathbf{FCD}(A, {\le}) &:= \mathcal{U} \mathcal{D}(A, {\le}) \\
-  \phi(a) &:= {\downarrow}{\uparrow} a &
-  \phi(a) &:= {\uparrow}{\downarrow} a \,.
-\end{align*}
-In the expressions above,
-$\mathcal{D}$ and $\mathcal{U}$
-are themselves completions.
-A \emph{downset} of a poset $(A, {\le})$
-is a subset $x \subseteq A$ satisfying
-the \emph{downward closure} property:
-\[
-  \forall \, a, b \in A \bdot
-          a \le b \wedge b \in x \Rightarrow a \in x \,.
-\]
-Unions and intersections preserve downward closure,
-giving rise to the \emph{downset lattice} $\mathcal{D}(A, {\le})$.
-Its elements are the downsets of $(A, {\le})$,
-ordered by set inclusion (${\subseteq}$) with
-unions as joins and intersections as meets.
-The dual \emph{upset lattice} $\mathcal{U}(A, {\le})$
-is ordered by set containment (${\supseteq}$) with
-intersections as joins and unions as meets.
-
-\subsection{Categorical characterization}
-
-Categorically speaking,
-$\mathbf{FCD} : \mathbf{Poset} \rightarrow \mathbf{CDLat}$
-is the left adjoint to the forgetful functor
-$U : \mathbf{CDLat} \rightarrow \mathbf{Poset}$
-from the category $\mathbf{CDLat}$
-of completely distributive lattices and complete homomorphisms
-to the category $\mathbf{Poset}$
-of partially ordered sets and monotonic functions.
-As such, $U \! \circ \mathbf{FCD}$ is a monad over $\mathbf{Poset}$,
-and can be used to model dual nondeterminism
-as an effect.
-In the remainder of this thesis,
-I will identify $\mathbf{FCD}$ with
-the monad $U \! \circ \mathbf{FCD}$,
-and refer to the function
-$U(f_\phi^*)$ as the \emph{$\mathbf{FCD}$ extension} of $f$.
-
-\subsection{Computational interpretation}
-
-Computationally,
-the $\mathbf{FCD}$ monad can be used to interpret
-dual nondeterminism as an effect.
-As usual,
-$\phi(a) \in \mathbf{FCD}(a)$
-corresponds to a computation which
-terminates immediately with the outcome $a \in A$.
-%We will sometimes simply write $a$ for $\phi(a)$,
-%regarding values in the poset as
-%the corresponding elements of the completion.
-For a computation $x \in \mathbf{FCD}(A)$
-and for $f : A \rightarrow \mathbf{FCD}(B)$,
-the computation $f_\phi^*(x) \in \mathbf{FCD}(B)$
-replaces
-any outcome $a$ of $x$ with the computation $f(a)$.
-%We will sometimes extend $f$ implicitly and write $f(x)$.
-We will use the notation
-$a \leftarrow x ; f(a)$ for $f^*_\phi(x)$,
-or simply $x ; y$ when $f$ is constant with $f(a) = y$.
-
-A computation $x \in \mathbf{FCD}(a)$
-can be understood as
-a \emph{structured} collection of possible outcomes.
-More precisely,
-each element $x \in \mathbf{FCD}(A)$ can be written as
-$
-    x = \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} \phi(a_{ij})
-$
-where
-the index $i \in I$ ranges over possible demonic choices,
-the index $j \in J_i$ ranges over possible angelic choices,
-and $a_{ij} \in A$ is the corresponding outcome of the computation.
-Note that
-$f_\phi^*(x) = \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} f(a_{ij})$.
-
-The algebraic properties of lattices
-underlie the model's insensitivity to \emph{branching}.
-Complete distributivity:
-\[
-    \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} x_{i,j} =
-    \bigsqcup_{f \in (\prod_i J_i)} \bigsqcap_{i \in I} x_{i, f_i}
-\]
-further allows angelic and demonic choices to commute,
-and the status of $f^*_\phi$ as a complete homomorphism
-enables the following properties:
-\begin{align*}
-    a \leftarrow \left( \bigsqcup_{i \in I} x_i \right) ; M[a] &=
-      \bigsqcup_{i \in I} (a \leftarrow x_i ; M[a])
-    \\
-    a \leftarrow \left( \bigsqcap_{i \in I} x_i \right) ; M[a] &=
-      \bigsqcap_{i \in I} (a \leftarrow x_i ; M[a])
-    \\
-    a \leftarrow x ; b \leftarrow y ; M[a,b] &=
-    b \leftarrow y ; a \leftarrow x ; M[a,b]
-\end{align*}
-
-Finally,
-the least element $\bot := \bigsqcup \varnothing$,
-traditionally called $\kw{abort}$,
-merits some discussion.
-As a specification construct,
-it places no constraint on the implementation
-(it is refined by every element).
-As an implementation construct,
-we use it indiscriminately to interpret
-failure, silent divergence,
-and any other behavior
-which we want to exclude (it refines only itself).
-Writing again $\mathbbm{1} = \{ * \}$ for the unit set,
-the \emph{assertion} $\{P\} \in \mathbf{FCD}(\mathbbm{1})$ of a proposition $P$
-evaluates to the unit value $\phi(*)$ when the proposition is true
-and to $\bot$ otherwise.
-We will use it to formulate guards
-blocking a subset of angelic choices.
-
-%
-%As expected,
-%every element $x \in \mathbf{FCD}(C)$
-%in a free completely distributive lattice
-%can be written as a meet of joins of generators,
-%or conversely:
-%\begin{align*}
-%    x &= \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(c_{ij}) &
-%    x &= \bigsqcap_{i \in I'} \bigsqcup_{j \in J'_i} \phi(c'_{ij})
-%\end{align*}
-%Morphisms given by the universal property
-%have a corresponding expressions as:
-%\begin{align*}
-%  f^*_\phi(x) &=
-%    \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(c_{ij})
-%  \qquad
-%  f^*_\phi(x) &=
-%    \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(c_{ij})
-%\end{align*}
-%
-
-%}}}
-
-\section{Dually nondeterministic strategies} %{{{
-
-Our approach to demonic nondeterminism in game semantics
-will be to substitute $\mathbf{FCD}$ for $\mathcal{D}$
-in the construction of strategies presented earlier. 
-The more permissive \emph{strategy specification} $\sigma'$
-which we attempted to construct above
-can then be expressed as:
-\[
-  \sigma' :=
-    \bigsqcup_{n \in \mathbb{N}}
-    \bigsqcap_{-1 \le \delta \le 1}
-    \phi \big(
-        \kw{run} \cdot
-        \underline{\kw{rd}_\kw{x}} \cdot n \cdot
-        \underline{\kw{wr}_\kw{x}[2n + \delta]} \cdot \kw{ok} \cdot
-        \underline{\kw{done}} \big)
-\]
-Because of the properties of $\mathbf{FCD}$,
-the strategy specification $\sigma'$ will retain
-not only angelic choices,
-but demonic choices as well,
-%corresponding to the possible behaviors
-expressing possible behaviors
-of the system.
-
-For the construction $\mathbf{FCD} := \mathcal{U} \mathcal{D}$,
-strategy specifications correspond to
-sets of traditional strategies,
-ordered by containment ($\supseteq$).
-This outer set ranges over demonic choices.
-Writing
-$
-  s_{n,\delta} :=
-        \kw{run} \cdot
-        \underline{\kw{rd}_\kw{x}} \cdot n \cdot
-        \underline{\kw{wr}_\kw{x}[2n + \delta]} \cdot \kw{ok} \cdot
-        \underline{\kw{done}} %\,,
-$,
-the strategy specification $\sigma'$
-will be encoded as:
-\[
-  \sigma' =
-  \{ \sigma \in \mathcal{D}(P_G) \mid
-     \forall n \in \mathbb{N} \bdot
-     \exists \delta \in [-1,1] \bdot
-     s_{n,\delta} \in \sigma \} \,.
-\]
-Upward closure ensures that a strategy specification
-which contains a strategy $\sigma$
-contains all of its refinements as well.
-For instance,
-the only strategy specification
-containing the completely undefined strategy $\varnothing$
-is the maximally permissive strategy specification $\bot = \mathcal{D}(P_G)$.
-
-%In particular, we have that:
-%\[
-%    \sigma \nsqsubseteq \bigsqcup_{n \in \mathbb{N}} n
-%\]
-
-%\paragraph{Determinacy} %{{{
-%
-%How should we understand
-%the traditional strategy containing $\{ sm_1, sm_2 \}$
-%when $m_1$ and $m_2$ are system moves?
-%Under our interpretation,
-%this does not correspond to
-%system nondeterminism;
-%\emph{by construction},
-%such nondeterminism cannot occur,
-%and indeed
-%${\downarrow} s m_1 \cap {\downarrow} s m_2 =
-% {\downarrow} s \notni
-% s m_1, s m_2$.
-%Instead,
-%we interpret this as an \emph{unobservable}
-%environment choice
-%between the outcomes $s m_1$ and $s m_2$.
-%
-%%}}}
-
-%}}}
-
-% }}}
 
 \chapter{The interaction specification monad} \label{sec:intspec} %{{{
 
