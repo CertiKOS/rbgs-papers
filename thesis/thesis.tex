@@ -329,8 +329,8 @@ a mechanized, machine-checkable proof of correctness.
 To construct a certified program,
 we must not only write its code in a given programming language,
 but also formally specify its intended behavior
-and construct, using specialized tools,
-evidence that the program
+use specialized tools
+to construct evidence that the program
 indeed conforms to the specification.
 
 %To achieve this,
@@ -355,7 +355,8 @@ compilers \citep{compcert},
 program logics \citep{vst},
 operating system kernels \citep{sel4,popl15},
 file systems \citep{fscq},
-processor designs \citep{safe,kami} and more,
+processor designs \citep{safe,kami} and
+other kinds of certified systems,
 often introducing new techniques
 and mathematical models.
 In this context,
@@ -392,8 +393,8 @@ as trustworthy as its specification.
 Indeed,
 it is possible to prove a buggy system correct
 with respect to a buggy specification.
-If the only user of the specification
-is a human expert subjecting it to careful examination,
+If the specification if only validated by
+a human expert subjecting it to careful examination,
 these bugs could go unnoticed
 and persist in the final system.
 By contrast,
@@ -406,12 +407,12 @@ Moreover,
 internal specifications used
 as intermediate steps
 in the verification of a complex system
-disappear from the external characterization of the system,
+disappear from its external characterization
 and no longer need to be trusted.
 This reduces the ratio between the size of the system
-and the size of the specification
-which must be trusted and understood
-to establish guarantees about the overall system.
+and the size of the trusted specification.
+%which must be trusted and understood
+%to establish guarantees about the overall system.
 
 %}}}
 
@@ -420,11 +421,28 @@ to establish guarantees about the overall system.
 To an extent,
 these principles are already demonstrated in the structure of the
 certified C compiler CompCert \citep{compcert}.
-In addition to the code of the compiler itself,
-CompCert comes with a proof of correctness
-showing that if the compiler successfully transforms
+CompCert supports an extensive subset of ISO C99,
+and CompCert can emit assembly code
+for PowerPC, ARM, RISC-V and x86 processors.
+However,
+in the context of verification,
+CompCert is usually used as compiler from
+the \kw{Clight} language,
+which is a simplified dialect of C
+more amenable to formal reasoning.
+The architecture-dependent assembly language
+targeted by CompCert is known as \kw{Asm}.
+
+As a \emph{certified} compiler,
+%In addition to the code of the compiler itself,
+CompCert comes with a proof of correctness.
+Like all components used in the DeepSpec project,
+CompCert was specified and verified
+in the Coq proof assistant.
+The proof shows that if the compiler successfully transforms
 a source program $p$ into a target program $p'$,
-then the behavior of $p'$ refines that of $p$:
+then the behavior of the target program
+\emph{refines} that of the source program:
 \[
   \begin{prooftree}
     \hypo{\kw{CompCert}(p) = p'}
@@ -442,14 +460,11 @@ $\kw{Clight}[p] \supseteq \kw{Asm}[p']$
 expresses that any possible behavior of
 the target program~$p'$
 is a possible behavior of the source program~$p$.
-Like the other components encompassed by the DeepSpec project,
-CompCert was specified and verified
-in the Coq proof assistant.
 
 The key to this achievement
 was the decomposition of CompCert
 into compilation passes,
-which were then specified and verified individually.
+which were then verified individually.
 When passes are composed to obtain the overall
 C-to-assembly compiler
 (Fig.~\ref{fig:compcert}),
@@ -458,7 +473,7 @@ to construct a proof for the whole compiler.
 The final theorem does not mention the intermediate
 programs or language semantics,
 so that a user only needs to trust
-the accuracy of the C and assembly semantics,
+the accuracy of the \kw{Clight} and \kw{Asm} semantics,
 and the soundness of the proof assistant.
 
 \begin{figure}
@@ -494,7 +509,7 @@ and the soundness of the proof assistant.
   \label{fig:compcert}
 \end{figure}
 
-The introduction of CompCert a decade ago
+The introduction of CompCert in 2008
 represented a breakthrough
 in the scale and feasability of
 certified software.
@@ -524,26 +539,27 @@ which we specified and verified individually.
 an abstract view of a layer's functionality,
 hiding the procedural details and low-level data representations
 involved in its implementation.
-They enumerate the primitives implemented by the layer
-and specify their behavior.
-Client code can be verified in terms of
+A layer interface
+enumerates the primitives implemented by an abstraction layer
+and specifies their expected behavior.
+Client code can then be verified in terms of
 this abstract view
 in order to build higher-level layers.
 
 To make this possible,
 we extended the CompCert semantics
 to be parametrized by a layer interface:
-the expression $\kw{Asm}[C, L]$
+the expression $\kw{Asm}_L[C]$
 denotes the set of traces generated by the client program $C$
 running on top of the layer interface $L$.
 Then a layer $M$
 implements an \emph{overlay} interface $L_2$
-on top of an \emph{underlay} interface $L_1$,
+on top of an \emph{underlay} interface $L_1$
 when the following \emph{contextual refinement}
 property holds:
 \[
   \forall \, C \, \bdot \,
-    \kw{Asm}[C, L_2] \supseteq \kw{Asm}[C + M, L_1] \,.
+    \kw{Asm}_{L_2}[C] \supseteq \kw{Asm}_{L_1}[C + M] \,.
 \]
 Here,
 the execution of the client code $C$ on top of the overlay $L_2$
@@ -553,7 +569,7 @@ can be implemented
 by running $C$ together with the layer implementation $M$
 on top of the underlay interface $L_1$.
 
-\begin{figure}
+\begin{figure} % fig:certikos {{{
   \[
     \begin{prooftree}
       \hypo{C}
@@ -583,10 +599,11 @@ on top of the underlay interface $L_1$.
     to derive a correctness property for the whole system.}
   \label{fig:certikos}
 \end{figure}
+%}}}
 
 Certified abstraction layers
 with compatible interfaces can then be chained together,
-in the way passes of a compiler
+in the same way passes of a compiler
 can be composed when the target language of one
 corresponds to the source language of another,
 allowing us to derive a contextual refinement property
@@ -594,15 +611,15 @@ for the whole kernel (Fig.~\ref{fig:certikos}).
 The system call interface of CertiKOS is specified
 by the topmost layer interface $\kw{TSyscall}$,
 and the basic facilities offered by the hardware
-are formalized by bottom interface $\kw{PreInit}$.
-Then, decomposing $\kw{CertiKOS} = M_n + \cdots + M_1$
+are formalized as the base layer interface $\kw{PreInit}$.
+Then, by decomposing $\kw{CertiKOS} = M_n + \cdots + M_1$
 into 37 certified abstraction layers,
 we were able to derive the overall theorem:
 \[
   \forall \, C \, \bdot \,
-    \kw{Asm}[C, \kw{TSyscall}]
+    \kw{Asm}_{\kw{TSyscall}}[C]
     \supseteq
-    \kw{Asm}[C + \kw{CertiKOS}, \kw{PreInit}] \,.
+    \kw{Asm}_{\kw{PreInit}}[C + \kw{CertiKOS}] \,.
 \]
 
 %}}}
@@ -610,7 +627,7 @@ we were able to derive the overall theorem:
 \subsection{Horizontal composition} %{{{
 
 In addition to
-the \emph{vertical} composition principles presented above,
+the \emph{vertical} composition principles outlined above,
 CompCert and CertiKOS provide limited forms of
 \emph{horizontal} composition,
 which allow individual programs and layer implementations
@@ -618,12 +635,12 @@ to be decomposed futher.
 
 In CompCert,
 this is used to model \emph{separate compilation}.
-While the original correctness theorem of CompCert
+The original correctness theorem of CompCert
 only characterized the compilation of a whole program,
-in practice C programs are usually made up of
+but in practice C programs usually consist of
 several \texttt{.c} files, known as \emph{compilation units}.
-These program components are compiled independently,
-and the results are then linked together to build
+These components are compiled independently,
+and the results are combined through \emph{linking} to build
 an executable image.
 To reflect this,
 \citet{sepcompcert} generalized the correctness theorem of CompCert
@@ -638,20 +655,19 @@ to the separate compilation property:
 \]
 
 Likewise,
-in CertiKOS the verification of a given
-certified abstraction layer
-can be further decomposed into
+in CertiKOS the verification of a given layer
+can be decomposed into
 the verification of the individual functions
-which constitute the layer's implementation.
+which constitute its implementation.
 This is achived through the \emph{layer calculus}
-which I present in \S\ref{sec:cal}.
+presented in Chapter~\ref{sec:cal}.
 
 %}}}
 
 \subsection{Challenges} %{{{
 
 The compositional approach to verification presented above is compelling,
-but applying it to build larger-scale certified systems
+but using it to build large-scale certified systems
 out of disparate certified components
 is challenging.
 A key aspect enabling composition in CompCert and CertiKOS
@@ -659,12 +675,12 @@ is the uniformity of the models underlying
 their language semantics and correctness proofs.
 By contrast,
 across certified software projects
-there exist a great diversity
+there exists a great diversity
 of semantic models and verification techniques.
 This makes it difficult to formulate
-interface specifications connecting specific components,
-let alone devise a general system
-to express such interfaces.
+specifications for interfacing specific projects,
+let alone devise a general method
+for connecting certified components.
 
 Worse yet,
 this diversity is not simply a historical accident.
@@ -675,21 +691,21 @@ to make the verification task tractable.
 The semantic model used in CompCert alone
 has changed multiple times,
 addressing new requirements and techniques
-that were introduced alongside
+which were introduced alongside
 new compiler features and optimizations~\citep{compsem}.
+
 Given the difficulty of verification,
 preserving this flexibility is essential.
-
-Then,
+Therefore,
 to make it possible to link components
 verified using a variety of paradigms,
-we need to identify a model
+we must identify a model which is
 expressive enough to embed
 the semantics, specifications and correctness proofs
 of all these paradigms.
-To enable constructing large-scale certified systems,
-the model should provide
-high-level composition and reasoning principles.
+The model should provide
+high-level composition and reasoning principles,
+allowing us to construct large-scale certified systems.
 
 %}}}
 
@@ -700,7 +716,8 @@ high-level composition and reasoning principles.
 
 Fortunately,
 there is a wealth of semantics research to draw from
-when attempting to design models for this task.
+as we attempt to design general models for certified components.
+I outline some of it below.
 
 \subsection{Symmetric monoidal categories} %{{{
 
@@ -708,17 +725,20 @@ As a whole,
 category theory provides a general study
 and taxonomy for
 compositional structures found
-across mathematics (\S\ref{sec:cat}).
+across mathematics.
 In a category,
-components (morphisms) can be chained together when
-the target interface (object) of one matches
-the source interface of another.
+two components (morphisms) can be chained together when
+the interface which the first one provides
+(its target object)
+matches the interface which the second one relies on
+(its source object).
 For example,
+as described above,
 compilation passes and certified abstraction layers
 both constitute categories.
 
 Symmetric monoidal categories
-additionally provide a \emph{tensor product} construction,
+also capture various kinds of \emph{product} constructions,
 allowing components to be connected
 both in series~($\circ$) and in parallel~($\otimes$):
 \[
@@ -735,9 +755,10 @@ both in series~($\circ$) and in parallel~($\otimes$):
   \end{prooftree}
 \]
 As such,
-symmetric monoidal categories capture structures found
-in various kinds of systems and processes \citep{rosetta}.
-This basic setup can be refined by introducing additional structures,
+symmetric monoidal categories can be constructed
+to model
+a wide range of systems and processes \citep{rosetta}.
+The basic setup can be refined by introducing additional structures,
 for instance modeling
 feedback loops (traced monoidal categories) or allowing
 wires to run in both directions
@@ -756,7 +777,7 @@ However,
 symmetric monoidal categories in general do not require
 multiple components to be able to connect to the same interface
 ($\Delta : A \rightarrow A \otimes A$),
-giving us more freedom to model access to shared resources.
+giving us more flexibility when modeling resources.
 In the same way the simply-typed lambda calculus provides
 an internal language for cartesian closed categories,
 various fragments of \emph{linear logic} provide
@@ -780,8 +801,8 @@ is \emph{game semantics} \citep{cspgs},
 which uses two-player games to describe
 the form of the interaction between a program component and its environment,
 and represents the externally observable behavior
-of the component as a strategy in this game
-(\S\ref{sec:bg:gamesem}).
+of the component as a strategy in this game.
+%(\S\ref{sec:bg:gamesem}).
 
 Game semantics represents a synthesis
 of various approaches to programming language semantics.
@@ -790,18 +811,18 @@ defining the behavior of complex programs
 in terms of the behavior of their components.
 However,
 since it models components
-in terms of their interactions across time,
-game semantics also provides a strong \emph{operational} flavor.
+by describing their external interactions across time,
+game semantics also feature a strong \emph{operational} flavor.
 Finally,
-the usual construction of strategies in game semantics
-shares characteristics with the \emph{trace semantics}
-used in the context of process algebra
+the usual construction of the strategies used in game semantics
+is a variation on the \emph{trace semantics}
+used in the context of process algebras
 and concurrent semantics.
 
-An early success of this approach
-was the formulation of the first
+An early success of game semantics
+was the formulation of the first satisfactory
 fully complete models for
-the functional programming language PCF \citep{pcfajm,pcfho}.
+the programming language PCF \citep{pcfajm,pcfho}.
 Since then,
 game semantics have provided fully complete models
 for a wide variety of other languages,
@@ -811,6 +832,7 @@ control \citep{gscontrol},
 general references \citep{gsgr},
 concurrency \citep{gsconcur}
 and more.
+
 There are deep connections between
 game semantics and linear logic \citep{gsnecessary},
 and hence symmetric monoidal categories,
@@ -819,9 +841,8 @@ as a general approach for modeling the behavior of
 various kinds of systems and processes.
 In particular,
 the typed aspect of many game models
-makes them relevant for
+makes them well-suited for
 describing the behavior of heterogeneous systems.
-
 However,
 the generality of game models
 often translates to a fair amount of complexity,
@@ -837,13 +858,13 @@ the framework of \emph{algebraic effects} \citep{effadq}
 is sufficient for many modeling tasks,
 fits within the well-known monadic approach
 to effectful and interactive computations,
-and can be adapted into a particularly simple version
+and can be seen as a particularly simple version
 of game semantics.
 
 In this framework,
-computations are modeled as \emph{terms}
-in an algebra whose operations correspond to
-the available effects (\S\ref{sec:eff}).
+computations are modeled as the \emph{terms}
+of an algebra whose operations correspond to
+the available effects. %(\S\ref{sec:eff}).
 The computation proceeds inward,
 with each function symbol representing an occurence of an effect,
 and each argument representing a possible way
@@ -882,17 +903,19 @@ than more general notions of games.
 
 \subsection{The refinement calculus} %{{{
 
-Finally,
-while game models have been proposed
+%Finally,
+While game semantics
+and effect systems
+have been proposed
 for a wide variety of programming languages,
 there has been comparatively less focus
-on specifications and correctness properties.
-%in the context of game semantics.
+on specifications and correctness properties
+for game semantics and algebraic effects.
 By contrast,
-the general approach of \emph{stepwise refinement}
-suggests a uniform treatment of programs and specifications
-as well as their relationships.
-It has been studied extensively in the context of
+the general approach of \emph{stepwise refinement},
+which suggests a uniform treatment of programs and specifications,
+%as well as their relationships,
+has been studied extensively in the context of
 Dijkstra's predicate transformer semantics \citep{gc}
 and in the framework known as the \emph{refinement calculus} \citep{refcal}.
 
@@ -942,15 +965,205 @@ the angel and the demon \citep[\S 14]{refcal}.
 
 %}}}
 
+\section{Compiling certified components} %{{{
+
+There are two ways to look at CompCert
+in the context of software verification:
+as a certified system
+with an interesting structure,
+or as a tool
+we can use to build certified assembly programs.
+
+\subsection{CompCert as a certified system}
+
+Until now,
+I have mostly presented
+CompCert as a specific example of a certified system,
+discussing the compositional structures used in
+its construction as a precedent for the development of
+certified systems of significant size.
+From this point of view,
+the language semantics and correctness theorem
+formalized alongside the compiler's code
+are components of its specification,
+and are used to formalize what it means
+for a C compiler to be correct.
+
+Their generalization can be understood as
+an effort to model real-world compiler usage
+more accurately,
+preventing bugs in the compiler
+from making it through the verification process
+due to simplifications in its specification.
+
+Connecting CompCert with other components
+could mean combining the proof of CompCert
+with that of a certified assembler
+and certified linker,
+perhaps even a certified processor design,
+to verify a larger portion of the toolchain end-to-end
+and guarantee that programs compiled by the user
+will execute in a way that conforms to
+the C standard.
+
+\subsection{CompCert as a tool for building certified systems}
+
+CompCert is also used as a tool
+for constructing other certified systems.
+For example,
+CertiKOS uses CompCert's assembly semantics
+to model the execution the kernel's code
+and formulate the correctness property
+which it must satisfy.
+In addition,
+CompCert is used to compile the portions of the kernel
+which are written in C,
+and the compiler's correctness theorem
+allows us to use code proofs carried out
+with respect to the source code
+to prove the compiled assembly code correct.
+
+CompCert serves in this case as
+a rudimentary \emph{framework} for the construction of
+certified C and assembly programs
+in the Coq proof assisant.
+Efforts to increase the precision and flexibility
+of the compiler's correctness theorem
+have made this framework more general and compositional,
+even though given the specialized nature
+of this work
+it is difficult to imagine
+it could be extended
+to reach the level of generality which I have discussed.
+
+\subsection{Intergrating CompCert into a general-purpose model}
+
+Still,
+given the importance of compilers in
+the construction of present-day computer systems,
+and of CompCert in the formal methods landscape,
+its integration into any framework
+attempting to tackle end-to-end verification
+should be a litmus test,
+and would provide immediate benefits:
+\begin{itemize}
+  \item
+    Embedding the transition systems
+    used to define CompCert semantics
+    into a general model
+    would immediately augment it with
+    a semantics for C and assembly programs.
+    For versions of CompCert semantics
+    which can model individual tranlation units,
+    this would give us the ability to
+    interface program components at the granular level
+    with components of different kinds,
+    for instance
+    file systems, network services, hardware devices,
+    \ldots
+  \item
+    Then,
+    in conjunction with a sufficiently precise
+    correctness theorem,
+    CompCert would not simply provide
+    a certified compiler,
+    but in fact
+    a \emph{compiler of certified program components},
+    showing that the interaction of a C translation unit
+    with its environment
+    is reflected by the corresopnding compiled assembly code,
+    a specified by the C calling convention in use.
+\end{itemize}
+
+Unfortunately,
+despite the abundance of research
+extending CompCert in this direction,
+none is flexible enough to be used in this way.
+As noted by \citet{next700},
+the problem of certified compositional compilation
+is extremely complex and challenging,
+lacking even a single commonly accepted definition.
+In fact,
+as illustrated by the connections between
+certified abstraction layers and
+certified compilation,
+the problem is almost as general
+as the full-blown programme which I am pursuing.
+
+On the flip side,
+this means that the techniques and conceptual framework
+developed in this thesis
+are a perfect match
+for understanding and tackling
+the very extensive form of
+compositional certified compilation
+described above,
+and indeed the culmination of my work
+is a version of CompCert
+which solves this challenge.
+
+%}}}
+
 \section{Contributions} %{{{
 \label{ssec:contrib}
 
-The central claim if this dissertation is that a synthesis
+The central claim of this dissertation is that a synthesis
 of %the existing research on
 game semantics, algebraic effects, and the refinement calculus
 can be used to construct a hierarchy of semantic models
-suitable for constructing large-scale, heterogeneous certified systems.
-My contributions are twofold.
+suitable for constructing large-scale, heterogeneous certified systems:
+\begin{itemize}
+  \item
+    Part~\ref{part:prelim} introduces relevant background
+    and the general approach of
+    \emph{refinement-based game semantics}.
+    A reexamination of the foundations of game semantics
+    under the lens of dual nondeterminism
+    invites us to regard plays as \emph{elementary specifications}
+    for the behaviors of interactive systems.
+    The completion of plays
+    with arbitrary angelic and demonic choices
+    yields a notion of \emph{strategy specification},
+    which provides support for
+    stepwise refinement and data abstraction
+    in the context of game semantics.
+  \item
+    Part~\ref{part:rbgs} demonstrates the use of this approach
+    in the context of certified abstraction layers.
+    Starting from the layer calculus of CertiKOS,
+    I construct increasingly expressive models
+    where layer interfaces, layer implementations and
+    simulation relations
+    can be treated in a uniform and compositional way.
+  \item
+    Part~\ref{part:compcerto}
+    presents my work on the certified compiler CompCert.
+    I examine existing models and techniques
+    under the lens of refinement-based game semantics,
+    and articulate why none of the existing
+    CompCert extensions can be integrated within
+    the framework in a completely satisfactory way.
+    I then introduce CompCertO,
+    the first extension of CompCert to fit the bill,
+    which nevertheless avoids much of the complexity
+    found in previous approaches.
+\end{itemize}
+
+Most of this work has been formalized in the Coq proof assistant.
+At the time of submission,
+the beginning of a Coq library
+for refinement-based game semantics
+is available at:
+\begin{center}
+  \url{https://github.com/CertiKOS/rbgs/}
+\end{center}
+A complete implementation of CompCertO
+can also be found at the following address:
+\begin{center}
+  \url{https://github.com/CertiKOS/compcert/tree/compcerto}
+\end{center}
+
+\section*{XXX redistribute}
 
 \subsection{General-purpose models for certified systems} %{{{
 
@@ -1136,7 +1349,7 @@ in previous work.
 
 % }}}
 
-\part{Preliminaries}
+\part{Preliminaries} \label{part:prelim}
 
 \chapter{Background} % {{{
 
