@@ -2417,6 +2417,7 @@ the subcomputations $x_1, \ldots x_n$.
 For example,
 the term:
 \[
+  w :=
     \kw{readbit}(
       \kw{print}[\text{``Hello''}](\kw{done}),
       \kw{print}[\text{``World''}](\kw{done}))
@@ -2462,12 +2463,13 @@ which indicates that
 printing the string $s$ followed by
 printing the string $t$ is equivalent to
 printing the string $st$ in one go.
+
 In this work,
-we use effect signatures to represent
+I use effect signatures to represent
 the possible external interactions
 of a computation,
-but we will not use equational theories.
-We will however make it possible to interpret effects
+but I will not use equational theories.
+It will however be possible to interpret effects
 into another signature,
 modeling a limited form of
 \emph{effect handlers} \citep{eff}.
@@ -2519,7 +2521,7 @@ so that the signature above can be described as:
 
 %}}}
 
-\subsection{Algebra} %{{{
+\subsection{Computations as terms} %{{{
 
 The most direct way to interpret an effect signature
 is the algebraic point of view,
@@ -2576,60 +2578,46 @@ defined by:
 \end{align*}
 \end{definition}
 
-As a complementary construction,
-we can give a semantics for the effects of $E$
-in a semantic domain $A$
-by defining an interpretation
-$\underline{m}^A : A^N \rightarrow A$
-for each operation of the signature.
-When equational theories are used,
-we need to show that the corresponding equations hold.
-In our limited setting we can use the simpler definition below.
-
-\begin{definition}
-An \emph{interpretation}
-for the effect signature $E$
-is a set $A$
-together with a function
-$m^A : A^N \rightarrow A$
-for each operation $m : N$ in $E$.
-We can then defined the interpretation
-of a term $t \in T_E(A)$
-as an element $t^A \in A$
-defined by:
-\begin{align*}
-  \underline{v}^A &:= v & v &\in A \\
-  \underline{m}(t_n)_{n \in N}^A &:= m^A(t_n^A)_{n \in N}
-    & (m : N) &\in E
-\end{align*}
-\end{definition}
-
-As outlined in \S\ref{sec:freemon},
-these concepts admit an elegant categorical formulation.
-$T_E$ is a \emph{free monad}
-associated with the signature $E$,
-where the substitution operation
-corresponds to Kleisli composition.
-The unit $\eta_X : X \rightarrow T_E(X)$
-of the associated adjunction
-corresponds to the identity substitution,
-embedding the variables as the corresponding terms.
-The counit $\varepsilon_A : T_E(A) \rightarrow A$
-evaluates a term for a given interpretation.
+\begin{example}
+The computation $w$ given above can be decomposed into
+the term $t \in T_{E_\kw{io}}(\{x, y\})$ and
+the substitution $\sigma : \{x, y\} \rightarrow \varnothing$
+defined as:
+\begin{gather*}
+  t := \underline{\kw{readbit}}(x, y)
+  \\
+  \sigma := \{
+    x \mapsto \underline{\kw{print}}[\text{\rm ``Hello''}](
+                \underline{\kw{done}}), \:
+    y \mapsto \underline{\kw{print}}[\text{\rm ``World''}](
+                \underline{\kw{done}})
+  \}
+  \,.
+\end{gather*}
+Then the term
+$t\sigma \in T_{E_\kw{io}}(\varnothing)$
+obtained applying $\sigma$ to $t$ is again:
+\[
+  t \sigma = w =
+    \kw{readbit}(
+      \kw{print}[\text{\rm ``Hello''}](\kw{done}),
+      \kw{print}[\text{\rm ``World''}](\kw{done}))
+  \,.
+\]
+\end{example}
 
 %}}}
 
-\subsection{Games} %{{{
+\subsection{Terms as strategies} %{{{
 
-Finally,
-an effect signature can also be seen as
+An effect signature can also be seen as
 a particularly simple \emph{game},
 in which the proponent chooses a question $m \in E$ and
 the opponent responds with an answer $n \in \kw{ar}(m)$.
 Then the terms induced by the signature
 are \emph{strategies}
 for an iterated version of this game.
-Indeed, the abstract syntax tree of our example term
+Indeed, the abstract syntax tree of our example term $w$
 can directly be read as the strategy:
 \[
   \begin{tikzpicture}
@@ -2646,37 +2634,250 @@ can directly be read as the strategy:
     \path (W1) edge node[auto,swap] {$*$} (K1);
   \end{tikzpicture}
 \]
-where we interpret
-node labels as moves of the system,
-and edge labels as moves of the environment.
+In this tree,
+the nodes are labeled with operations of the signatures
+and can be interpreted as moves of the systems.
+The edges are labeled with elements of the arity sets
+and can be interpreted as moves of the environment.
 
-%Terms are constructed by
-%applying function symbols $e \in E$
-%to subcomputations given for each $r \in \kw{ar}(e)$.
-%In simple cases,
-%the computation $e(x_r)_{r \in \kw{ar}(e)}$
-%first triggers an effect $e$;
-%then the context chooses $r$
-%and resumes the computation as $x_r$.
-%For example,
-%the following effect signature
-%models a very basic input/output facility:
-%\[
-%  E_\kw{io} :=
-%    \{ \kw{readbit} : \mathbbm{2}, \:
-%       \kw{writebit}[n] : \mathbbm{1} \mid
-%       n \in \mathbbm{2} \}
-%\]
-%A computation which writes a zero,
-%reads one bit, echoes its complement
-%and continues as the computation $k$
-%can be written as:
-%\[
-%  \kw{writebit}[0](
-%    \kw{readbit}(
-%      \kw{writebit}[1](k),
-%      \kw{writebit}[0](k)))
-%\]
+%}}}
+
+\subsection{Interpreting effects} %{{{
+
+To assign a semantics to the effects of $E$,
+we can interpret the operations of the signature
+in a semantic domain $A$
+by defining for each $(m \mathop{:} N) \in E$
+a corresponding funtion $m^A : A^N \rightarrow A$.
+When equational theories are used,
+we need to make sure that the corresponding equations hold.
+In our limited setting we can use the simpler definition below.
+
+\begin{definition} \label{def:algebra} %{{{
+An \emph{algebra}
+for the effect signature $E$
+is a set $A$
+together with a function
+$m^A : A^N \rightarrow A$
+for each operation $m : N$ in $E$.
+We can then interpret
+an arbitrary term $t \in T_E(A)$
+as $t^A \in A$
+using the recursive definition:
+\begin{align*}
+  \underline{v}^A &:= v & v &\in A \\
+  \underline{m}(t_n)_{n \in N}^A &:= m^A(t_n^A)_{n \in N}
+    & (m : N) &\in E
+\end{align*}
+\end{definition}
+%}}}
+
+\begin{example}[Trace semantics for $E_\kw{io}$] %{{{
+We can interpret the operations of $E_\kw{io}$ using traces
+in the language $P = (\mathbbm{2} + \kw{str})^*$.
+A trace $s \in P$ records a possible execution.
+The corresponding algebra is defined over the set
+$S = \mathcal{P}(P)$,
+with operations evaluated as:
+\begin{align*}
+  \kw{readbit}^S(\sigma_0, \sigma_1) &:=
+    \{ 0 \cdot s_0, \: 1 \cdot s_1 \mid
+       s_0 \in \sigma_0, s_1 \in \sigma_1 \}
+  \\
+  \kw{print}[u]^S(\sigma) &:=
+    \{ u \cdot s \mid s \in \sigma \}
+  \\
+  \kw{done}^S &:=
+    \{ \epsilon \}
+\end{align*}
+For instance, the recurring example $w$ yields the set:
+\[
+  w^S =
+  \{ 0 \cdot \text{\rm ``Hello''}, \: 1 \cdot \text{\em ``Worlds''} \}
+  \,.
+\]
+Note that as presented,
+the algebra does not respect the equation:
+\[
+  \kw{print}[s](\kw{print}[t](x)) = \kw{print}[st](x)
+  \,.
+\]
+since the left-hand side will add two events $s \cdot t$
+at the beginning of the traces,
+while the right-hand side will add a single event $st$.
+\end{example}
+%}}}
+
+%}}}
+
+\subsection{Monads} %{{{
+
+The semantics of effectful computations
+is often expressed using \emph{monads}.
+There are deep connections between
+monadic and algebraic effects,
+which mirror the way monads have long been used
+in the context of categorical algebra.
+This is explained in more detail \S\ref{sec:freemon}.
+Below, I give a brief introduction
+free of categorical jargon.
+
+The notion of algebra
+given in Def.~\ref{def:algebra}
+does not provide a very sophisticated account
+of terms with variables
+(partial computations).
+We did allow ``variables''
+to be taken from the algebra's underlying set $A$
+when interpreting terms.
+This allows us to interpret terms with variables
+from an arbitrary set
+by assigning values in the set $A$ to each one:
+given a term $t \in T_E(X)$, and
+a variable assignment $\rho : X \rightarrow A$,
+we can easily construct the substitution
+$\sigma(x) := \underline{\rho(x)}$
+and interpret $t$ as $(t\sigma)^A \in A$.
+
+However,
+to be able to interpret open terms in a more systematic way
+and independently of any assignment,
+we need a notion of algebra which is \emph{parametric}
+in the set of variables we use.
+Instead of using a single carrier set,
+we will specify for every possible
+set $X$ of variables:
+\begin{itemize}
+  \item A carrier set $T(X)$ for the corresponding algebra.
+  \item A function $\eta_X : X \rightarrow T(X)$
+    providing the interpretations of variables;
+  \item For every ``semantic substitution''
+    $\sigma : X \rightarrow T(Y)$,
+    a map $\sigma^\dagger : T(X) \rightarrow T(Y)$
+    applying the substitution to the elements of $T(X)$.
+\end{itemize}
+These data can be interpreted computationally in the following way:
+\begin{itemize}
+  \item
+    A semantic object $\tau \in T(X)$
+    is a partial computation
+    with an intermediate result in $X$.
+  \item
+    The computation $\eta_X(v) \in T(X)$
+    immediately yields the intermediate result $v \in X$.
+  \item
+    A \emph{continuation} $\sigma : X \rightarrow T(Y)$
+    is activated with a value $v \in X$
+    to produce a computation with outcomes in $Y$.
+    Its extension $\sigma^\dagger(\tau)$
+    is the sequential composition
+    of $\tau \in T(X)$
+    with the continuation $\sigma$,
+    sometimes written
+    $x \mathop{\leftarrow} \tau \mathop{;} \sigma(x)$.
+\end{itemize}
+When they behave consistently with each other,
+these data define a monad.
+
+\begin{definition} \label{def:setmonad}
+A \emph{monad} $\langle T, \eta, {-}^\dagger \rangle$
+is given as above,
+and must satisfy
+for all $\sigma : X \rightarrow T(Y)$ and
+$\rho : Y \rightarrow T(Z)$
+the following properties:
+\[
+  \eta_Y^\dagger \circ \sigma \, = \,
+  \sigma^\dagger \circ \eta_X \, = \,
+  \sigma
+  \qquad \qquad
+  (\rho^\dagger \circ \sigma)^\dagger \, = \,
+  \rho^\dagger \circ \sigma^\dagger
+  \,.
+\]
+\end{definition}
+
+Moreover,
+if we specify
+a computation $m^T \in T(N)$
+for each operation $m \mathop{:} N$
+in a signature~$E$,
+we can derive an $E$-algebra on $T(X)$
+for every set $X$ of variables:
+\[
+  m^{T(X)}(\tau_n)_{n \in N} \: := \:
+    n \mathop{\leftarrow} m^T \mathop{;} \tau_n
+  \,.
+\]
+This algebra is compatible with the monad structure,
+in the sense that for all $\sigma : X \rightarrow T(Y)$,
+the following property holds:
+\[
+  \sigma^\dagger \left( m^{T(X)}(\tau_n)_{n \in N} \right) =
+    m^{T(Y)} \left( \sigma^\dagger(\tau_n) \right)_{n \in N}
+\]
+In fact,
+a ``parametric interpretation'' of $m$
+satisfying this property
+uniquely determines $m^T$ as:
+\[
+  m^T = m^{T(N)}(\eta_N(n))_{n \in N}
+  \,.
+\]
+
+\begin{example}[Free monad for a signature]
+The set of terms $T_E(X)$
+for a signature $E$ and a set of variables $X$
+can be extended to a monad.
+For $v \in X$, $t \in T_E(X)$ and $\sigma : X \rightarrow T_E(Y)$,
+we define:
+\[
+  \eta_X(v) := \underline{v}
+  \qquad \qquad
+  \sigma^\dagger(t) := t \sigma
+\]
+For each operation $m : N$ in the signature $E$,
+we define:
+\[
+  m^{T_E} := \underline{m}(\underline{n})_{n \in N}
+  \,.
+\]
+This monad is known as the \emph{free monad}
+on the signature $E$.
+\end{example}
+
+\begin{remark}
+This presentation
+of the connections between monads and algebraic structures
+seems to be somewhat unusual from the point of view of
+categorical algebra.
+In particular,
+in that context monads correspond to
+the algebraic theories themselves
+rather than their models,
+so that for instance the signature $E$
+would simply be captured by the monad $T_E$.
+It would be unusual to give an interpretation of a theory
+\emph{into} a monad in the way presented above,
+and this would perhaps be formulated instead
+as a monad homomorphism out of $T_E$.
+
+However,
+for my purposes it is useful to retain signatures
+as the starting point for constructing models,
+in particular in view of their interpretations as games.
+For example,
+in Chapter~\ref{sec:intspec}
+I will construct a monad which adds
+additional structure to signatures in a systematic way,
+borrowing ideas from game semantics.
+The presentation I have given above also
+reveals clearly the connections between signatures
+and the practical use of monads in functional programming,
+where each monad is complemented by
+a number of monadic operations,
+given in the style that I have used.
+\end{remark}
 
 %}}}
 
@@ -3815,6 +4016,11 @@ Moreover, the functor $[L, {-}]$ has a left adjoint ${-} \otimes L$,
 \end{definition}
 
 \subsection{Monads} \label{sec:freemon} %{{{
+
+[comparing with Def.~\ref{def:setmonad}:]
+The usual categorical definition can be recovered
+by taking $\mu_X := \kw{id}_{T(X)}^\dagger$
+and $T(f) := (\eta_Y \circ f)^\dagger$.
 
 The concepts discussed above admit an elegant
 categorical formulation \citep{freemon}.
