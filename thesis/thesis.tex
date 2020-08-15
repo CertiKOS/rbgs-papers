@@ -4316,6 +4316,404 @@ as $f^\dagger := \mu \circ T f$.
 
 \section{Symmetric monoidal categories} %{{{
 
+\subsection{Motivation} %{{{
+
+Categories with
+products allow us to represent systems
+which use and provide multiple interfaces
+as morphisms of type:
+\[
+  f : A_1 \times \cdots \times A_n \rightarrow
+      B_1 \times \cdots \times B_m
+  \,.
+\]
+In particular,
+two morphisms
+$f_1 : A_1 \rightarrow B_1$ and
+$f_2 : A_2 \rightarrow B_2$
+can be combined side-by-side
+as:
+\[
+  f_1 \times f_2 :=
+  \langle f_1 \circ \pi_1, f_2 \circ \pi_2 \rangle :
+  A_1 \times A_2 \rightarrow B_1 \times B_2
+  \,.
+\]
+Products essentially behave as a commutative monoid
+on the objects of a category.
+In the ``systems'' interpretation,
+this means that a multiset of interfaces
+can be combined to define a larger interface.
+The properties of products
+correspond to that of ``wiring diagrams'',
+allowing systems to be combined in series
+through the usual composition of morphisms,
+and in parallel through the operation $\times$
+shown above.
+
+However,
+products also come with additional structure and properties
+which are not always appropriate
+when modeling systems.
+For example,
+for every object $A \in \mathbf{C}$,
+there is a morphism:
+\[
+  \Delta_A := \langle \kw{id}_A, \kw{id}_A \rangle :
+    A \rightarrow A \times A
+\]
+with the property that
+$\pi_1 \circ \Delta_A = \pi_2 \circ \Delta_A = \kw{id}_A$.
+This means that every interface can be duplicated
+and shared between several clients with no interference.
+This is appropriate for some simple systems;
+for instance the value produced by a function
+can be duplicated or discarded at will
+and used as input by an arbitrary number of other functions.
+However,
+systems which are stateful or model resources
+do not usually behave in this way.
+For instance,
+invoking the primitives of an abstraction layer
+will transform its state.
+Two clients accessing the same layer interface
+may interfere with each other;
+because of this it is not possible in general
+to duplicate a layer interface
+in a transparent way
+(see also \S\ref{sec:layerprod} and \S\ref{sec:layermon}).
+
+%}}}
+
+\subsection{Example: nondeterministic functions} %{{{
+
+Below I illustrate how these phenomena
+are expressed in the context of the category $\mathbf{Sup}$
+of sup-lattice and their homomorphisms,
+which provide models of unbounded nondeterminism
+and nondeterministic functions.
+
+\begin{definition} % sup-lattice {{{
+A \emph{sup-lattice} is a poset $L$
+with all least upper bounds.
+In other words,
+for every family $(x_i)_{i \in I}$
+of elements of $L$,
+there is an element
+$\bigvee_i x_i \in L$
+with the property that:
+\[
+  \forall \, i \, \bdot \, x_i \le y
+  \quad \Leftrightarrow \quad
+  \bigvee_{i \in I} x_i \: \le \: y
+\]
+A sup-lattice homomorphism
+from $\langle L, {\le}, {\bigvee} \rangle$
+to $\langle M, {\sqsubseteq}, {\bigsqcup} \rangle$
+is a function $f : L \rightarrow M$
+such that:
+\[
+  f \left( \bigvee_i x_i \right) =
+  \bigsqcup_i f(x_i)
+  \,.
+\]
+I will write $\mathbf{Sup}$ for
+the category of sup-lattices and their homomorphism.
+\end{definition}
+%}}}
+
+In any sup-lattice $\langle L, {\le}, {\bigvee} \rangle$,
+we can compute the least upper bound
+of a subset $X \subseteq L$
+as the supremum $\bigvee X = \bigvee_{x \in X} x$.
+Binary joins are computed as $x \vee y = \bigvee \{ x, y \}$.
+Every sup-lattice $L$ has
+a least element $\bot = \bigvee \varnothing$ and
+a greatest element $\top = \bigvee L$.
+Note that sup-lattice homomorphisms
+preserve binary joins and $\bot$,
+but do not necessarily preserve $\top$.
+
+Sup-lattices are in fact \emph{complete lattices},
+since arbitrary meets can be computed in any sup-lattice as
+$
+  \bigwedge_{i \in I} x_i =
+  \bigvee \{ x \mid \forall i \in I \bdot x \le x_i \}
+$.
+However,
+complete lattices are usually associated with
+\emph{complete homomorphisms},
+which preserve both arbitrary joins and arbitrary meets,
+whereas viewing a complete lattice as a sup-lattice
+yields the weaker notion of sup-lattice homomorphism
+and the category $\mathbf{Sup}$ as defined above.
+
+\paragraph{Free sup-lattice and powerset monad} %{{{
+
+There is a forgetful functor
+$U : \mathbf{Sup} \rightarrow \mathbf{Set}$
+which maps a sup-lattice $\langle L, {\le}, {\bigvee} \rangle$
+to its underlying set $L$.
+This functor has a left adjoint
+$F : \mathbf{Set} \rightarrow \mathbf{Sup}$
+which maps a set $X$ to the sup-lattice
+$F X = \langle \mathcal{P}(X), {\subseteq}, {\bigcup} \rangle$
+of subsets of $X$ ordered by inclusion.
+The action of $F$ on a function $f : X \rightarrow Y$
+is defined by the image $f[A] = \{ f(a) \mid a \in A \}$
+of a subset $A \in \mathcal{P}(X)$ under $f$.
+The components of the adjunction are summarized
+in Figure~\ref{fig:pow}.
+
+%}}}
+
+\begin{figure} % fig:pow powerset adjunction {{{
+  \[
+    \begin{tikzcd}[row sep=large]
+      X \ar[d, "g"', dashed] &
+      F X \ar[d, "{g[-]}"'] \ar[dr, "f"] &
+      &
+      X \ar[r, "\{ - \}"] \ar[dr, "g"'] &
+      \mathcal{P}(X) \ar[d, "f"] &
+      F X \ar[d, "f", dashed]
+      \\
+      L &
+      F L \ar[r, "{\bigvee}"'] &
+      \langle L, {\le}, {\bigvee} \rangle &
+      &
+      L &
+      \langle L, {\le}, {\bigvee} \rangle
+    \end{tikzcd}
+  \]
+  \caption{Adjunction for the free sup-lattice
+    $F X = \langle \mathcal{P}(X), {\subseteq}, {\bigcup} \rangle$.
+    The unit maps $x \in X$
+    to the singleton set $\{ x \} \in \mathcal{P}(X)$.
+    The counit ``evaluates'' a subset $A \subseteq L$
+    of the sup-lattice $\langle L, {\le}, {\bigvee} \rangle$
+    to its least upper bound $\bigvee A \in L$.}
+  \label{fig:pow}
+\end{figure}
+%}}}
+
+\paragraph{Cartesian structure} %{{{
+
+The category $\mathbf{Sup}$ has all products
+$\prod_{i \in I} \langle L_i, {\le_i}, \bigvee \rangle$.
+The underlying set of a product
+is the cartesian product $\prod_{i \in I} L_i$
+of underlying sets,
+so that its elements have the form $(x_i)_{i \in I}$
+with $x_i \in L_i$.
+Their ordering is defined componentwise by
+\[
+  (x_i)_{i \in I} \le (y_i)_{i \in I}
+  \: \Leftrightarrow \:
+  \forall i \in I \bdot x_i \le_i y_i
+  \,,
+\]
+and joins can likewise be computed as follows:
+\[
+  \bigvee_{j \in J} (x_i^j)_{i \in I}
+  \: = \:
+  \left( \bigvee_{j \in J} x_i^j \right)_{i \in I}
+\]
+In particular,
+the bottom element of a product
+is the tuple $\bot = (\bot_i)_{i \in I}$.
+The terminal object
+of $\mathbf{Sup}$ is the trivial sup-lattice $1 = \{ \bot \}$,
+and the terminal sup-lattice homomorphism
+$\langle \rangle_L : L \rightarrow 1$
+maps every element of $L$ to $\bot$.
+
+Products in $\mathbf{Sup}$
+behave in a rather unexpected way.
+For example,
+a global element $e : 1 \rightarrow L$
+carries no information,
+because as a sup-lattice homomorphism $e$
+can only map $\bot \in 1$ to $\bot \in L$.
+A related phenomenon is that
+within the sup-lattice $L_1 \times L_2$,
+the tupling operation $(-, -)$
+is only a sup-lattice homomorphism
+jointly in the two variables:
+for example $(\bot, \bot) = \bot$
+but in general $(\bot, x_2) \ne \bot$ and $(x_1, \bot) \ne \bot$.
+If the global elements behaved in the usual way,
+this would be a paradox because
+it would be possible to construct a morphism
+$\kw{id} \times e_2 : L_1 \times 1 \rightarrow L_1 \times L_2$
+which would not be a sup-lattice homomorphism.
+But since $e_2 : 1 \rightarrow L_2$
+can only represent the element $\bot \in L_2$
+this is not a problem.
+
+Likewise,
+the hom-sets $\mathbf{Sup}(X, Y)$
+can be equipped with a sup-lattice structure,
+where ordering and joins are defined pointwise as:
+\[
+  f \le g \Leftrightarrow \forall x \in X \bdot f(x) \le g(x)
+  \qquad
+  \left( \bigvee_{i \in I} f_i \right)(x) = \bigvee_{i \in I} f_i(x)
+\]
+Therefore,
+we expect $\mathbf{Sup}$
+to be \emph{closed} in some way, with
+$[X, Y] = \langle \mathbf{Sup}(X, Y), {\le}, {\bigvee} \rangle$
+as defined above representing the hom-set
+$\mathbf{Sup}(X, Y)$ as an object in the category $\mathbf{Sup}$ itself.
+However,
+$\mathbf{Sup}$ cannot be \emph{cartesian} closed
+with respect to $[X, Y]$.
+For example there cannot be in general
+a correspondance between the single morphisms of type
+$1 \rightarrow [X, Y]$
+and the potentially many morphisms of type
+$X \rightarrow Y$.
+
+%}}}
+
+While the cartesian structure of $\mathbf{Sup}$
+does not support elements and closure in the
+expected way,
+it turns out we can recover them by using alternative constructions
+which behave similarly in some aspects.
+This alternative \emph{monoidal} structure on $\mathbf{Sup}$
+can be defined using the \emph{tensor product}
+of sup-lattices \citep[Chapter I]{egg}.
+
+\paragraph{Tensor product} %{{{
+
+Tensor products come from linear algebra,
+but can be defined for many structures other than vector spaces,
+and admit a general categorical description.
+Tensor products of vector spaces
+emerge from the notion of \emph{bilinear} maps.
+Likewise,
+the more general notion of tensor product
+emerges from notion of \emph{bimorphism} \citep{tpbm}.
+
+In the context of $\mathbf{Sup}$,
+a \emph{bimorphisms}
+from the sup-lattices $L_1$ and $L_2$
+to the sup-lattice $M$
+is a function $f : U L_1 \times U L_2 \rightarrow U M$,
+which satisfies the following properties:
+\begin{align*}
+  f(\bigvee_{i \in I} x_i, \, y) \, &= \, \bigvee_{i \in I} f(x_i, y) \\
+  f(x, \, \bigvee_{i \in I} y_i) \, &= \, \bigvee_{i \in I} f(x, y_i)
+  \,,
+\end{align*}
+Note that $f$ is simply a function
+and in general is not
+a sup-lattice homomorphism.
+The defining property of the tensor product
+is that bimorphisms
+uniquely factor through a bimorphism $h$
+in the following way:
+\begin{equation} \label{eqn:tensor}
+  \begin{tikzcd}[row sep=huge]
+    U L_1 \times U L_2 \ar[r, "h"] \ar[dr, "f"'] &
+    U (L_1 \otimes L_2) \ar[d, "U f^\dagger"] &
+    L_1 \otimes L_2 \ar[d, "f^\dagger", dashed] \\
+    & U M & M
+  \end{tikzcd}
+\end{equation}
+Often, the notation $\otimes$ is used for elements
+of the tensor product as well as the object,
+in other words $h(x, y)$ is written as
+$x \otimes y \in L_1 \otimes L_2$.
+One way to construct the tensor product
+is to start from the free sup-lattice $F (U L_1 \times U L_2)$
+with $h(x, y) = \{ (x, y) \}$,
+then identify elements of $L_1 \otimes L_2$
+to make $h$ into a bimorphism.
+
+%}}}
+
+\paragraph{Monoidal structure}
+
+The property (\ref{eqn:tensor}) means that
+a sup-lattice homomorphism $f^\dagger$
+out of the tensor product $L_1 \otimes L_2$
+can be defined by giving its action on
+elements of the form $x \otimes y$,
+and verifying that
+$f^\dagger(- \otimes y)$ and
+$f^\dagger(x \otimes -)$ 
+are sup-lattice homomorphisms.
+For example,
+the tensor product is in fact a \emph{functor}
+${\otimes} :
+ \mathbf{Sup} \times \mathbf{Sup} \rightarrow \mathbf{Sup}$.
+To define its action
+$f \otimes g : L_1 \times L_2 \rightarrow M_1 \times M_2$
+on the morphisms
+$f : L_1 \rightarrow M_1$ and
+$g : L_2 \rightarrow M_2$,
+it suffices to specify:
+\[
+  (f \otimes g)(x \otimes y) := f(x) \otimes g(x)
+  \,,
+\]
+and to note that since $f$ and $g$ are sup-lattice homomorphisms
+and $\otimes$ is a bimorphism,
+the $(f \otimes g)(x \otimes y)$
+is a sup-lattice homomorphism separately in $x$ and $y$.
+
+Besides functoriality,
+the tensor product $\otimes$ shares other characteristics
+with the cartesian product $\times$.
+In particular,
+the sup-lattice $I = \{ \bot, * \}$ 
+serves as a unit for $\otimes$,
+which satisfies the following isomorphisms:
+\[
+  I \otimes X \cong X \otimes I \cong X
+  \qquad
+  X \otimes Y \cong Y \otimes X
+  \qquad
+  (X \otimes Y) \otimes Z \cong X \otimes (Y \otimes Z)
+\]
+Finally,
+the tensor product in $\mathbf{Sup}$
+has some of the characteristics
+which the cartesian product failed to deliver.
+For example,
+the global elements $e : I \rightarrow L$
+are in one-to-one correspondence
+with the elements $e(*) \in L$.
+Moreover,
+there is an adjunction
+$- \otimes A \dashv [A, -]$
+which allows us to recover a tensor version
+of the cartesian closed structure
+present for example in $\mathbf{Set}$,
+and provides an alternative characterization
+of the tensor product.
+
+The properties of $\mathbf{Sup}$
+illustrate a more general phenomenon.
+In categories like $\mathbf{Set}$ and $\mathbf{Pos}$,
+all morphisms out of a product $A \times B$
+are ``bifunctions'' or ``bimonotonic functions''.
+Because of this,
+the notion of tensor product collapses into
+the usual cartesian product.
+By contrast,
+in $\mathbf{Sup}$ morphisms and bimorphisms
+are two very different things,
+giving rise to a richer setting
+where these two structures
+interact in interesting ways.
+These structures mirror those found in linear algebra
+and are captured by various fragments of linear logic.
+
+%}}}
+
 \subsection{Cartesian closure} %{{{
 
 A category $\mathbf{C}$ is \emph{closed} when
@@ -4410,80 +4808,6 @@ we can give these constructions the following interpretation:
 %}}}
 
 \subsection{Symmetric monoidal categories} %{{{
-
-\begin{example}[Cartesian structure in $\mathbf{Sup}$]
-The category $\mathbf{Sup}$
-has complete join-semilattices as objects,
-and join-preserving functions as morphisms.
-Since by definition,
-any $L \in \mathbf{Sup}$ has all joins,
-in particular it has an element $\bot \in L$
-defined by $\bot = \bigvee \varnothing$,
-which is preserved by morphisms.
-
-Products in $\mathbf{Sup}$ are defined as expected:
-the underlying set $\left| \prod_{i \in I} L_i \right|$
-is the cartesian product of sets $\prod_{i \in I} |L_i|$,
-so that its elements have the form $(x_i)_{i \in I}$
-with $x_i \in L_i$.
-Their ordering is defined componentwise as:
-\[
-  (x_i)_{i \in I} \le (y_i)_{i \in I}
-  \: \Leftrightarrow \:
-  \forall i \in I \bdot x_i \le_i y_i
-  \,,
-\]
-and joins can likewise be computed as:
-\[
-  \bigvee_{j \in J} (x_i^j)_{i \in I}
-  \: = \:
-  \left( \bigvee_{j \in J} x_i^j \right)_{i \in I}
-  \,.
-\]
-In particular, the terminal object is the
-trivial suplattice $\{ \bot \}$ as expected.
-However,
-a global element $e : 1 \rightarrow L$ in $\mathbf{Sup}$
-is meaningless,
-because the sup-morphism $e$
-can only map $\bot$ to $\bot_L$.
-
-We will see in \S\ref{sec:ct:smc}
-
-\end{example}
-
-
-\begin{example}
-The category $\mathbf{Sup}$ is catesian.
-The homset $\mathbf{Sup}(L, M)$
-can be made into a semilattice $[L, M]$,
-with joins defined pointwise:
-\[
-  \left( \bigvee_{i \in I} f_i \right)(x) =
-  \bigvee_{i \in I} f_i(x)
-  \,,
-\]
-so we would like $\mathbf{Sup}$ to be closed.
-
-However, the object $0 = 1 = \{\bot\}$ is both initial and terminal.
-Global elements $e : 1 \rightarrow L$
-are initial morphisms and carry no information,
-since they can only map $\bot \in 1$ to $\bot \in L$.
-This means in particular that in general:
-\[
-  \mathbf{Sup}(1 \times L, M)
-  \: \ncong \:
-  \mathbf{Sup}(1, [L, M]) \,,
-\]
-since the right-hand side is a unit set.
-
-There is however a semilattice $I = \{\bot, *\}$
-which can take over the role of $1$,
-in the sense that generalized elements $e : I \rightarrow L$
-are in one-to-one correspondence with
-the elements $e(*) \in L$.
-Moreover, the functor $[L, {-}]$ has a left adjoint ${-} \otimes L$,
-\end{example}
 
 \begin{definition}[Monoidal category]
 \end{definition}
@@ -6276,7 +6600,7 @@ and the layer still implements a single queue.
 
 %}}}
 
-\subsection{Monoidal structure} %{{{
+\subsection{Monoidal structure} \label{sec:layermon} %{{{
 
 
 [XXX motivation: text+figure from prospectus]
@@ -11847,10 +12171,16 @@ picks out an element of $L$.
 
 \section{Parametric language for CompCert memory model}
 
+\section{Game-theoretic interpretation}
+
+CDLat is the structure we want of payoffs
+with min-max theorems.
+FCD is the ``most general payoff'',
+and if we assign a payoff to each outcome
+the universal morphism
+computes the payoff for a given strategy.
+
 %}}}
-
-
-
 
 %\chapter{The Coqrel library} % {{{
 %
