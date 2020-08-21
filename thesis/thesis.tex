@@ -6148,7 +6148,7 @@ in two different ways:
     \hline
   \end{tabular}
   \caption{
-    Correspondance between certified compilation
+    Correspondence between certified compilation
     and certified abstraction layers
   }
   \label{tbl:compccal}
@@ -6272,26 +6272,37 @@ containing the value $v \in V$ and the state $k \in S$.
 In the type of $L.m$ above,
 $\mathcal{P}^1$ corresponds to the \emph{maybe} monad:
 \[
-  \mathcal{P}^1(A) := \{ x \subseteq A : |x| \le 1 \} \,,
+  \mathcal{P}^1(X) := \{ \mathbf{x} \subseteq X : |\mathbf{x}| \le 1 \} \,,
 \]
 where a terminating computation producing
-the value $v \in A$ is represented as the singleton:
+the value $v \in X$ is represented as the singleton:
 \[
-  \eta_\mathcal{P}(v) := \{ v \} \,,
+  \eta^\mathcal{P}_X(v) := \{ v \} \,,
 \]
-and where the empty set $\varnothing \in \mathcal{P}^1(A)$
+and where the empty set $\varnothing \in \mathcal{P}^1(X)$
 specifies an undefined computation,
 which is free to silently diverge, crash, or
 produce any possible outcome.
 When two computations are sequentially composed,
 both must be successful for the result to be defined.
-For $x \in \mathcal{P}(\mathcal{P}(A))$,
-the multiplication $\mu_\mathcal{P}(x) \in \mathcal{P}(A)$
+For $\mathbf{x} \in \mathcal{P}(\mathcal{P}(X))$,
+the multiplication $\mu^\mathcal{P}(\mathbf{x}) \in \mathcal{P}(X)$
 is defined as:
 \[
-  \mu_\mathcal{P}(x) :=
-    \{ v \in A \mid \exists \, y \,.\, x \ni y \ni v \} =
-    \bigcup x
+  \mu^\mathcal{P}(\mathbf{x})_X :=
+    \{ v \in X \mid
+       \exists \, \mathbf{y} \bdot \mathbf{x} \ni \mathbf{y} \ni v \} =
+    \bigcup \mathbf{x}
+  \,.
+\]
+Equivalentaly,
+for $x \in \mathcal{P}(X)$ and $f : X \rightarrow \mathcal{P}(Y)$,
+the Kleisli extension
+$f^\dagger : \mathcal{P}(X) \rightarrow \mathcal{P}(Y)$ is:
+\[
+  f^\dagger(\mathbf{x})
+    = \{ v \in Y \mid \exists \, u \bdot \mathbf{x} \ni u \wedge f(u) \ni v \}
+    = \bigcup_{u \in \mathbf{x}} f(u)
   \,.
 \]
 The notion of refinement associated with this monad is set inclusion,
@@ -6306,20 +6317,23 @@ we combine $\mathcal{P}^1$ with the state monad transformer.
 For a set of states $S$,
 we obtain the monad:
 \[
-  \mathcal{L}_S(A) :=
-    S \rightarrow \mathcal{P}^1({A} \times S) \,,
+  \mathcal{L}_S(X) :=
+    \mathcal{P}^1(X \times S)^S \,,
 \]
 equipped with the structure:
 \begin{gather*}
-  \eta_\mathcal{L}(v) :=
-    \lambda \, k \,.\, \{ v@k \} \\
-  \mu_\mathcal{L}(x) :=
-    \lambda \, k \,.\, \{ v@k'' \mid
-      \exists \, y \, k' \,.\, x(k) \ni y@k' \wedge y(k') \ni v@k'' \}
+  \eta^\mathcal{L}(v) :=
+    \lambda \, k \bdot \{ v@k \} \\
+  \mu^\mathcal{L}(x) :=
+    \lambda \, k \bdot \{ v@k'' \mid
+      \exists \, y \, k' \bdot x(k) \ni y@k' \wedge y(k') \ni v@k'' \}
   \,.
 \end{gather*}
-This monad is used to specify the primitives
-in a layer interface using abstract states in the set $S$.
+Then in a layer interface $L$
+using abstract states in the set $S$,
+the primitives $m \mathop: N$
+will be given specifications
+of type $L.m \in \mathcal{L}_S(N)$.
 
 \begin{remark}
 Our version of the \emph{maybe} monad $\mathcal{P}^1$
@@ -6413,22 +6427,25 @@ the correponding layer interfaces below.
       & \fbox{$L_\kw{bq}$} &
         S_\kw{bq} &:= V^* \\
       \kw{enq} &: V \rightarrow \mathbbm{1} &
-        L_\kw{bq}.\kw{enq}[v](\vec{q}) &:= \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
+        L_\kw{bq}.\kw{enq}[v] &:=
+          \lambda \, \vec{q} \bdot \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
       \kw{deq} &: \mathbbm{1} \rightarrow V &
-        L_\kw{bq}.\kw{deq}(\vec{q}) &:= \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
+        L_\kw{bq}.\kw{deq} &:=
+          \lambda \, \vec{q} \bdot \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
       \\[1em]
       %
       % Implementation
       %
       & \fbox{$M_\kw{bq}$} &
         R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
-      M_\kw{bq}.\kw{enq}[v] &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) &
-        \vec{q} \mathrel{R} (f, c_1, c_2) \Leftrightarrow
-           (c_1 &\le c_2 < N \wedge
+      M_\kw{bq}.\kw{enq}[v] &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) \!\!\!\! &
+        \vec{q} \mathrel{R} (f, &c_1, c_2) \Leftrightarrow
+           (c_1 \le c_2 < N \wedge
             \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {}
       \\
       M_\kw{bq}.\kw{deq} &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
-           (c_2 &\le c_1 < N \wedge
+           &\phantom{c_1, c_2) \Leftrightarrow {}}
+           (c_2 \le c_1 < N \wedge
             \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
       \\[1em]
       %
@@ -6438,22 +6455,26 @@ the correponding layer interfaces below.
         S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
       \\
       \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
-        L_\kw{rb}.\kw{set}[i, v](f, c_1, c_2) &:=
-        \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
+        L_\kw{rb}.\kw{set}[i, v] &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
       \\
       \kw{get} &: \mathbb{N} \rightarrow V &
-        L_\kw{rb}.\kw{get}[i](f, c_1, c_2) &:=
-        \{ f_i@(f, c_1, c_2) \mid i < N \}
+        L_\kw{rb}.\kw{get}[i] &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ f_i@(f, c_1, c_2) \mid i < N \}
       \\
       \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
-        L_\kw{rb}.\kw{inc}_1(f, c_1, c_2) &:=
-        \{ c_1@(f, c_1', c_2) \mid
-           c_1' = (c_1 + 1) \mathop{\mathrm{mod}} N \}
+        L_\kw{rb}.\kw{inc}_1 &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ c_1@(f, c_1', c_2) \mid
+             c_1' = (c_1 + 1) \mathop{\mathrm{mod}} N \}
       \\
       \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
-        L_\kw{rb}.\kw{inc}_2(f, c_1, c_2) &:=
-        \{ c_2@(f, c_1, c_2') \mid
-           c_2' = (c_2 + 1) \mathop{\mathrm{mod}} N \}
+        L_\kw{rb}.\kw{inc}_2 &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ c_2@(f, c_1, c_2') \mid
+             c_2' = (c_2 + 1) \mathop{\mathrm{mod}} N \}
     \end{align*}
   \caption[Certified abstraction layer implementing a bounded queue]%
    {A certified abstraction layer
@@ -6505,16 +6526,25 @@ and return the counter's old value.
 
 \subsection{Client code} %{{{
 
-Given an underlay interface $L = \langle E, S, \sigma \rangle$,
-we can use the \emph{free monad} $T_E$ on the signature $E$
-as a general representation for client code.
+We can use the free monad $T_E$ on the signature $E$
+as a general representation for client code for
+an underlay interface $L = \langle E, S, \sigma \rangle$.
+The monad homomorphism $(-)[\sigma] : T_E \rightarrow \mathcal{L}_S$
+can then be used to evaluate client programs.
+
+More explicitly,
+as discussed in \S\ref{sec:eff:mon},
+a client program $C \in T_E(X)$
+is a term on the signature~$E$ with variables in $X$,
+or equivalently a monadic expression built using
+the operations in $E$, with a result in $X$.
 A client program $C \in T_E(A)$
 can be interpreted as
 a computation $C[L] \in \mathcal{L}_S(A)$ in the following way:
 \[
   \begin{array}{c@{\qquad}c}
     \ul{m}(t_n)_{n \in N}[L] \: = \:
-      (n \mathop\leftarrow c^m \mathop; t_n)[L] \: = \:
+      (n \mathop\leftarrow m \mathop; t_n)[L] \: = \:
       n \mathop\leftarrow \sigma^m \mathop; t_n[L] &
       (m \mathop: N) \in E \\
     \ul{v}[L] \: = \:
@@ -6525,24 +6555,24 @@ a computation $C[L] \in \mathcal{L}_S(A)$ in the following way:
 \]
 In other words, in $C[L] \in \mathcal{L}_S(A)$,
 occurences of the operations of $E$
-have been replaced by their specification given in $L$
+have been replaced by their specification given in $\sigma$
 to interpret the program in terms of state transitions.
 
-\begin{remark}
-As discussed in \S\ref{sec:eff:mon},
-an element $t \in T_E(A)$ in the free monad
-is a term built out of the operations of $E$ and
-the elements of $A$ regarded as variables.
-These terms can be interpreted as a computation which proceeds inward
-from the top-level operation
-towards the leaves of the term (constants or variables).
-An underlay interface $L = \langle E, S, \sigma \rangle$
-defines an interpretation $\sigma$
-of the signature $E$ into the monad $\mathcal{L}_S$.
-This interpretation corresponds to
-the monad homomorphism $(-)[L]$ from $T_E$ to $\mathcal{L}_S$
-which we use to evaluate client programs for $L$.
-\end{remark}
+\begin{example}[Queue rotation]
+The following client program for the signature $E_\kw{bq}$
+rotates a queue and returns the rotated value:
+\[
+  C_\kw{rot} :=
+    v \mathop\leftarrow \kw{deq} \mathop; \kw{enq}[v] \mathop; \eta(v)
+\]
+Using $L_\kw{bq}$ as an underlay interface,
+we can evaluate it to:
+\[
+  C_\kw{rot}[L_\kw{bq}] :=
+    \lambda \, \vec{q} \bdot
+    \{ \vec{p}v@v \mid \vec{q} = v\vec{p} \wedge |\vec{p}| < N \}
+\]
+\end{example}
 
 %}}}
 
@@ -6550,6 +6580,9 @@ which we use to evaluate client programs for $L$.
 
 A layer implementation provides underlay client code
 for each operation of the overlay interface.
+In other words,
+it is an interpretation of the overlay's signature
+into the underlay's signature.
 
 \begin{definition}
 A \emph{layer implementation}
@@ -6557,8 +6590,8 @@ for an underlay signature $E$ and
 an overlay signature $F$
 is a family $(M^q)_{(q \mathop: R) \in F}$
 with $M^q \in T_E(R)$.
-I write $M : E \rightarrow F$ and
-will sometimes use the notation $M.q$
+As before I will write $M : E \rightarrow F$, and
+sometimes use the notation $M.q$
 to refer to $M^q$.
 Then,
 for an underlay interface $L = \langle E, S, \sigma \rangle$,
@@ -6569,6 +6602,14 @@ $
 $
 with $\tau^q := M^q[L]$.
 \end{definition}
+
+Similarly to layer interfaces,
+a layer implementation $M : E \rightarrow F$ is
+associated with a monad homomorphism $(-)[M] : T_F \rightarrow T_E$.
+The monad homomorphism associated with the evaluated
+layer interface $M \circ L$
+is then the composite
+$(-)[L] \circ (-)[M] : T_F \rightarrow \mathcal{L}_S$.
 
 \begin{example} \label{ex:bqimpl} %{{{
 The layer implementation $M_\kw{bq}$ 
