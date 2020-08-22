@@ -6973,21 +6973,67 @@ by structural induction on the term $C$:
 
 \subsection{Composing certified abstraction layers} %{{{
 
-Note that in its presentation above,
-the soundness property $C[L_2] \le_R C[M \circ L_1]$
-does not capture the property we want quite yet.
-
-
-
-Certified abstraction layers presented in this way
-can be vertically composed as expected:
+Layer implementations can be composed
+as explained in \S\ref{sec:bg:freemon}.
+Given the layer implementations
+$M : E_1 \rightarrow E_2$ and $N : E_2 \rightarrow E_3$,
+the layer implementation $N \circ M$
+replaces the operations of $E_2$ in $N$
+by their interpretation given by $M$:
+\[
+  (N \circ M)^m := N^m[M]
+  \,.
+\]
+The soundness theorem for the certified abstraction layer
+$L_1 \vdash_R M : L_2$
+can be easily extended from individual client programs
+to complete layer implementations,
+so that:
 \[
   \begin{prooftree}
-    \hypo{L_1 \vdash_R N : L_2}
-    \hypo{L_2 \vdash_S M : L_3}
-    \infer2{L_1 \vdash_{R \circ S} M[N] : L_3}
+    \hypo{L_1 \vdash_R M : L_2}
+    \infer1{N \circ L_2 \: \le_R N \: \circ M \circ L_1}
   \end{prooftree}
 \]
+More generally,
+if $N$ defines a certified abstraction layer
+with underlay $L_2$,
+then its correctness property can be combined with that of $M$
+to build a composite certified abstraction layer.
+
+\begin{theorem}[Vertical composition]
+Certified abstraction layers compose in the following way:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_R M : L_2}
+    \hypo{L_2 \vdash_S N : L_3}
+    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
+  \end{prooftree}
+\]
+\begin{proof}
+Simulation properties can be composed
+by vertically pasting the simulations diagrams:
+\[
+  \begin{prooftree}
+    \hypo{\tau_3 \le_S \tau_2}
+    \hypo{\tau_2 \le_R \tau_1}
+    \infer2{\tau_3 \le_{R \circ S} \tau_2}
+  \end{prooftree}
+\]
+This can be easily extended to layer interfaces.
+Then,
+the theorem can be proved by
+ combining this property with the soundness theorem:
+\[
+  \begin{prooftree}
+    \hypo{L_3 \le_S N \circ L_2}
+    \hypo{N \circ L_2 \le_R N \circ M \circ L_1}
+    \infer2{L_3 \le_{R \circ S} N \circ M \circ L_1}
+  \end{prooftree}
+\]
+\end{proof}
+\end{theorem}
+
 This allows us to decompose a large system
 into multiple abstraction layers,
 verify their correctness individually,
@@ -6995,21 +7041,12 @@ then derive a correctness property for the whole system.
 
 Note that for every layer interface
 $L = \langle E, S, \sigma \rangle$,
-we can also derive a trivial certified abstraction layer
-which leaves everything unchanged:
-\[
-  L \vdash_{=} \mathbf{I}_E : L
-\]
+the identity interpretation $e : E \rightarrow E$
+is a correct implementation $L \vdash_{=} e : L$
+of the layer interface $L$ itself.
 In other words,
-we can define a category $\mathbf{CAL}$
-of layer interface and certified layer implementation.
-
-\begin{remark}
-Whereas a layer interface defines
-a monad homomorphism of type $T_E \rightarrow \mathcal{L}_S$,
-a layer implementation defines
-a monad homomorphism of type $T_F \rightarrow T_E$.
-\end{remark}
+layer interfaces and certified layer implementation
+define a category $\mathbf{CAL}$
 
 %}}}
 
@@ -7018,26 +7055,202 @@ a monad homomorphism of type $T_F \rightarrow T_E$.
 \section{Horizontal composition} %{{{
 
 While vertical composition is quite useful,
-individual abstraction layers can themselves be quite complex
-and involve a significant number of independent opertations.
-To address this,
-we seek to decompose layers futher by introducing
-\emph{horizontal} composition principles.
+individual abstraction layers can themselves be fairly complex
+and involve a significant number of opertations
+which we would like to verify one by one
+to build layers out of elementary components
+in a systematic way.
+
+Moreover,
+abstraction layers do not always depend on each other
+in a purely linear fashion;
+often two independent subsystems will rely on the same underlay,
+and we would like to be able to verify them in isolation
+but build higher-level code based on their combined functionality.
+
+In this section I present \emph{horizontal} composition principles
+which we can use to achieve this.
+It will then be possible to combine layers
+side-by-side in addition to stacking them
+on top of one another.
+
+\subsection{Signatures} %{{{
+
+To describe horizontal compositions of layers
+we must first combine signatures.
+When layers are placed side-by-side,
+a client program will have access to
+the operations of both.
+The result is essentially
+the disjoint union of the two layers' signatures,
+and can be constructed as follows.
+
+\begin{definition}
+The \emph{sum} of a family of effect signatures $(E_i)_{i \in I}$
+is defined as:
+\[
+  \bigoplus_{i \in I} E_i :=
+    \{ \iota_i(m) \mathop: N \mid i \in I, (m \mathop: N) \in E_i \}
+\]
+The finitary case $\bigoplus_{1 \le i \le n} E_i$
+can be writted as $E_1 \oplus \cdots \oplus E_n$.
+\end{definition}
+
+On one hand,
+this enables a coarse-grained description
+of the operations offered by a collection of layers.
+For instance,
+if we combinine an implementation of $L_\kw{bq}$
+with an implementation of the I/O operations
+used an example in \S\ref{sec:eff},
+the signature of the result will be $E_\kw{bq} \oplus E_\kw{io}$.
+On the other hand,
+this also allows us to decompose the signature
+of a single layer into signatures associated with
+individual operations,
+for instance:
+\[
+  E_\kw{bq} \cong
+    \{ \kw{deq} : V \} \oplus \{ \kw{enq} : V \rightarrow \mathbbm{1} \}
+  \,.
+\]
+
+\begin{remark}
+In terms of monad homomorphisms,
+the signature $E_1 \oplus E_2$ defines the coproduct
+of the free monads $T_{E_1}$ and $T_{E_2}$.
+This means that intepreting $T_{E \oplus F}$ into a monad $T$
+is the same thing as giving independent intepretations
+of $T_E$ and $T_F$:
+\[
+  \begin{tikzcd}[row sep=large]
+    T_{E_1} \ar[r, "\iota_1"] \ar[dr, "\phi_1"'] &
+    T_{E_1 \oplus E_2}
+      \ar[d, "{[\phi_1, \phi_2]}", dashed, near start] &
+    T_{E_2} \ar[l, "\iota_2"'] \ar[dl, "\phi_2"]
+    \\
+    & T &
+  \end{tikzcd}
+\]
+In terms of interpretations,
+the combined monad homomorphism $[\phi_1, \phi_2]$
+can be described as:
+\begin{align*}
+  [\phi_1, \phi_2]^{\iota_1(m)} &= \phi_1^m \in T(N)
+    & (m \mathop: N) &\in E_1 \\
+  [\phi_1, \phi_2]^{\iota_2(m)} &= \phi_2^m \in T(N)
+    & (m \mathop: N) &\in E_2
+\end{align*}
+This immediately suggests composition principles
+for layer interfaces and layer implementations:
+\begin{itemize}
+  \item
+    When $T$ is of the form $\mathcal{L}_S$,
+    this characterizes horizontal composition for layer interfaces
+    expressed in terms of a common set of abstract states $S$.
+  \item
+    When $T$ is itself a free monad of the form $T_E$,
+    this gives a horizontal composition principle
+    for layer implementations.
+\end{itemize}
+\end{remark}
+
+%}}}
 
 \subsection{Layer implementations} %{{{
 
-As a starting point,
-we note that the category of effect signatures
-and layer implementations
-is equipped with a cartesian structure.
-For a simple signature $F = \{ m : A \rightarrow B \}$,
-we write:
-\[ (m[a] \mapsto x) : E \rightarrow F \,, \]
-with $a \in A$ bound in $x \in \mathcal{F}_E(B)$,
-for a correspondingly simple layer implementation
-of the signature $F$ in terms of $E$.
-Cartesian tupling can be used to construct more complex
-layer implementation from the simple ones.
+It is straightforward
+to combine layer implementations
+of the individual signatures $E_1$ and $E_2$
+into an implementation of $E_1 \oplus E_2$.
+
+\begin{definition}
+The layer implementations
+$M_1 : E \rightarrow E_1$ and
+$M_2 : E \rightarrow E_2$
+can be combined into
+$\langle M_1, M_2 \rangle : E \rightarrow E_1 \oplus E_2$
+as follows:
+\begin{align*}
+  \langle M_1, M_2 \rangle^{\iota_1(m)} &:= M_1^m \in T_E(N) &
+    (m \mathop: N) &\in E_1 \\
+  \langle M_1, M_2 \rangle^{\iota_2(m)} &:= M_2^m \in T_E(N) &
+    (m \mathop: N) &\in E_2
+\end{align*}
+In addition,
+we can define the layer implementations:
+\begin{align*}
+  \pi_1 &: E_1 \oplus E_2 \rightarrow E_1 &
+  \pi_1^m &:= e^{\iota_1(m)} \in T_{E_1 \oplus E_2}(N) &
+  (m \mathop: M) &\in E_1
+  \\
+  \pi_2 &: E_1 \oplus E_2 \rightarrow E_2 &
+  \pi_2^m &:= e^{\iota_2(m)} \in T_{E_1 \oplus E_2}(N) &
+  (m \mathop: M) &\in E_2
+\end{align*}
+which discard the operations of one of the summands.
+\end{definition}
+
+Given a client program
+formulated in terms of the operations of $E_1$,
+the projections allow $C \in T_{E_1}(A)$
+to be lifted to $C[\pi_1] \in T_{E_1 \oplus E_2}(A)$,
+so that it can be connected
+to underlay interfaces and implementations
+which provide the larger signature.
+A layer implementation
+$M : E_1 \rightarrow F$
+can likewise be lifted to
+$M \circ \pi_1 : E_1 \oplus E_2 \rightarrow F$.
+
+Conversely,
+tupling allows us to construct a layer implementations
+for the signature $F_1 \oplus F_2$
+out of components implementing $F_1$ and $F_2$.
+Combined with projections,
+this means in particular that
+two layer implementations $M_1 : E_1 \rightarrow F_1$
+and $M_2 : E_2 \rightarrow F_2$
+can be composed side-by-side as
+$M_1 \oplus M_2 : E_1 \oplus E_2 \rightarrow F_1 \oplus F_2$,
+where
+$M_1 \oplus M_2 := \langle M_1 \circ \pi_1, M_2 \circ \pi_2 \rangle$.
+
+Moreover,
+we can break down any signature into elementary
+components of the form $F_i = \{ m : A \rightarrow B \}$,
+containing a single $A$-indexed family of operations of arity $B$.
+Likewise,
+we can break down any layer implementation into
+elementary components of type $E \rightarrow F_i$.
+If the operation $m[a]$
+is interpreted by $C_a \in T_E(B)$ for all $a \in A$,
+we can write
+\[
+  (m[a] \mapsto C_a) : E \rightarrow F_i
+\]
+for the corresponding elementary layer implementation.
+Tupling can be used to reconstruct complete layer implementations
+from these elementary components.
+
+%\begin{example}
+%Recalling the decomposition
+%$E_\kw{bq} \cong
+% \{ \kw{enq} : V \rightarrow \mathbbm{1} \} \oplus \{ \kw{deq} : V \}$,
+%we can write
+%$M_\kw{bq} : E_\kw{rb} \rightarrow E_\kw{bq}$
+%as:
+%\[
+%  M_\kw{bq} \cong
+%  \big\langle
+%    \kw{enq}[v] \mapsto
+%      (i \mathop\leftarrow \kw{inc}_2 \mathop; \kw{set}[i, v]),
+%    \:\:
+%    \kw{deq} \mapsto
+%      (i \mathop\leftarrow \kw{inc}_1 \mathop; \kw{get}[i])
+%  \big\rangle
+%\]
+%\end{example}
 
 \begin{example}[Decomposition of $M_\kw{bq}$]
 The signature $E_\kw{bq}$ and layer implementation $M_\kw{bq}$
@@ -7046,42 +7259,82 @@ can be decomposed into the elementary components:
   E_\kw{enq} &:= \{ \kw{enq} : V \rightarrow \mathbbm{1} \} &
   M_\kw{enq} : E_\kw{rb} \rightarrow E_\kw{enq} \: &:= \:
     \kw{enq}[v] \: \mapsto \:
-      i \mathop{\leftarrow} \kw{inc}_2 \mathop{;}
-      \kw{set}[i, v] \\
+     (i \mathop{\leftarrow} \kw{inc}_2 \mathop{;}
+      \kw{set}[i, v]) \\
   E_\kw{deq} &:= \{ \kw{deq} : \mathbbm{1} \rightarrow V \} &
   M_\kw{deq} : E_\kw{rb} \rightarrow E_\kw{deq} \: &:= \:
     \kw{deq}[*] \:\mapsto\:
-      i \mathop{\leftarrow} \kw{inc}_1 \mathop{;}
-      \kw{get}[i]
+     (i \mathop{\leftarrow} \kw{inc}_1 \mathop{;}
+      \kw{get}[i])
 \end{align*}
 Then:
 \begin{align*}
-  E_\kw{bq} &= E_\kw{enq} \otimes E_\kw{deq} \\
-  M_\kw{bq} &= \langle M_\kw{enq}, M_\kw{deq} \rangle \,.
+  E_\kw{bq} &\cong E_\kw{enq} \oplus E_\kw{deq} &
+  M_\kw{bq} &\cong \langle M_\kw{enq}, M_\kw{deq} \rangle \,.
 \end{align*}
 \end{example}
+
+Since layer implementations are defined componentwise,
+there is not much substance to this reshuffling.
+However,
+it will allows us to verify certified abstraction layers
+by verifying their elementary components one by one.
 
 %}}}
 
 \subsection{Layer interfaces sharing state} \label{sec:layerprod} %{{{
 
+Layer interfaces can likewise be built from elementary components.
+For a signature $\{ m : A \rightarrow B \}$,
+a set of states $S$,
+and a specification $\sigma_a \in \mathcal{L}_S(B)$ for all $a \in A$,
+we can write:
+\begin{align*}
+  (m[a] \mapsto \sigma_a) &:=
+  \langle
+    \{ m : A \rightarrow B \}, \:
+    S, \:
+    \hat{\sigma}
+  \rangle
+  &
+  \hat{\sigma}^{m[a]} &:= \sigma_a
+\end{align*}
+Going one step further,
+we can build elementary certified abstraction layers
+by using the property:
+\[
+  \begin{prooftree}
+    \hypo{\forall a \in A \bdot \tau_a \le_R C_a[L]}
+    \infer1{L \vdash_R (m[a] \mapsto C_a) : (m[a] \mapsto \tau_a)}
+  \end{prooftree}
+\]
+These elementary layer interfaces
+can then be composed in the following way.
+
+\begin{definition}
 When two layer interfaces
 $L_1 = \langle E_1, S, \sigma_1 \rangle$ and
 $L_2 = \langle E_2, S, \sigma_2 \rangle$
 share a common set of abstract states,
-the specifications $\sigma_1$ and $\sigma_2$
-will have compatible types,
-and the product of layer interfaces can be defined as:
+their product can be defined as:
 \[
   L_1 \times L_2 :=
-    \langle E_1 \otimes E_2, S, (\sigma_1, \sigma_2) \rangle \,,
+    \langle
+      E_1 \oplus E_2, \:
+      S, \:
+      \langle \sigma_1, \sigma_2 \rangle
+    \rangle \,,
   \qquad
   \text{where}
   \quad
-  (\sigma_1, \sigma_2)^{\iota_i(m)} := \sigma_i^m \,.
+  \langle \sigma_1, \sigma_2 \rangle^{\iota_i(m)} := \sigma_i^m \,.
 \]
-Layer correctness properties can be
-decomposed along the same lines:
+\end{definition}
+
+\begin{theorem}
+When the product of layer interface is defined,
+the tupling of layer implementations
+preserves correctness in the following sense:
 \[
   \begin{prooftree}
     \hypo{L \vdash_R M_1 : L_1}
@@ -7089,12 +7342,16 @@ decomposed along the same lines:
     \infer2{L \vdash_R \langle M_1, M_2 \rangle : L_1 \times L_2}
   \end{prooftree}
 \]
-Conversely, the cartesian projections:
+Moreover, the projections satisfy the following correctness properties:
 \[
    L_1 \times L_2 \vdash_{=} \pi_1 : L_1 \qquad \qquad
    L_1 \times L_2 \vdash_{=} \pi_2 : L_2
 \]
-allow us retain only part of a layer's interface.
+\begin{proof}
+From the reflexivity of $\le_=$ and
+the operation-wise definition of correctness.
+\end{proof}
+\end{theorem}
 
 \begin{example}[Decomposition of $L_\kw{bq}$]
 The specification and verification of
@@ -7118,20 +7375,22 @@ where:
 \end{align*}
 \end{example}
 
-The various forms of composition I have introduced so far
-are summarized in Figure~[XXX: building blocks figure from slides].
-Together,
-they describe the principles of the layer calculus we used
-to verfiy CertiKOS.
+To summarize,
+the constructions I have presented so far
+provide a language to build
+complex certified abstraction layers
+by verifying elementary components.
+This is in essence the \emph{layer calculus}
+we used in our initial verification of CertiKOS
+\cite{popl15}.
 However,
-the form of horizontal composition we have introduced so far
-is largely syntactic in nature.
-Crucially,
-they rely on the fact that within an abstraction layer,
-components share the same low- and high-level state,
-and correctness proof share the same correspondence between them.
-In particular,
-note that the diagonal morphism:
+under this approach the components of a given layers
+must still be designed around a common notion of abstract state,
+and it is not possible to compose horizontally
+layers which have been designed and verified independently.
+
+A related phenomenon is
+that the diagonal morphism:
 \[
   L \vdash_{=} \Delta_L : L \times L
 \]
@@ -7152,27 +7411,23 @@ and the layer still implements a single queue.
 
 %}}}
 
-\subsection{Monoidal structure} \label{sec:layermon} %{{{
-
-
-[XXX motivation: text+figure from prospectus]
+\subsection{Tensor product} \label{sec:layermon} %{{{
 
 In this section,
-we present a more general form of horizontal composition
+I present a more general form of horizontal composition
 which lets two layers operate independently of one another.
 The layers do not need to share state.
 
 \begin{definition}
 The \emph{tensor product} of
-%two layer interfaces
 $L_1 = \langle E_1, S_1, \sigma_1 \rangle$ and
 $L_2 = \langle E_2, S_2, \sigma_2 \rangle$
 is defined as:
 \[
   L_1 \otimes L_2 := \langle
-    E_1 \otimes E_2,
-    S_1 \otimes S_2,
-    (\hat{\sigma}_1, \hat{\sigma}_2)
+    E_1 \oplus E_2, \:
+    S_1 \times S_2, \:
+    \langle \hat{\sigma}_1, \hat{\sigma}_2 \rangle
   \rangle \,,
 \]
 where $\hat{\sigma}_1$ and $\hat{\sigma}_2$
@@ -7185,7 +7440,7 @@ act on their respective halves of the state:
 \end{gather*}
 \end{definition}
 
-Note that the corresponding structure is not cartesian.
+The corresponding monoidal structure is not cartesian.
 In particular, two certfied abstraction layers
 $L \vdash_{R_1} M_1 : L_1$ and
 $L \vdash_{R_2} M_2 : L_2$
@@ -7819,26 +8074,7 @@ and all non-empty extrema on the right.
 
 \section{Products} %{{{
 
-Effect signatures can be combined in the following way.
-
-\begin{definition}
-We define the effect signature
-$1 := \varnothing$.
-For a family of effect signatures $(E_i)_{i \in I}$,
-we define:
-\[
-  \bigotimes_i E_i := \{ (i, e) : \kw{ar}(e) \mid i \in I, e \in E_i \}
-\]
-\end{definition}
-
-For example,
-the signature $E_\kw{io}$ above is equivalent
-to the following composite one:
-\[
-    \{ \kw{readbit} : \mathbbm{2} \} \otimes
-    \{ \kw{print}[s] : \mathbbm{1} \mid s \in \kw{string} \} \otimes
-    \{ \kw{done} : \varnothing \}
-\]
+[signatures compose horizontally]
 
 The construction $\otimes$ gives products in the category $\gcat^{ib}$,
 as demonstrated below.
