@@ -7380,13 +7380,13 @@ the constructions I have presented so far
 provide a language to build
 complex certified abstraction layers
 by verifying elementary components.
-This is in essence the \emph{layer calculus}
+This is the essence of the \emph{layer calculus}
 we used in our initial verification of CertiKOS
-\cite{popl15}.
+\citep{popl15}.
 However,
 under this approach the components of a given layers
 must still be designed around a common notion of abstract state,
-and it is not possible to compose horizontally
+and it is not possible to horizontally compose
 layers which have been designed and verified independently.
 
 A related phenomenon is
@@ -7464,37 +7464,81 @@ Two certified abstraction layers can be composed as follows:
       M_1 \times M_2 : L_1' \otimes L_2'}
   \end{prooftree}
 \]
+\begin{proof}
+Each abstraction layer
+will act on its half of the state
+with no interference from the other.
+Hence the correctness properties
+of the premises
+can be used almost directly
+to establish those of the composite layer.
+\end{proof}
 \end{theorem}
 
-Then,
-when doing so makes sense,
-we can model a situation where
-two independent layers access a common underlay $L$,
-by showing that the resources of $L$
-can be multiplexed.
-This can be formalized
-by introducing a third certified abstraction layer
+To enable two independent
+certified abstraction layers
+to rely on a common underlay $L$,
+we must first show that the resources of $L$
+can be multiplexed
+by introducing a third component
 $L \vdash_R M : L \otimes L$.
 
-For example,
-suppose the layer interface $L^n$
-describes a memory allocator maintaining a pool of $n$ pages.
-To share this interface between multiple clients,
-it may be possible to split this pool,
-so that:
+\begin{example}[Multiplexing a memory allocator]
+Suppose the layer interface $L_\kw{mm}$
+offers an operation $\kw{alloc} : \mathbbm{1} \rightarrow \kw{pageno}$
+which allocates a page of memory from a pool
+and returns its identifier.
+In a practical system,
+memory allocators can be used concurrently
+by any number of subsystems
+which will only access pages
+that have been allocated to them.
+To reflect this,
+we need to introduce a component
 \[
-  L^{n_1 + n_2} \vdash_R \Delta : L^{n_1} \otimes L^{n_2}
+  L_\kw{mm} \vdash_R \Delta : L_\kw{mm} \otimes L_\kw{mm}
+  \,,
+\]
+where the simulation relation $R$
+explicates how the \emph{client views}
+of the allocator's state
+add up consistently to make up the global state,
+and to show that the client's won't interfere with each other
+when the execute operations based on their view.
+The layer implementatione
+$\Delta = \langle \pi_1, \pi_2 \rangle$
+simply passes through the calls of each client
+unchanged to the underlay.
+
+This presents several challenges.
+For instance,
+unless the allocator's interface
+describes an idealized allocator which always succeeds
+(a convenient but unimplementable abstraction),
+the state will need to keep track of a finite number of
+available pages.
+Since $R$ cannot duplicate these pages,
+we may need to add a parameter the layer interface $L_\kw{mm}^n$
+indicating the total number $n$ of available pages.
+Then the multiplexing component can be weakened to
+take the form:
+\[
+  L_\kw{mm}^{n_1 + n_2} \vdash_R \Delta : L_\kw{mm}^{n_1} \otimes L_\kw{mm}^{n_2}
   \,.
 \]
 
-
-The allocator is used by 
-
-[XXX example of a memory allocator maintaining a pool of $n$ pages,
-we we can split as
-Problem of modeling the nondeterminism of
-arbitrary page numbers being returned in the context
-of the limited monad $\mathcal{L}$]
+Another issue is that the model that I have presented
+can only express \emph{deterministic} interfaces.
+In the case of a memory allocator,
+this means the allocator's abstract state
+should contain enough details to predict
+the specific identity of
+every page handed out by the allocator.
+This is possible in the global view,
+but when multiple clients are accessing the allocator,
+the sequences of page identifiers handed out to each client
+will depend on how their requests interleave with that of other clients.
+\end{example}
 
 %}}}
 
@@ -7503,7 +7547,7 @@ of the limited monad $\mathcal{L}$]
 \section{CompCertX} \label{sec:cal:compcertx} %{{{
 
 Our original definition of certified abstraction layers
-was tied up with the semantic model of CompCert
+was tightly coupled with the semantic model of CompCert
 \citep{popl15}.
 In particular,
 layer specifications were defined to operate
