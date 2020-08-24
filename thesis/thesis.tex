@@ -6614,7 +6614,7 @@ and return the counter's old value.
 
 %}}}
 
-\subsection{Client code} %{{{
+\subsection{Client code} \label{sec:cal:cli} %{{{
 
 We can use the free monad $T_E$ on the signature $E$
 as a general representation for client code for
@@ -6666,7 +6666,7 @@ we can evaluate it to:
 
 %}}}
 
-\subsection{Layer implementations} %{{{
+\subsection{Layer implementations} \label{sec:cal:impl} %{{{
 
 A layer implementation provides underlay client code
 for each operation of the overlay interface.
@@ -7639,113 +7639,245 @@ will depend on how their requests interleave with that of other clients.
 Our original definition of certified abstraction layers
 was tightly coupled with the semantic model of CompCert
 \citep{popl15}.
-In particular,
-layer specifications were defined to operate
+In that context,
+layer specifications are defined to operate
 on a CompCert memory state component as well as
 the layer-specific abstract state.
-The specifications in more abstract layer interfaces 
-would in fact leave this component unchanged,
-acting instead on the asbtract state,
-but intermediate layer interfaces which could
-modify both components of the state would be used
-to define the semantics of layer implementations
-and define corresponding low-level specifications.
+%Abstract layer interfaces 
+%leave this component unchanged,
+%acting only on the abstract state.
+%However,
+%the intermediate layer interfaces
+%used to define the semantics of layer implementations---%
+%and corresponding low-level specifications---%
+%can modify both components of the state.
 
-The streamlined version presented in this chapter
-can however be used to recover and present the original theory.
+The overall structure of
+the layer calculus used in CertiKOS is very similar
+to the one I have described so far.
+In this section,
+I briefly touch on some of the differences between the two systems,
+and the ways in which the system is integrated with CompCert.
 
-\subsection{CompCertX}
+The version of CompCert we used for this purpose
+is called CompCertX.
+It was designed to support certified abstraction layers,
+and allow CompCert programs
+to play the role of layer implementations.
+CompCertX itself was largely designed and implemented
+by Tahina Ramananandro
+during his time in the Yale FLINT group.
 
-CompCertX is a version of CompCert
-designed to support certified abstraction layers.
+\subsection{Layer interfaces} %{{{
 
-In CompCert,
-language semantics use a parameter
+Roughly speaking,
+\emph{external calls} in CompCert
+can be understood as effects in a signature
+\[
+  \tilde{\mathcal{C}}_D =
+  \{ f : \kw{val}^* \rightarrow \kw{val} \mid
+    f \in D \subseteq \kw{ident} \}
+  \,.
+\]
+In an external call $f[\vec{v}]$,
+the identifier $f$ designates the function to be called
+and $\vec{v} \in \kw{val}^*$ gives its actual parameters;
+the corresponding outcome $v' \in \kw{val}$
+is the value returned by the function.
+
+In CertiKOS,
+we use these signatures
+to construct layer interfaces of the form
+\[
+  L =
+  \langle \mathcal{C}_D, \: S \times \kw{mem}, \: \sigma \rangle
+  \,.
+\]
+The set $D$ is the layer's \emph{domain},
+in other words the set of primitives which it implements.
+The set $S$ is a layer-specific set of abstract states,
+and is combined with the set $\kw{mem}$ of memory states
+used to define the language semantics of CompCert.
+
+%}}}
+
+\subsection{Client code} %{{{
+
+Traditional CompCert semantics use a parameter
 $\chi$
 common to all languages,
 which describes the behavior of external functions.
 Schematically,
-\[
-  \kw{Clight}_\chi[p]
-\]
+$\kw{Clight}_\chi[p]$
 describes the semantics of the \kw{Clight} program $p$,
 where
-$\chi^{f[\mathit{sg}](\vec{v})} :
- \kw{mem} \times \mathcal{P}^1(\kw{val} \times \kw{mem})$
+$\chi^{f[\vec{v}]} \in
+ \mathcal{L}_\kw{mem}(\kw{val})$
 describes the behavior of
-the external function $f$ with signature $\mathit{sg}$
-called by $p$ with arguments $\vec{v}$.
-We extend this facility to full-blown layer interfaces.
-Given a layer interface
-$L = \langle E, S \times \kw{mem}, \sigma \rangle$,
-where
-$E \subseteq \mathcal{C}$,
-the semantics:
-\[
-  \kw{Clight}_L[p]
-\]
-will maintain and abstract state $s \in S$
-alongside the program's memory state,
-and use the specification $\sigma$
-to interpret external calls as before.
+the external call $f[\vec{v}]$.
+This can be understood as a rudimentary underlay interface
+$\langle \tilde{C}_\kw{ident}, \kw{mem}, \chi \rangle$
+on top of which \kw{Clight} programs
+are evaluated.
 
-To make it possible to evaluate a CompCert modules
-as layer implementations (\S\ref{sec:cal:impl}),
+To enable the use of richer underlay interfaces,
+we extend this facility as follows.
+Given a CertiKOS layer interface
+$L = \langle \mathcal{C}_D, \: S \times \kw{mem}, \: \sigma \rangle$,
+the semantics $\kw{Clight}_L[p]$
+will maintain an abstract state $k \in S$
+alongside the memory state,
+and use the family of specifications
+$\sigma^{f[\vec{v}]} \in \mathcal{L}_{S \times \kw{mem}}(\kw{val})$
+to interpret external calls.
+This allows us to evaluate \emph{client code}
+with $L$ as underlay.
+
+%}}}
+
+\subsection{Layer implementations} %{{{
+
+To make it possible to evaluate CompCert modules
+as complete layer \emph{implementations},
 CompCertX also extends the \emph{incoming} interface
 of language semantics.
-Instead of only modelling the initial
-invocation of $\kw{main}$,
-we make it possible to evaluate the component
-for any incoming call.
-Then:
+Traditional CompCert semantics only model the top-level
+invocation of $\kw{main}[\epsilon]$.
+In CompCertX,
+we make it possible to evaluate
+any incoming call $f[\vec{v}]$
+and describe its action in terms of
+the combined abstract and memory states:
 \[
-  \kw{Clight_L}[M]^{f[\mathit{sg}](\vec{v})} :
-    S \times \kw{mem} \rightarrow N \times S \times \kw{mem}
+  \kw{Clight_L}[M]^{f(\vec{v})} \in
+    \mathcal{L}_{S \times \kw{mem}}(\kw{val})
+  \,.
 \]
-models the execution of the function $f$
-in the module $M$,
-so that the evaluation of $M$ on the underlay $L$
-can be defined as:
+Then evaluating $M$ on the underlay
+$L =
+ \langle \tilde{\mathcal{C}}_D, \: S \times \kw{mem}, \: \sigma \rangle$
+yields the layer interface:
 \[
   M[L] :=
     \langle
-      E_M, \,
+      E_{\kw{dom}(M)}, \,
       S \times \kw{mem}, \,
       \kw{Clight}_L[M]
     \rangle
   \,.
 \]
 
-\subsection{Extending layer interfaces with memory states}
+%}}}
 
-The layer interfaces we have seen so far
-have been expressed in purely abstract terms.
-To use them as specifications for CompCert modules,
-we can adjoin a memory state to them in the following way.
+\subsection{Simulation relations} %{{{
 
-\begin{definition}[Layer interface extension]
-A layer interface $L = \langle E, S, \sigma \rangle$
-can be promoted to the layer interface:
-\[
-  L@T := \langle E, S \times T, \hat{\sigma} \rangle
-  \,,
-\]
-where the state has an additional component
-of type $S'$ which is left unchanged by the specifications:
-\[
-  \hat{\sigma}^m(s, t) := \{ (s', t) \mid \sigma^m(s) \ni s' \}
+Using CompCertX to compile layer implementations
+to assembly
+introduces \emph{memory injections},
+written $m_1 \stackrel{\iota}{\hookrightarrow} m_2$,
+which reflect the change in structure
+between a source memory state $m_1$
+and a corresponding target memory state $m_2$.
+Moreover,
+the certified abstraction layers used in CertiKOS
+follow a common pattern,
+where abstract data is progressively
+realized in lower layers
+as global variables stored in the CompCert memory state.
+
+To make our certified abstraction layers compatible
+with injections and to capture this pattern,
+the simulation relations are specified by two components:
+\begin{align*}
+  R^\kw{r} &\subseteq S_1 \times S_2 \\
+  R^\kw{m}_\iota &\subseteq S_1 \times \kw{mem}
   \,.
+\end{align*}
+The overlay abstract states of $S_1$
+will retain some of the underlay's abstract data in $S_2$.
+The component $R_\kw{m}$ formalizes this correspondence.
+On the other hand,
+$S_1$ may also contain newly abstracted data,
+stored in the underlay as part of the memory states.
+This is formalized by the component $R_\kw{r}$.
+From this description,
+we can derive the layer's simulation relation
+as:
+\[
+  (k_1, m_1) \mathrel{R} (k_2, m_2)
+  \: \Leftrightarrow \:
+  \exists \, \iota \:\bdot\:
+    k_1 \mathrel{R^\kw{r}_\iota} k_2 \:\wedge\:
+    k_1 \mathrel{R^\kw{m}_\iota} m_2 \:\wedge\:
+    m_1 \stackrel{\iota}{\hookrightarrow} m_2
 \]
-\end{definition}
+\[
+  \begin{tikzcd}[row sep=large]
+    k_1 \ar[d, "R^\kw{r}_\iota"']
+        \ar[dr, "R^\kw{m}_\iota"'] &
+    m_1 \ar[d, hook, "\iota"] \\
+    k_2 & m_2
+  \end{tikzcd}
+\]
+Describing simulation relations in this way
+allows us to take advantage of this pattern
+when we develop proof principles for
+individual layers,
+especially when it comes to
+making sure our simulation
+relations are compatible with
+compilation by CompCertX.
 
+Unfortunately,
+simulation relations described in this way
+do not directly compose.
+To see why,
+consider the following diagram:
+\[
+  \begin{tikzcd}
+    k_1 \ar[d] \ar[dr] & m_1 \ar[d, hook] \\
+    k_2 \ar[d] \ar[dr] & m_2 \ar[d, hook] \\
+    k_3 & m_3
+  \end{tikzcd}
+\]
+Injections compose as expected,
+in the sense that
+${\stackrel{\: \iota \circ \iota'}{\longhookrightarrow}} =
+ {\stackrel{\iota}{\hookrightarrow}} \circ
+ {\stackrel{\iota'}{\hookrightarrow}}$.
+We also place restrictions on $R^\kw{m}$
+relations
+which guarantee that they composes with memory injections
+in the appropriate way.
+However,
+to formulate the composite $R^\kw{m}$,
+we must existentially quantify
+over the intermediate memory state $m_2$ as well.
+Because there is no way to guarantee consistency between
+the $m_2$ involved in
+$\stackrel{\iota}{\hookrightarrow} \circ
+ \stackrel{\iota}{\hookrightarrow}$
+and in the composite $R^\kw{m}$,
+the composition does not behave as expected.
 
+To work around this issue,
+we can use formal sequences of
+$(R^\kw{r}, R^\kw{m})$ pairs to describe the
+simulation relation used by vertically composable
+CertiKOS layers.
+We can then compose 
+the overall simulation relations derived from
+individual components
+when we formulate the soundness proof.
+Another approach is to generalize our pattern
+so that it still provides the same advantages
+but behaves in a better way
+with respect to composition.
+This was the original motivation
+for my work on
+CompCert Kripke logical relations
+(\S\ref{sec:cklr}).
 
-
-[XXX give an overview of how this translates
-when we mix with CompCert,
-and the implementation of the layer library,
-which was also the inspiration behind
-CompCert Kripke logical relations.]
 
 %}}}
 
