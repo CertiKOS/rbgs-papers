@@ -9548,7 +9548,9 @@ of transition systems,
 and the distinction and correspondence between
 CompCert's notions of \emph{forward} and \emph{backward} simulations.
 
-\subsection{Trace semantics}
+%}}}
+
+\subsection{Trace semantics} %{{{
 
 I outlined above the execution of a labelled transition system
 in terms of terminating traces.
@@ -9584,7 +9586,7 @@ The model used in CompCert is more general:
           s_{n+1} \stackrel{\epsilon}{\rightarrow}
           \cdots
     \]
-    I will write silently diverging behaviors as:
+    I will write the corresponding behavior as:
     \[
       t_1 t_2 \cdots t_{n-1} \Uparrow
       \,.
@@ -9624,61 +9626,360 @@ The model used in CompCert is more general:
     \]
     It can be refined by any behavior
     admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
-
-    A transition system with no initial state ($I = \varnothing$)
-    immediately goes wrong.
-    In this case,
-    the transition system will admit the single undefined behavior
-    $\epsilon \lightning$.
 \end{itemize}
+A transition system with no initial state ($I = \varnothing$)
+immediately goes wrong.
+In this case,
+the transition system will admit the single undefined behavior
+$\epsilon \lightning$.
 
-I will write $b \in \mathbb{B}$ for the individual behaviors
-defined above.
-CompCert characterizes the externally observable behavior
-of a transition system $L$
-as a set $\kw{Beh}(L) \subseteq \mathbb{B}$.
-I will often simply write $b \in L$
-to mean that the transition system $L$
-admits the behavior $b$,
-overlooking the distinction between $L$
-and the set of behaviors it admits.
-
-Refinement is defined mostly as trace containment,
-but the refinement of undefined behaviors
-must be taken into account as well.
-Writing the prefix relation between individual behaviors as
-${\pref} \subseteq \mathbb{B} \times \mathbb{B}$,
-this notion of refinement can be defined as:
+Summing up,
+the traces used by CompCert to define
+the possible behaviors of transition systems
+are taken from the following language:
 \[
-  L_1 \refby L_2
-  \: \Leftrightarrow \:
-  \forall b_2 \in L_2 \bdot
-  \exists b_1 \in L_1 \bdot
-  b_1 \pref b_2
+  b \in \mathbb{B} =
+    \mathbb{E}^*
+      \{ {\Downarrow} r, {\Uparrow}, {\lightning} \mid r \in \kw{int} \}
+      \cup
+    \mathbb{E}^\omega
+  \,.
 \]
-Every behavior $b_2 \in L_2$ of the target program
-refines a corresponding behavior $b_1 \in L_1$ of the source program.
-In other words,
-the behaviors of the target program must largely be contained
-within the behaviors of the source program,
-but when the source program goes wrong
-the target program is free to continue with any behavior.
+I will write
+${\refby_\lightning} \subseteq \mathbb{B} \times \mathbb{B}$
+for CompCert's notion of \emph{behavior improvement},
+which allows behaviors which go wrong to
+be refined by more defined ones.
+It can be defined as:
+\[
+  {\refby_\lightning} := \{ (b, b) \mid b \in \mathbb{B} \}
+    \cup \{ (t \lightning, t b) \mid
+            t \in \mathbb{E}^*, b \in \mathbb{B} \}
+  \,.
+\]
+Then the overall external behavior
+of a transition system $L$
+is characterized
+as a set $\kw{Beh}(L) \subseteq \mathbb{B}$
+of possible individual behaviors.
+In the remainder of this section I will describe
+the techniques used in CompCert to define and establish
+corresponding notions of refinement.
 
-\subsection{Nondeterminism}
+%I will often simply write $b \in L$
+%to mean that the transition system $L$
+%admits the behavior $b$,
+%overlooking the distinction between $L$
+%and the set of behaviors it admits.
 
-Although
-the interpretation of transition systems presented above
-is not typically stated in terms of angelic and demonic nondeterminism,
-it can be understood as exhibiting both.
+\subsection{Events} %{{{
 
-For the most part,
-the interpretation is demonic,
-as underscored by the trace containment aspect
-of the definition of $\refby$.
+The events used in the traces above are taken from the following set:
+\[
+  e \in \mathbb{E} ::=
+    \kw{syscall}[u, \vec{v}]/v \mid
+    \kw{vload}[i, o]/v \mid
+    \kw{vstore}[i, o, v] \mid
+    \kw{annot}[u, \vec{v}]
+\]
+They correspond to system calls ($\kw{syscall}$),
+volatile loads and stores ($\kw{vload}$, $\kw{vstore}$),
+and annotations ($\kw{annot}$).
+The data involved
+are strings ($u \in \kw{str}$),
+global identifiers ($i \in \kw{ident}$),
+pointer offsets ($o \in \mathbb{Z}$) and
+event values ($v \in \kw{eval}$, $\vec{v} \in \kw{eval}^*$).
+Crucially,
+these data are invariant between the source and target programs,
+so that the corresponding traces can be compared directly.
+For the purposes of this discussion,
+the exact nature and use of these events
+are not important,
+but they correspond to the external interactions
+which need to be preserved between the execution
+of the source and target program.
+
+Events involve both an output component,
+chosen by the program and
+written here to the left of the oblique bar ($/$),
+and a (possibly trivial) input component,
+chosen by the environment and written to the right of the oblique.
+In CompCert,
+this distinction is formulated as a ``$\kw{match\_traces}$'' relation
+which identifies events that have the same output component.
+It can be described as the smallest equivalence relation $\simeq$
+containing:
+\[
+  \kw{syscall}[u, \vec{v}]/v_1' \simeq
+  \kw{syscall}[u, \vec{v}]/v_2'
+  \qquad
+  \kw{vload}[i, o]/v_1 \simeq
+  \kw{vload}[i, o]/v_2
+\]
+Equivalently,
+the set of events can be described as an effect signature
+and used to intepret the behaviors of transition systems
+in terms of strategies.
+
+%}}}
+
+\subsection{Game semantics} %{{{
+
+Although CompCert semantics
+are not formulated explicitly as game semantics,
+understanding them in that framework
+will be useful
+when we consider the extensions I present in \S\ref{sec:compcert-ext}
+and in Chapter~\ref{sec:compcerto}.
+In that context,
+event traces correspond to an interaction
+over the signature
+\begin{align*}
+  \mathcal{E} := \{ {}
+    &\kw{syscall} :
+      \kw{str} \times \kw{eval}^* \rightarrow \kw{eval},
+      \\
+    &\kw{vload} :
+      \kw{ident} \times \mathbb{Z} \rightarrow \kw{eval},
+      \\
+    &\kw{vstore} :
+      \kw{ident} \times \mathbb{Z} \times \kw{eval} \rightarrow \mathbbm{1},
+      \\
+    &\kw{annot} :
+      \kw{str} \times \kw{eval}^* \rightarrow \mathbbm{1}
+  \}
+  \,.
+\end{align*}
+%The set of events can then be recovered as
+%$
+%  \mathbb{E} :=
+%    \{ m / n \mid (m \mathbin: N) \in \mathcal{E} \wedge n \in N \}
+%$.
+Likewise,
+the initial invocation of a program
+and its ultimate outcome can
+be understood as an interaction over the signature
+$
+  \mathcal{W} := \{
+    {*} : \{ {\Downarrow} r, {\Uparrow} \mid r \in \kw{int} \}
+  \}
+$.
+Overall,
+the external behavior of
+a CompCert transition system
+corresponds to a strategy
+for the game $\mathcal{E} \rightarrow \mathcal{W}$.
+
 However,
-undefined behaviors introduce a discontinuity in this model.
-To illustrate this phenomenon,
-consder the following sequence of transition systems,
+the precise behavior of a transition system
+as a strategy of this kind
+depends on how nondeterminism is interpreted:
+\begin{itemize}
+  \item
+    The angelic interpretation
+    is used implicitly in the context of
+    \emph{forward simulations},
+    which entail a \emph{trace inclusion} property
+    for the corresponding sets of behaviors.
+  \item
+    The demonic interpretation
+    is used implicitly in the context of
+    \emph{backward simulations},
+    which entail
+    under some \emph{receptiveness} assumptions
+    a corresponding \emph{trace containment} property.
+\end{itemize}
+This is outlined in Table~\ref{tbl:compcertref}
+and explained in the following sections.
+
+\begin{table} %{{{
+  \centering
+  \begin{tabular}{ccc}
+    \hline
+    Nondeterminism
+      & Transition systems
+      & Sets of traces \\
+    \hline
+    Angelic interpretation
+      & Forward simulations ($\le$)
+      & Trace inclusion ($\mathcal{P}^\le(\refby_\lightning)$) \\
+    Demonic interpretation
+      & Backward simulations ($\ge$)
+      & Trace containment ($\mathcal{P}^\ge(\refby_\lightning)$) \\
+    \hline
+  \end{tabular}
+  \caption{Notions of refinement in CompCert semantics}
+  \label{tbl:compcertref}
+\end{table}
+%}}}
+
+%}}}
+
+\subsection{Angelic interpretation} %{{{
+
+Under an angelic interpretation of nondeterminism,
+we look at the choice between two possible transitions
+$
+  s \stackrel{t_1}{\longrightarrow} s_1
+$
+and
+$
+  s \stackrel{t_2}{\longrightarrow} s_2
+$
+purely as a choice of the \emph{environment}.
+In terms of sets of behaviors,
+the corresponding notion of refinement
+is the trace inclusion relation
+$\mathcal{P}^\le({\refby_\lightning})$,
+which guarantees that
+all choices available to the environment in the source program
+are available in the target program as well.
+
+Formally speaking,
+the angelic treatment of nondeterminism
+yields a more homogenous theory
+than its demonic counterpart.
+A behavior $b \in \mathbb{B}$ can be interpreted
+in $\mathcal{I}_\mathcal{E}$ as:
+\begin{align*}
+  \llbracket {\Downarrow}r \rrbracket &:= \eta({\Downarrow} r) &
+  \llbracket {\lightning} \rrbracket &:= \bot \\
+  \llbracket {\Uparrow} \rrbracket &:= \eta({\Uparrow}) &
+  \llbracket m / n \cdot b \rrbracket &:=
+    m n \llbracket b \rrbracket
+\end{align*}
+Then $\kw{Beh}(L)$ can be interpreted as a strategy
+in $\mathcal{E} \rightarrow \mathcal{W}$ given by:
+\[
+  \llbracket \kw{Beh}(L) \rrbracket^* :=
+    \bigsqcup_{b \in \kw{Beh}(L)} \llbracket b \rrbracket
+  \,,
+\]
+and trace inclusion and refinement
+coincide in the following way:
+\[
+  \kw{Beh}(L_1)
+  \ifr{\mathcal{P}^\le({\refby_\lightning})}
+  \kw{Beh}(L_2)
+  \: \Leftrightarrow \:
+  \llbracket \kw{Beh}(L_1) \rrbracket
+  \refby
+  \llbracket \kw{Beh}(L_2) \rrbracket
+  \,.
+\]
+
+Often,
+an angelic interpretation of nondeterminism
+is also the most convenient one
+when it comes to proving refinement between
+two transition systems,
+as in the case of correctness proofs for
+a specific compiler pass.
+For transition systems,
+it can be proved using simulations of the following kind,
+which assert that every transition of the source program
+is matched by a corresponding transition sequence in the target program.
+Note that the target sequence may be empty,
+but in order to ensure the preservation of silent divergence,
+we must ensure this happens for at most
+finitely many steps in the source program.
+
+\begin{definition}
+A \emph{forward simulation}
+of a transition system
+$L_1 = \langle S_1, I_1, {\rightarrow}_1, F_1 \rangle$
+by a transition system
+$L_2 = \langle S_2, I_2, {\rightarrow}_2, F_2 \rangle$
+is given by a relation $R \subseteq W \times S_1 \times S_2$
+indexed by a well-founded order $(W, {<})$
+such that the following properties hold:
+\begin{itemize}
+  \item For all $s_1 \in I_1$,
+    there exist $i \in W$ and $s_2 \in I_2$
+    such that $(i, s_1, s_2) \in R$.
+  \item For all $(i, s_1, s_2) \in R$
+    and for every transition
+    $s_1 \mathrel{\smash{\stackrel{t}{\rightarrow}}_1} s_1'$,
+    there exist $i' \in W$ and $s_2' \in S_2$
+    such that $(i', s_1', s_2') \in R$ and either
+    $s_2 \mathrel{\smash{\stackrel{t}{\rightarrow}}_2^+} s_2'$ or
+    $s_2 = s_2' \:\wedge\: i' < i$.
+  \item For all $(i, s_1, s_2) \in R$
+    and every result $r$ such that $s_1 \mathrel{F_1} r$,
+    there exists $s_2'$ such that
+    $s_2 \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}_2^*} s_2'$ and
+    $s_2' \mathrel{F_2} r$.
+\end{itemize}
+I will write $L_1 \le L_2$.
+\end{definition}
+
+CompCert also includes in \texttt{common/Smallstep.v}
+a number of simplified formulations
+which can be used to establish forward simulations
+in simpler situations.
+Forward simulations imply trace inclusion:
+\[
+  L_1 \le L_2
+  \: \Rightarrow \:
+  \kw{Beh}(L_1) \ifr{\mathcal{P}^\le(\refby_\lightning)} \kw{Beh}(L_2)
+\]
+This is proved as \texttt{forward\_simulation\_behavior\_improves}
+in \texttt{common/Behaviors.v}.
+
+While the angelic interpretation
+of nondeterminism is the most convenient one to work with,
+it does not correspond to the intended intepretation
+of CompCert transition systems,
+detailed in the next section,
+where multiple possible transitions correspond
+primarily to choices of the system.
+However,
+under some conditions
+the two interpretations coincide,
+making it possible to use forward simulations
+to prove semantic preservation properties
+for most of CompCert's compilation passes.
+
+\subsection{Demonic interpretation} %{{{
+
+Under a demonic interpretation of nondeterminism,
+we look at the choice between two possible transitions
+$s \stackrel{\epsilon}{\rightarrow} s_1$ and
+$s \stackrel{\epsilon}{\rightarrow} s_2$
+as a choice of the \emph{system}.
+In terms of traces,
+the corresponding notion of refinement
+is the \emph{trace containment} relation
+$\mathcal{P}^\ge({\refby_\lightning})$,
+which guarantees that all possible behaviors of the target program
+are permitted by the specification (source program).
+
+This elegant story is complicated by two phenomena
+involving angelic as well as demonic nondeterminism:
+\begin{itemize}
+  \item
+    While the choice between multiple possible transitions
+    should be interpreted as demonic,
+    stuck states should still denote undefined behaviors.
+    In other words,
+    when there are \emph{no} possible transitions,
+    the ``choice'' between them should be interpreted
+    angelically as $\bot$,
+    rather than demonically as $\top$.
+  \item
+    When interactions with the environment are involved
+    in the form of non-empty event traces,
+    \emph{outputs} should be interpreted as demonic,
+    but \emph{inputs} should still correspond to
+    choices of the environment.
+\end{itemize}
+The former phenomenon creates a discontinuity
+in the interpretation of sets of possible actions,
+as illustrated by the following example.
+
+\begin{example} %{{{
+Consider the following family of transition systems,
 where the initial state $\kw{i}$ may admit zero, one, or more
 transitions to the final state $\kw{f}$:
 \begin{align*}
@@ -9708,10 +10009,13 @@ we obtain the ordering
   L_0 \refby \cdots \refby L_3 \refby L_2 \refby L_1
 \]
 where $L_0$ is pushed to the bottom.
+\end{example}
+%}}}
 
-This example only illustrates the nondeterminism
+While so far I have only mentioned
+choices between transitions
 introduced by the step relation $\rightarrow$,
-but this phenomenon involves initial and final states as well.
+this phenomenon involves initial and final states as well.
 In more general terms,
 we can consider the way CompCert interprets nondeterminism
 in a set of possible actions $A$,
@@ -9724,7 +10028,7 @@ When $|A| \ge 1$, nondeterminism is interpreted as demonic:
 \[
   \bigsqcap A
 \]
-Therefore CompCert uses the following form of
+In other words, CompCert uses the following form of
 \emph{discontinuous choice}:
 \[
   \bigoplus A \: := \:
@@ -9733,23 +10037,226 @@ Therefore CompCert uses the following form of
     \bigsqcap A & \mbox{otherwise}
   \end{cases}
 \]
-As we will see,
-CompCert's forward simulations
-correspond to the angelic interpretation $\bigsqcup A$,
-whereas backward simulations
-correspond to the discontinuous intepretation $\bigoplus A$.
-This discontinuity is at the root of the \emph{safety} conditions
-found in CompCert's definition of backward simulations
-(\S\ref{sec:bsim}).
-For determinate transition systems,
-$A$ will always be of size at most $1$,
-so that the two interpretations coincide.
+Concretely, this manifests in the form of additional
+\emph{safety} clauses
+in the definition of backward simulations
+as given below.
+A state $s \in S$
+in a transition system $\langle S, I, {\rightarrow}, F \rangle$
+is called \emph{safe}
+if it does go wrong.
+A state $s \in S$
+\emph{goes wrong} if there exists
+$s \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}^*} s'$
+such that $s'$ is stuck
+(it has no successor and is not a final state).
+
+\begin{definition} %{{{
+A \emph{backward simulation}
+of a transition system
+$L_1 = \langle S_1, I_1, {\rightarrow}_1, F_1 \rangle$
+by a transition system
+$L_2 = \langle S_2, I_2, {\rightarrow}_2, F_2 \rangle$
+is given by a relation $R \subseteq W \times S_1 \times S_2$
+indexed by a well-founded order $(W, {<})$
+such that the following properties hold:
+\begin{itemize}
+  \item If $I_1 \ne \varnothing$, then $I_2 \ne \varnothing$.
+  \item If $I_1 \ne \varnothing$ and $s_2 \in I_2$,
+    there exist $i \in W$ and $s_1 \in I_1$
+    such that $(i, s_1, s_2) \in R$.
+  \item For all $(i, s_1, s_2) \in R$
+    with $s_1$ a \emph{safe} state,
+    $s_2$ either has a successor or
+    is a final state.
+  \item For all $(i, s_1, s_2) \in R$
+    with $s_1$ a \emph{safe} state,
+    and for every transition
+    $s_2 \mathrel{\smash{\stackrel{t}{\rightarrow}}_2} s_2'$,
+    there exist $i' \in W$ and $s_1' \in S_1$
+    such that $(i', s_1', s_2') \in R$ and either
+    $s_1 \mathrel{\smash{\stackrel{t}{\rightarrow}}_1^+} s_1'$ or
+    $s_1 = s_1' \:\wedge\: i' < i$.
+  \item For all $(i, s_1, s_2) \in R$
+    with $s_1$ a \emph{safe} state,
+    and every result $r$ such that $s_2 \mathrel{F_2} r$,
+    there exists $s_1'$ such that
+    $s_1 \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}_1^*} s_1'$ and
+    $s_1' \mathrel{F_1} r$.
+\end{itemize}
+I will write $L_1 \ge L_2$.
+\end{definition}
+%}}}
+
+As with forward simulations,
+stronger but simplified versions
+of these criteria
+are provided in \texttt{common/Smallstep.v}.
+Backward simulations imply trace containment:
+\[
+  L_1 \ge L_2
+  \: \Rightarrow \:
+  \kw{Beh}(L_1) \ifr{\mathcal{P}^\ge(\refby_\lightning)} \kw{Beh}(L_2)
+\]
+This is proved as \texttt{backward\_simulation\_behavior\_improves}
+in \texttt{common/Behaviors.v}.
 
 %}}}
 
-\subsection{Forward simulations} \label{sec:fsim}
+\subsection{Dual interpretation}
 
-\subsection{Backward simulations} \label{sec:bsim}
+To formulate a honest-to-god game semantics for
+CompCert transition systems,
+we must also address the distinction between
+outputs and inputs mentioned
+at the beginning of the previous section.
+In fact,
+this underscores that
+neither one of the notions of refinement
+formulated in CompCert
+is entirely satisfactory:
+\begin{itemize}
+  \item
+    The trace inclusion property
+    $\kw{Beh}(L_1)
+     \mathrel{\mathcal{P}^\le(\refby_\lightning)}
+     \kw{Beh}(L_2)$
+    is only appropriate when
+    the target transition system $L_2$
+    is \emph{determinate},
+    in other words \emph{only} contains nondeterminism
+    over environment inputs.
+  \item
+    The trace containment property
+    $\kw{Beh}(L_1)
+     \mathrel{\mathcal{P}^\ge(\refby_\lightning)}
+     \kw{Beh}(L_2)$
+    is only appropriate when
+    the target transition system $L_2$
+    is \emph{receptive},
+    in other words is \emph{maximally} nondeterministic
+    over environment inputs.
+\end{itemize}
+This prevents the corresponding trace refinement property
+to be broken by a variation in the kind of nondeterminism which
+must be refined in the opposite direction.
+
+Expressing these properties at the level of individual states
+is made complicated when transitions can include
+traces of variable or mismatching length.
+For this reason the corresponding definitions below
+require transitions to have at most one event.
+
+\begin{definition}
+A transition system
+$\langle S, I, {\rightarrow}, F \rangle$
+has \emph{single-event transitions}
+when $|t| \le 1$ for all $s \stackrel{t}{\rightarrow} s'$.
+
+A single-event transition system is called
+\emph{determinate}
+if whenever
+$s \stackrel{e_1}{\rightarrow} s_1$ and
+$s \stackrel{e_2}{\rightarrow} s_2$
+the property $e_1 \simeq e_2$ holds.
+
+A single-event transition system is called
+\emph{receptive}
+if for all transistions $s \stackrel{e_1}{\rightarrow} s_1$
+and all events $e_2 \simeq e_1$,
+there exists $s_2$ such that
+$s \stackrel{e_2}{\rightarrow} s_2$.
+\end{definition}
+
+When $L_1$ is receptive and $L_2$ is determinate,
+a forward simulation $L_1 \le L_2$ can be converted
+into a backward simulation $L_1 \ge L_2$.
+Note that in this case,
+the states of $L_2$ which correspond
+to safe states of $L_1$ will be receptive as well,
+so that the trace containment property we obtain
+from the backward simulation
+is an appropriate expression of refinement.
+
+%\subsection{Refinement} %{{{
+%
+%Then, at the level of transition systems
+%and sets of behaviors,
+%CompCert uses the various notions of refinement
+%outlined in Table~\ref{tbl:compcertref}.
+%
+%These notions of refinement are related in various ways.
+%For example,
+%most passes of CompCert are verified in terms of forward simulations.
+%Because of properties of the languages involved,
+%these forward simulations can be converted to backward simulations,
+%which is the paradigm used to formulate
+%the principal correctness theorem of CompCert.
+%This backward simulation is then used to derive
+%various consequences,
+%including a trace containment property.
+%
+%The differences and relationships
+%between these various forms of refinement
+%are fairly subtle,
+%as are the constraints on transition systems
+%which are used in CompCert.
+%However,
+%the conceptual framework of
+%game semantics and dual nondeterminism
+%provides a useful lens
+%through which to understand them.
+%
+%Refinement is defined mostly as trace containment,
+%but the refinement of undefined behaviors
+%must be taken into account as well.
+%Writing the prefix relation between individual behaviors as
+%${\pref} \subseteq \mathbb{B} \times \mathbb{B}$,
+%this notion of refinement can be defined as:
+%\[
+%  L_1 \refby L_2
+%  \: \Leftrightarrow \:
+%  \forall b_2 \in L_2 \bdot
+%  \exists b_1 \in L_1 \bdot
+%  b_1 \pref b_2
+%\]
+%Every behavior $b_2 \in L_2$ of the target program
+%refines a corresponding behavior $b_1 \in L_1$ of the source program.
+%In other words,
+%the behaviors of the target program must largely be contained
+%within the behaviors of the source program,
+%but when the source program goes wrong
+%the target program is free to continue with any behavior.
+
+%}}}
+
+%\subsection{Nondeterminism} %{{{
+%
+%Although
+%the interpretation of transition systems presented above
+%is not typically stated in terms of angelic and demonic nondeterminism,
+%it can be understood as exhibiting both.
+%
+%For the most part,
+%the interpretation is demonic,
+%as underscored by the trace containment aspect
+%of the definition of $\refby$.
+%However,
+%undefined behaviors introduce a discontinuity in this model.
+%
+%As we will see,
+%CompCert's forward simulations
+%correspond to the angelic interpretation $\bigsqcup A$,
+%whereas backward simulations
+%correspond to the discontinuous intepretation $\bigoplus A$.
+%This discontinuity is at the root of the \emph{safety} conditions
+%found in CompCert's definition of backward simulations
+%(\S\ref{sec:bsim}).
+%For determinate transition systems,
+%$A$ will always be of size at most $1$,
+%so that the two interpretations coincide.
+%
+%%}}}
 
 \subsection{Memory model} \label{sec:sem:mm} %{{{
 
