@@ -3186,7 +3186,7 @@ in other words $c^m_X = \ul{m}$ and $t[c] = t$.
 
 %}}}
 
-\subsection{Monad homomorphisms} %{{{
+\subsection{Monad homomorphisms} \label{sec:eff:monhom} %{{{
 
 The free monad gives us a different way to present
 monadic interpretations of effect signatures.
@@ -5462,6 +5462,1773 @@ has a right adjoint $[A, {-}]$.
 
 \part{Refinement-based game semantics} \label{part:rbgs}
 
+\chapter{Certified abstraction layers} \label{sec:cal} %{{{
+
+\section{Introduction} %{{{
+
+This chapter describes
+the theory of certified abstraction layers
+used in the verification of
+the certified operating system kernel CertiKOS.
+
+\subsection{Abstraction layers} %{{{
+
+Software is constructed in layers.
+The basic, concrete facilities provided by the programming environment
+are used to implement abstract data structures and operations.
+The programmer can then forget the implementation details
+of these data structures and operations,
+and instead think of them as \emph{primitives}
+when building the next layer of code.
+
+This core principle is especially relevant
+in the context of system code,
+where abstraction layers
+may transform the programming model significantly.
+For example,
+at the level of the bare metal,
+the memory address space must be manipulated explicitly.
+For higher-level code,
+the operating system's memory management layers
+abstract away the hardware's low-level details and
+provide a much more convenient view of the memory.
+
+This illustrates a conceptual similarity between
+abstraction layers and compilers.
+As is the case for abstraction layers,
+the purpose of a compiler is to use a lower-level programming model
+(like assembly code)
+to provide a more abstract, higher-level model
+(for example the C programming language).
+For abstraction layers,
+the transformation of client code
+is less expansive,
+consisting only of linking with a layer's code.
+Nevertheless compilers and abstraction layers
+can be understood as specific instances
+of a more general phenomenon.
+
+%}}}
+
+\subsection{Certified abstraction layers in CertiKOS} %{{{
+
+The analogy between compilers and abstraction layers
+can be extended to cover correctness and verification techniques.
+This is illustrated by the \emph{certified abstraction layers}
+of CertiKOS and their connection to CompCert.
+The verification of CertiKOS builds on CompCert
+in two different ways:
+\begin{itemize}
+\item
+  In terms of functionality,
+  CompCert provides C and assembly semantics
+  mechanized in the Coq proof assistant,
+  and its correctness theorem
+  allows us to use proofs about the kernel's C code
+  to verify the compiled assembly code.
+\item
+  Additionally,
+  many of the patterns and techniques used
+  to verify CompCert
+  serve as a starting point for
+  the formulation of certified abstraction layers
+  (Table~\ref{tbl:compccal}).
+\end{itemize}
+
+\begin{table}
+  \centering
+  \begin{tabular}{c@{\qquad}c}
+    \hline
+    CompCert & CertiKOS \\
+    \hline
+    Language semantics & Layer interface \\
+    Source language & Overlay interface \\
+    Compilation pass & Abstraction layer \\
+    Target language & Underlay interface \\
+    Pass correctness & Layer correctness \\
+    \hline
+  \end{tabular}
+  \caption{
+    Correspondence between certified compilation
+    and certified abstraction layers
+  }
+  \label{tbl:compccal}
+\end{table}
+
+The CertiKOS kernel is divided into several dozen abstraction layers,
+which are specified and verified individually.
+Specifications of abstraction layers
+are called \emph{layer interfaces}.
+They extend CompCert semantics
+to provide a set of \emph{primitives},
+which can be invoked as
+external functions.
+The behavior of primitives is described in terms of
+an \emph{abstract state},
+maintained alongside CompCert's memory state
+but only updated by primitive invocations.
+
+A layer implementation
+realizes the primitives described by an \emph{overlay} interface
+as client code for an \emph{underlay} interface.
+A layer $M$ implementing the overlay interface $L_2$
+on top of the underlay interface $L_1$ can be depicted as follows:
+\[
+  \begin{prooftree}
+    \infer0[$L_2$]{\fbox{\qquad M \qquad}}
+    \infer1[$L_1$]{}
+  \end{prooftree}
+\]
+The correctness of $M$ is formulated as
+the contextual refinement property:
+\[
+  \forall \, C \, . \,
+  \llbracket C \rrbracket_{L_2} \refby
+  \llbracket C + M \rrbracket_{L_1}
+\]
+expressing that the behavior of the client code $C$
+running alongside $M$ on top of the underlay interface $L_1$
+refines the behavior of $C$
+evaluated on top of the overlay interface $L_2$.
+Then,
+when the underlay interface of one layer
+corresponds to the overlay interface of another
+contextual refinement properties can be combined
+to obtain the composite certified layer:
+\[
+  \begin{prooftree}
+    \infer0[$L_3$]{\fbox{\qquad N \qquad}}
+    \infer1[$L_2$]{\fbox{\qquad M \qquad}}
+    \infer1[$L_1$]{}
+  \end{prooftree}
+  \qquad
+  \Rightarrow
+  \qquad
+  \begin{prooftree}
+    \infer0[$L_3$]{\fbox{\qquad M + N \qquad}}
+    \infer1[$L_1$]{}
+  \end{prooftree}
+\]
+This is similar to the way the passes of CompCert
+can be composed when the target language of one corresponds to
+the source language of another.
+
+%}}}
+
+\subsection{Contributions} %{{{
+
+In our original design \citep{popl15},
+the formalization of certified abstraction layers
+was closely tied with
+the semantic infrastructure of CompCert.
+Indeed,
+we introduced the variant CompCertX discussed in \S\ref{sec:compcertx}
+to make it possible for language semantics
+to use arbitrary underlay interfaces and
+express the behavior of layer implementations.
+
+As we proceeded to verify the 37 layers of CertiKOS
+in the framework outlined above,
+it quickly became apparent that
+the common structures found in the verification of each layer
+were a source of excessive redundancy in our proofs.
+This prompted my work on the \emph{layer calculus} of CertiKOS,
+which became the starting point for the research
+presented in this thesis.
+
+This chapter
+presents a modernized version of the layer calculus
+decoupled from CompCert.
+The new version avoids the complications of the original model
+but captures its essential features.
+Through a series of embeddings,
+the new model could be interfaced with
+CompCertO (\S\ref{sec:compcerto})
+to provide the capabilities of the original model
+and more.
+
+%}}}
+
+%}}}
+
+\section{Layer model} %{{{
+
+A layer interface $L$ has three components.
+First, a \emph{signature} $E$ enumerates
+primitive operations together with their types
+(see Def.~\ref{def:esig}).
+Second,
+the set $S$ contains the \emph{abstract states} of the layer interface.
+Finally, for each operation $m \mathbin: N$ in the signature $E$,
+a \emph{specification}
+is given as a function:
+\[
+  L.m : S \rightarrow \mathcal{P}^1( N \times S) \,.
+\]
+Throughout this thesis,
+the notation $v@k \in V \times S$ is used for a pair
+containing the value $v \in V$ and the state $k \in S$.
+
+\subsection{Specification monad} %{{{
+
+In the type of $L.m$ above,
+$\mathcal{P}^1$ corresponds to the \emph{maybe} monad:
+\[
+  \mathcal{P}^1(X) := \{ x \subseteq X : |x| \le 1 \} \,,
+\]
+where a terminating computation producing
+the value $v \in X$ is represented as the singleton:
+\[
+  \eta^\mathcal{P}_X(v) := \{ v \} \,,
+\]
+and where the empty set $\varnothing \in \mathcal{P}^1(X)$
+specifies an undefined computation,
+which is free to silently diverge, crash, or
+produce any possible outcome.
+When two computations are sequentially composed,
+both must be successful for the result to be defined.
+For $x \in \mathcal{P}^1(\mathcal{P}^1(X))$,
+the multiplication $\mu^\mathcal{P}(x) \in \mathcal{P}^1(X)$
+is defined by:
+\[
+  \mu^\mathcal{P}_X(x) :=
+    \{ v \in X \mid
+       \exists \, y \in \mathcal{P}^1(X) \bdot x \ni y \ni v \} =
+    \bigcup x
+  \,.
+\]
+Equivalentaly,
+for $x \in \mathcal{P}^1(X)$ and $f : X \rightarrow \mathcal{P}^1(Y)$,
+the Kleisli extension
+$f^\dagger : \mathcal{P}^1(X) \rightarrow \mathcal{P}^1(Y)$
+is defined by:
+\[
+  f^\dagger(x)
+    = \{ v \in Y \mid \exists \, u \in \mathcal{P}^1(X) \bdot x \ni u \:\wedge\: f(u) \ni v \}
+    = \bigcup_{u \in x} f(u)
+  \,.
+\]
+The notion of refinement associated with this monad is set inclusion,
+which allows an unspecified computation to be refined by
+a computation with a definite outcome:
+\[
+  \varnothing \subseteq \{ v \} \,.
+\]
+
+To account for state,
+we combine $\mathcal{P}^1$ with the state monad transformer.
+For a set of states $S$,
+we obtain the monad:
+\[
+  \mathcal{L}_S(X) :=
+    \mathcal{P}^1(X \times S)^S \,,
+\]
+equipped with the structure:
+\begin{gather*}
+  \eta^\mathcal{L}(v) :=
+    \lambda \, k \bdot \{ v@k \} \\
+  \mu^\mathcal{L}(x) :=
+    \lambda \, k \bdot \{ v@k'' \mid
+      \exists \, y \, k' \bdot x(k) \ni y@k' \wedge y(k') \ni v@k'' \}
+  \,.
+\end{gather*}
+Then in a layer interface $L$
+using abstract states in the set $S$,
+the primitives $m \mathbin: N$
+will be given specifications
+of type $L.m \in \mathcal{L}_S(N)$.
+
+\begin{remark}
+Our version of the \emph{maybe} monad $\mathcal{P}^1$
+arises from an adjunction $\mathcal{P}^1 \dashv U$
+between the category $\mathbf{Pos}_\bot$
+of lower-bounded posets
+and the category $\mathbf{Set}$,
+enriching our model with a notion of failure $\bot$
+and an associated partial order.
+Likewise,
+the state monad arises from the adjunction
+$- \times S \dashv (-)^S$
+introduced in Example~\ref{ex:ccset}.
+The left adjoint allows computations to produce a state,
+and the right adjoint allows them to consume one.
+The monad $\mathcal{L}_S$ corresponds to the composition:
+\[
+  \begin{tikzcd}
+    \mathbf{Pos}_\bot
+      \ar[r, "U"', shift right] &
+    \mathbf{Set}
+      \ar[l, "\mathcal{P}^1"', shift right]
+      \ar[r, "(-)^S"', shift right] &
+    \mathbf{Set}
+      \ar[l, "- \times S"', shift right]
+   \end{tikzcd}
+  \,.
+\]
+% Not true
+Since $\mathbf{Pos}_\bot$ is monoidal closed,
+these two aspects of $\mathcal{L}_S$
+could be combined in the opposite way:
+\[
+  \begin{tikzcd}
+    \mathbf{Pos}_\bot
+      \ar[r, "{[S, {-}]}"', shift right] &
+    \mathbf{Pos}_\bot
+      \ar[l, "{-} \otimes S"', shift right]
+      \ar[r, "U"', shift right] &
+    \mathbf{Set}
+      \ar[l, "\mathcal{P}^1"', shift right]
+   \end{tikzcd}
+  \,.
+\]
+Under this approach,
+from a \emph{lower-bounded, partially ordered}
+set of states $S$, we would construct a monad $\mathcal{L}'$
+consisting of the \emph{monotonic, $\bot$-preserving} functions:
+\[
+  \mathcal{L}'(A) := S \xrightarrow{\mathbf{Pos}_\bot} \mathcal{P}^1(A) \otimes S
+\]
+Since the tensor product $\mathcal{P}^1(A) \otimes S$ identifies
+the posets' lower bounds,
+$\mathcal{L}'$ is largely equivalent to $\mathcal{L}$.
+However, $S$ can now be an arbitrary bounded poset,
+allowing states with partial information.
+\end{remark}
+
+%}}}
+
+\subsection{Layer interfaces} %{{{
+
+\begin{definition} % layer interface {{{
+A \emph{layer interface} is a tuple
+$L = \langle E, S, \sigma \rangle$,
+where $E$ is an effect signature,
+$S$ is a set of states,
+and $\sigma$ assigns to each operation
+$(m \mathbin: N) \in E$
+a specification
+$\sigma^m \in \mathcal{L}_S(N)$.
+I will sometimes use the notation $L.m$
+to refer to $\sigma^m$.
+\end{definition}
+%}}}
+
+As a running example,
+I will use the certified layer
+described in Figure~\ref{fig:cal},
+which implements a bounded queue with at most $N$ elements
+using a circular buffer.
+We outline the construction of
+the correponding layer interfaces below.
+
+\begin{figure} % fig:cal {{{
+  \small
+    \begin{align*}
+      %
+      % Overlay
+      %
+      & \fbox{$L_\kw{bq}$} &
+        S_\kw{bq} &:= V^* \\
+      \kw{enq} &: V \rightarrow \mathbbm{1} &
+        L_\kw{bq}.\kw{enq}[v] &:=
+          \lambda \, \vec{q} \bdot \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
+      \kw{deq} &: \mathbbm{1} \rightarrow V &
+        L_\kw{bq}.\kw{deq} &:=
+          \lambda \, \vec{q} \bdot \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
+      \\[1em]
+      %
+      % Implementation
+      %
+      & \fbox{$M_\kw{bq}$} &
+        R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
+      M_\kw{bq}.\kw{enq}[v] &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) \!\!\!\! &
+        \vec{q} \mathrel{R} (f, &c_1, c_2) \Leftrightarrow
+           (c_1 \le c_2 < N \wedge
+            \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {}
+      \\
+      M_\kw{bq}.\kw{deq} &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
+           &\phantom{c_1, c_2) \Leftrightarrow {}}
+           (c_2 \le c_1 < N \wedge
+            \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
+      \\[1em]
+      %
+      % Underlay
+      %
+      & \fbox{$L_\kw{rb}$} &
+        S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
+      \\
+      \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
+        L_\kw{rb}.\kw{set}[i, v] &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
+      \\
+      \kw{get} &: \mathbb{N} \rightarrow V &
+        L_\kw{rb}.\kw{get}[i] &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ f_i@(f, c_1, c_2) \mid i < N \}
+      \\
+      \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
+        L_\kw{rb}.\kw{inc}_1 &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ c_1@(f, c_1', c_2) \mid
+             c_1' = (c_1 + 1) \mathbin{\mathrm{mod}} N \}
+      \\
+      \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
+        L_\kw{rb}.\kw{inc}_2 &:=
+          \lambda (f, c_1, c_2) \bdot
+          \{ c_2@(f, c_1, c_2') \mid
+             c_2' = (c_2 + 1) \mathbin{\mathrm{mod}} N \}
+    \end{align*}
+  \caption[Certified abstraction layer implementing a bounded queue]%
+   {A certified abstraction layer
+    $L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
+    implementing a bounded queue of size $N$
+    using a ring buffer.
+    The left-hand side of the figure shows
+    the signatures of the overlay and underlay interfaces,
+    and the code associated with the layer.
+    The right-hand side shows primitive specifications
+    and the simulation relation used by the correctness proof.}
+  \label{fig:cal}
+\end{figure}
+%}}}
+
+\begin{example}[Bounded queue and ring buffer interfaces] %{{{
+The layer interface
+$L_\kw{rb} = \langle E_\kw{rb}, S_\kw{rb}, \sigma_\kw{rb} \rangle$
+describes a bounded queue.
+Its states are sequences of values,
+expected to contain at most $N$ elements.
+The two primitives
+$\kw{enq}$ and $\kw{deq}$
+respectively add a new element to the queue
+and remove the oldest element.
+If we attempt to add an element
+which would overflow the queue's capacity $N$,
+or remove an element from an empty queue,
+the result is $\varnothing$ (i.e., the operation aborts).
+
+I will demonstrate how the bounded queue interface
+can be implemented in terms of a circular buffer
+described by the layer interface
+$L_\kw{bq} = \langle E_\kw{bq}, S_\kw{bq}, \sigma_\kw{bq} \rangle$.
+The states of $L_\kw{rb}$
+contain an array $f \in V^N$
+storing $N$ values of type $V$,
+and two counters
+taking values in the interval $0 \le c_1, c_2 < N$.
+The array can be accessed through the primitives
+$\kw{get}$ and $\kw{set}$;
+the primitives $\kw{inc}_1$ and $\kw{inc}_2$
+increment the corresponding counter
+and return the counter's old value.
+\end{example}
+%}}}
+
+%}}}
+
+\subsection{Client code} \label{sec:cal:cli} %{{{
+
+We can use the free monad $T_E$ on the signature $E$
+as a general representation for client code for
+an underlay interface $L = \langle E, S, \sigma \rangle$.
+The monad homomorphism $(-)[\sigma] : T_E \rightarrow \mathcal{L}_S$
+can then be used to evaluate client programs.
+
+More explicitly,
+as discussed in \S\ref{sec:eff:mon},
+a client program $C \in T_E(X)$
+is a term on the signature~$E$ with variables in $X$,
+or equivalently a monadic expression built using
+the operations in $E$, with a result in $X$.
+A client program $C \in T_E(A)$
+can be interpreted as
+a computation $C[L] \in \mathcal{L}_S(A)$ in the following way:
+\[
+  \begin{array}{c@{\qquad}c}
+    \ul{m}(t_n)_{n \in N}[L] \: = \:
+      (n \mathbin\leftarrow m \mathbin; t_n)[L] \: = \:
+      n \mathbin\leftarrow \sigma^m \mathbin; t_n[L] &
+      (m \mathbin: N) \in E \\
+    \ul{v}[L] \: = \:
+      \eta^E_A(v)[L] \: = \:
+      \eta^\mathcal{L}_A(v) &
+      v \in A
+  \end{array}
+\]
+In other words, in $C[L] \in \mathcal{L}_S(A)$,
+occurences of the operations of $E$
+have been replaced by their specification given in $\sigma$
+to interpret the program in terms of state transitions.
+
+\begin{example}[Queue rotation]
+The following client program for the signature $E_\kw{bq}$
+rotates a queue and returns the rotated value:
+\[
+  C_\kw{rot} :=
+    v \mathbin\leftarrow \kw{deq} \mathbin; \kw{enq}[v] \mathbin; \eta(v)
+\]
+Using $L_\kw{bq}$ as an underlay interface,
+we can evaluate it to
+\[
+  C_\kw{rot}[L_\kw{bq}] :=
+    \lambda \, \vec{q} \bdot
+    \{ \vec{p}v@v \mid \vec{q} = v\vec{p} \wedge |\vec{p}| < N \}
+  \,.
+\]
+\end{example}
+
+%}}}
+
+\subsection{Layer implementations} \label{sec:cal:impl} %{{{
+
+A layer implementation provides underlay client code
+for each operation of the overlay interface.
+In other words,
+it is an interpretation of the overlay's signature
+into the underlay's signature.
+
+\begin{definition}
+A \emph{layer implementation}
+for an underlay signature $E$ and
+an overlay signature $F$
+is a family $(M^q)_{(q \mathbin: R) \in F}$
+with $M^q \in T_E(R)$.
+As before I will write $M : E \rightarrow F$, and
+sometimes use the notation $M.q$
+to refer to $M^q$.
+Then,
+for an underlay interface $L = \langle E, S, \sigma \rangle$,
+the \emph{evaluation} of $M$ over $L$ is
+the layer interface
+$
+  M \circ L := \langle F, S, \tau \rangle
+$
+with $\tau^q := M^q[L]$.
+\end{definition}
+
+Similarly to layer interfaces,
+a layer implementation $M : E \rightarrow F$ is
+associated with a monad homomorphism $(-)[M] : T_F \rightarrow T_E$.
+The monad homomorphism associated with the evaluated
+layer interface $M \circ L$
+is then the composite
+$(-)[L] \circ (-)[M] : T_F \rightarrow \mathcal{L}_S$.
+
+\begin{example} \label{ex:bqimpl} %{{{
+The layer implementation $M_\kw{bq}$ 
+stores the queue's elements into the array,
+between the indices given by the counters' values.
+This is expressed by the simulation relation $R$
+given in Figure~\ref{fig:cal},
+which explains how overlay states are realized by $M_\kw{bq}$ 
+in terms of underlay states.
+
+The code of $M_\kw{bq}$ can be interpreted in the monad
+$
+    S_\kw{rb} \rightarrow \mathcal{P}^1(- \times S_\kw{rb})
+$,
+with calls to primitives of $L_\kw{rb}$
+replaced by their specifications,
+to obtain the layer interface $M_\kw{rb}[L_\kw{bq}]$.
+Concretely,
+the behaviors of $M_\kw{bq}.\kw{enq}[v]$ and $M_\kw{bq}.\kw{deq}$
+running on the underlay interface $L_\kw{rb}$
+evaluate to:
+\begin{align*}
+  (M_\kw{bq} \circ L_\kw{rb}).{\kw{enq}[v]}
+    &= i \leftarrow L_\kw{rb}.\kw{inc}_2 \mathbin{;}
+        L_\kw{rb}.\kw{set}[i, v] \\
+    &= \lambda \, (f, c_1, c_2) \bdot
+       L_\kw{rb}.\kw{set}[c_2, v](f, c_1, (c_2+1) \mathbin{\mathrm{mod}} N) \\
+    &= \lambda \, (f, c_1, c_2) \bdot
+       \{ *@(f[c_2 := v], c_1, (c_2+1) \mathbin{\mathrm{mod}} N) \mid c_2 < N \}
+  \\[1em]
+  (M_\kw{bq} \circ L_\kw{rb}).\kw{deq}
+    &= i \leftarrow L_\kw{rb}.\kw{inc}_1 \mathbin{;}
+        L_\kw{rb}.\kw{get}[i] \\
+    &= \lambda \, (f, c_1, c_2) \bdot
+       L_\kw{rb}.\kw{get}[c_1](f,
+          (c_1 + 1) \mathbin{\mathrm{mod}} N,
+          c_2) \\
+    &= \lambda \, (f, c_1, c_2) \bdot
+       \{ f_{c_1}@(f, 
+          (c_1 + 1) \mathbin{\mathrm{mod}} N,
+          c_2) \mid
+          c_1 < N \}
+\end{align*}
+\end{example}
+%}}}
+
+%}}}
+
+\subsection{Correctness} %{{{
+
+Consider an underlay interface $L_1$,
+an overlay interface $L_2$,
+and a corresponding layer implementation $M$.
+The layer interface $M \circ L_1$
+shares a signature with $L_2$,
+but its behavior is described in terms of
+the states of $L_1$.
+To establish correctness,
+we need to provide a simulation relation
+$R \subseteq S_2 \times S_1$
+explaining the correspondence between
+the more abstract states of $L_2$ and
+the more concrete states of $L_1$.
+Using the relators $\rightarrow$, $\times$, $\mathcal{P}^\le$
+presented in \S\ref{sec:relators},
+the associated simulation property can be defined as follows.
+
+\begin{definition}[Simulation of layer interfaces] %{{{
+For a relation $R \subseteq S_2 \times S_1$
+and two computations
+$\tau_2 \in \mathcal{L}_{S_2}(A)$ and
+$\tau_1 \in \mathcal{L}_{S_1}(A)$,
+we say that $\tau_2$ is \emph{simulated by} $\tau_1$
+and write $\tau_2 \le_R \tau_1$
+when:
+\begin{equation} \label{eqn:sim}
+  \tau_2
+  \: \mathrel{[R \rightarrow \mathcal{P}^\le({=} \times R)]} \:
+  \tau_1
+\end{equation}
+Likewise,
+given two layer interfaces
+$L_1 = \langle E, S_1, \sigma_1 \rangle$ and
+$L_2 = \langle E, S_2, \sigma_2 \rangle$
+sharing a signature,
+we say that $L_2$ is \emph{simulated by} $L_1$
+and write $L_2 \le_R L_1$ when
+the following simulation property holds
+for each operation $(m \mathbin: N) \in E$:
+\begin{equation}
+  \label{eqn:layersim}
+  L_2.m \le_R L_1.m
+  \,.
+\end{equation}
+\end{definition}
+%}}}
+
+The properties (\ref{eqn:sim}) and (\ref{eqn:layersim})
+correspond to the following simulation diagram,
+which asserts that if the computation $L_2.m$
+started in a state $k_1$ succeeds,
+then the computation $L_1.m$
+started in a related state $k_2$ must produce
+the same result
+while maintaining the relation between states:
+\[
+  \begin{tikzcd}[sep=large]
+    k_1 \ar[r, "L_2.m"] \ar[d, "R"', dash] &
+    v@k_1' \ar[d, "{=} \times R", dash, dashed] \\
+    k_2 \ar[r, "L_1.m", dashed] &
+    v@k_2'
+  \end{tikzcd}
+\]
+Layer correctness is established by showing
+a simulation between the overlay interface
+and the layer implementation.
+
+\begin{definition}[Certified abstraction layer] %{{{
+For an underlay interface $L_1 = \langle E_1, S_1, \sigma_1 \rangle$,
+a layer implementation $M : E_1 \rightarrow E_2$ and
+an overlay interface $L_2 = \langle E_2, S_2, \sigma_2 \rangle$,
+we say that $M$
+\emph{correctly implements $L_2$ on top of $L_1$}
+when there is a simulation relation $R \subseteq S_2 \times S_1$
+such that:
+\[
+  L_2 \le_R M \circ L_1 \,.
+\]
+We say that $L_1$, $M$, $L_2$ together
+constitute a \emph{certified abstraction layer}
+and write $L_1 \vdash_R M : L_2$.
+\end{definition}
+%}}}
+
+\begin{example}[Correctness of the bounded queue implementation] %{{{
+I will prove the correctness of
+the layer implementation $M_\kw{bq}$
+with respect to the relation $R$
+shown in Figure~\ref{fig:cal}.
+
+First,
+we can write $[f]_{c_1}^{c_2}$
+for the set of possible sequences of values
+read between indices $c_1$ and $c_2$
+within the array $f$.
+More precisely:
+\[
+  [f]_{c_1}^{c_2} :=
+    \{ f_{c_1} \ldots f_{c_2 - 1} \mid c_1 \le c_2 < N \} \cup
+    \{ f_{c_1} \ldots f_{N-1} f_0 \ldots f_{c_2} \mid c_2 \le c_1 < N \}
+  \,.
+\]
+Then the simulation relation can be formulated as:
+\[
+  \vec{q} \mathrel{R} (f, c_1, c_2)
+  \: \Leftrightarrow \:
+  \vec{q} \in [f]_{c_1}^{c_2}
+  \,.
+\]
+To show the correctness property
+$
+  L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}
+$,
+we then need to prove that:
+\[
+  L_\kw{bq} \le_R M_\kw{bq} \circ L_\kw{rb}
+  \,.
+\]
+To this end,
+consider the related states
+$\vec{q} \mathrel{R} (f, c_1, c_2)$.
+We know in particular that $c_1, c_2 < N$.
+Hence, from the calculation
+carried out in Example~\ref{ex:bqimpl}:
+\begin{align*}
+  (M_\kw{bq} \circ L_\kw{rb}).{\kw{enq}[v]}(f, c_1, c_2)
+    &= \{ *@(f[c_2 := v], \:
+          c_1, \:
+          (c_2 + 1) \mathbin{\mathrm{mod}} N) \}
+  \\
+  (M_\kw{bq} \circ L_\kw{rb}).\kw{deq}(f, c_1, c_2)
+    &= \{ f_{c_1}@(f, \:
+          (c_1 + 1) \mathbin{\mathrm{mod}} N, \:
+          c_2) \}
+\end{align*}
+Since the operations are specified as:
+\begin{align*}
+  L_\kw{bq}.\kw{enq}[v](\vec{q}) &=
+    \{ * @ \vec{q} v \mid |\vec{q}| < N \}
+  \\
+  L_\kw{bq}.\kw{deq}(\vec{q}) &=
+    \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
+  \,,
+\end{align*}
+we need to show that whenever
+$|\vec{q}| < N$,
+the following relations hold:
+\[
+  {*} = {*}
+  \: \wedge \:
+  \vec{q}v \mathrel{R}
+    (f[c_2 := v], c_1, (c_2 + 1) \mathbin{\mathrm{mod}} N)
+  \,,
+\]
+and that whenever $\vec{q} = v\vec{p}$,
+the following relations hold:
+\[
+  v = f_{c_1}
+  \: \wedge \:
+  \vec{p} \mathrel{R}
+    (f, \:
+     (c_1 + 1) \mathbin{\mathrm{mod}} N, \:
+     c_2)
+  \,.
+\]
+This is straightforward to check,
+using the constraints on the length of the queue
+to verify that:
+\begin{align*}
+  \vec{q} \in [f]_{c_1}^{c_2}
+    \: &\Rightarrow \:
+    \vec{q}v \in [f[c_2 := v]]_{c_1}^{(c_2+1) \mathbin{\mathrm{mod}} N}
+  \\
+  v\vec{p} \in [f]_{c_1}^{c_2}
+    \: &\Rightarrow \:
+    \vec{p} \in [f]_{(c_1+1) \mathbin{\mathrm{mod}} N}^{c_2}
+  \,.
+\end{align*}
+\end{example}
+%}}}
+
+\begin{remark} %{{{
+Note that we place no restriction
+on the relations we use
+beyond the simulation property.
+In particular, in the example above
+$R$ is neither one-to-many nor many-to-one.
+
+On one hand,
+there are many low-level ring buffer states corresponding to
+a given high-level queue state:
+the implementation is free to choose the position $c_1$
+where the queue's first element is stored,
+and arbitrary values for the $N - |\vec{q}|$
+array locations which are not in use.
+
+On the other hand,
+a low-level state where $c_1 = c_2$
+can be interpreted in two different ways,
+as the empty queue $\epsilon$ or
+as the full queue $f_{c_1} \ldots f_{N-1} f_0 \ldots f_{c_2 - 1}$.
+This would make it impossible to implement
+an operation specified as
+$L_\kw{bq}.\kw{len}(\vec{q}) := \{ |\vec{q}|@\vec{q} \}$:
+when $c_1 = c_2$,
+the implementation
+would have to simulataneously
+return $0$ and $N$.
+However,
+this is not an issue for $\kw{enq}$ and $\kw{deq}$ because
+for both interpretations,
+one of the specifications is undefined:
+\[
+  L_\kw{bq}.\kw{enq}[v](f_{c_1} \ldots f_{N-1} f_0 \ldots f_{c_2 - 1})
+  =
+  \varnothing
+  \qquad
+  L_\kw{bq}.\kw{deq}(\epsilon)
+  =
+  \varnothing
+  \,.
+\]
+The implementation can satisfy both specifications
+under both interpretations,
+because in each case one of
+the specification does not actually place
+any constraints on the implementation.
+This allows
+$M_\kw{bq}.\kw{enq}$ to be correct
+by using the ``empty'' interpretation, and
+$M_\kw{bq}.\kw{deq}$ to be correct
+by using the ``full'' interpretation.
+\end{remark}
+%}}}
+
+Once we have shown an abstraction layer correct,
+we will be able to reason about any client code
+in terms of the layer's overlay interface
+rather than its low-level implementation.
+This is enabled by the following property.
+
+\begin{theorem}[Soundness] %{{{
+For a certified abstraction layer $L_1 \vdash_R M : L_2$
+and a client program $C$ of $L_2$,
+the following \emph{contextual refinement} property holds:
+\[
+  C[L_2] \: \le_R \: C[M \circ L_1]
+\]
+\begin{proof}
+We need to show that $C[-]$ preserves $\le_R$.
+In essence,
+as $C$ executes successive operations of
+the two layer interfaces,
+we can follow along with the corresponding
+simulation diagrams,
+and paste them horizontally to derive a simulation
+for the whole execution.
+More formally,
+we can proceed
+by structural induction on the term $C$:
+\begin{itemize}
+  \item
+    If the term $C$ is of the form $\ul{v} = \eta^E(v)$,
+    then it is interpreted as $\lambda k \bdot \{v@k\}$
+    in any layer,
+    and we get the simulation property:
+    \[
+      \begin{tikzcd}[sep=large]
+        k_1 \ar[r, "{C[L_2]}"] \ar[d, "R"', dash] &
+        v@k_1 \ar[d, "{=} \times R", dash, dashed] \\
+        k_2 \ar[r, "{C[M \circ L_1]}", dashed] &
+        v@k_2
+      \end{tikzcd}
+    \]
+  \item
+    Now suppose $C$ is of the form
+    $\ul{m}(C_n)_{n \in N} = n \mathbin\leftarrow m \mathbin; C_n$.
+    We know from the correctness property of $M$ and
+    from the induction hypothesis that:
+    \[
+      \begin{tikzcd}[sep=large]
+        k_1 \ar[r, "L_2.m"] \ar[d, "R"', dash] &
+        n@k_1' \ar[d, "{=} \times R", dash, dashed] \\
+        k_2 \ar[r, "(M \circ L_1).m", dashed] &
+        n@k_2'
+      \end{tikzcd}
+      \qquad \qquad
+      \begin{tikzcd}[sep=large]
+        k_1' \ar[r, "{C_n[L_2]}"] \ar[d, "R"', dash] &
+        v@k_1'' \ar[d, "{=} \times R", dash, dashed] \\
+        k_2' \ar[r, "{C_n[M \circ L_1]}", dashed] &
+        v@k_2''
+      \end{tikzcd}
+    \]
+    By pasting the two diagrams horizontally,
+    we can conclude that:
+    \[
+      \begin{tikzcd}[sep=large]
+        k_1 \ar[r, "{C[L_2]}"] \ar[d, "R"', dash] &
+        v@k_1'' \ar[d, "{=} \times R", dash, dashed] \\
+        k_2 \ar[r, "{C[M \circ L_1]}", dashed] &
+        v@k_2''
+      \end{tikzcd}
+    \]
+\end{itemize}
+\end{proof}
+\end{theorem}
+%}}}
+
+%}}}
+
+\subsection{Composing certified abstraction layers} %{{{
+
+Layer implementations can be composed
+as explained in \S\ref{sec:eff:monhom}.
+Given the layer implementations
+$M : E_1 \rightarrow E_2$ and $N : E_2 \rightarrow E_3$,
+the layer implementation $N \circ M$
+replaces the operations of $E_2$ in $N$
+by their interpretation given by $M$:
+\[
+  (N \circ M)^m := N^m[M]
+  \,.
+\]
+The soundness theorem for the certified abstraction layer
+$L_1 \vdash_R M : L_2$
+can be easily extended from individual client programs
+to complete layer implementations,
+so that:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_R M : L_2}
+    \infer1{N \circ L_2 \: \le_R N \: \circ M \circ L_1}
+  \end{prooftree}
+\]
+More generally,
+if $N$ defines a certified abstraction layer
+with underlay $L_2$,
+then its correctness property can be combined with that of $M$
+to build a composite certified abstraction layer.
+
+\begin{theorem}[Vertical composition] \label{thm:vcomp} %{{{
+Certified abstraction layers compose in the following way:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_R M : L_2}
+    \hypo{L_2 \vdash_S N : L_3}
+    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
+  \end{prooftree}
+\]
+\begin{proof}
+Simulation properties can be composed
+by vertically pasting the simulations diagrams:
+\[
+  \begin{prooftree}
+    \hypo{\tau_3 \le_S \tau_2}
+    \hypo{\tau_2 \le_R \tau_1}
+    \infer2{\tau_3 \le_{R \circ S} \tau_2}
+  \end{prooftree}
+\]
+This can be easily extended to layer interfaces.
+Then,
+the theorem can be proved by
+combining this property with the soundness theorem for $M$
+as follows:
+\[
+  \begin{prooftree}
+    \hypo{L_3 \le_S N \circ L_2}
+    \hypo{N \circ L_2 \le_R N \circ M \circ L_1}
+    \infer2{L_3 \le_{R \circ S} N \circ M \circ L_1}
+  \end{prooftree}
+\]
+\end{proof}
+\end{theorem}
+%}}}
+
+Theorem~\ref{thm:vcomp} allows us to decompose a large system
+into multiple abstraction layers,
+verify their correctness individually,
+then derive a correctness property for the whole system.
+Note that for every layer interface
+$L = \langle E, S, \sigma \rangle$,
+the identity interpretation $e : E \rightarrow E$
+is a correct implementation $L \vdash_{=} e : L$
+of the layer interface $L$ itself.
+In other words,
+layer interfaces and certified layer implementation
+define a category $\mathbf{CAL}$
+
+%}}}
+
+%}}}
+
+\section{Horizontal composition} %{{{
+
+While vertical composition is quite useful,
+individual abstraction layers can themselves be fairly complex
+and involve a significant number of operations.
+We would like to verify them one by one,
+and build layers out of elementary components
+in a systematic way.
+
+Moreover,
+abstraction layers do not always depend on each other
+in a purely linear fashion;
+often two independent subsystems will rely on the same underlay.
+We would like to be able to verify them in isolation
+but retain the ability to build higher-level code
+based on their combined functionality.
+
+In this section I present \emph{horizontal} composition principles
+which we can use to achieve this.
+It will then be possible to combine layers
+side-by-side in addition to stacking them
+on top of one another.
+
+\subsection{Signatures} \label{sec:hcomp:sig} %{{{
+
+To describe horizontal compositions of layers
+we must first combine signatures.
+When layers are placed side-by-side,
+a client program will have access to
+the operations of both.
+The result is essentially
+the disjoint union of the two layers' signatures,
+and can be constructed as follows.
+
+\begin{definition} \label{def:sigsum}
+The \emph{sum} of a family of effect signatures $(E_i)_{i \in I}$
+is defined as:
+\[
+  \bigoplus_{i \in I} E_i :=
+    \{ \iota_i(m) \mathbin: N \mid i \in I, (m \mathbin: N) \in E_i \}
+\]
+The finitary case $\bigoplus_{1 \le i \le n} E_i$
+can be writted as $E_1 \oplus \cdots \oplus E_n$.
+\end{definition}
+
+On one hand,
+this allows us to compute
+the operations offered by a collection of layers.
+For instance,
+if we combine an implementation of $L_\kw{bq}$
+with an implementation of the I/O operations
+used an example in \S\ref{sec:eff},
+the signature of the result will be $E_\kw{bq} \oplus E_\kw{io}$.
+Conversely,
+this also allows us to decompose the signature
+of a single layer into signatures associated with
+individual operations,
+for instance:
+\[
+  E_\kw{bq} \cong
+    \{ \kw{deq} : V \} \oplus \{ \kw{enq} : V \rightarrow \mathbbm{1} \}
+  \,.
+\]
+
+\begin{remark}
+In the categories of monads and monad homomorphisms,
+the signature $E_1 \oplus E_2$ defines the coproduct
+of the free monads $T_{E_1}$ and $T_{E_2}$.
+This means that intepreting $T_{E \oplus F}$ into a monad $T$
+is the same thing as giving independent intepretations
+of $T_E$ and $T_F$:
+\[
+  \begin{tikzcd}[row sep=large]
+    T_{E_1} \ar[r, "\iota_1"] \ar[dr, "\phi_1"'] &
+    T_{E_1 \oplus E_2}
+      \ar[d, "{[\phi_1, \phi_2]}", dashed, near start] &
+    T_{E_2} \ar[l, "\iota_2"'] \ar[dl, "\phi_2"]
+    \\
+    & T &
+  \end{tikzcd}
+\]
+In terms of interpretations,
+the combined monad homomorphism $[\phi_1, \phi_2]$
+can be described as:
+\begin{align*}
+  [\phi_1, \phi_2]^{\iota_1(m)} &= \phi_1^m \in T(N)
+    & (m \mathbin: N) &\in E_1 \\
+  [\phi_1, \phi_2]^{\iota_2(m)} &= \phi_2^m \in T(N)
+    & (m \mathbin: N) &\in E_2
+\end{align*}
+This immediately suggests composition principles
+for layer interfaces and layer implementations:
+\begin{itemize}
+  \item
+    When $T$ is of the form $\mathcal{L}_S$,
+    this characterizes horizontal composition for layer interfaces
+    expressed in terms of a common set of abstract states $S$.
+  \item
+    When $T$ is itself a free monad of the form $T_E$,
+    this gives a horizontal composition principle
+    for layer implementations.
+\end{itemize}
+\end{remark}
+
+%}}}
+
+\subsection{Layer implementations} %{{{
+
+It is straightforward
+to combine layer implementations
+of the individual signatures $E_1$ and $E_2$
+into an implementation of $E_1 \oplus E_2$.
+
+\begin{definition}
+The layer implementations
+$M_1 : E \rightarrow E_1$ and
+$M_2 : E \rightarrow E_2$
+can be combined into
+$\langle M_1, M_2 \rangle : E \rightarrow E_1 \oplus E_2$
+as follows:
+\begin{align*}
+  \langle M_1, M_2 \rangle^{\iota_1(m)} &:= M_1^m \in T_E(N) &
+    (m \mathbin: N) &\in E_1 \\
+  \langle M_1, M_2 \rangle^{\iota_2(m)} &:= M_2^m \in T_E(N) &
+    (m \mathbin: N) &\in E_2
+\end{align*}
+In addition,
+we can define the layer implementations:
+\begin{align*}
+  \pi_1 &: E_1 \oplus E_2 \rightarrow E_1 &
+  \pi_1^m &:= e^{\iota_1(m)} \in T_{E_1 \oplus E_2}(N) &
+  (m \mathbin: M) &\in E_1
+  \\
+  \pi_2 &: E_1 \oplus E_2 \rightarrow E_2 &
+  \pi_2^m &:= e^{\iota_2(m)} \in T_{E_1 \oplus E_2}(N) &
+  (m \mathbin: M) &\in E_2
+\end{align*}
+which discard the operations of one of the summands.
+\end{definition}
+
+Given a client program
+formulated in terms of the operations of $E_1$,
+the projections allow $C \in T_{E_1}(A)$
+to be lifted to $C[\pi_1] \in T_{E_1 \oplus E_2}(A)$,
+so that it can be connected
+to underlay interfaces and implementations
+which provide the larger signature.
+A layer implementation
+$M : E_1 \rightarrow F$
+can likewise be lifted to
+$M \circ \pi_1 : E_1 \oplus E_2 \rightarrow F$.
+
+Conversely,
+tupling allows us to construct a layer implementations
+for the signature $F_1 \oplus F_2$
+out of components implementing $F_1$ and $F_2$.
+Combined with projections,
+this means in particular that
+two layer implementations $M_1 : E_1 \rightarrow F_1$
+and $M_2 : E_2 \rightarrow F_2$
+can be composed side-by-side as
+$M_1 \oplus M_2 : E_1 \oplus E_2 \rightarrow F_1 \oplus F_2$,
+where
+$M_1 \oplus M_2 := \langle M_1 \circ \pi_1, M_2 \circ \pi_2 \rangle$.
+
+Moreover,
+we can break down any signature $F = \sum_i F_i$ into elementary
+components of the form $F_i = \{ m_i : A_i \rightarrow B_i \}$
+containing a single $A_i$-indexed family of operations of arity $B_i$.
+Likewise,
+we can break down any layer implementation into
+elementary components of type $E \rightarrow F_i$.
+If the operation $m_i[a]$
+is interpreted by $C_a \in T_E(B_i)$ for all $a \in A$,
+we can write
+\[
+  (m_i[a] \mapsto C_a) : E \rightarrow F_i
+\]
+for the corresponding elementary layer implementation.
+Tupling can be used to reconstruct complete layer implementations
+from these elementary components.
+
+%\begin{example}
+%Recalling the decomposition
+%$E_\kw{bq} \cong
+% \{ \kw{enq} : V \rightarrow \mathbbm{1} \} \oplus \{ \kw{deq} : V \}$,
+%we can write
+%$M_\kw{bq} : E_\kw{rb} \rightarrow E_\kw{bq}$
+%as:
+%\[
+%  M_\kw{bq} \cong
+%  \big\langle
+%    \kw{enq}[v] \mapsto
+%      (i \mathbin\leftarrow \kw{inc}_2 \mathbin; \kw{set}[i, v]),
+%    \:\:
+%    \kw{deq} \mapsto
+%      (i \mathbin\leftarrow \kw{inc}_1 \mathbin; \kw{get}[i])
+%  \big\rangle
+%\]
+%\end{example}
+
+\begin{example}[Decomposition of $M_\kw{bq}$]
+The signature $E_\kw{bq}$ and layer implementation $M_\kw{bq}$
+can be decomposed into the elementary components:
+\begin{align*}
+  E_\kw{enq} &:= \{ \kw{enq} : V \rightarrow \mathbbm{1} \} &
+  M_\kw{enq} : E_\kw{rb} \rightarrow E_\kw{enq} \: &:= \:
+    \kw{enq}[v] \: \mapsto \:
+     (i \mathbin{\leftarrow} \kw{inc}_2 \mathbin{;}
+      \kw{set}[i, v]) \\
+  E_\kw{deq} &:= \{ \kw{deq} : \mathbbm{1} \rightarrow V \} &
+  M_\kw{deq} : E_\kw{rb} \rightarrow E_\kw{deq} \: &:= \:
+    \kw{deq}[*] \:\mapsto\:
+     (i \mathbin{\leftarrow} \kw{inc}_1 \mathbin{;}
+      \kw{get}[i])
+\end{align*}
+Then:
+\begin{align*}
+  E_\kw{bq} &\cong E_\kw{enq} \oplus E_\kw{deq} &
+  M_\kw{bq} &\cong \langle M_\kw{enq}, M_\kw{deq} \rangle \,.
+\end{align*}
+\end{example}
+
+Since layer implementations are defined operation-wise,
+there is not much substance to this reshuffling.
+However,
+it will allows us to verify certified abstraction layers
+by verifying their elementary components one by one.
+
+%}}}
+
+\subsection{Layer interfaces sharing state} \label{sec:layerprod} %{{{
+
+Layer interfaces can likewise be built from elementary components.
+For a signature $\{ m : A \rightarrow B \}$,
+a set of states $S$,
+and a specification $\sigma_a \in \mathcal{L}_S(B)$ for all $a \in A$,
+we can write:
+\begin{align*}
+  (m[a] \mapsto \sigma_a) &:=
+  \langle
+    \{ m : A \rightarrow B \}, \:
+    S, \:
+    \hat{\sigma}
+  \rangle
+  &
+  \hat{\sigma}^{m[a]} &:= \sigma_a
+\end{align*}
+Going one step further,
+we can build elementary certified abstraction layers
+by using the property:
+\[
+  \begin{prooftree}
+    \hypo{\forall a \in A \bdot \tau_a \le_R C_a[L]}
+    \infer1{L \vdash_R (m[a] \mapsto C_a) : (m[a] \mapsto \tau_a)}
+  \end{prooftree}
+\]
+These elementary layers
+can then be composed in the following way.
+
+\begin{definition}
+When two layer interfaces
+$L_1 = \langle E_1, S, \sigma_1 \rangle$ and
+$L_2 = \langle E_2, S, \sigma_2 \rangle$
+share a common set of abstract states,
+their product can be defined as:
+\[
+  L_1 \times L_2 :=
+    \langle
+      E_1 \oplus E_2, \:
+      S, \:
+      \langle \sigma_1, \sigma_2 \rangle
+    \rangle \,,
+  \qquad
+  \text{where}
+  \quad
+  \langle \sigma_1, \sigma_2 \rangle^{\iota_i(m)} := \sigma_i^m \,.
+\]
+\end{definition}
+
+\begin{theorem}
+When the product of layer interfaces is defined,
+the tupling of layer implementations
+preserves correctness in the following sense:
+\[
+  \begin{prooftree}
+    \hypo{L \vdash_R M_1 : L_1}
+    \hypo{L \vdash_R M_2 : L_2}
+    \infer2{L \vdash_R \langle M_1, M_2 \rangle : L_1 \times L_2}
+  \end{prooftree}
+\]
+Moreover, the projections satisfy the following correctness properties:
+\[
+   L_1 \times L_2 \vdash_{=} \pi_1 : L_1 \qquad \qquad
+   L_1 \times L_2 \vdash_{=} \pi_2 : L_2
+\]
+\begin{proof}
+From the reflexivity of $\le_=$ and
+the operation-wise definition of correctness.
+\end{proof}
+\end{theorem}
+
+\begin{example}[Decomposition of $L_\kw{bq}$]
+The specification and verification of
+our bounded queue implementation can be decomposed
+in the following way:
+\[
+  \begin{prooftree}
+    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{enq} : L_\kw{enq}}
+    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{deq} : L_\kw{deq}}
+    \infer2{L_\kw{rb} \vdash M_\kw{bq} : L_\kw{bq}}
+  \end{prooftree}
+\]
+where:
+\begin{align*}
+  L_\kw{enq} &:=
+    \langle E_\kw{enq}, S_\kw{bq},
+      (\kw{enq}[v] \mapsto L_\kw{bq}.\kw{enq}[v]) \rangle \\
+  L_\kw{deq} &:=
+    \langle E_\kw{deq}, S_\kw{bq},
+      (\kw{deq}[v] \mapsto L_\kw{bq}.\kw{deq}[v]) \rangle
+\end{align*}
+\end{example}
+
+To summarize,
+the constructions I have presented so far
+provide a language to build
+complex certified abstraction layers
+by verifying elementary components.
+With vertical composition,
+this is the essence of the \emph{layer calculus}
+we used in our initial verification of CertiKOS
+\citep{popl15}.
+
+However,
+under this approach the components of a given layers
+must still be designed around a common notion of abstract state,
+and it is not possible to horizontally compose
+layers which have been designed and verified independently.
+A related phenomenon is
+that the diagonal morphism:
+\[
+  L \vdash_{=} \Delta : L \times L
+\]
+does not duplicate any of the resources implemented by $L$.
+That is, in the layer:
+\[
+  \begin{prooftree}
+    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{bq} : L_\kw{bq}}
+    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{bq} : L_\kw{bq}}
+    \infer2{L_\kw{rb} \vdash_{R_\kw{bq}}
+      \langle M_\kw{bq}, M_\kw{bq} \rangle :
+      L_\kw{bq} \times L_\kw{bq}}
+  \end{prooftree}
+\]
+we have simply duplicated the code for each of the queue operations.
+But each copy uses the same underlying ring buffer,
+and the layer still implements a single queue.
+
+%}}}
+
+\subsection{Tensor product} \label{sec:layermon} %{{{
+
+In this section,
+I present a more general form of horizontal composition
+which lets two layers operate independently of one another.
+In particular, the layers do not share state.
+
+\begin{definition}
+The \emph{tensor product} of
+$L_1 = \langle E_1, S_1, \sigma_1 \rangle$ and
+$L_2 = \langle E_2, S_2, \sigma_2 \rangle$
+is defined as:
+\[
+  L_1 \otimes L_2 := \langle
+    E_1 \oplus E_2, \:
+    S_1 \times S_2, \:
+    \langle \hat{\sigma}_1, \hat{\sigma}_2 \rangle
+  \rangle \,,
+\]
+where $\hat{\sigma}_1$ and $\hat{\sigma}_2$
+act on their respective halves of the state:
+\begin{gather*}
+  \hat{\sigma}_1^{m@(k_1, k_2)} :=
+    \{ v@(k_1', k_2) \mid \sigma_1^{m@k_1} \ni v@k_1' \} \\
+  \hat{\sigma}_2^{m@(k_1, k_2)} :=
+    \{ v@(k_1, k_2') \mid \sigma_2^{m@k_2} \ni v@k_2' \}
+\end{gather*}
+\end{definition}
+
+The corresponding monoidal structure is not cartesian.
+In particular, two certified abstraction layers
+$L \vdash_{R_1} M_1 : L_1$ and
+$L \vdash_{R_2} M_2 : L_2$
+cannot be composed as
+\[
+  L \vdash_{\langle R_1, R_2 \rangle} \langle M_1, M_2 \rangle : L_1 \otimes L_2
+  \,,
+\]
+because the operations of one layer could update the underlay state
+in a way that breaks the simulation relation for the other layer.
+However, layers can be composed side-by-side
+when they act on two independent underlay interfaces.
+
+\begin{theorem}[Tensor product of certified abstraction layers]
+Two certified abstraction layers can be composed as follows:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_{R_1} M_1 : L_1'}
+    \hypo{L_2 \vdash_{R_2} M_2 : L_2'}
+    \infer2{L_1 \otimes L_2 \vdash_{R_1 \times R_2}
+      M_1 \times M_2 : L_1' \otimes L_2'}
+  \end{prooftree}
+\]
+\begin{proof}
+Each abstraction layer
+will act on its half of the state
+with no interference from the other.
+Hence the correctness properties
+of the premises
+can be used almost directly
+to establish those of the composite layer.
+\end{proof}
+\end{theorem}
+
+To enable two independent
+certified abstraction layers
+to rely on a common underlay $L$,
+we must first show that the resources of $L$
+can be multiplexed
+by introducing a third component
+$L \vdash_R M : L \otimes L$.
+
+\begin{example}[Multiplexing a memory allocator]
+Suppose the layer interface $L_\kw{mm}$
+offers an operation $\kw{alloc} : \mathbbm{1} \rightarrow \kw{pageno}$
+which allocates a page of memory from a pool
+and returns its identifier.
+In a practical system,
+memory allocators can be used concurrently
+by any number of subsystems,
+which will only access pages
+that have been allocated to them.
+To reflect this,
+we need to introduce a component
+\[
+  L_\kw{mm} \vdash_R \Delta : L_\kw{mm} \otimes L_\kw{mm}
+  \,,
+\]
+where the simulation relation $R$
+explicates how the \emph{client views}
+of the allocator's state
+add up consistently to make up the global state,
+such that the clients won't interfere with each other
+when they execute operations based on their view.
+The layer implementation
+$\Delta = \langle \pi_1, \pi_2 \rangle$
+simply passes through the calls of each client
+unchanged to the underlay.
+
+This presents several challenges.
+For instance,
+unless the allocator's interface
+describes an idealized allocator which always succeeds
+(a convenient but unimplementable abstraction),
+the state will need to keep track of a finite number of
+available pages.
+Since $R$ cannot duplicate these pages,
+we may need to add a parameter $n$ to the layer interface $L_\kw{mm}^n$
+indicating the total number of available pages.
+Then the multiplexing component could be weakened to
+take the form:
+\[
+  L_\kw{mm}^{n_1 + n_2} \vdash_R \Delta : L_\kw{mm}^{n_1} \otimes L_\kw{mm}^{n_2}
+  \,.
+\]
+
+Another issue is that the model presented in this chapter
+can only express \emph{deterministic} interfaces.
+In the case of a memory allocator,
+this means the allocator's abstract state
+should contain enough details to predict
+the specific identity of
+every page handed out by the allocator.
+This is possible in the global view,
+but when multiple clients are accessing the allocator,
+the sequences of page identifiers handed out to each client
+will depend on how their requests interleave with that of other clients.
+This limitation, among others,
+is addressed by the models
+presented in Chapters~\ref{sec:intspec} and~\ref{sec:gamesem}
+\end{example}
+
+%}}}
+
+%}}}
+
+\section{CompCertX} \label{sec:cal:compcertx} %{{{
+
+Our original definition of certified abstraction layers
+was tightly coupled with the semantic model of CompCert
+\citep{popl15}.
+In that context,
+layer specifications are defined to operate
+on a CompCert memory state component as well as
+the layer-specific abstract state.
+%Abstract layer interfaces 
+%leave this component unchanged,
+%acting only on the abstract state.
+%However,
+%the intermediate layer interfaces
+%used to define the semantics of layer implementations---%
+%and corresponding low-level specifications---%
+%can modify both components of the state.
+
+The overall structure of
+the layer calculus used in CertiKOS is very similar
+to the one I have described so far.
+In this section,
+I briefly touch on some of the differences between the two systems,
+and the ways in which the system is integrated with CompCert.
+
+The version of CompCert we used for this purpose
+is called CompCertX.
+It was designed to support certified abstraction layers,
+and allow CompCert programs
+to play the role of layer implementations.
+CompCertX itself was largely designed and implemented
+by Tahina Ramananandro
+during his time in the Yale FLINT group.
+
+\subsection{Layer interfaces} %{{{
+
+Roughly speaking,
+\emph{external calls} in CompCert
+can be understood as effects in a signature
+\[
+  \tilde{\mathcal{C}}_D =
+  \{ f : \kw{val}^* \rightarrow \kw{val} \mid
+    f \in D \subseteq \kw{ident} \}
+  \,.
+\]
+In an external call $f[\vec{v}]$,
+the identifier $f$ designates the function to be called
+and $\vec{v} \in \kw{val}^*$ gives its actual parameters;
+the corresponding outcome $v' \in \kw{val}$
+is the value returned by the function.
+
+In CertiKOS,
+we use these signatures
+to construct layer interfaces of the form
+\[
+  L =
+  \langle \tilde{\mathcal{C}}_D, \: S \times \kw{mem}, \: \sigma \rangle
+  \,.
+\]
+The set $D$ is the layer's \emph{domain},
+in other words the set of primitives which it implements.
+The set $S$ is a layer-specific set of abstract states,
+and is combined with the set $\kw{mem}$ of memory states
+used to define the language semantics of CompCert.
+
+%}}}
+
+\subsection{Client code} %{{{
+
+Traditional CompCert semantics use a parameter
+$\chi$
+common to all languages,
+which describes the behavior of external functions.
+Schematically,
+$\kw{Clight}_\chi[p]$
+describes the semantics of the \kw{Clight} program $p$,
+where
+$\chi^{f[\vec{v}]} \in
+ \mathcal{L}_\kw{mem}(\kw{val})$
+describes the behavior of
+the external call $f[\vec{v}]$.
+This can be understood as a rudimentary underlay interface
+$\langle \tilde{C}_\kw{ident}, \kw{mem}, \chi \rangle$
+on top of which \kw{Clight} programs
+are evaluated.
+
+To enable the use of richer underlay interfaces,
+we extend this facility as follows.
+Given a CertiKOS layer interface
+$L = \langle \mathcal{C}_D, \: S \times \kw{mem}, \: \sigma \rangle$,
+the semantics $\kw{Clight}_L[p]$
+will maintain an abstract state $k \in S$
+alongside the memory state,
+and use the family of specifications
+$\sigma^{f[\vec{v}]} \in \mathcal{L}_{S \times \kw{mem}}(\kw{val})$
+to interpret external calls.
+This allows us to evaluate client code
+with $L$ as underlay.
+
+%}}}
+
+\subsection{Layer implementations} %{{{
+
+To make it possible to evaluate CompCert modules
+as complete layer \emph{implementations},
+CompCertX also extends the \emph{incoming} interface
+of language semantics.
+Traditional CompCert semantics only model the top-level
+invocation of $\kw{main}[\epsilon]$.
+In CompCertX,
+we make it possible to evaluate
+any incoming call $f[\vec{v}]$
+and describe its action in terms of
+the combined abstract and memory states:
+\[
+  \kw{Clight_L}[M]^{f[\vec{v}]} \in
+    \mathcal{L}_{S \times \kw{mem}}(\kw{val})
+  \,.
+\]
+Then evaluating $M$ on the underlay
+$L =
+ \langle \tilde{\mathcal{C}}_D, \: S \times \kw{mem}, \: \sigma \rangle$
+yields the layer interface:
+\[
+  M[L] :=
+    \langle
+      \tilde{\mathcal{C}}_{\kw{dom}(M)}, \,
+      S \times \kw{mem}, \,
+      \kw{Clight}_L[M]
+    \rangle
+  \,.
+\]
+
+%}}}
+
+\subsection{Simulation relations} %{{{
+
+Using CompCertX to compile layer implementations
+to assembly
+introduces \emph{memory injections},
+written $\iota \Vdash m_1 \hookrightarrow m_2$,
+which reflect the change in structure
+between a source memory state $m_1$
+and a corresponding target memory state $m_2$.
+Moreover,
+the certified abstraction layers used in CertiKOS
+follow a common pattern,
+where abstract data is progressively
+realized in lower layers
+as global variables stored in the CompCert memory state.
+
+To make our certified abstraction layers compatible
+with injections and to capture this pattern,
+the simulation relations are specified by two components:
+\begin{align*}
+  R^\kw{r} &\subseteq S_2 \times S_1 \\
+  R^\kw{m}_\iota &\subseteq S_2 \times \kw{mem}
+  \,.
+\end{align*}
+The overlay abstract states of $S_2$
+will retain some of the underlay's abstract data in $S_1$.
+This is formalized by
+the component $R_\kw{m}$.
+On the other hand,
+$S_2$ may also contain newly abstracted data,
+stored in the underlay as part of the memory states.
+This is formalized by the component $R_\kw{r}$.
+From this description,
+we can derive the layer's simulation relation
+as:
+\[
+  (k_2, m_2) \mathrel{R} (k_1, m_1)
+  \: \Leftrightarrow \:
+  \exists \, \iota \:\bdot\:
+    k_2 \mathrel{R^\kw{r}_\iota} k_1 \:\wedge\:
+    k_2 \mathrel{R^\kw{m}_\iota} m_1 \:\wedge\:
+    m_2 \stackrel{\iota}{\hookrightarrow} m_1
+\]
+\[
+  \begin{tikzcd}[row sep=large]
+    k_2 \ar[d, "R^\kw{r}_\iota"']
+        \ar[dr, "R^\kw{m}_\iota"'] &
+    m_2 \ar[d, hook, "\iota"] \\
+    k_1 & m_1
+  \end{tikzcd}
+\]
+
+Describing simulation relations in this way
+allows us to take advantage of the pattern
+when we develop proof principles for
+individual layers,
+especially when it comes to
+making sure our simulation
+relations are compatible with
+compilation by CompCertX.
+Unfortunately,
+simulation relations described in this way
+do not directly compose.
+To see why,
+consider the following diagram:
+\[
+  \begin{tikzcd}
+    k_3 \ar[d] \ar[dr] & m_3 \ar[d, hook] \\
+    k_2 \ar[d] \ar[dr] & m_2 \ar[d, hook] \\
+    k_1 & m_1
+  \end{tikzcd}
+\]
+Injections compose as expected,
+in the sense that
+$(\iota \circ \iota' \Vdash {\hookrightarrow}) =
+ (\iota \Vdash {\hookrightarrow}) \circ
+ (\iota' \Vdash {\hookrightarrow})$.
+We also place restrictions on the component
+relations
+which guarantee that they composes with memory injections
+in the appropriate way.
+However,
+to formulate the composite $R^\kw{m}$,
+we must existentially quantify
+over the intermediate memory state.
+Because there is no way to guarantee consistency between
+the $m_2$ involved in
+$(\iota \Vdash {\hookrightarrow}) \circ
+ (\iota \Vdash {\hookrightarrow})$
+and in the composite $R^\kw{m}$,
+the composition does not behave as expected.
+
+To work around this issue,
+we can use formal sequences of
+$(R^\kw{r}, R^\kw{m})$ pairs to describe the
+simulation relation used by vertically composable
+CertiKOS layers.
+We can then compose 
+the overall simulation relations derived from
+individual components
+when we formulate the soundness proof.
+Another approach is to generalize our pattern
+so that it still provides the same advantages
+but behaves in a better way
+with respect to composition.
+This was the original motivation
+for my work on
+CompCert Kripke logical relations
+(\S\ref{sec:cklr}).
+
+
+%}}}
+
+\section{Conclusion} %{{{
+
+The new presentation of certified abstraction layers
+laid out in this chapter
+eliminates some of the complexity found in the original code
+by decoupling the model from CompCert semantics.
+In doing so,
+the new exposition makes precise the underlying mathematical structures
+and some of the challenges involved in
+our approach to layered verification.
+
+In particular,
+the categorical structures behind the layer calculus
+are made explicit.
+The distinctions between our restricted form of product
+and the more general monoidal structure
+hints at the connections between our framework
+and linear logic,
+where cartesian and tensor products cohabitate
+and work together.
+
+%}}}
+
+%}}}
+
+%}}}
+
 \chapter{Games and dual nondeterminism} \label{sec:games-dnd} %{{{
 
 This chapter presents my general approach
@@ -6392,1763 +8159,6 @@ $\varnothing \in \mathcal{D}(P)$
 is the maximally permissive strategy specification
 containing all possible strategies
 $\bot = \mathcal{D}(P) \in \mathcal{UD}(P)$.
-
-%}}}
-
-%}}}
-
-%}}}
-
-\chapter{Certified abstraction layers} \label{sec:cal} %{{{
-
-\section{Introduction} %{{{
-
-This chapter describes
-the theory of certified abstraction layers
-used in the verification of
-the certified operating system kernel CertiKOS.
-
-\subsection{Abstraction layers} %{{{
-
-Software is constructed in layers.
-The basic facilities provided by the programming environment
-are used to implement more abstract data structures and operations.
-The programmer can then forget the implementation details
-of these data structures and operations,
-and instead think of them as \emph{primitive} constructions
-when building the next layer of code.
-
-This core principle is especially relevant
-in the context of system code,
-where abstraction layers
-may transform the programming model significantly.
-For example,
-at the level of the bare metal,
-the memory address space must be manipulated explicitly.
-The operating system's memory management layers
-abstract away the hardware's low-level details and
-provide a much more convenient view of the memory
-for higher-level code.
-
-This illustrates a conceptual similarity between
-abstraction layers and compilers.
-As is the case for abstraction layers,
-the purpose of a compiler is to use a lower-level programming model
-(like assembly code)
-to provide a more abstract, higher-level one
-(for example the C programming language).
-For abstraction layers,
-the transformation of client code
-is less expansive,
-consisting only in adding a layer's code.
-Nevertheless compilers and abstraction layers
-can be understood as specific instances
-of a more general phenomenon.
-
-%}}}
-
-\subsection{Certified abstraction layers in CertiKOS} %{{{
-
-The analogy between compilers and abstraction layers
-can be extended to cover correctness and verification techniques.
-This is illustrated by the \emph{certified abstraction layers}
-of CertiKOS and their connection to CompCert.
-The verification of CertiKOS builds on CompCert
-in two different ways:
-\begin{itemize}
-\item
-  In terms of functionality,
-  CompCert provides semantics for C and assembly
-  mechanized in the Coq proof assistant,
-  and CompCert's correctness theorem
-  can be used to transport proofs about the C code of the kernel
-  to the level of the compiled assembly code.
-\item
-  Additionally,
-  many of the patterns and techniques used
-  to establish the correctness theorem of CompCert
-  serve as a starting point for
-  the verification of CertiKOS
-  (Table~\ref{tbl:compccal}).
-\end{itemize}
-
-\begin{table}
-  \centering
-  \begin{tabular}{c@{\qquad}c}
-    \hline
-    CompCert & CertiKOS \\
-    \hline
-    Language semantics & Layer interface \\
-    Source language & Overlay interface \\
-    Compilation pass & Abstraction layer \\
-    Target language & Underlay interface \\
-    Pass correctness & Layer correctness \\
-    \hline
-  \end{tabular}
-  \caption{
-    Correspondence between certified compilation
-    and certified abstraction layers
-  }
-  \label{tbl:compccal}
-\end{table}
-
-The CertiKOS kernel is divided into several dozen abstraction layers,
-which are specified and verified individually.
-Specifications of abstraction layers
-are called \emph{layer interfaces}.
-They extend CompCert semantics
-to provide a set of \emph{primitives},
-which can be invoked as
-external functions.
-The behavior of primitives is described in terms of
-an \emph{abstract state},
-maintained alongside CompCert's memory state,
-but only updated by primitive invocations.
-
-A layer implementation
-realizes the primitives described by an \emph{overlay} interface
-as client code for an \emph{underlay} interface.
-A layer $M$ implementing the overlay interface $L_2$
-on top of the underlay interface $L_1$ can be depicted as follows:
-\[
-  \begin{prooftree}
-    \infer0[$L_2$]{\fbox{\qquad M \qquad}}
-    \infer1[$L_1$]{}
-  \end{prooftree}
-\]
-The correctness of $M$ is formulated as
-the contextual refinement property:
-\[
-  \forall \, C \, . \,
-  \llbracket C \rrbracket_{L_2} \refby
-  \llbracket C + M \rrbracket_{L_1}
-\]
-expressing that the behavior of the client code $C$
-running alongside $M$ on top of the underlay interface $L_1$
-will refine the behavior of $C$
-evaluated on top of the overlay interface $L_2$.
-Then,
-when the underlay interface of one layer
-corresponds to the overlay interface of another:
-\[
-  \begin{prooftree}
-    \infer0[$L_3$]{\fbox{\qquad N \qquad}}
-    \infer1[$L_2$]{\fbox{\qquad M \qquad}}
-    \infer1[$L_1$]{}
-  \end{prooftree}
-\]
-In the same way passes of CompCert and their correctness properties
-can be composed when the target language of one corresponds to
-the source language of another,
-contextual refinement properties can be combined
-to obtain the composite certified layer:
-\[
-  \begin{prooftree}
-    \infer0[$L_3$]{\fbox{\qquad M + N \qquad}}
-    \infer1[$L_1$]{}
-  \end{prooftree}
-\]
-
-%}}}
-
-\subsection{Contributions} %{{{
-
-In our original design \citep{popl15},
-the formalization of certified abstraction layers
-was closely tied with
-the semantic infrastructure of CompCert.
-Indeed,
-we introduced the variant CompCertX discussed in \S\ref{sec:compcertx}
-to make it possible for language semantics
-to use arbitrary underlay interfaces and
-express the behavior of layer implementations.
-
-As we proceeded to verify the 37 layers of CertiKOS
-in the framework outlined above,
-it quickly became apparent that
-the common structures found in the verification of each layer
-were a source of excessive redundancy in our proofs.
-This prompted my work on the \emph{layer calculus} of CertiKOS,
-which became the starting point for the research
-presented in this thesis.
-
-This chapter
-presents a modernized version of the layer calculus
-decoupled from CompCert.
-The new version avoids the complications of the original model
-but captures its essential features.
-Through a series of embeddings,
-the new model can be interfaced with
-CompCertO (\S\ref{sec:compcerto})
-to provide the capabilities of the original model
-and more.
-
-%}}}
-
-%}}}
-
-\section{Layer model} %{{{
-
-A layer interface $L$ has three components.
-First, a \emph{signature} $E$ enumerates
-primitive operations together with their types
-(see Def.~\ref{def:esig}).
-Second,
-the set $S$ contains the \emph{abstract states} of the layer interface.
-Finally, for each operation $m \mathbin: N$ in the signature $E$,
-a \emph{specification}
-is given as a function:
-\[
-  L.m : S \rightarrow \mathcal{P}^1( N \times S) \,.
-\]
-Throughout this thesis,
-the notation $v@k \in V \times S$ is used for a pair
-containing the value $v \in V$ and the state $k \in S$.
-
-\subsection{Specification monad} %{{{
-
-In the type of $L.m$ above,
-$\mathcal{P}^1$ corresponds to the \emph{maybe} monad:
-\[
-  \mathcal{P}^1(X) := \{ \mathbf{x} \subseteq X : |\mathbf{x}| \le 1 \} \,,
-\]
-where a terminating computation producing
-the value $v \in X$ is represented as the singleton:
-\[
-  \eta^\mathcal{P}_X(v) := \{ v \} \,,
-\]
-and where the empty set $\varnothing \in \mathcal{P}^1(X)$
-specifies an undefined computation,
-which is free to silently diverge, crash, or
-produce any possible outcome.
-When two computations are sequentially composed,
-both must be successful for the result to be defined.
-For $\mathbf{x} \in \mathcal{P}(\mathcal{P}(X))$,
-the multiplication $\mu^\mathcal{P}(\mathbf{x}) \in \mathcal{P}(X)$
-is defined as:
-\[
-  \mu^\mathcal{P}(\mathbf{x})_X :=
-    \{ v \in X \mid
-       \exists \, \mathbf{y} \bdot \mathbf{x} \ni \mathbf{y} \ni v \} =
-    \bigcup \mathbf{x}
-  \,.
-\]
-Equivalentaly,
-for $x \in \mathcal{P}(X)$ and $f : X \rightarrow \mathcal{P}(Y)$,
-the Kleisli extension
-$f^\dagger : \mathcal{P}(X) \rightarrow \mathcal{P}(Y)$ is:
-\[
-  f^\dagger(\mathbf{x})
-    = \{ v \in Y \mid \exists \, u \bdot \mathbf{x} \ni u \wedge f(u) \ni v \}
-    = \bigcup_{u \in \mathbf{x}} f(u)
-  \,.
-\]
-The notion of refinement associated with this monad is set inclusion,
-which allows an unspecified computation to be refined by
-a computation with a definite outcome:
-\[
-  \varnothing \subseteq \{ v \} \,.
-\]
-
-To account for state,
-we combine $\mathcal{P}^1$ with the state monad transformer.
-For a set of states $S$,
-we obtain the monad:
-\[
-  \mathcal{L}_S(X) :=
-    \mathcal{P}^1(X \times S)^S \,,
-\]
-equipped with the structure:
-\begin{gather*}
-  \eta^\mathcal{L}(v) :=
-    \lambda \, k \bdot \{ v@k \} \\
-  \mu^\mathcal{L}(x) :=
-    \lambda \, k \bdot \{ v@k'' \mid
-      \exists \, y \, k' \bdot x(k) \ni y@k' \wedge y(k') \ni v@k'' \}
-  \,.
-\end{gather*}
-Then in a layer interface $L$
-using abstract states in the set $S$,
-the primitives $m \mathbin: N$
-will be given specifications
-of type $L.m \in \mathcal{L}_S(N)$.
-
-\begin{remark}
-Our version of the \emph{maybe} monad $\mathcal{P}^1$
-arises from an adjunction $\mathcal{P}^1 \dashv U$
-between the category $\mathbf{Pos}_\bot$
-of lower-bounded posets
-and the category $\mathbf{Set}$,
-enriching our model with a notion of failure $\bot$
-and an associated partial order.
-Likewise,
-the state monad arises from the adjunction
-$- \times S \dashv (-)^S$
-introduced in Example~\ref{ex:ccset}.
-The left adjoint allows computations to produce a state,
-and the right adjoint allows them to consume one.
-The monad $\mathcal{L}_S$ corresponds to the composition:
-\[
-  \begin{tikzcd}
-    \mathbf{Pos}_\bot
-      \ar[r, "U"', shift right] &
-    \mathbf{Set}
-      \ar[l, "\mathcal{P}^1"', shift right]
-      \ar[r, "(-)^S"', shift right] &
-    \mathbf{Set}
-      \ar[l, "- \times S"', shift right]
-   \end{tikzcd}
-  \,.
-\]
-% Not true
-Since $\mathbf{Pos}_\bot$ is monoidal closed,
-these two aspects of $\mathcal{L}_S$
-could be combined in the opposite way:
-\[
-  \begin{tikzcd}
-    \mathbf{Pos}_\bot
-      \ar[r, "{[S, {-}]}"', shift right] &
-    \mathbf{Pos}_\bot
-      \ar[l, "{-} \otimes S"', shift right]
-      \ar[r, "U"', shift right] &
-    \mathbf{Set}
-      \ar[l, "\mathcal{P}^1"', shift right]
-   \end{tikzcd}
-  \,.
-\]
-Under this approach,
-from a \emph{lower-bounded, partially ordered}
-set of states $S$, we would construct a monad $\mathcal{L}'$
-consisting of the \emph{monotonic, $\bot$-preserving} functions:
-\[
-  \mathcal{L}'(A) := S \xrightarrow{\mathbf{Pos}_\bot} \mathcal{P}^1(A) \otimes S
-\]
-Since the tensor product $\mathcal{P}^1(A) \otimes S$ identifies
-the posets' lower bounds,
-this is largely equivalent.
-However in this setting $S$ can be an arbitrary bounded poset,
-allowing states with partial information.
-\end{remark}
-
-%}}}
-
-\subsection{Layer interfaces} %{{{
-
-\begin{definition} % layer interface {{{
-A \emph{layer interface} is a tuple
-$L = \langle E, S, \sigma \rangle$,
-where $E$ is an effect signature,
-$S$ is a set of states,
-and $\sigma$ assigns to each operation
-$(m \mathbin: N) \in E$
-a specification
-$\sigma^m \in \mathcal{L}_S(N)$.
-I will sometimes use the notation $L.m$
-to refer to $\sigma^m$.
-\end{definition}
-%}}}
-
-As a running example,
-we will use the certified layer
-described in Figure~\ref{fig:cal},
-which implements a bounded queue with at most $N$ elements
-using a circular buffer.
-We outline the construction of
-the correponding layer interfaces below.
-
-\begin{figure} % fig:cal {{{
-  \small
-    \begin{align*}
-      %
-      % Overlay
-      %
-      & \fbox{$L_\kw{bq}$} &
-        S_\kw{bq} &:= V^* \\
-      \kw{enq} &: V \rightarrow \mathbbm{1} &
-        L_\kw{bq}.\kw{enq}[v] &:=
-          \lambda \, \vec{q} \bdot \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
-      \kw{deq} &: \mathbbm{1} \rightarrow V &
-        L_\kw{bq}.\kw{deq} &:=
-          \lambda \, \vec{q} \bdot \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
-      \\[1em]
-      %
-      % Implementation
-      %
-      & \fbox{$M_\kw{bq}$} &
-        R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
-      M_\kw{bq}.\kw{enq}[v] &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) \!\!\!\! &
-        \vec{q} \mathrel{R} (f, &c_1, c_2) \Leftrightarrow
-           (c_1 \le c_2 < N \wedge
-            \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {}
-      \\
-      M_\kw{bq}.\kw{deq} &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
-           &\phantom{c_1, c_2) \Leftrightarrow {}}
-           (c_2 \le c_1 < N \wedge
-            \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
-      \\[1em]
-      %
-      % Underlay
-      %
-      & \fbox{$L_\kw{rb}$} &
-        S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
-      \\
-      \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
-        L_\kw{rb}.\kw{set}[i, v] &:=
-          \lambda (f, c_1, c_2) \bdot
-          \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
-      \\
-      \kw{get} &: \mathbb{N} \rightarrow V &
-        L_\kw{rb}.\kw{get}[i] &:=
-          \lambda (f, c_1, c_2) \bdot
-          \{ f_i@(f, c_1, c_2) \mid i < N \}
-      \\
-      \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
-        L_\kw{rb}.\kw{inc}_1 &:=
-          \lambda (f, c_1, c_2) \bdot
-          \{ c_1@(f, c_1', c_2) \mid
-             c_1' = (c_1 + 1) \mathbin{\mathrm{mod}} N \}
-      \\
-      \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
-        L_\kw{rb}.\kw{inc}_2 &:=
-          \lambda (f, c_1, c_2) \bdot
-          \{ c_2@(f, c_1, c_2') \mid
-             c_2' = (c_2 + 1) \mathbin{\mathrm{mod}} N \}
-    \end{align*}
-  \caption[Certified abstraction layer implementing a bounded queue]%
-   {A certified abstraction layer
-    $L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
-    implementing a bounded queue of size $N$
-    using a ring buffer.
-    The left-hand side of the figure shows
-    the signatures of the overlay and underlay interfaces,
-    and the code associated with the layer.
-    The right-hand side shows primitive specifications
-    and the simulation relation used by the correctness proof.}
-  \label{fig:cal}
-\end{figure}
-%}}}
-
-\begin{example}[Bounded queue and ring buffer interfaces] %{{{
-The layer interface
-$L_\kw{rb} = \langle E_\kw{rb}, S_\kw{rb}, \sigma_\kw{rb} \rangle$
-describes a bounded queue.
-Its states are sequences of values,
-expected to contain at most $N$ elements.
-The two primitives
-$\kw{enq}$ and $\kw{deq}$
-respectively add a new element to the queue
-and remove the oldest element.
-If we attempt to add an element
-which would overflow the queue's capacity $N$,
-or remove an element from an empty queue,
-the result is $\varnothing$ (i.e., the operation aborts).
-
-I will demonstrate how the bounded queue interface
-can be implemented in terms of a circular buffer
-described by the layer interface
-$L_\kw{bq} = \langle E_\kw{bq}, S_\kw{bq}, \sigma_\kw{bq} \rangle$.
-The states of $L_\kw{rb}$
-contain an array $f \in V^N$
-storing $N$ values of type $V$,
-and two counters
-taking values in the interval $0 \le c_1, c_2 < N$.
-The array can be accessed through the primitives
-$\kw{get}$ and $\kw{set}$;
-the primitives $\kw{inc}_1$ and $\kw{inc}_2$
-increment the corresponding counter
-and return the counter's old value.
-\end{example}
-%}}}
-
-%}}}
-
-\subsection{Client code} \label{sec:cal:cli} %{{{
-
-We can use the free monad $T_E$ on the signature $E$
-as a general representation for client code for
-an underlay interface $L = \langle E, S, \sigma \rangle$.
-The monad homomorphism $(-)[\sigma] : T_E \rightarrow \mathcal{L}_S$
-can then be used to evaluate client programs.
-
-More explicitly,
-as discussed in \S\ref{sec:eff:mon},
-a client program $C \in T_E(X)$
-is a term on the signature~$E$ with variables in $X$,
-or equivalently a monadic expression built using
-the operations in $E$, with a result in $X$.
-A client program $C \in T_E(A)$
-can be interpreted as
-a computation $C[L] \in \mathcal{L}_S(A)$ in the following way:
-\[
-  \begin{array}{c@{\qquad}c}
-    \ul{m}(t_n)_{n \in N}[L] \: = \:
-      (n \mathbin\leftarrow m \mathbin; t_n)[L] \: = \:
-      n \mathbin\leftarrow \sigma^m \mathbin; t_n[L] &
-      (m \mathbin: N) \in E \\
-    \ul{v}[L] \: = \:
-      \eta^E_A(v)[L] \: = \:
-      \eta^\mathcal{L}_A(v) &
-      v \in A
-  \end{array}
-\]
-In other words, in $C[L] \in \mathcal{L}_S(A)$,
-occurences of the operations of $E$
-have been replaced by their specification given in $\sigma$
-to interpret the program in terms of state transitions.
-
-\begin{example}[Queue rotation]
-The following client program for the signature $E_\kw{bq}$
-rotates a queue and returns the rotated value:
-\[
-  C_\kw{rot} :=
-    v \mathbin\leftarrow \kw{deq} \mathbin; \kw{enq}[v] \mathbin; \eta(v)
-\]
-Using $L_\kw{bq}$ as an underlay interface,
-we can evaluate it to:
-\[
-  C_\kw{rot}[L_\kw{bq}] :=
-    \lambda \, \vec{q} \bdot
-    \{ \vec{p}v@v \mid \vec{q} = v\vec{p} \wedge |\vec{p}| < N \}
-\]
-\end{example}
-
-%}}}
-
-\subsection{Layer implementations} \label{sec:cal:impl} %{{{
-
-A layer implementation provides underlay client code
-for each operation of the overlay interface.
-In other words,
-it is an interpretation of the overlay's signature
-into the underlay's signature.
-
-\begin{definition}
-A \emph{layer implementation}
-for an underlay signature $E$ and
-an overlay signature $F$
-is a family $(M^q)_{(q \mathbin: R) \in F}$
-with $M^q \in T_E(R)$.
-As before I will write $M : E \rightarrow F$, and
-sometimes use the notation $M.q$
-to refer to $M^q$.
-Then,
-for an underlay interface $L = \langle E, S, \sigma \rangle$,
-the \emph{evaluation} of $M$ over $L$ is
-the layer interface
-$
-  M \circ L := \langle F, S, \tau \rangle
-$
-with $\tau^q := M^q[L]$.
-\end{definition}
-
-Similarly to layer interfaces,
-a layer implementation $M : E \rightarrow F$ is
-associated with a monad homomorphism $(-)[M] : T_F \rightarrow T_E$.
-The monad homomorphism associated with the evaluated
-layer interface $M \circ L$
-is then the composite
-$(-)[L] \circ (-)[M] : T_F \rightarrow \mathcal{L}_S$.
-
-\begin{example} \label{ex:bqimpl} %{{{
-The layer implementation $M_\kw{bq}$ 
-stores the queue's elements into the array,
-between the indices given by the counters' values.
-This is expressed by the simulation relation $R$
-given in Figure~\ref{fig:cal},
-which explains how overlay states are realized by $M_\kw{bq}$ 
-in terms of underlay states.
-
-The code of $M_\kw{bq}$ can be interpreted in the monad
-$
-    S_\kw{rb} \rightarrow \mathcal{P}^1(- \times S_\kw{rb})
-$,
-with calls to primitives of $L_\kw{rb}$
-replaced by their specifications,
-to obtain the layer interface $M_\kw{rb}[L_\kw{bq}]$.
-Concretely,
-the behaviors of $M_\kw{bq}.\kw{enq}[v]$ and $M_\kw{bq}.\kw{deq}$
-running on the underlay interface $L_\kw{rb}$
-evaluate to:
-\begin{align*}
-  (M_\kw{bq} \circ L_\kw{rb}).{\kw{enq}[v]}
-    &= i \leftarrow L_\kw{rb}.\kw{inc}_2 \mathbin{;}
-        L_\kw{rb}.\kw{set}[i, v] \\
-    &= \lambda \, (f, c_1, c_2) \bdot
-       L_\kw{rb}.\kw{set}[c_2, v](f, c_1, (c_2+1) \mathbin{\mathrm{mod}} N) \\
-    &= \lambda \, (f, c_1, c_2) \bdot
-       \{ *@(f[c_2 := v], c_1, (c_2+1) \mathbin{\mathrm{mod}} N) \mid c_2 < N \}
-  \\[1em]
-  (M_\kw{bq} \circ L_\kw{rb}).\kw{deq}
-    &= i \leftarrow L_\kw{rb}.\kw{inc}_1 \mathbin{;}
-        L_\kw{rb}.\kw{get}[i] \\
-    &= \lambda \, (f, c_1, c_2) \bdot
-       L_\kw{rb}.\kw{get}[c_1](f,
-          (c_1 + 1) \mathbin{\mathrm{mod}} N,
-          c_2) \\
-    &= \lambda \, (f, c_1, c_2) \bdot
-       \{ f_{c_1}@(f, 
-          (c_1 + 1) \mathbin{\mathrm{mod}} N,
-          c_2) \mid
-          c_1 < N \}
-\end{align*}
-\end{example}
-%}}}
-
-%}}}
-
-\subsection{Correctness} %{{{
-
-Consider an underlay interface $L_1$,
-an overlay interface $L_2$,
-and a corresponding layer implementation $M$.
-The layer interface $M \circ L_1$
-shares a signature with $L_2$,
-but its behavior is described in terms of
-the states of $L_1$.
-To establish correctness,
-we need to provide a simulation relation
-$R \subseteq S_2 \times S_1$
-explaining the correspondence between
-the more abstract states of $L_2$ and
-the more concrete states of $L_1$.
-Using the relators $\rightarrow$, $\times$, $\mathcal{P}^\le$
-presented in \S\ref{sec:relators},
-the associated simulation property can be defined as follows.
-
-\begin{definition}[Simulation of layer interfaces] %{{{
-For a relation $R \subseteq S_2 \times S_1$
-and two computations
-$\tau_2 \in \mathcal{L}_{S_2}(A)$ and
-$\tau_1 \in \mathcal{L}_{S_1}(A)$,
-we say that $\tau_2$ is \emph{simulated by} $\tau_1$
-and write $\tau_2 \le_R \tau_1$
-when:
-\begin{equation} \label{eqn:sim}
-  \tau_2
-  \: \mathrel{[R \rightarrow \mathcal{P}^\le({=} \times R)]} \:
-  \tau_1
-\end{equation}
-Likewise,
-given two layer interfaces
-$L_1 = \langle E, S_1, \sigma_1 \rangle$ and
-$L_2 = \langle E, S_2, \sigma_2 \rangle$
-sharing a signature,
-we say that $L_2$ is \emph{simulated by} $L_1$
-and write $L_2 \le_R L_1$ when
-the following simulation property holds
-for each operation $(m \mathbin: N) \in E$:
-\begin{equation}
-  \label{eqn:layersim}
-  L_2.m \le_R L_1.m
-  \,.
-\end{equation}
-\end{definition}
-%}}}
-
-The properties (\ref{eqn:sim}) and (\ref{eqn:layersim})
-correspond to the following simulation diagram,
-which asserts that if the computation $L_2.m$
-started in a state $k_1$ succeeds,
-then the computation $L_1.m$
-started in a related state $k_2$ must produce
-the same result
-while maintaining the relation between states:
-\[
-  \begin{tikzcd}[sep=large]
-    k_1 \ar[r, "L_2.m"] \ar[d, "R"', dash] &
-    v@k_1' \ar[d, "{=} \times R", dash, dashed] \\
-    k_2 \ar[r, "L_1.m", dashed] &
-    v@k_2'
-  \end{tikzcd}
-\]
-Layer correctness is established by showing
-a simulation between the overlay interface
-and the layer implementation.
-
-\begin{definition}[Certified abstraction layer] %{{{
-For an underlay interface $L_1 = \langle E_1, S_1, \sigma_1 \rangle$,
-a layer implementation $M : E_1 \rightarrow E_2$ and
-an overlay interface $L_2 = \langle E_2, S_2, \sigma_2 \rangle$,
-we say that $M$
-\emph{correctly implements $L_2$ on top of $L_1$}
-when there is a simulation relation $R \subseteq S_2 \times S_1$
-such that:
-\[
-  L_2 \le_R M \circ L_1 \,.
-\]
-We say that $L_1$, $M$, $L_2$ together
-constitute a \emph{certified abstraction layer}
-and write $L_1 \vdash_R M : L_2$.
-\end{definition}
-%}}}
-
-\begin{example}[Correctness of the bounded queue implementation] %{{{
-I will prove the correctness of
-the layer implementation $M_\kw{bq}$
-with respect to the relation $R$
-shown in Figure~\ref{fig:cal}.
-
-First,
-we can write $[f]_{c_1}^{c_2}$
-for the set of possible sequences of values
-read between indices $c_1$ and $c_2$
-within the array $f$.
-More precisely:
-\[
-  [f]_{c_1}^{c_2} :=
-    \{ f_{c_1} \ldots f_{c_2 - 1} \mid c_1 \le c_2 < N \} \cup
-    \{ f_{c_1} \ldots f_{N-1} f_0 \ldots f_{c_2} \mid c_2 \le c_1 < N \}
-  \,.
-\]
-Then the simulation relation can be formulated as:
-\[
-  \vec{q} \mathrel{R} (f, c_1, c_2)
-  \: \Leftrightarrow \:
-  \vec{q} \in [f]_{c_1}^{c_2}
-  \,.
-\]
-To show the correctness property
-$
-  L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}
-$,
-we then need to prove that:
-\[
-  L_\kw{bq} \le_R M_\kw{bq} \circ L_\kw{rb}
-  \,.
-\]
-To this end,
-consider the related states
-$\vec{q} \mathrel{R} (f, c_1, c_2)$.
-We know in particular that $c_1, c_2 < N$.
-Hence, from the calculation
-carried out in Example~\ref{ex:bqimpl}:
-\begin{align*}
-  (M_\kw{bq} \circ L_\kw{rb}).{\kw{enq}[v]}(f, c_1, c_2)
-    &= \{ *@(f[c_2 := v], \:
-          c_1, \:
-          (c_2 + 1) \mathbin{\mathrm{mod}} N) \}
-  \\
-  (M_\kw{bq} \circ L_\kw{rb}).\kw{deq}(f, c_1, c_2)
-    &= \{ f_{c_1}@(f, \:
-          (c_1 + 1) \mathbin{\mathrm{mod}} N, \:
-          c_2) \}
-\end{align*}
-Since the operations are specified as:
-\begin{align*}
-  L_\kw{bq}.\kw{enq}[v](\vec{q}) &=
-    \{ * @ \vec{q} v \mid |\vec{q}| < N \}
-  \\
-  L_\kw{bq}.\kw{deq}(\vec{q}) &=
-    \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
-  \,,
-\end{align*}
-we need to show that whenever
-$|\vec{q}| < N$,
-the following relations hold:
-\[
-  {*} = {*}
-  \: \wedge \:
-  \vec{q}v \mathrel{R}
-    (f[c_2 := v], c_1, (c_2 + 1) \mathbin{\mathrm{mod}} N)
-  \,,
-\]
-and that whenever $\vec{q} = v\vec{p}$,
-the following relations hold:
-\[
-  v = f_{c_1}
-  \: \wedge \:
-  \vec{p} \mathrel{R}
-    (f, \:
-     (c_1 + 1) \mathbin{\mathrm{mod}} N, \:
-     c_2)
-  \,.
-\]
-This is straightforward to check,
-using the constraints on the length of the queue
-to verify that:
-\begin{align*}
-  \vec{q} \in [f]_{c_1}^{c_2}
-    \: &\Rightarrow \:
-    \vec{q}v \in [f[c_2 := v]]_{c_1}^{(c_2+1) \mathbin{\mathrm{mod}} N}
-  \\
-  v\vec{p} \in [f]_{c_1}^{c_2}
-    \: &\Rightarrow \:
-    \vec{p} \in [f]_{(c_1+1) \mathbin{\mathrm{mod}} N}^{c_2}
-  \,.
-\end{align*}
-\end{example}
-%}}}
-
-\begin{remark} %{{{
-Note that we place no restriction
-on the relations we use
-beyond the simulation property.
-In particular, in the example above
-$R$ is neither one-to-many nor many-to-one.
-
-On one hand,
-there are many low-level ring buffer states corresponding to
-a given high-level queue state:
-the implementation is free to choose the position $c_1$
-where the queue's first element is stored,
-and arbitrary values for the $N - |\vec{q}|$
-array locations which are not in use.
-
-On the other hand,
-a low-level state where $c_1 = c_2$
-can be interpreted in two different ways,
-as the empty queue $\epsilon$ or
-as the full queue $f_{c_1} \ldots f_{N-1} f_0 \ldots f_{c_2 - 1}$.
-This would make it impossible to implement
-an operation specified as
-$L_\kw{bq}.\kw{len}(\vec{q}) := \{ |\vec{q}|@\vec{q} \}$:
-the implementation
-would have to simulataneously
-return $0$ and $N$
-when $c_1 = c_2$.
-However,
-this is not an issue for $\kw{enq}$ and $\kw{deq}$ because
-for both interpretations,
-one of the specifications is undefined:
-\[
-  L_\kw{bq}.\kw{enq}[v](f_{c_1} \ldots f_{N-1} f_0 \ldots f_{c_2 - 1})
-  =
-  \varnothing
-  \qquad
-  L_\kw{bq}.\kw{deq}(\epsilon)
-  =
-  \varnothing
-  \,.
-\]
-The implementation can satisfy both specifications
-under both interpretations,
-because in each case one of
-the specification does not actually place
-any constraints on the implementation.
-This allows
-$M_\kw{bq}.\kw{enq}$ to be correct
-by using the ``empty'' interpretation, and
-$M_\kw{bq}.\kw{deq}$ to be correct
-by using the ``full'' interpretation.
-\end{remark}
-%}}}
-
-Once we have shown an abstraction layer correct,
-we will be able to reason about any client code
-in terms of the layer's overlay interface
-rather than its low-level implementation.
-This is enabled by the following property.
-
-\begin{theorem}[Soundness] %{{{
-For a certified abstraction layer $L_1 \vdash_R M : L_2$
-and a client program $C$ of $L_2$,
-the following \emph{contextual refinement} property holds:
-\[
-  C[L_2] \: \le_R \: C[M \circ L_1]
-\]
-\begin{proof}
-We need to show that $C[-]$ preserves $\le_R$.
-In essence,
-as $C$ executes successive operations of
-the two layer interfaces,
-we can follow along with the corresponding
-simulation diagrams,
-and paste them horizontally to derive a simulation
-for the whole execution.
-More formally,
-we can proceed
-by structural induction on the term $C$:
-\begin{itemize}
-  \item
-    If the term $C$ is of the form $\ul{v} = \eta^E(v)$,
-    then it is interpreted as $\lambda k \bdot \{v@k\}$
-    in any layer,
-    and we get the simulation property:
-    \[
-      \begin{tikzcd}[sep=large]
-        k_1 \ar[r, "{C[L_2]}"] \ar[d, "R"', dash] &
-        v@k_1 \ar[d, "{=} \times R", dash, dashed] \\
-        k_2 \ar[r, "{C[M \circ L_1]}", dashed] &
-        v@k_2
-      \end{tikzcd}
-    \]
-  \item
-    Now suppose $C$ is of the form
-    $\ul{m}(C_n)_{n \in N} = n \mathbin\leftarrow m \mathbin; C_n$.
-    We know from the correctness property of $M$ and
-    from the induction hypothesis that:
-    \[
-      \begin{tikzcd}[sep=large]
-        k_1 \ar[r, "L_2.m"] \ar[d, "R"', dash] &
-        n@k_1' \ar[d, "{=} \times R", dash, dashed] \\
-        k_2 \ar[r, "(M \circ L_1).m", dashed] &
-        n@k_2'
-      \end{tikzcd}
-      \qquad \qquad
-      \begin{tikzcd}[sep=large]
-        k_1' \ar[r, "{C_n[L_2]}"] \ar[d, "R"', dash] &
-        v@k_1'' \ar[d, "{=} \times R", dash, dashed] \\
-        k_2' \ar[r, "{C_n[M \circ L_1]}", dashed] &
-        v@k_2''
-      \end{tikzcd}
-    \]
-    By pasting the two diagrams horizontally,
-    we can conclude that:
-    \[
-      \begin{tikzcd}[sep=large]
-        k_1 \ar[r, "{C[L_2]}"] \ar[d, "R"', dash] &
-        v@k_1'' \ar[d, "{=} \times R", dash, dashed] \\
-        k_2 \ar[r, "{C[M \circ L_1]}", dashed] &
-        v@k_2''
-      \end{tikzcd}
-    \]
-\end{itemize}
-\end{proof}
-\end{theorem}
-%}}}
-
-%}}}
-
-\subsection{Composing certified abstraction layers} %{{{
-
-Layer implementations can be composed
-as explained in \S\ref{sec:bg:freemon}.
-Given the layer implementations
-$M : E_1 \rightarrow E_2$ and $N : E_2 \rightarrow E_3$,
-the layer implementation $N \circ M$
-replaces the operations of $E_2$ in $N$
-by their interpretation given by $M$:
-\[
-  (N \circ M)^m := N^m[M]
-  \,.
-\]
-The soundness theorem for the certified abstraction layer
-$L_1 \vdash_R M : L_2$
-can be easily extended from individual client programs
-to complete layer implementations,
-so that:
-\[
-  \begin{prooftree}
-    \hypo{L_1 \vdash_R M : L_2}
-    \infer1{N \circ L_2 \: \le_R N \: \circ M \circ L_1}
-  \end{prooftree}
-\]
-More generally,
-if $N$ defines a certified abstraction layer
-with underlay $L_2$,
-then its correctness property can be combined with that of $M$
-to build a composite certified abstraction layer.
-
-\begin{theorem}[Vertical composition]
-Certified abstraction layers compose in the following way:
-\[
-  \begin{prooftree}
-    \hypo{L_1 \vdash_R M : L_2}
-    \hypo{L_2 \vdash_S N : L_3}
-    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
-  \end{prooftree}
-\]
-\begin{proof}
-Simulation properties can be composed
-by vertically pasting the simulations diagrams:
-\[
-  \begin{prooftree}
-    \hypo{\tau_3 \le_S \tau_2}
-    \hypo{\tau_2 \le_R \tau_1}
-    \infer2{\tau_3 \le_{R \circ S} \tau_2}
-  \end{prooftree}
-\]
-This can be easily extended to layer interfaces.
-Then,
-the theorem can be proved by
- combining this property with the soundness theorem:
-\[
-  \begin{prooftree}
-    \hypo{L_3 \le_S N \circ L_2}
-    \hypo{N \circ L_2 \le_R N \circ M \circ L_1}
-    \infer2{L_3 \le_{R \circ S} N \circ M \circ L_1}
-  \end{prooftree}
-\]
-\end{proof}
-\end{theorem}
-
-This allows us to decompose a large system
-into multiple abstraction layers,
-verify their correctness individually,
-then derive a correctness property for the whole system.
-
-Note that for every layer interface
-$L = \langle E, S, \sigma \rangle$,
-the identity interpretation $e : E \rightarrow E$
-is a correct implementation $L \vdash_{=} e : L$
-of the layer interface $L$ itself.
-In other words,
-layer interfaces and certified layer implementation
-define a category $\mathbf{CAL}$
-
-%}}}
-
-%}}}
-
-\section{Horizontal composition} %{{{
-
-While vertical composition is quite useful,
-individual abstraction layers can themselves be fairly complex
-and involve a significant number of opertations
-which we would like to verify one by one
-to build layers out of elementary components
-in a systematic way.
-
-Moreover,
-abstraction layers do not always depend on each other
-in a purely linear fashion;
-often two independent subsystems will rely on the same underlay,
-and we would like to be able to verify them in isolation
-but build higher-level code based on their combined functionality.
-
-In this section I present \emph{horizontal} composition principles
-which we can use to achieve this.
-It will then be possible to combine layers
-side-by-side in addition to stacking them
-on top of one another.
-
-\subsection{Signatures} \label{sec:hcomp:sig} %{{{
-
-To describe horizontal compositions of layers
-we must first combine signatures.
-When layers are placed side-by-side,
-a client program will have access to
-the operations of both.
-The result is essentially
-the disjoint union of the two layers' signatures,
-and can be constructed as follows.
-
-\begin{definition} \label{def:sigsum}
-The \emph{sum} of a family of effect signatures $(E_i)_{i \in I}$
-is defined as:
-\[
-  \bigoplus_{i \in I} E_i :=
-    \{ \iota_i(m) \mathbin: N \mid i \in I, (m \mathbin: N) \in E_i \}
-\]
-The finitary case $\bigoplus_{1 \le i \le n} E_i$
-can be writted as $E_1 \oplus \cdots \oplus E_n$.
-\end{definition}
-
-On one hand,
-this enables a coarse-grained description
-of the operations offered by a collection of layers.
-For instance,
-if we combinine an implementation of $L_\kw{bq}$
-with an implementation of the I/O operations
-used an example in \S\ref{sec:eff},
-the signature of the result will be $E_\kw{bq} \oplus E_\kw{io}$.
-On the other hand,
-this also allows us to decompose the signature
-of a single layer into signatures associated with
-individual operations,
-for instance:
-\[
-  E_\kw{bq} \cong
-    \{ \kw{deq} : V \} \oplus \{ \kw{enq} : V \rightarrow \mathbbm{1} \}
-  \,.
-\]
-
-\begin{remark}
-In terms of monad homomorphisms,
-the signature $E_1 \oplus E_2$ defines the coproduct
-of the free monads $T_{E_1}$ and $T_{E_2}$.
-This means that intepreting $T_{E \oplus F}$ into a monad $T$
-is the same thing as giving independent intepretations
-of $T_E$ and $T_F$:
-\[
-  \begin{tikzcd}[row sep=large]
-    T_{E_1} \ar[r, "\iota_1"] \ar[dr, "\phi_1"'] &
-    T_{E_1 \oplus E_2}
-      \ar[d, "{[\phi_1, \phi_2]}", dashed, near start] &
-    T_{E_2} \ar[l, "\iota_2"'] \ar[dl, "\phi_2"]
-    \\
-    & T &
-  \end{tikzcd}
-\]
-In terms of interpretations,
-the combined monad homomorphism $[\phi_1, \phi_2]$
-can be described as:
-\begin{align*}
-  [\phi_1, \phi_2]^{\iota_1(m)} &= \phi_1^m \in T(N)
-    & (m \mathbin: N) &\in E_1 \\
-  [\phi_1, \phi_2]^{\iota_2(m)} &= \phi_2^m \in T(N)
-    & (m \mathbin: N) &\in E_2
-\end{align*}
-This immediately suggests composition principles
-for layer interfaces and layer implementations:
-\begin{itemize}
-  \item
-    When $T$ is of the form $\mathcal{L}_S$,
-    this characterizes horizontal composition for layer interfaces
-    expressed in terms of a common set of abstract states $S$.
-  \item
-    When $T$ is itself a free monad of the form $T_E$,
-    this gives a horizontal composition principle
-    for layer implementations.
-\end{itemize}
-\end{remark}
-
-%}}}
-
-\subsection{Layer implementations} %{{{
-
-It is straightforward
-to combine layer implementations
-of the individual signatures $E_1$ and $E_2$
-into an implementation of $E_1 \oplus E_2$.
-
-\begin{definition}
-The layer implementations
-$M_1 : E \rightarrow E_1$ and
-$M_2 : E \rightarrow E_2$
-can be combined into
-$\langle M_1, M_2 \rangle : E \rightarrow E_1 \oplus E_2$
-as follows:
-\begin{align*}
-  \langle M_1, M_2 \rangle^{\iota_1(m)} &:= M_1^m \in T_E(N) &
-    (m \mathbin: N) &\in E_1 \\
-  \langle M_1, M_2 \rangle^{\iota_2(m)} &:= M_2^m \in T_E(N) &
-    (m \mathbin: N) &\in E_2
-\end{align*}
-In addition,
-we can define the layer implementations:
-\begin{align*}
-  \pi_1 &: E_1 \oplus E_2 \rightarrow E_1 &
-  \pi_1^m &:= e^{\iota_1(m)} \in T_{E_1 \oplus E_2}(N) &
-  (m \mathbin: M) &\in E_1
-  \\
-  \pi_2 &: E_1 \oplus E_2 \rightarrow E_2 &
-  \pi_2^m &:= e^{\iota_2(m)} \in T_{E_1 \oplus E_2}(N) &
-  (m \mathbin: M) &\in E_2
-\end{align*}
-which discard the operations of one of the summands.
-\end{definition}
-
-Given a client program
-formulated in terms of the operations of $E_1$,
-the projections allow $C \in T_{E_1}(A)$
-to be lifted to $C[\pi_1] \in T_{E_1 \oplus E_2}(A)$,
-so that it can be connected
-to underlay interfaces and implementations
-which provide the larger signature.
-A layer implementation
-$M : E_1 \rightarrow F$
-can likewise be lifted to
-$M \circ \pi_1 : E_1 \oplus E_2 \rightarrow F$.
-
-Conversely,
-tupling allows us to construct a layer implementations
-for the signature $F_1 \oplus F_2$
-out of components implementing $F_1$ and $F_2$.
-Combined with projections,
-this means in particular that
-two layer implementations $M_1 : E_1 \rightarrow F_1$
-and $M_2 : E_2 \rightarrow F_2$
-can be composed side-by-side as
-$M_1 \oplus M_2 : E_1 \oplus E_2 \rightarrow F_1 \oplus F_2$,
-where
-$M_1 \oplus M_2 := \langle M_1 \circ \pi_1, M_2 \circ \pi_2 \rangle$.
-
-Moreover,
-we can break down any signature into elementary
-components of the form $F_i = \{ m : A \rightarrow B \}$,
-containing a single $A$-indexed family of operations of arity $B$.
-Likewise,
-we can break down any layer implementation into
-elementary components of type $E \rightarrow F_i$.
-If the operation $m[a]$
-is interpreted by $C_a \in T_E(B)$ for all $a \in A$,
-we can write
-\[
-  (m[a] \mapsto C_a) : E \rightarrow F_i
-\]
-for the corresponding elementary layer implementation.
-Tupling can be used to reconstruct complete layer implementations
-from these elementary components.
-
-%\begin{example}
-%Recalling the decomposition
-%$E_\kw{bq} \cong
-% \{ \kw{enq} : V \rightarrow \mathbbm{1} \} \oplus \{ \kw{deq} : V \}$,
-%we can write
-%$M_\kw{bq} : E_\kw{rb} \rightarrow E_\kw{bq}$
-%as:
-%\[
-%  M_\kw{bq} \cong
-%  \big\langle
-%    \kw{enq}[v] \mapsto
-%      (i \mathbin\leftarrow \kw{inc}_2 \mathbin; \kw{set}[i, v]),
-%    \:\:
-%    \kw{deq} \mapsto
-%      (i \mathbin\leftarrow \kw{inc}_1 \mathbin; \kw{get}[i])
-%  \big\rangle
-%\]
-%\end{example}
-
-\begin{example}[Decomposition of $M_\kw{bq}$]
-The signature $E_\kw{bq}$ and layer implementation $M_\kw{bq}$
-can be decomposed into the elementary components:
-\begin{align*}
-  E_\kw{enq} &:= \{ \kw{enq} : V \rightarrow \mathbbm{1} \} &
-  M_\kw{enq} : E_\kw{rb} \rightarrow E_\kw{enq} \: &:= \:
-    \kw{enq}[v] \: \mapsto \:
-     (i \mathbin{\leftarrow} \kw{inc}_2 \mathbin{;}
-      \kw{set}[i, v]) \\
-  E_\kw{deq} &:= \{ \kw{deq} : \mathbbm{1} \rightarrow V \} &
-  M_\kw{deq} : E_\kw{rb} \rightarrow E_\kw{deq} \: &:= \:
-    \kw{deq}[*] \:\mapsto\:
-     (i \mathbin{\leftarrow} \kw{inc}_1 \mathbin{;}
-      \kw{get}[i])
-\end{align*}
-Then:
-\begin{align*}
-  E_\kw{bq} &\cong E_\kw{enq} \oplus E_\kw{deq} &
-  M_\kw{bq} &\cong \langle M_\kw{enq}, M_\kw{deq} \rangle \,.
-\end{align*}
-\end{example}
-
-Since layer implementations are defined componentwise,
-there is not much substance to this reshuffling.
-However,
-it will allows us to verify certified abstraction layers
-by verifying their elementary components one by one.
-
-%}}}
-
-\subsection{Layer interfaces sharing state} \label{sec:layerprod} %{{{
-
-Layer interfaces can likewise be built from elementary components.
-For a signature $\{ m : A \rightarrow B \}$,
-a set of states $S$,
-and a specification $\sigma_a \in \mathcal{L}_S(B)$ for all $a \in A$,
-we can write:
-\begin{align*}
-  (m[a] \mapsto \sigma_a) &:=
-  \langle
-    \{ m : A \rightarrow B \}, \:
-    S, \:
-    \hat{\sigma}
-  \rangle
-  &
-  \hat{\sigma}^{m[a]} &:= \sigma_a
-\end{align*}
-Going one step further,
-we can build elementary certified abstraction layers
-by using the property:
-\[
-  \begin{prooftree}
-    \hypo{\forall a \in A \bdot \tau_a \le_R C_a[L]}
-    \infer1{L \vdash_R (m[a] \mapsto C_a) : (m[a] \mapsto \tau_a)}
-  \end{prooftree}
-\]
-These elementary layer interfaces
-can then be composed in the following way.
-
-\begin{definition}
-When two layer interfaces
-$L_1 = \langle E_1, S, \sigma_1 \rangle$ and
-$L_2 = \langle E_2, S, \sigma_2 \rangle$
-share a common set of abstract states,
-their product can be defined as:
-\[
-  L_1 \times L_2 :=
-    \langle
-      E_1 \oplus E_2, \:
-      S, \:
-      \langle \sigma_1, \sigma_2 \rangle
-    \rangle \,,
-  \qquad
-  \text{where}
-  \quad
-  \langle \sigma_1, \sigma_2 \rangle^{\iota_i(m)} := \sigma_i^m \,.
-\]
-\end{definition}
-
-\begin{theorem}
-When the product of layer interface is defined,
-the tupling of layer implementations
-preserves correctness in the following sense:
-\[
-  \begin{prooftree}
-    \hypo{L \vdash_R M_1 : L_1}
-    \hypo{L \vdash_R M_2 : L_2}
-    \infer2{L \vdash_R \langle M_1, M_2 \rangle : L_1 \times L_2}
-  \end{prooftree}
-\]
-Moreover, the projections satisfy the following correctness properties:
-\[
-   L_1 \times L_2 \vdash_{=} \pi_1 : L_1 \qquad \qquad
-   L_1 \times L_2 \vdash_{=} \pi_2 : L_2
-\]
-\begin{proof}
-From the reflexivity of $\le_=$ and
-the operation-wise definition of correctness.
-\end{proof}
-\end{theorem}
-
-\begin{example}[Decomposition of $L_\kw{bq}$]
-The specification and verification of
-our bounded queue implementation can be decomposed
-in the following way:
-\[
-  \begin{prooftree}
-    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{enq} : L_\kw{enq}}
-    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{deq} : L_\kw{deq}}
-    \infer2{L_\kw{rb} \vdash M_\kw{bq} : L_\kw{bq}}
-  \end{prooftree}
-\]
-where:
-\begin{align*}
-  L_\kw{enq} &:=
-    \langle E_\kw{enq}, S_\kw{bq},
-      (\kw{enq}[v] \mapsto L_\kw{bq}.\kw{enq}[v]) \rangle \\
-  L_\kw{deq} &:=
-    \langle E_\kw{deq}, S_\kw{bq},
-      (\kw{deq}[v] \mapsto L_\kw{bq}.\kw{deq}[v]) \rangle
-\end{align*}
-\end{example}
-
-To summarize,
-the constructions I have presented so far
-provide a language to build
-complex certified abstraction layers
-by verifying elementary components.
-This is the essence of the \emph{layer calculus}
-we used in our initial verification of CertiKOS
-\citep{popl15}.
-However,
-under this approach the components of a given layers
-must still be designed around a common notion of abstract state,
-and it is not possible to horizontally compose
-layers which have been designed and verified independently.
-
-A related phenomenon is
-that the diagonal morphism:
-\[
-  L \vdash_{=} \Delta_L : L \times L
-\]
-does not duplicate any of the resources implemented by $L$.
-That is, in the layer:
-\[
-  \begin{prooftree}
-    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{bq} : L_\kw{bq}}
-    \hypo{L_\kw{rb} \vdash_{R_\kw{bq}} M_\kw{bq} : L_\kw{bq}}
-    \infer2{L_\kw{rb} \vdash_{R_\kw{bq}}
-      \langle M_\kw{bq}, M_\kw{bq} \rangle :
-      L_\kw{bq} \times L_\kw{bq}}
-  \end{prooftree}
-\]
-we have simply duplicated the code for each of the queue operations.
-But each copy uses the same underlying ring buffer,
-and the layer still implements a single queue.
-
-%}}}
-
-\subsection{Tensor product} \label{sec:layermon} %{{{
-
-In this section,
-I present a more general form of horizontal composition
-which lets two layers operate independently of one another.
-The layers do not need to share state.
-
-\begin{definition}
-The \emph{tensor product} of
-$L_1 = \langle E_1, S_1, \sigma_1 \rangle$ and
-$L_2 = \langle E_2, S_2, \sigma_2 \rangle$
-is defined as:
-\[
-  L_1 \otimes L_2 := \langle
-    E_1 \oplus E_2, \:
-    S_1 \times S_2, \:
-    \langle \hat{\sigma}_1, \hat{\sigma}_2 \rangle
-  \rangle \,,
-\]
-where $\hat{\sigma}_1$ and $\hat{\sigma}_2$
-act on their respective halves of the state:
-\begin{gather*}
-  \hat{\sigma}_1^{m@(k_1, k_2)} :=
-    \{ v@(k_1', k_2) \mid \sigma_1^{m@k_1} \ni v@k_1' \} \\
-  \hat{\sigma}_2^{m@(k_1, k_2)} :=
-    \{ v@(k_1, k_2') \mid \sigma_2^{m@k_2} \ni v@k_2' \}
-\end{gather*}
-\end{definition}
-
-The corresponding monoidal structure is not cartesian.
-In particular, two certfied abstraction layers
-$L \vdash_{R_1} M_1 : L_1$ and
-$L \vdash_{R_2} M_2 : L_2$
-cannot be composed into a single one in this way:
-\[
-  L \vdash_{\langle R_1, R_2 \rangle} \langle M_1, M_2 \rangle : L_1
-\otimes L_2
-\]
-because the operations of one layer will update the underlay state
-in a way that may break the simulation relation for the other layer.
-However, layers can be composed side-by-side
-when the act on two independent underlay interfaces.
-
-\begin{theorem}[Tensor product of certified abstraction layers]
-Two certified abstraction layers can be composed as follows:
-\[
-  \begin{prooftree}
-    \hypo{L_1 \vdash_{R_1} M_1 : L_1'}
-    \hypo{L_2 \vdash_{R_2} M_2 : L_2'}
-    \infer2{L_1 \otimes L_2 \vdash_{R_1 \times R_2}
-      M_1 \times M_2 : L_1' \otimes L_2'}
-  \end{prooftree}
-\]
-\begin{proof}
-Each abstraction layer
-will act on its half of the state
-with no interference from the other.
-Hence the correctness properties
-of the premises
-can be used almost directly
-to establish those of the composite layer.
-\end{proof}
-\end{theorem}
-
-To enable two independent
-certified abstraction layers
-to rely on a common underlay $L$,
-we must first show that the resources of $L$
-can be multiplexed
-by introducing a third component
-$L \vdash_R M : L \otimes L$.
-
-\begin{example}[Multiplexing a memory allocator]
-Suppose the layer interface $L_\kw{mm}$
-offers an operation $\kw{alloc} : \mathbbm{1} \rightarrow \kw{pageno}$
-which allocates a page of memory from a pool
-and returns its identifier.
-In a practical system,
-memory allocators can be used concurrently
-by any number of subsystems
-which will only access pages
-that have been allocated to them.
-To reflect this,
-we need to introduce a component
-\[
-  L_\kw{mm} \vdash_R \Delta : L_\kw{mm} \otimes L_\kw{mm}
-  \,,
-\]
-where the simulation relation $R$
-explicates how the \emph{client views}
-of the allocator's state
-add up consistently to make up the global state,
-and to show that the client's won't interfere with each other
-when the execute operations based on their view.
-The layer implementatione
-$\Delta = \langle \pi_1, \pi_2 \rangle$
-simply passes through the calls of each client
-unchanged to the underlay.
-
-This presents several challenges.
-For instance,
-unless the allocator's interface
-describes an idealized allocator which always succeeds
-(a convenient but unimplementable abstraction),
-the state will need to keep track of a finite number of
-available pages.
-Since $R$ cannot duplicate these pages,
-we may need to add a parameter the layer interface $L_\kw{mm}^n$
-indicating the total number $n$ of available pages.
-Then the multiplexing component can be weakened to
-take the form:
-\[
-  L_\kw{mm}^{n_1 + n_2} \vdash_R \Delta : L_\kw{mm}^{n_1} \otimes L_\kw{mm}^{n_2}
-  \,.
-\]
-
-Another issue is that the model that I have presented
-can only express \emph{deterministic} interfaces.
-In the case of a memory allocator,
-this means the allocator's abstract state
-should contain enough details to predict
-the specific identity of
-every page handed out by the allocator.
-This is possible in the global view,
-but when multiple clients are accessing the allocator,
-the sequences of page identifiers handed out to each client
-will depend on how their requests interleave with that of other clients.
-\end{example}
-
-%}}}
-
-%}}}
-
-\section{CompCertX} \label{sec:cal:compcertx} %{{{
-
-Our original definition of certified abstraction layers
-was tightly coupled with the semantic model of CompCert
-\citep{popl15}.
-In that context,
-layer specifications are defined to operate
-on a CompCert memory state component as well as
-the layer-specific abstract state.
-%Abstract layer interfaces 
-%leave this component unchanged,
-%acting only on the abstract state.
-%However,
-%the intermediate layer interfaces
-%used to define the semantics of layer implementations---%
-%and corresponding low-level specifications---%
-%can modify both components of the state.
-
-The overall structure of
-the layer calculus used in CertiKOS is very similar
-to the one I have described so far.
-In this section,
-I briefly touch on some of the differences between the two systems,
-and the ways in which the system is integrated with CompCert.
-
-The version of CompCert we used for this purpose
-is called CompCertX.
-It was designed to support certified abstraction layers,
-and allow CompCert programs
-to play the role of layer implementations.
-CompCertX itself was largely designed and implemented
-by Tahina Ramananandro
-during his time in the Yale FLINT group.
-
-\subsection{Layer interfaces} %{{{
-
-Roughly speaking,
-\emph{external calls} in CompCert
-can be understood as effects in a signature
-\[
-  \tilde{\mathcal{C}}_D =
-  \{ f : \kw{val}^* \rightarrow \kw{val} \mid
-    f \in D \subseteq \kw{ident} \}
-  \,.
-\]
-In an external call $f[\vec{v}]$,
-the identifier $f$ designates the function to be called
-and $\vec{v} \in \kw{val}^*$ gives its actual parameters;
-the corresponding outcome $v' \in \kw{val}$
-is the value returned by the function.
-
-In CertiKOS,
-we use these signatures
-to construct layer interfaces of the form
-\[
-  L =
-  \langle \mathcal{C}_D, \: S \times \kw{mem}, \: \sigma \rangle
-  \,.
-\]
-The set $D$ is the layer's \emph{domain},
-in other words the set of primitives which it implements.
-The set $S$ is a layer-specific set of abstract states,
-and is combined with the set $\kw{mem}$ of memory states
-used to define the language semantics of CompCert.
-
-%}}}
-
-\subsection{Client code} %{{{
-
-Traditional CompCert semantics use a parameter
-$\chi$
-common to all languages,
-which describes the behavior of external functions.
-Schematically,
-$\kw{Clight}_\chi[p]$
-describes the semantics of the \kw{Clight} program $p$,
-where
-$\chi^{f[\vec{v}]} \in
- \mathcal{L}_\kw{mem}(\kw{val})$
-describes the behavior of
-the external call $f[\vec{v}]$.
-This can be understood as a rudimentary underlay interface
-$\langle \tilde{C}_\kw{ident}, \kw{mem}, \chi \rangle$
-on top of which \kw{Clight} programs
-are evaluated.
-
-To enable the use of richer underlay interfaces,
-we extend this facility as follows.
-Given a CertiKOS layer interface
-$L = \langle \mathcal{C}_D, \: S \times \kw{mem}, \: \sigma \rangle$,
-the semantics $\kw{Clight}_L[p]$
-will maintain an abstract state $k \in S$
-alongside the memory state,
-and use the family of specifications
-$\sigma^{f[\vec{v}]} \in \mathcal{L}_{S \times \kw{mem}}(\kw{val})$
-to interpret external calls.
-This allows us to evaluate \emph{client code}
-with $L$ as underlay.
-
-%}}}
-
-\subsection{Layer implementations} %{{{
-
-To make it possible to evaluate CompCert modules
-as complete layer \emph{implementations},
-CompCertX also extends the \emph{incoming} interface
-of language semantics.
-Traditional CompCert semantics only model the top-level
-invocation of $\kw{main}[\epsilon]$.
-In CompCertX,
-we make it possible to evaluate
-any incoming call $f[\vec{v}]$
-and describe its action in terms of
-the combined abstract and memory states:
-\[
-  \kw{Clight_L}[M]^{f(\vec{v})} \in
-    \mathcal{L}_{S \times \kw{mem}}(\kw{val})
-  \,.
-\]
-Then evaluating $M$ on the underlay
-$L =
- \langle \tilde{\mathcal{C}}_D, \: S \times \kw{mem}, \: \sigma \rangle$
-yields the layer interface:
-\[
-  M[L] :=
-    \langle
-      E_{\kw{dom}(M)}, \,
-      S \times \kw{mem}, \,
-      \kw{Clight}_L[M]
-    \rangle
-  \,.
-\]
-
-%}}}
-
-\subsection{Simulation relations} %{{{
-
-Using CompCertX to compile layer implementations
-to assembly
-introduces \emph{memory injections},
-written $m_1 \stackrel{\iota}{\hookrightarrow} m_2$,
-which reflect the change in structure
-between a source memory state $m_1$
-and a corresponding target memory state $m_2$.
-Moreover,
-the certified abstraction layers used in CertiKOS
-follow a common pattern,
-where abstract data is progressively
-realized in lower layers
-as global variables stored in the CompCert memory state.
-
-To make our certified abstraction layers compatible
-with injections and to capture this pattern,
-the simulation relations are specified by two components:
-\begin{align*}
-  R^\kw{r} &\subseteq S_1 \times S_2 \\
-  R^\kw{m}_\iota &\subseteq S_1 \times \kw{mem}
-  \,.
-\end{align*}
-The overlay abstract states of $S_1$
-will retain some of the underlay's abstract data in $S_2$.
-The component $R_\kw{m}$ formalizes this correspondence.
-On the other hand,
-$S_1$ may also contain newly abstracted data,
-stored in the underlay as part of the memory states.
-This is formalized by the component $R_\kw{r}$.
-From this description,
-we can derive the layer's simulation relation
-as:
-\[
-  (k_1, m_1) \mathrel{R} (k_2, m_2)
-  \: \Leftrightarrow \:
-  \exists \, \iota \:\bdot\:
-    k_1 \mathrel{R^\kw{r}_\iota} k_2 \:\wedge\:
-    k_1 \mathrel{R^\kw{m}_\iota} m_2 \:\wedge\:
-    m_1 \stackrel{\iota}{\hookrightarrow} m_2
-\]
-\[
-  \begin{tikzcd}[row sep=large]
-    k_1 \ar[d, "R^\kw{r}_\iota"']
-        \ar[dr, "R^\kw{m}_\iota"'] &
-    m_1 \ar[d, hook, "\iota"] \\
-    k_2 & m_2
-  \end{tikzcd}
-\]
-Describing simulation relations in this way
-allows us to take advantage of this pattern
-when we develop proof principles for
-individual layers,
-especially when it comes to
-making sure our simulation
-relations are compatible with
-compilation by CompCertX.
-
-Unfortunately,
-simulation relations described in this way
-do not directly compose.
-To see why,
-consider the following diagram:
-\[
-  \begin{tikzcd}
-    k_1 \ar[d] \ar[dr] & m_1 \ar[d, hook] \\
-    k_2 \ar[d] \ar[dr] & m_2 \ar[d, hook] \\
-    k_3 & m_3
-  \end{tikzcd}
-\]
-Injections compose as expected,
-in the sense that
-${\stackrel{\: \iota \circ \iota'}{\longhookrightarrow}} =
- {\stackrel{\iota}{\hookrightarrow}} \circ
- {\stackrel{\iota'}{\hookrightarrow}}$.
-We also place restrictions on $R^\kw{m}$
-relations
-which guarantee that they composes with memory injections
-in the appropriate way.
-However,
-to formulate the composite $R^\kw{m}$,
-we must existentially quantify
-over the intermediate memory state $m_2$ as well.
-Because there is no way to guarantee consistency between
-the $m_2$ involved in
-$\stackrel{\iota}{\hookrightarrow} \circ
- \stackrel{\iota}{\hookrightarrow}$
-and in the composite $R^\kw{m}$,
-the composition does not behave as expected.
-
-To work around this issue,
-we can use formal sequences of
-$(R^\kw{r}, R^\kw{m})$ pairs to describe the
-simulation relation used by vertically composable
-CertiKOS layers.
-We can then compose 
-the overall simulation relations derived from
-individual components
-when we formulate the soundness proof.
-Another approach is to generalize our pattern
-so that it still provides the same advantages
-but behaves in a better way
-with respect to composition.
-This was the original motivation
-for my work on
-CompCert Kripke logical relations
-(\S\ref{sec:cklr}).
-
-
-%}}}
-
-\section{Conclusion} %{{{
-
-The new presentation of certified abstraction layers
-laid out in this chapter
-eliminates some of the complexity found in the original code
-by decoupling the model from CompCert semantics.
-In doing so,
-the new exposition makes precise the underlying mathematical structures
-and some of the challenges involved in
-our approach to layered verification.
-
-In particular,
-the categorical structures behind our layer calculus
-are made explicit.
-The distinctions between our restricted form of product
-and the more general monoidal structure
-hints at the connections between our framework
-and linear logic,
-where cartesian and tensor products cohabitate
-and work together.
 
 %}}}
 
