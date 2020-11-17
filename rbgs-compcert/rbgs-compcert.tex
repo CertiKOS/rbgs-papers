@@ -52,6 +52,7 @@
 \newcommand{\mext}{\le_\kw{m}}
 \newcommand{\refby}{\preceq}
 \newcommand{\scref}{\sqsupseteq}
+\newcommand{\CA}{{\mathcal{C} \!\mathcal{A}}}
 
 % Pointers for justified sequences %{{{
 
@@ -4016,6 +4017,178 @@ This is expressed as:
 %}}}
 
 %}}}
+
+\section{Calling convention}
+
+We now examine in more detail
+the simulation convention
+$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
+used in the formulation of Theorem~\ref{thm:compc}.
+
+\subsection{Formulation}
+
+It comprises the following components:
+\[
+  \mathbb{C} :=
+    \mathcal{R}^* \cdot
+    \mathcal{C}\!\mathcal{A} \cdot
+    \kw{injp}_{\!\mathcal{A}}
+\]
+The first component ensures
+that the source is well-behaved
+with respect to various memory relations,
+namely:
+\[
+  \mathcal{R} := \kw{injp} + \kw{ext} + \kw{wt} + \kw{va}
+\]
+The component
+$\kw{injp}_{\!\mathcal{A}}$
+allows the assembly execution
+to allocate stack frames
+and guarantees the preservation by external calls
+of their assembly-specific regions.
+Finally,
+The inner component
+$\mathcal{C} \!\mathcal{A}$
+formalizes the structural aspects of
+the C calling convention,
+in particular
+the encoding of C function arguments
+in assembly registers and on the stack.
+
+\begin{definition}
+The simulation convention
+${\mathcal{C} \!\mathcal{A}} :
+ \mathcal{C} \Leftrightarrow \mathcal{A}$
+is defined as follows:
+\begin{align*}
+  {\mathcal{C} \!\mathcal{A}} &:=
+    \langle
+      W_{\mathcal{C} \!\mathcal{A}},
+      {\mathcal{C} \!\mathcal{A}}^\que,
+      {\mathcal{C} \!\mathcal{A}}^\ans
+    \rangle
+    \\
+  W_{\mathcal{C} \!\mathcal{A}} &:=
+    \kw{signature} \times
+    \kw{regset}
+\end{align*}
+\[
+  \AxiomC{$
+   {\begin{array}{c}
+      \kw{WB}(\mathit{sg}, \vec{v}, \bar{m}) \\
+      \mathit{vf} = \mathit{rs}[\kw{pc}] \\
+      \vec{v} = \kw{args}(\mathit{sg}, \mathit{rs}, m) \\
+      \bar{m} = \kw{drop\_args}(\mathit{sg}, \mathit{rs}, m)
+    \end{array}}
+  $}
+  \UnaryInfC{$
+    (\mathit{sg}, \mathit{rs}) \Vdash
+    \mathit{vf}[\mathit{sg}](\vec{v})@\bar{m}
+    \mathrel{\CA^\que}
+    \mathit{rs}@m
+  $}
+  \DisplayProof
+\]
+\[
+  \AxiomC{$v' = \kw{retval}(\mathit{sg}, \mathit{rs}')$}
+  \AxiomC{$\mathit{rs} \equiv_\kw{CS} \mathit{rs}'$}
+  \AxiomC{$\bar{m}' \mext m'$}
+  \TrinaryInfC{$
+    (\mathit{sg}, \mathit{rs}) \Vdash
+    v'@\bar{m}'
+    \mathrel{\CA^\ans}
+    \mathit{rs}'@m'
+  $}
+  \DisplayProof
+\]
+\end{definition}
+
+The predicate $\kw{WB}$
+ensure that the arguments $\vec{v}$ are well-typed
+with respect to the signature $\mathit{sg}$,
+and that global constants have their prescribed values
+in the source memory $\bar{m}$.
+The function $\kw{args}$ extracts
+the value of arguments from the assembly query.
+Last but not least,
+$\kw{drop\_args}$ ensures that
+the regions of the memory which encode the arguments
+at the assembly level
+are inaccessible to the source execution.
+
+\subsection{Incoming calls}
+
+To establish that incoming calls
+performed according to $\mathbb{C}$
+are compatible with the various passes of CompCertO,
+we rely on the following property.
+
+\begin{lemma} \label{lm:incoming}
+Any simulation convention $\mathbb{R} = \mathbb{R}_1 \cdots \mathbb{R}_n$
+such that $\mathbb{R}_i \in \{ \kw{ext}, \kw{inj}, \kw{wt}, \kw{va} \}$
+satisfies the following property:
+\[
+  \CA \cdot \kw{injp} 
+  \scref
+  \kw{injp} \cdot \mathbb{R} \cdot \kw{alloc} \cdot \kw{ext} \cdot \kw{stacking} \cdot \kw{asmgen} \cdot \kw{injp}
+\]
+\begin{proof}
+For a memory injection $f$,
+defined the injection $\kw{dom}(f)$
+which maps every block $b$ in the domain of $f$
+to itself with no offset shifting.
+The following property is key to the proof:
+\[
+  f \Vdash m \hookrightarrow m' \quad \Rightarrow \quad
+  \kw{dom}(f) \Vdash m \hookrightarrow m
+\]
+This allows us to expand $\CA$ by using the corresponding memory state
+in both the source and target queries for all of CompCertO's passes.
+For replies, the injection and extension properties provided by the passes
+can be composed back into a single injection,
+and the preservation properties required by the left-hand side $\kw{injp}$
+can be obtained by the outer $\kw{injp}$ properties on the right-hand side.
+For details,
+see \texttt{driver/CallConv.v}.
+\end{proof}
+\end{lemma}
+
+The passes of CompCertO can be extended with
+self-simulation properties of \kw{Clight} and \kw{Asm}
+to provide the $\mathcal{R}^*$ component of $\mathbb{C}$,
+as well as the outermost $\kw{injp}$ components required by Lemma~\ref{lm:incoming}.
+
+\subsection{Outgoing calls}
+
+For most passes,
+the requirements on external calls
+can be satisfied by the $\mathcal{R}^*$ component of $\mathbb{C}$.
+To bridge the gap for the remaining passes,
+we use the following lemma.
+
+\begin{lemma}
+The following convention refinement holds:
+\[
+  \kw{alloc} \cdot \kw{ext} \cdot \kw{stacking} \cdot \kw{asmgen}
+  \scref
+  \kw{ext} \cdot \kw{ext} \cdot \kw{injp} \cdot \kw{ext} \cdot \CA
+\]
+\begin{proof}
+The proof essentially works by converting
+the intermediate $\mathcal{L}$ and $\mathcal{M}$ queries
+into $\mathcal{C}$ queries by extracting function arguments
+in the appropriate language-specific way.
+The main difficulty is then to reconstruct
+appropriate $\mathcal{L}$ and $\mathcal{M}$ replies
+from the $\mathcal{C}$ replies obtained from the right-hand side;
+in particular,
+to reconstruct the location and register states,
+we must use an aggregate of the original callee-save registers
+and store the $\mathcal{C}$ return value in the appropriate locations,
+leaving all others with the value $\kw{undef}$.
+\end{proof}
+\end{lemma}
 
 \section{Related work and evaluation} \label{sec:rw} %{{{
 
