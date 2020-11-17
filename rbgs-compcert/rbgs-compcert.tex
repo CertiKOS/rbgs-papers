@@ -228,13 +228,79 @@ comes with its own challenges.
 
 %}}}
 
+\subsection{Compiler correctness} %{{{
+
+The most straightforward sense in which
+a compiler can be correct is a
+\emph{semantics preservation} property of the form
+\[
+  \llbracket p \rrbracket_\kw{S} \sim
+  \llbracket \kw{C}(p) \rrbracket_\kw{T}
+  \,,
+\]
+asserting the semantics $\llbracket p \rrbracket_\kw{S}$
+of the source program $p$
+to be related in some sense $\sim$
+to the semantics $\llbracket \kw{C}(p) \rrbracket_\kw{T}$
+of the target program $\kw{C}(p)$ emitted by the compiler $\kw{C}$.
+
+For whole-program compilers,
+semantics preservation is simple enough.
+In CompCert,
+the semantics of the source and target programs
+are given as labelled transition systems,
+and the relation $\sim$ is a simulation property.
+A more abstract version of the theorem can also be derived,
+where the semantics are given in terms of observable traces,
+and correctness is expressed as a trace containment property.
+
+However,
+in practice compilation usually operates on program \emph{components}
+rather that whole programs.
+In this context,
+formulating semantics preservation directly
+is challenging.
+The semantics itself must be compositional
+and account for the intricacies
+of linking and cross-component interactions.
+Worse,
+these interactions are often very different
+between the source and target languages,
+so the relation $\sim$ must bridge
+a significant abstraction gap.
+Given these difficulties,
+common wisdom holds semantics preservation
+to be a lost cause
+for compositional compiler correctness.
+
+Instead,
+reserch in the area has mainly focused on
+compositional reasoning methods
+based on contextual equivalence and refinement,
+formulated by reference to (whole-program)
+operational semantics,
+side-stepping the need for a compositional semantics
+\cite{next700}.
+This approach has been successfully applied
+to CompCert, turning it
+into a platform enabling compositional verification
+\cite{sepcompcert,compcertm}.
+
+%}}}
+
 \subsection{Decomposing heterogenous systems} %{{{
 
-Existing work turns CompCert
-into a platform enabling compositional verification (\S\ref{sec:rw}).
-%\cite{compcompcert,sepcompcert,compcertm,vst,verasco}.
-However, in most cases,
-the horizon is a completed assembly program to be run as a user-level process.
+However, by necessity,
+its horizon is a completed assembly program to be run as a user-level process.
+Interactions between the completed program and its environment
+are expressed through event traces,
+but compositionality breaks at the boundary between
+the completed program and the rest of the system.
+This becomes a limitation
+when we seek to use the resulting compiler
+in the construction and verification
+of complex heterogenous systems.
+
 %Indeed, while
 %CompCertM allows the user to reason about components with C and assembly
 %call interfaces in isolation and link them, its top-level correctness
@@ -247,10 +313,23 @@ the horizon is a completed assembly program to be run as a user-level process.
 %at various levels of abstraction.
 %In the context of the verification of heterogenous systems
 %where software and hardware component
-This becomes a limitation in the context of heterogenous systems.
 
-For example,
-consider the problem of verifying
+\begin{figure}
+  \centering
+  \includegraphics[scale=0.09]{hetsys}
+  \caption{A futuristic verification scenario.
+    Contextual approaches to compositional reasoning
+    impose a boundary between
+    the completed program and its environment;
+    compositionality operates only within this boundary.
+    However,
+    the verification of large-scale, heterogenous systems
+    requires modelling components which cross this boundary.}
+  \label{fig:hetsys}
+\end{figure}
+
+\begin{example} \label{ex:nicdriver} %{{{
+Consider the problem of verifying
 a network interface card (NIC) driver.
 The NIC and its driver are closely coupled,
 but the details of their interaction
@@ -287,11 +366,72 @@ it would be possible to establish a relationship between
 the overall specification $\sigma : \kw{Net} \rightarrow \mathcal{C}$ and
 the composition
 $\sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC}$.
+\end{example}
+
+
 Then a \emph{compiler of certified components}
 would help us transport specifications and proofs
 obtained with respect to the driver's C code
 to the compiled code operating at the level of assembly
 ($\sigma' : \kw{Net} \rightarrow \mathcal{A}$).
+
+The example above is by no means contrived,
+and the pattern is pervasive even in more mundane situations.
+Indeed,
+\emph{most} libraries available to contemporary programmers
+are used to mediate access to external
+network services, file systems, user interfaces, \ldots
+or use them in specific ways.
+Proper high-level specifications
+of software components of this kind
+must model the resources they access
+
+To be sure,
+given a specific situation
+such as the one described in Example~\ref{ex:nicdriver},
+existing techniques could be extended to
+bring the NIC hardware model
+within the scope of the ``whole program'' being considered,
+and the exchange of Ethernet packets
+as part of its observable behavior.
+However, this approach does not scale.
+[explain why:
+there are hundreads of such situations involved in verifying
+a large-scale heterogenous system;
+this subordinates everything to the compiler correctness theoerm
+when it should just be one component;
+we seek to build an extensible framework once and for all;
+what happens when the NIC manufacturer,
+database engine vendor,
+network service provider
+all give us their own modified version of CompCertM]
+
+Scaling up verification requires
+giving an account of the operation
+of such components
+directly in terms of their interactions with
+the resources they access.
+
+[A satisfactory formal account of
+the functionality of such libraries
+\emph{cannot} be formulated in terms of the interaction
+of a postulated ``completed program'' with its environment
+(say, the operating system),
+because this interaction is precisely the thing
+that such libraries seek to abstract.]
+
+[We need a compositional semantics there's no way around it]
+
+%}}}
+
+\subsection{Refinement-based game semantics} %{{{
+
+Fortunately,
+
+
+
+
+
 
 In this paper, we show how to adapt
 the semantic model and correctness proofs of CompCert
@@ -474,6 +614,8 @@ are discussed in \S\ref{sec:backend}.
 %[The public URL of the CompCertO repository is omitted
 %for the purposes of the double-blind review process
 %but has been provided in HotCRP alongside this submission.]
+
+%}}}
 
 %}}}
 
@@ -1320,8 +1462,8 @@ $\tilde{\mathbb{C}} :=
   \langle \kw{val}^*, \tilde{\mathbb{C}}^\que, \tilde{\mathbb{C}}^\ans \rangle :
     \tilde{\mathcal{C}} \Leftrightarrow \tilde{\mathcal{A}}$.
 We use the set of worlds $\kw{val}^*$
-to relate the stack of
-assembly questions to that of the corresponding answers.
+to relate the stack within
+assembly questions to that in the corresponding answers.
 The relations $\tilde{\mathbb{C}}^\que, \tilde{\mathbb{C}}^\ans$
 are defined by:
 %can be expressed using the rules:
@@ -2531,6 +2673,221 @@ in the file \texttt{common/Smallstep.v}.
 
 %}}}
 
+\subsection{Compiler correctness} \label{sec:comppass} %{{{
+
+We can now present our result and some of its consequences.
+
+\begin{theorem}[Compositional Correctness of CompCertO] \label{thm:compc} %{{{
+For a \kw{Clight} program $p$
+and an \kw{Asm} program $p'$ such that
+$\kw{CompCert}(p) = p'$,
+the following simulation holds:
+\[
+    \kw{Clight}(p) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+    \kw{Asm}(p') \,,
+\]
+\end{theorem}
+%}}}
+
+The simulation convention $\mathbb{C}$ is defined in \S{}X.Y.
+It formalizes the correspondance between C and assembly interactions.
+By necessity,
+it follows $\kw{Clight}$ and $\kw{Asm}$ in its use of
+the CompCert memory model,
+but is otherwise independent of the compiler
+and in particular is not sensitive to the inclusion of optional optimization passes.
+
+\subsection{Compositional compilation and verification} \label{sec:cver} %{{{
+
+While the main focus of this paper is to
+the present techniques we used to obtain this result,
+we first outline some of the ways in which
+it can be used to carry out compositional reasoning
+in the presence of compilation.
+
+\paragraph{Separate compilation}
+
+%Recalling Fig.~\ref{fig:process},
+Consider the translation units
+$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
+compiled and linked to
+$\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
+We~can use
+Thms.~\ref{thm:fsim-hcomp},
+\ref{thm:asmlinking} and
+\ref{thm:compc}
+to establish the following separate compilation property:
+\begin{equation}
+  \label{eqn:sepcomp}
+  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+  \kw{Asm}(\mathtt{M.s})
+\end{equation}
+That is,
+the linked \kw{Asm} program
+$\mathtt{M.s}$
+faithfully implements
+the horizontal composition of the source modules' behaviors,
+following the simulation convention $\mathbb{C}$.
+
+\paragraph{Compositional verification}
+
+Additionally,
+suppose we wish to verify that the composite program
+satisfies a specification $\Sigma$,
+also expressed as a transition system
+for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
+We must first decompose $\Sigma$
+%along the lines of the program's components:
+into:
+\[
+    \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
+    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
+\]
+Then for each module, we prove that
+$\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
+This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
+to establish the correctness property
+$\Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+        \kw{Asm}(\mathtt{M.s})$.
+
+\paragraph{Mixed compilation}
+
+Note that Eqn.~\ref{eqn:sepcomp} can be established
+as long as the property
+$\kw{Clight}(\mathtt{Mi.c})
+ \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+ \kw{Asm}(\mathtt{Mi.s})$
+holds independently for each module.
+It is possible for the different $\mathtt{Mi.s}$
+to be obtained by different compilers,
+as long as each one satisfies a correctness property
+following the simulation convention in Thm.~\ref{thm:compc}.
+Indeed this is the case for versions of CompCertO
+obtained by enabling different optimization passes.
+Moreover, if some of the $\mathtt{Mi.s}$
+are hand-written assembly modules satisfying
+$\mathcal{C}$-style specifications,
+then we can prove on a case-by-case basis that
+$\Sigma_i \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{Mi.s})$
+and proceed with the rest of the proof as before.
+
+\paragraph{Granular use of $\mathbb{C}$}
+
+In addition to the high-level principles outlined above,
+Theorem~\ref{thm:compc} enables low-level reasoning
+about the interaction between $\kw{Asm}$ code
+and components implementing $\mathcal{C}$-style specifications
+(including assembly modules compiler from $\kw{Clight}$ code),
+and conversely between $\kw{Clight}$ code
+and components implementing $\mathcal{A}$-style specifications,
+(including hand-written assembly
+which may offer some guarantees to a $\mathcal{C}$ caller, or none).
+Indeed,
+the simulation convention $\mathbb{C}$
+serves as a formalization of the C calling convention
+and precisely capture the guarantees that a C compiler must provide
+at the granularity of individual calls.
+
+To illustrate this,
+consider two transition systems
+$\Sigma_\mathcal{C}
+ \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+ \Sigma_\mathcal{A}$
+related by the simulation convention $\mathbb{C}$.
+We will first consider
+what we can learn about the interaction
+$\kw{Asm}(p) \oplus \Sigma_\mathcal{A}$
+of an arbitrary assembly program $p$ with $\Sigma_\mathcal{A}$,
+using only $\Sigma_\mathcal{C}$
+and its relationship with $\Sigma_\mathcal{A}$.
+
+To show that the combination admits a certain behavior
+when $p$ calls into $\Sigma_\mathcal{A}$ with a query $m_\mathcal{A}$,
+we may choose any world and related query
+$w \Vdash m_\mathcal{C} \mathrel{\mathbb{C}^\que} m_\mathcal{A}$,
+establishing that $p$ performed the call
+in accordance with the C calling convention in use.
+As we unroll the behavior of $\Sigma_\mathcal{C}$ on $m_\mathcal{C}$,
+the simulation property ensures that
+for any eventual answer $n_\mathcal{C}$ produced by $\Sigma_\mathcal{C}$,
+there exists a related answer
+$w \Vdash n_\mathcal{C} \mathrel{\mathbb{C}^\ans} n_\mathcal{A}$,
+allowing us to deduce that the execution of $p$ eventually resumes.
+The answer $n_\mathcal{A}$ is not completely determined,
+since for instance $\Sigma_\mathcal{A}$ is free to allocate
+new blocks in the target memory
+and leave caller-save registers in an abitrary state,
+however its relationship with $w$ and $n_\mathcal{C}$
+captures all of the guarantees provided by the C calling convention.
+
+Conversely,
+consider the combination $\kw{Clight}(p) \oplus \Sigma_\mathcal{C}$
+and what we can learn of the interaction between $p$ and $\Sigma_\mathcal{C}$
+based on the latter's relationship with $\Sigma_\mathcal{A}$.
+To show that the combination admits a certain behavior when
+$p$ calls into $\Sigma_\mathcal{C}$ with a query $m_\mathcal{C}$,
+we must show this behavior hold for \emph{all} possible choices of
+$w$ and $m_\mathcal{A}$ such that
+$w \Vdash m_\mathcal{C} \mathrel{\mathbb{C}^\que} m_\mathcal{A}$,
+knowing that if $\Sigma_\mathcal{A}$ eventually returns with 
+
+
+---
+
+
+
+Using C functions from
+arbitrary assembly contexts is also possible,
+because the compiler's simulation convention $\mathbb{C}$
+captures all of the guarantees provided by CompCertO and
+directly specifies the behavior of the compiled assembly code.
+A proof involving an arbitrary assembly context
+which invokes a function compiled by CompCertO
+must establish that the call is performed
+according to the C calling convention.
+Then Thm.~\ref{thm:compc}
+can be used to reason about the behavior of the call
+in terms of the semantics of the source code
+or a $\mathcal{C}$ specification that it satisfies.
+
+\paragraph{}
+
+
+
+The passes of CompCertO are shown in Table~\ref{tbl:passes}.
+The techniques outlined above allow us to formulate
+a simulation convention
+$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
+for the compiler, %which is both compositional
+%and independent of the exact sequence of passes
+%included in the compiler.
+and to establish the following correcntess property.
+
+%\begin{proof}
+%%\begin{optional}
+%Use Thm.~\ref{thm:fsim-vcomp} to compose
+%the correctness proofs of the compiler passes and
+%self-simulations shown in Table~\ref{tbl:passes}.
+%By properties of the Kleene star,
+%the outgoing simulation convention of each of the
+%passes \kw{SimplLocals}--\kw{Renumber} %\kw{Unusedglob}
+%can be folded into $(\kw{ext} + \kw{injp})^*$
+%to obtain the overall outgoing convention $\mathbb{C}$.
+%Likewise, by properties of $\kw{inj}$ and $\kw{ext}$
+%%(Thm.~\ref{thm:cklr-props}),
+%their incoming simulation conventions
+%can be folded into $\kw{inj}$
+%to obtain the overall incoming convention $\mathbb{C}$.
+%%\end{optional}
+%For details, see \texttt{driver/Compiler.v}.
+%\end{proof}
+%%}}}
+
+%}}}
+
+%}}}
+
 %}}}
 
 \section{Simulation convention algebra} \label{sec:simalg} %{{{
@@ -2823,139 +3180,6 @@ in \texttt{common/CallconvAlgebra.v}.
 \end{proof}
 \end{theorem}
 %}}}
-
-%}}}
-
-\subsection{Compiler correctness} \label{sec:comppass} %{{{
-
-We can now present our central result.
-The passes of CompCertO are shown in Table~\ref{tbl:passes}.
-The techniques outlined above allow us to formulate
-a simulation convention
-$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
-for the compiler, %which is both compositional
-%and independent of the exact sequence of passes
-%included in the compiler.
-and to establish the following correcntess property.
-
-\begin{theorem}[Compositional Correctness of CompCertO] \label{thm:compc} %{{{
-For a \kw{Clight} program $p$
-and an \kw{Asm} program $p'$ such that
-$\kw{CompCert}(p) = p'$,
-the following simulation holds:
-\[
-    \kw{Clight}(p) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-    \kw{Asm}(p') \,,
-\]
-where the simulation convention $\mathbb{C}$ is defined as:
-\[
-    \mathbb{C} := (\kw{ext} + \kw{injp})^* \cdot \kw{inj} \cdot
-      (\kw{va} \cdot \kw{ext})^3 \cdot
-      \kw{wt} \cdot \kw{alloc} \cdot
-      \kw{ext} \cdot %_\mathcal{L} \cdot
-      \kw{stacking} \cdot
-      \kw{asmgen}
-      \,.
-\]
-\begin{proof}
-%\begin{optional}
-Use Thm.~\ref{thm:fsim-vcomp} to compose
-the correctness proofs of the compiler passes and
-self-simulations shown in Table~\ref{tbl:passes}.
-By properties of the Kleene star,
-the outgoing simulation convention of each of the
-passes \kw{SimplLocals}--\kw{Renumber} %\kw{Unusedglob}
-can be folded into $(\kw{ext} + \kw{injp})^*$
-to obtain the overall outgoing convention $\mathbb{C}$.
-Likewise, by properties of $\kw{inj}$ and $\kw{ext}$
-%(Thm.~\ref{thm:cklr-props}),
-their incoming simulation conventions
-can be folded into $\kw{inj}$
-to obtain the overall incoming convention $\mathbb{C}$.
-%\end{optional}
-For details, see \texttt{driver/Compiler.v}.
-\end{proof}
-\end{theorem}
-%%}}}
-
-%}}}
-
-\subsection{Compositional compilation and verification} \label{sec:cver} %{{{
-
-%Recalling Fig.~\ref{fig:process},
-Consider the translation units
-$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
-compiled and linked to
-$\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
-We~can use
-Thms.~\ref{thm:fsim-hcomp},
-\ref{thm:asmlinking} and
-\ref{thm:compc}
-to establish the following separate compilation property:
-\begin{equation}
-  \label{eqn:sepcomp}
-  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
-  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-  \kw{Asm}(\mathtt{M.s})
-\end{equation}
-That is,
-the linked \kw{Asm} program
-$\mathtt{M.s}$
-faithfully implements
-the horizontal composition of the source modules' behaviors,
-following the simulation convention $\mathbb{C}$.
-
-Additionally,
-suppose we wish to verify that the overall program
-satisfies a specification $\Sigma$,
-also expressed as a transition system
-for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
-We must first decompose $\Sigma$
-%along the lines of the program's components:
-into:
-\[
-    \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
-    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
-\]
-Then for each module, we prove that
-$\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
-This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
-to establish the correctness property
-$\Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-        \kw{Asm}(\mathtt{M.s})$.
-
-Note that Eqn.~\ref{eqn:sepcomp} can be established
-as long as the property
-$\kw{Clight}(\mathtt{Mi.c})
- \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
- \kw{Asm}(\mathtt{Mi.s})$
-holds independently for each module.
-It is possible for the different $\mathtt{Mi.s}$
-to be obtained by different compilers,
-as long as each one satisfies a correctness property
-following the simulation convention in Thm.~\ref{thm:compc}.
-Indeed this is the case for versions of CompCertO
-obtained by enabling different optimization passes.
-Moreover, if some of the $\mathtt{Mi.s}$
-are hand-written assembly modules satisfying
-$\mathcal{C}$-style specifications,
-then we can prove on a case-by-case basis that
-$\Sigma_i \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{Mi.s})$
-and proceed with the rest of the proof as before.
-
-Using C functions from
-arbitrary assembly contexts is also possible,
-because the compiler's simulation convention $\mathbb{C}$
-captures all of the guarantees provided by CompCertO and
-directly specifies the behavior of the compiled assembly code.
-A proof involving an arbitrary assembly context
-which invokes a function compiled by CompCertO
-must establish that the call is performed
-according to the C calling convention.
-Then Thm.~\ref{thm:compc}
-can be used to reason about the behavior of the call
-in terms of the semantics of the source code
-or a $\mathcal{C}$ specification that it satisfies.
 
 %}}}
 
