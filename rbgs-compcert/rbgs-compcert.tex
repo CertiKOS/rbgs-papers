@@ -3842,407 +3842,6 @@ found under \texttt{cklr/}.
 
 %}}}
 
-\section{Invariants} \label{sec:inv} %{{{
-
-% preamble {{{
-
-Several passes of CompCert
-rely on the preservation of invariants
-by their source program
-(this situation is illustrated in more detail in the supplementary
-appendix):
-%in Fig.~\ref{fig:fsim-inv}:
-when the semantics of a language preserves an invariant,
-the preservation properties can assist
-in proving forward simulations
-which use the language as their source.
-This allows us to decompose the simulation proof,
-and in the case of $\kw{RTL}$
-the preservation proofs can be reused for multiple passes.
-
-In CompCert,
-this technique is deployed in an ad-hoc manner:
-for each pass using an invariant,
-the simulation relation is strengthened to assert that
-the invariant holds on the source state,
-and the preservation properties for the source language
-are used explicitly in the simulation proof
-to maintain this invariant.
-In CompCertO,
-this becomes more involved,
-because the simulation convention must be altered
-to ensure that invariants are preserved
-by external calls.
-
-On the other hand,
-our simulation infrastructure offers the opportunity
-to capture and reason about invariants explicitly,
-and to further decouple preservation and simulation proofs.
-In this section,
-we give an overview of our treatment of invariants.
-For details,
-see the supplementary appendix and
-\texttt{common/Invariant.v}
-in the Coq development.
-
-%}}}
-
-\subsection{Invariants and language interfaces} %{{{
-
-First, we define a sort of ``invariant convention'',
-which describes how a given invariant impacts the questions and answers
-of the language under consideration.
-
-\begin{definition} % Invariant for a language interface {{{
-An \emph{invariant for a language interface} $A$
-is a tuple
-$\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$,
-where $W$ is a set of worlds
-and $\mathbb{P}^\que, \mathbb{P}^\ans$
-are families of predicates on $A^\que, A^\ans$
-indexed by $W$.
-\end{definition}
-%}}}
-
-\begin{example} \label{ex:wt} %{{{
-Typing constraints for the language interface $\mathcal{C}$
-can be expressed as the invariant:
-\begin{gather*}
-  \kw{wt} :=
-    \langle
-      \kw{sig},
-      \mathbb{P}_\kw{wt}^\que,
-      \mathbb{P}_\kw{wt}^\ans
-    \rangle
-  \\
-  \AxiomC{$\vec{v} <: \mathit{sg}.\kw{args}$}
-  \UnaryInfC{$\mathit{sg} \Vdash
-    \mathit{vf}[\mathit{sg}](\vec{v})@m \in \mathbb{P}_\kw{wt}^\que$}
-  \DisplayProof
-  \qquad
-  \AxiomC{$v' <: \mathit{sg}.\kw{res}$}
-  \UnaryInfC{$\mathit{sg} \Vdash
-    v'@m' \in \mathbb{P}_\kw{wt}^\ans$}
-  \DisplayProof
-\end{gather*}
-The proposition $\vec{v} <: \mathit{sg}.\kw{args}$
-asserts that the types of the arguments $\vec{v}$
-match those specified by the signature $\mathit{sg}$.
-The proposition $v' <: \mathit{sg}.\kw{res}$
-asserts a similar property for the return value $v'$.
-\end{example}
-%}}}
-
-Invariants can be seen as a special case of simulation convention
-which constrain the source and target questions and answers
-to be equal.
-This can be formalized as follows.
-
-\begin{definition}[Simulation conventions for invariants]
-A $W$-indexed predicate $P$ on a set $X$
-can be promoted to a Kripke relation
-$\hat{P} \in \mathcal{R}_W(X, X)$
-defined by the rule:
-\[
-  \AxiomC{$w \Vdash x \in P$}
-  \UnaryInfC{$w \Vdash x \mathrel{\hat{P}} x$}
-  \DisplayProof
-\]
-Then an invariant
-$\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$
-can be promoted to a simulation convention:
-$\hat{\mathbb{P}} :=
- \langle W, \hat{\mathbb{P}}^\que, \hat{\mathbb{P}}^\ans \rangle$.
-\end{definition}
-
-%}}}
-
-\subsection{Typing invariants} \label{sec:wt} %{{{
-
-The typing invariant described in Ex.~\ref{ex:wt}
-is used by the $\kw{Selection}$ and $\kw{Allocation}$ passes.
-We have updated their correctness proofs
-as well as the preservation proofs in
-$\texttt{Cminortyping.v}$ and $\texttt{RTLtyping.v}$
-to use our framework.
-
-The invariant $\kw{wt}$ satisfies one key property:
-when a simulation convention $\mathbb{R}$
-consists of a sequence of CKLRs and other invariants,
-the following property holds:
-\[
-  \kw{wt} \cdot \mathbb{R} \cdot \kw{wt} \equiv
-  \mathbb{R} \cdot \kw{wt}
-\]
-This means CompCertO's overall simulation convention
-can eliminate the typing invariant for the $\kw{Selection}$ pass,
-retaining only that used for $\kw{Allocation}$.
-In turn, this facilitates the simplification of the convention for
-the passes from \kw{Clight} to \kw{Inlining}.
-
-%}}}
-
-\subsection{Value analysis} \label{sec:va} %{{{
-
-The passes
-$\kw{Constprop}$, $\kw{CSE}$ and $\kw{Deadcode}$
-use CompCert's value analysis framework.
-Abstract interpretation is performed %at compilation time
-on their source program,
-and the resulting information is used to carry out
-the corresponding optimizations.
-The correctness proofs for these passes then rely
-on the invariant $\kw{va}$,
-which asserts that the concrete runtime states
-satisfy the constraints encoded in the corresponding
-abstract states.
-
-We have updated the value analysis framework
-and associated pass correctness proofs
-to fit the invariant infrastructure described in this section.
-Value analysis passes use the convention
-$\kw{va} \cdot \kw{ext} \twoheadrightarrow \kw{va} \cdot \kw{ext}$.
-Unfortunately,
-because it combines constraints with mixed variance,
-the invariant $\kw{va}$ does not propagate in the same way as $\kw{wt}$,
-so the compiler's simulation convention must retain
-the component $(\kw{va} \cdot \kw{ext})^3$ as-is.
-When some of the corresponding optimization passes are disabled,
-we use self-simulations of the $\kw{RTL}$ language
-to match this convention nonetheless.
-
-%}}}
-
-%}}}
-
-\section{Specialized simulation conventions} \label{sec:backend} %{{{
-
-For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
-we construct more specific simulation conventions
-which express the correspondance between
-the higher-level and lower-level representations
-of function calls and returns.
-These passes use identical conventions for
-incoming and external calls.
-
-\subsection{The \kw{Allocation} pass} \label{sec:alloc} %{{{
-
-The \kw{Allocation} pass from \kw{RTL} to \kw{LTL}
-is the first pass to modify the interface of function calls.
-\kw{LTL} uses \emph{abstract locations}
-which represent the stack slots and machine registers
-eventually used in the target assembly program.
-Abstract locations contain arguments, temporaries and return values.
-The contents are stored in a \emph{location map},
-passed across components by the interface $\mathcal{L}$
-alongside memory states.
-%Up to \kw{RTL},
-%arguments are passed as standalone values,
-%but in \kw{LTL}
-%they are mapped to locations.
-The compiler also expects the values of
-abstract locations designated as \emph{callee-save}
-to be preserved by function calls.
-
-To express the simulation convention used by the \kw{Allocation} pass,
-we will use the following notations.
-For a signature $\mathit{sg}$ and a location map $\mathit{ls}$,
-we write $\kw{args}(\mathit{sg}, \mathit{ls})$
-to represent the argument values stored in $\mathit{ls}$.
-Likewise,
-$\kw{retval}(\mathit{sg}, \mathit{ls})$ extracts
-the contents of locations used to store the return value.
-The relation $\equiv_\kw{CS}$ asserts that
-two location maps agree on callee-save locations.
-
-The simulation convention
-$\kw{alloc} : \mathcal{C} \Leftrightarrow \mathcal{L}$
-uses its worlds to remember the initial location map
-and the signature associated with a call,
-and can then be defined by:
-\[
-  \kw{alloc} := \langle
-      \kw{signature} \times \kw{locmap}, \:
-      R_\kw{alloc}^\que, \:
-      R_\kw{alloc}^\ans \rangle
-\]
-\[
-  \AxiomC{$\vec{v} \vref \kw{args}(\mathit{sg}, \mathit{ls})$}
-  \AxiomC{$m_1 \mext m_2$}
-  \BinaryInfC{$
-      (\mathit{sg}, \mathit{ls}) \Vdash
-      \mathit{vf}[\mathit{sg}](\vec{v})@m_1
-      \mathrel{R_\kw{alloc}^\que}
-      \mathit{vf}[\mathit{sg}](\mathit{ls})@m_2$}
-  \DisplayProof
-\]
-\[
-  \AxiomC{$v' \vref \kw{retval}(sg, ls')$}
-  \AxiomC{$ls \equiv_\kw{CS} ls'$}
-  \AxiomC{$m_1' \mext m_2'$}
-  \TrinaryInfC{$
-      (sg, ls) \Vdash
-      v'@m_1'
-      \mathrel{R_\kw{alloc}^\ans}
-      ls'@m_2'$}
-  \DisplayProof
-\]
-
-%}}}
-
-\subsection{The \kw{Stacking} pass} \label{sec:stacking} %{{{
-
-The \kw{Stacking} pass
-consolidates the information which
-\kw{Linear} stores in abstract stack locations
-into in-memory stack frames.
-The simulation proof uses a memory injection,
-and involves maintaining separation properties
-ensuring that the source memory and
-the regions of stack frames
-introduced by \kw{Stacking}
-occupy disjoint areas of the target memory.
-
-With regards to the memory state,
-the \kw{stacking} simulation convention
-is essentially identical to \kw{injp}.
-Since the new regions of stack frames
-are outside the image of source memory,
-and most of them are local to
-function activations,
-the properties of \kw{injp}
-are largely sufficient
-(see also \S\ref{sec:cklr-worlds}).
-
-The exception to the rule pertains to argument passing.
-Loads from a function's argument locations
-access the caller's stack frame.
-If the area used to store arguments
-overlaps with the injected source memory state,
-then the source program and external calls
-may alter them in unexpected ways.
-In previous CompCert extensions,
-sophisticated techniques were required
-to prevent this from happening.
-
-In our model,
-we simply encode the required separation condition
-in the simulation convention
-$\kw{stacking} : \mathcal{L} \Leftrightarrow \mathcal{M}$.
-The convention
-asserts that the contents of argument locations
-are stored into corresponding stack slots
-within the target memory.
-Additionally, it
-requires that the region of the target memory
-used to store arguments within the caller's stack
-must be disjoint from the injection image of the source memory
-(Fig.~\ref{fig:stacking}).
-For details,
-see \texttt{cc\_stacking} in \texttt{backend/Mach.v}.
-
-\begin{figure}
-\[
-  \begin{tikzpicture}[scale=0.4,>=stealth]
-    \draw ( 1,3) rectangle +(3,1); \node[left] at (1,3.5) {$m_1$};
-    \draw ( 0,0) rectangle +(9,1); \node[left] at (0,0.5) {$m_2$};
-    \node (V1) at (6.5,3.5) {$\vec{v}_1$};
-    \node (V2) at (2.5,0.5) {$\vec{v}_2$};
-    \draw[->] (1,4) -- (1,1); \draw[dotted] (1,1) -- (1,0); \draw[dotted] (4,4) -- (4,0);
-    \draw[->] (V1) -- (V2);
-  \end{tikzpicture}
-  \:{\times}
-  \qquad
-  \begin{tikzpicture}[scale=0.4,>=stealth]
-    \draw ( 1,3) rectangle +(3,1); \node[left] at (1,3.5) {$m_1$};
-    \draw ( 0,0) rectangle +(9,1); \node[left] at (0,0.5) {$m_2$};
-    \node (V1) at (6.5,3.5) {$\vec{v}_1$};
-    \node (V2) at (6.5,0.5) {$\vec{v}_2$};
-    \draw[->] (1,4) -- (1,1); \draw[dotted] (1,1) -- (1,0); \draw[dotted] (4,4) -- (4,0);
-    \draw[->] (V1) -- (V2);
-  \end{tikzpicture}
-  \:{\checkmark}
-\]
-  \caption{Separation of argument
-    in the \kw{stacking} simulation convention.}
-  \label{fig:stacking}
-\end{figure}
-
-%}}}
-
-\subsection{The \kw{Asmgen} pass} \label{sec:asmgen} %{{{
-
-The \kw{Asmgen} pass from \kw{Mach} to \kw{Asm}
-uses a memory extension.
-\kw{Asm} introduces explicit registers for the
-program counter, stack pointer and return address.
-The corresponding simulation convention
-$\kw{asmgen} : \mathcal{M} \Leftrightarrow \mathcal{A}$
-ensures that the appropriate components of
-\kw{Mach}-level queries are mapped to the new registers.
-In addition,
-we must ensure that the call returns the stack pointer
-to its original value,
-and set the program counter to the return address
-specified by the caller.
-
-\begin{optional}
-[XXX: we don't talk about nextblock in our simplified
-exposition of the memory model]
-A more complex challenge is that the $\kw{Asm}$ language
-does not have a control stack,
-but instead executes instruction after instruction
-in a ``flat'' manner,
-making it difficult to distinguish final states.
-To address this,
-we keep track of the initial value $\mathit{nb}_0$ of
-the memory's $\kw{nextblock}$ counter,
-and use it to distinguish between inner and outer
-stack pointers.
-When $\mathit{rs}[\kw{sp}] \ge \mathit{nb}_0$,
-we interpret the \kw{ret} instruction as an \emph{internal} return
-and simply jump to the location pointed to by $\mathit{rs}[\kw{ra}]$.
-However, when $\mathit{rs}[\kw{sp}] < \mathit{nb}_0$,
-we intepret \kw{ret} as a top-level return to the environment,
-and model its behavior as a final state
-rather than an internal step.
-In addition,
-the simulation convention $\kw{asmgen}$
-must ensure that the initial value of the stack pointer
-points to a valid block of the initial memory.
-\end{optional}
-
-This is expressed as:
-\begin{gather*}
-  \kw{asmgen} := \langle \kw{val} \times \kw{val},
-    R_\kw{asmgen}^\que, R_\kw{asmgen}^\ans \rangle
-  \\[1ex]
-  \AxiomC{$\mathit{rs}_1 \uplus
-    [\kw{sp} := \mathit{sp}, \kw{ra} := \mathit{ra}, \kw{pc} := \mathit{vf}]
-    \vref \mathit{rs}_2$}
-  \AxiomC{$m_1 \mext m_2$}
-  \BinaryInfC{
-    $(\mathit{sp}, \mathit{ra}) \Vdash
-     \mathit{vf}(\mathit{sp}, \mathit{ra}, \mathit{rs}_1)@m_1
-     \mathrel{R_\kw{asmgen}^\que}
-     \mathit{rs}_2@m_2$}
-  \DisplayProof
-  \\[1ex]
-  \AxiomC{$
-    \mathit{rs}_1' \uplus [\kw{sp} := \mathit{sp}, \kw{pc} := \mathit{ra}]
-    \vref \mathit{rs}_2'$}
-  \AxiomC{$m_1' \mext m_2'$}
-  \BinaryInfC{$
-    (\mathit{sp}, \mathit{ra}) \Vdash \mathit{rs}_1'@m_1'
-    \mathrel{R_\kw{asmgen}^\ans}
-    \mathit{rs}_2'@m_2'$}
-  \DisplayProof
-\end{gather*}
-
-%}}}
-
-%}}}
-
 \section{Calling convention}
 
 We now examine in more detail
@@ -4710,8 +4309,180 @@ required for this formidable undertaking.
 
 \bibliography{../references}
 
-\begin{optional}
 \appendix
+
+\section{Invariants} \label{sec:inv} %{{{
+
+% preamble {{{
+
+Several passes of CompCert
+rely on the preservation of invariants
+by their source program
+(this situation is illustrated in more detail in the supplementary
+appendix):
+%in Fig.~\ref{fig:fsim-inv}:
+when the semantics of a language preserves an invariant,
+the preservation properties can assist
+in proving forward simulations
+which use the language as their source.
+This allows us to decompose the simulation proof,
+and in the case of $\kw{RTL}$
+the preservation proofs can be reused for multiple passes.
+
+In CompCert,
+this technique is deployed in an ad-hoc manner:
+for each pass using an invariant,
+the simulation relation is strengthened to assert that
+the invariant holds on the source state,
+and the preservation properties for the source language
+are used explicitly in the simulation proof
+to maintain this invariant.
+In CompCertO,
+this becomes more involved,
+because the simulation convention must be altered
+to ensure that invariants are preserved
+by external calls.
+
+On the other hand,
+our simulation infrastructure offers the opportunity
+to capture and reason about invariants explicitly,
+and to further decouple preservation and simulation proofs.
+In this section,
+we give an overview of our treatment of invariants.
+For details,
+see the supplementary appendix and
+\texttt{common/Invariant.v}
+in the Coq development.
+
+%}}}
+
+\subsection{Invariants and language interfaces} %{{{
+
+First, we define a sort of ``invariant convention'',
+which describes how a given invariant impacts the questions and answers
+of the language under consideration.
+
+\begin{definition} % Invariant for a language interface {{{
+An \emph{invariant for a language interface} $A$
+is a tuple
+$\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$,
+where $W$ is a set of worlds
+and $\mathbb{P}^\que, \mathbb{P}^\ans$
+are families of predicates on $A^\que, A^\ans$
+indexed by $W$.
+\end{definition}
+%}}}
+
+\begin{example} \label{ex:wt} %{{{
+Typing constraints for the language interface $\mathcal{C}$
+can be expressed as the invariant:
+\begin{gather*}
+  \kw{wt} :=
+    \langle
+      \kw{sig},
+      \mathbb{P}_\kw{wt}^\que,
+      \mathbb{P}_\kw{wt}^\ans
+    \rangle
+  \\
+  \AxiomC{$\vec{v} <: \mathit{sg}.\kw{args}$}
+  \UnaryInfC{$\mathit{sg} \Vdash
+    \mathit{vf}[\mathit{sg}](\vec{v})@m \in \mathbb{P}_\kw{wt}^\que$}
+  \DisplayProof
+  \qquad
+  \AxiomC{$v' <: \mathit{sg}.\kw{res}$}
+  \UnaryInfC{$\mathit{sg} \Vdash
+    v'@m' \in \mathbb{P}_\kw{wt}^\ans$}
+  \DisplayProof
+\end{gather*}
+The proposition $\vec{v} <: \mathit{sg}.\kw{args}$
+asserts that the types of the arguments $\vec{v}$
+match those specified by the signature $\mathit{sg}$.
+The proposition $v' <: \mathit{sg}.\kw{res}$
+asserts a similar property for the return value $v'$.
+\end{example}
+%}}}
+
+Invariants can be seen as a special case of simulation convention
+which constrain the source and target questions and answers
+to be equal.
+This can be formalized as follows.
+
+\begin{definition}[Simulation conventions for invariants]
+A $W$-indexed predicate $P$ on a set $X$
+can be promoted to a Kripke relation
+$\hat{P} \in \mathcal{R}_W(X, X)$
+defined by the rule:
+\[
+  \AxiomC{$w \Vdash x \in P$}
+  \UnaryInfC{$w \Vdash x \mathrel{\hat{P}} x$}
+  \DisplayProof
+\]
+Then an invariant
+$\mathbb{P} = \langle W, \mathbb{P}^\que, \mathbb{P}^\ans \rangle$
+can be promoted to a simulation convention:
+$\hat{\mathbb{P}} :=
+ \langle W, \hat{\mathbb{P}}^\que, \hat{\mathbb{P}}^\ans \rangle$.
+\end{definition}
+
+%}}}
+
+\subsection{Typing invariants} \label{sec:wt} %{{{
+
+The typing invariant described in Ex.~\ref{ex:wt}
+is used by the $\kw{Selection}$ and $\kw{Allocation}$ passes.
+We have updated their correctness proofs
+as well as the preservation proofs in
+$\texttt{Cminortyping.v}$ and $\texttt{RTLtyping.v}$
+to use our framework.
+
+The invariant $\kw{wt}$ satisfies one key property:
+when a simulation convention $\mathbb{R}$
+consists of a sequence of CKLRs and other invariants,
+the following property holds:
+\[
+  \kw{wt} \cdot \mathbb{R} \cdot \kw{wt} \equiv
+  \mathbb{R} \cdot \kw{wt}
+\]
+This means CompCertO's overall simulation convention
+can eliminate the typing invariant for the $\kw{Selection}$ pass,
+retaining only that used for $\kw{Allocation}$.
+In turn, this facilitates the simplification of the convention for
+the passes from \kw{Clight} to \kw{Inlining}.
+
+%}}}
+
+\subsection{Value analysis} \label{sec:va} %{{{
+
+The passes
+$\kw{Constprop}$, $\kw{CSE}$ and $\kw{Deadcode}$
+use CompCert's value analysis framework.
+Abstract interpretation is performed %at compilation time
+on their source program,
+and the resulting information is used to carry out
+the corresponding optimizations.
+The correctness proofs for these passes then rely
+on the invariant $\kw{va}$,
+which asserts that the concrete runtime states
+satisfy the constraints encoded in the corresponding
+abstract states.
+
+We have updated the value analysis framework
+and associated pass correctness proofs
+to fit the invariant infrastructure described in this section.
+Value analysis passes use the convention
+$\kw{va} \cdot \kw{ext} \twoheadrightarrow \kw{va} \cdot \kw{ext}$.
+Unfortunately,
+because it combines constraints with mixed variance,
+the invariant $\kw{va}$ does not propagate in the same way as $\kw{wt}$,
+so the compiler's simulation convention must retain
+the component $(\kw{va} \cdot \kw{ext})^3$ as-is.
+When some of the corresponding optimization passes are disabled,
+we use self-simulations of the $\kw{RTL}$ language
+to match this convention nonetheless.
+
+%}}}
+
+%}}}
 
 \section{Simulations modulo invariants} \label{sec:fsim-inv} %{{{
 
@@ -4860,8 +4631,235 @@ defined by CompCert
 in \texttt{Smallstep.v}
 remain available.
 
-\end{optional}
+%}}}
+
+\section{Specialized simulation conventions} \label{sec:backend} %{{{
+
+For the \kw{Alloc}, \kw{Stacking} and \kw{Asmgen} passes,
+we construct more specific simulation conventions
+which express the correspondance between
+the higher-level and lower-level representations
+of function calls and returns.
+These passes use identical conventions for
+incoming and external calls.
+
+\subsection{The \kw{Allocation} pass} \label{sec:alloc} %{{{
+
+The \kw{Allocation} pass from \kw{RTL} to \kw{LTL}
+is the first pass to modify the interface of function calls.
+\kw{LTL} uses \emph{abstract locations}
+which represent the stack slots and machine registers
+eventually used in the target assembly program.
+Abstract locations contain arguments, temporaries and return values.
+The contents are stored in a \emph{location map},
+passed across components by the interface $\mathcal{L}$
+alongside memory states.
+%Up to \kw{RTL},
+%arguments are passed as standalone values,
+%but in \kw{LTL}
+%they are mapped to locations.
+The compiler also expects the values of
+abstract locations designated as \emph{callee-save}
+to be preserved by function calls.
+
+To express the simulation convention used by the \kw{Allocation} pass,
+we will use the following notations.
+For a signature $\mathit{sg}$ and a location map $\mathit{ls}$,
+we write $\kw{args}(\mathit{sg}, \mathit{ls})$
+to represent the argument values stored in $\mathit{ls}$.
+Likewise,
+$\kw{retval}(\mathit{sg}, \mathit{ls})$ extracts
+the contents of locations used to store the return value.
+The relation $\equiv_\kw{CS}$ asserts that
+two location maps agree on callee-save locations.
+
+The simulation convention
+$\kw{alloc} : \mathcal{C} \Leftrightarrow \mathcal{L}$
+uses its worlds to remember the initial location map
+and the signature associated with a call,
+and can then be defined by:
+\[
+  \kw{alloc} := \langle
+      \kw{signature} \times \kw{locmap}, \:
+      R_\kw{alloc}^\que, \:
+      R_\kw{alloc}^\ans \rangle
+\]
+\[
+  \AxiomC{$\vec{v} \vref \kw{args}(\mathit{sg}, \mathit{ls})$}
+  \AxiomC{$m_1 \mext m_2$}
+  \BinaryInfC{$
+      (\mathit{sg}, \mathit{ls}) \Vdash
+      \mathit{vf}[\mathit{sg}](\vec{v})@m_1
+      \mathrel{R_\kw{alloc}^\que}
+      \mathit{vf}[\mathit{sg}](\mathit{ls})@m_2$}
+  \DisplayProof
+\]
+\[
+  \AxiomC{$v' \vref \kw{retval}(sg, ls')$}
+  \AxiomC{$ls \equiv_\kw{CS} ls'$}
+  \AxiomC{$m_1' \mext m_2'$}
+  \TrinaryInfC{$
+      (sg, ls) \Vdash
+      v'@m_1'
+      \mathrel{R_\kw{alloc}^\ans}
+      ls'@m_2'$}
+  \DisplayProof
+\]
 
 %}}}
+
+\subsection{The \kw{Stacking} pass} \label{sec:stacking} %{{{
+
+The \kw{Stacking} pass
+consolidates the information which
+\kw{Linear} stores in abstract stack locations
+into in-memory stack frames.
+The simulation proof uses a memory injection,
+and involves maintaining separation properties
+ensuring that the source memory and
+the regions of stack frames
+introduced by \kw{Stacking}
+occupy disjoint areas of the target memory.
+
+With regards to the memory state,
+the \kw{stacking} simulation convention
+is essentially identical to \kw{injp}.
+Since the new regions of stack frames
+are outside the image of source memory,
+and most of them are local to
+function activations,
+the properties of \kw{injp}
+are largely sufficient
+(see also \S\ref{sec:cklr-worlds}).
+
+The exception to the rule pertains to argument passing.
+Loads from a function's argument locations
+access the caller's stack frame.
+If the area used to store arguments
+overlaps with the injected source memory state,
+then the source program and external calls
+may alter them in unexpected ways.
+In previous CompCert extensions,
+sophisticated techniques were required
+to prevent this from happening.
+
+In our model,
+we simply encode the required separation condition
+in the simulation convention
+$\kw{stacking} : \mathcal{L} \Leftrightarrow \mathcal{M}$.
+The convention
+asserts that the contents of argument locations
+are stored into corresponding stack slots
+within the target memory.
+Additionally, it
+requires that the region of the target memory
+used to store arguments within the caller's stack
+must be disjoint from the injection image of the source memory
+(Fig.~\ref{fig:stacking}).
+For details,
+see \texttt{cc\_stacking} in \texttt{backend/Mach.v}.
+
+\begin{figure}
+\[
+  \begin{tikzpicture}[scale=0.4,>=stealth]
+    \draw ( 1,3) rectangle +(3,1); \node[left] at (1,3.5) {$m_1$};
+    \draw ( 0,0) rectangle +(9,1); \node[left] at (0,0.5) {$m_2$};
+    \node (V1) at (6.5,3.5) {$\vec{v}_1$};
+    \node (V2) at (2.5,0.5) {$\vec{v}_2$};
+    \draw[->] (1,4) -- (1,1); \draw[dotted] (1,1) -- (1,0); \draw[dotted] (4,4) -- (4,0);
+    \draw[->] (V1) -- (V2);
+  \end{tikzpicture}
+  \:{\times}
+  \qquad
+  \begin{tikzpicture}[scale=0.4,>=stealth]
+    \draw ( 1,3) rectangle +(3,1); \node[left] at (1,3.5) {$m_1$};
+    \draw ( 0,0) rectangle +(9,1); \node[left] at (0,0.5) {$m_2$};
+    \node (V1) at (6.5,3.5) {$\vec{v}_1$};
+    \node (V2) at (6.5,0.5) {$\vec{v}_2$};
+    \draw[->] (1,4) -- (1,1); \draw[dotted] (1,1) -- (1,0); \draw[dotted] (4,4) -- (4,0);
+    \draw[->] (V1) -- (V2);
+  \end{tikzpicture}
+  \:{\checkmark}
+\]
+  \caption{Separation of argument
+    in the \kw{stacking} simulation convention.}
+  \label{fig:stacking}
+\end{figure}
+
+%}}}
+
+\subsection{The \kw{Asmgen} pass} \label{sec:asmgen} %{{{
+
+The \kw{Asmgen} pass from \kw{Mach} to \kw{Asm}
+uses a memory extension.
+\kw{Asm} introduces explicit registers for the
+program counter, stack pointer and return address.
+The corresponding simulation convention
+$\kw{asmgen} : \mathcal{M} \Leftrightarrow \mathcal{A}$
+ensures that the appropriate components of
+\kw{Mach}-level queries are mapped to the new registers.
+In addition,
+we must ensure that the call returns the stack pointer
+to its original value,
+and set the program counter to the return address
+specified by the caller.
+
+\begin{optional}
+[XXX: we don't talk about nextblock in our simplified
+exposition of the memory model]
+A more complex challenge is that the $\kw{Asm}$ language
+does not have a control stack,
+but instead executes instruction after instruction
+in a ``flat'' manner,
+making it difficult to distinguish final states.
+To address this,
+we keep track of the initial value $\mathit{nb}_0$ of
+the memory's $\kw{nextblock}$ counter,
+and use it to distinguish between inner and outer
+stack pointers.
+When $\mathit{rs}[\kw{sp}] \ge \mathit{nb}_0$,
+we interpret the \kw{ret} instruction as an \emph{internal} return
+and simply jump to the location pointed to by $\mathit{rs}[\kw{ra}]$.
+However, when $\mathit{rs}[\kw{sp}] < \mathit{nb}_0$,
+we intepret \kw{ret} as a top-level return to the environment,
+and model its behavior as a final state
+rather than an internal step.
+In addition,
+the simulation convention $\kw{asmgen}$
+must ensure that the initial value of the stack pointer
+points to a valid block of the initial memory.
+\end{optional}
+
+This is expressed as:
+\begin{gather*}
+  \kw{asmgen} := \langle \kw{val} \times \kw{val},
+    R_\kw{asmgen}^\que, R_\kw{asmgen}^\ans \rangle
+  \\[1ex]
+  \AxiomC{$\mathit{rs}_1 \uplus
+    [\kw{sp} := \mathit{sp}, \kw{ra} := \mathit{ra}, \kw{pc} := \mathit{vf}]
+    \vref \mathit{rs}_2$}
+  \AxiomC{$m_1 \mext m_2$}
+  \BinaryInfC{
+    $(\mathit{sp}, \mathit{ra}) \Vdash
+     \mathit{vf}(\mathit{sp}, \mathit{ra}, \mathit{rs}_1)@m_1
+     \mathrel{R_\kw{asmgen}^\que}
+     \mathit{rs}_2@m_2$}
+  \DisplayProof
+  \\[1ex]
+  \AxiomC{$
+    \mathit{rs}_1' \uplus [\kw{sp} := \mathit{sp}, \kw{pc} := \mathit{ra}]
+    \vref \mathit{rs}_2'$}
+  \AxiomC{$m_1' \mext m_2'$}
+  \BinaryInfC{$
+    (\mathit{sp}, \mathit{ra}) \Vdash \mathit{rs}_1'@m_1'
+    \mathrel{R_\kw{asmgen}^\ans}
+    \mathit{rs}_2'@m_2'$}
+  \DisplayProof
+\end{gather*}
+
+%}}}
+
+%}}}
+
 
 \end{document}
