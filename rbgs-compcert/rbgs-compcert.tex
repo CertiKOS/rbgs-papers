@@ -4309,7 +4309,338 @@ required for this formidable undertaking.
 
 \bibliography{../references}
 
+\balance
+\cleardoublepage
 \appendix
+\nobalance
+
+\section{Detailed comparison with CompCertM} %{{{
+
+CompCertM is the state of the art
+of compositional extensions to CompCert.
+In some ways,
+CompCertM and CompCertO aim to solve different problems.
+CompCertM provides a complete platform
+for the modular verification of composite C-assembly programs.
+By contrast,
+the goal of CompCertO is only to
+provide a precise formulation of CompCert's correctness theorem,
+with the aim of integrating it into
+a more general and more abstract framework
+for the construction of heterogenous certified systems
+still to be constructed.
+
+Nevertheless,
+there is some amount of overlap between
+the goals and techniques used in both projects,
+and we hope that the detailed comparison
+provided in this appendix
+can provide a useful discussion
+of the design space explored by both approaches,
+and some of the consequences of ...
+
+\subsection{Semantics in CompCertM} %{{{
+
+The CompCertM verification framework involves
+both the original closed semantics of CompCert
+($\mathbf{1} \twoheadrightarrow \mathcal{W}$),
+and a more compositional semantics
+modelled after the interaction semantics of Compositional CompCert
+($\mathcal{C} \twoheadrightarrow \mathcal{C}$).
+
+To support hand-written assembly functions
+which do not follow the C calling convention,
+some functions can be specifically designated
+to be called
+using the assembly language interface $\mathcal{A}$
+instead of $\mathcal{C}$.
+In particular,
+this feature is used to demonstrate
+the verification of the builtin function $\kw{utod}$
+used by compiled programs,
+whereas its behavior was previously
+axiomatized by CompCert.
+However,
+this facility is not used for assembly functions
+invoked in the usual way or compiled from C code,
+and does not otherwise have any bearing on
+CompCertM's approach to compiler correctness,
+so we elide it in our discussion below.
+
+CompCertM does not direcly define horizontal composition
+of open semantics (Definition~\ref{def:hcomp}),
+but uses a similar construction
+to give a closed semantics to a collection of open components,
+modelling both the conventional invocation of $\kw{main}$
+and cross-component interactions:
+\[
+  \forall i \,.\,
+  L_i : \mathcal{C} \twoheadrightarrow \mathcal{C} \vdash
+  [L_1 \oplus \cdots \oplus L_n] : \mathbf{1} \twoheadrightarrow \mathcal{W}
+\]
+Adequacy of the compositional semantics $\kw{Asm}_\mathcal{C}(-)$
+with respect to the original closed semantics $\kw{Asm}[-]$
+is then established as the trace containment property
+\begin{equation} \label{eqn:asmadeq}
+  [\kw{Asm}_\mathcal{C}(p_1) \oplus \cdots \oplus \kw{Asm}_\mathcal{C}(p_n)] \supseteq
+  \kw{Asm}[p_1 + \cdots + p_n]
+  \,,
+\end{equation}
+similar in its role to Theorem~\ref{thm:asmlinking}.
+
+%}}}
+
+\subsection{Compiler correctness} %{{{
+
+The correctness of each pass of CompCertM
+is established using a notion of \emph{open simulation}
+similar in principle to the ones described in \S\ref{sec:sem:ref}.
+These open simulations
+are parameterized by a notion of memory relation $R$
+which mirrors our use of CKLRs,
+so that they correspond roughly to
+$\le_{R_\mathcal{C} \twoheadrightarrow R_\mathcal{C}}$.
+
+The challenge is then to achieve
+horizontal and vertical compositionality,
+across both compilation units and compiler passes
+which may use different memory relations.
+To this end,
+CompCertM eschews direct composition of open simulations
+in favor of a novel contextual technique dubbed
+\emph{refinement under self-related contexts} (RUSC).
+The use of this technique in CompCertM boils down to the following.
+
+First,
+every possible form of the simulation relation
+is shown to be adequate with respect to the closed semantics.
+More precisely,
+the following property is established
+for every memory relation $R \in \mathcal{R}$
+used in CompCertM:
+\begin{equation} \label{eqn:simadeq}
+  \AxiomC{$\forall i \,.\,
+    L_i \le_{R_\mathcal{C} \twoheadrightarrow R_\mathcal{C}} L_i'$}
+  \UnaryInfC{$
+    [L_1  \oplus \cdots \oplus L_n] \supseteq
+    [L_1' \oplus \cdots \oplus L_n']$}
+  \DisplayProof
+\end{equation}
+Next,
+consider a particular $R \in \mathcal{R}$
+and suppose that $L_i = L_i'$
+for all but a single component $L_k$.
+Then
+as long as the fixed components are self-simulating under $R$,
+a simulation of the form
+$L_k \le_{R_\mathcal{C} \twoheadrightarrow R_\mathcal{C}} L_k'$
+can be used to replace $L_k$ by $L_k'$
+while preserving the observable behavior of the whole program.
+Using this strategy for every successive $k = 1, \ldots, n$,
+we are free to use for each of the components
+any vertical succession of passes,
+as long as the source and target components
+are self-simulating under every possible $R \in \mathcal{R}$.
+
+The result is a very flexible approach
+which achieves horizontal and vertical compositionality
+with only minimal requirements.
+Every pass of CompCert can be easily
+extended to an open simulation
+by using the corresponding memory relation,
+and a new memory relation is even defined
+enabling reasoning about module-local state
+and the introduction of a new \kw{Unreadglob} optimisation.
+
+%}}}
+
+\subsection{Symbol tables} %{{{
+
+Compared with our work,
+CompCertM also has a more sophisticated handling
+of symbol tables.
+CompCertO relies on a global symbol table
+which is used as-is by every module.
+This prevents us
+from verifying the \kw{Unusedglob} pass of CompCert:
+when components access locally undeclared symbols,
+these accesses may become valid in
+in the context of a larger symbol table.
+These ``rogue'' accesses may in turn be invalidated by compilation
+if the component providing the symbols
+do not actually access or export them,
+causing their removal by \kw{Unusedglob}.
+
+By contrast,
+in addition to the global symbol table which results from linking,
+CompCertM assigns to each component
+a more restricted local symbol table,
+which is used for all the component's accesses.
+This prevents ``rogue'' accesses
+from occuring in the first place.
+
+%}}}
+
+\subsection{Expressing the calling convention} %{{{
+
+On the other hand,
+the use of RUSC in CompCertM imposes a series of design choices
+introducing their own complexity,
+which CompCertO's more direct approach can avoid.
+
+Most immediately,
+RUSC imposes a homogeneous
+treatment of the semantics of source and target programs.
+Like that of Compositional CompCert,
+the compositional semantics $\kw{Asm}_\mathcal{C}(-)$
+of CompCertM
+is formulated in terms of the $\mathcal{C}$ language interface,
+with the the C calling convention built into its definition.
+Consequently, $\kw{Asm}_\mathcal{C}(-)$ is by design an under-approximation,
+and must model as undefined any assembly execution
+which does not realize a C-level behavior.
+Unfortunately,
+the simple definition used in Compositional CompCert
+actually fails in this regard:
+it can assign incorrect $\mathcal{C}$ behaviors
+to assembly executions which violate the calling convention,
+breaking property (\ref{eqn:asmadeq}).
+
+To an extent,
+this reflects the inherent complexity
+of the kind of data abstraction performed by calling conventions;
+specifically,
+the correspondence between C and assembly behaviors
+involves \emph{dual} nondeterminism.
+On one hand,
+the \emph{environment} is free to choose among
+many valid assembly representations of a given C query.
+In particular,
+registers which do not encode relevant information
+can be assigned arbitrary values.
+%In addition,
+%source memory blocks
+%which are not reachable from
+%pointer values passed as $\mathcal{C}$ arguments or
+%stored in global variables
+%can be hidden from the assembly execution.
+On the other hand,
+the \emph{system} can choose among
+the valid assembly representations of the C reply:
+caller-save registers may be left in unspecified states,
+and the assembly execution is free
+to allocate additional or larger memory blocks.
+As a result,
+the translation is difficult to express in the context of
+the transition systems and forward simulations used
+in most of CompCert.
+Nevertheless,
+this was successfully achieved in CompCertM
+at the cost of some additional complications:
+\begin{itemize}
+\item
+For incoming calls,
+the assembly semantics
+first allocates a stack block
+to simulate the way arguments are passed in the
+closed assembly program.
+It also assigns
+opaque handles to the registers unconstrained by the
+C calling convention,
+in the form of pointers to a nondeterministically
+chosen number of newly allocated empty memory blocks,
+preventing their use by the assembly component.
+When the call returns,
+the semantics checks that callee-save registers
+maintain their original values
+and frees the simulated caller stack block.
+\item
+For outgoing calls,
+a complementary process occurs.
+Permissions are cleared on the arguments region of the stack,
+ensuring that any indirect access by the context
+will result in an undefined behavior.
+After the call returns,
+permissions are restored
+and the new register state is constructed
+by copying the original values of callee-save register
+and setting caller-save registers to $\kw{undef}$.
+\end{itemize}
+Similar constructions must be introduced
+in the semantics of
+the intermediate languages
+$\kw{LTL}$, $\kw{Linear}$ and $\kw{Mach}$,
+and the proof of (\ref{eqn:asmadeq})
+must show that they
+give a sound account of the execution
+of the linked assembly program.
+
+%}}}
+
+\subsection{Mixed forward-backward simulations} %{{{
+
+The changes described in the previous section
+introduce nondeterminism in the initial states
+of $\kw{Asm}_\mathcal{C}(-)$.
+In turn,
+this propagates to the internal states of
+$[L_1 \oplus \cdots L_n]$
+which correspond to cross-component interactions.
+As a consequence,
+the forward simulations used in most of CompCert
+are no longer a satisfactory reasoning principle.
+
+To address this issue,
+CompCertM uses a notion of
+\emph{mixed} forward-backward simulation,
+which allows a fine-grained use of forward simulations
+for deterministic states,
+but requires a more complex backward simulation
+when nondeterministic states are encountered.
+
+%}}}
+
+\subsection{CompCertO's simplifications} %{{{
+
+This series of complications
+is avoided in CompCertO in two ways.
+First,
+our semantics of assembly
+is formulated exclusively in terms of the language interface $\mathcal{A}$.
+As such,
+it characterizes the behavior of assembly components
+more precisely and independently of the C calling convention,
+rendering the proof of Theorem~\ref{thm:asmlinking} straightforward.
+Secondly,
+by formulating the C calling convention as a simulation convention,
+we are able to isolate its inherent nondeterminism
+and avoid the use of nondeterministic transition systems
+and sophisticated simulation properties.
+
+Another aspect where CompCertO is simpler
+concerns our treatment of injection passes.
+In the context of RUSC,
+the per-pass simulations used by CompCertM
+must use the same memory relation for incoming and outgoing calls.
+This means that the guarantees provided by injections proofs
+on incoming calls
+must be strengthened to correspond to
+their own requirements on outgoing calls.
+The approach used in CompCertO
+is more flexible,
+allowing us to assign the convention
+$\kw{injp} \twoheadrightarrow \kw{inj}$
+for the passes $\kw{SimplLocals}$ and $\kw{Inlining}$
+and to avoid the corresponding modifications
+to the proofs found in CompCert.
+
+%}}}
+
+\subsection{Conclusions for CompCertO}
+
+\subsection{Conclusions for CompCertM}
+
+%}}}
 
 \section{Invariants} \label{sec:inv} %{{{
 
