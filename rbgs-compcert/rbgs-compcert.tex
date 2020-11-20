@@ -191,24 +191,24 @@ including
 operating system kernels \cite{sel4,popl15},
 file systems \cite{fscq} and
 processor designs \cite{safe,kami}.
-
+%
 Building on these successes,
-the research community is now undertaking the next challenge:
-constructing large-scale, heterogenous certified systems
-by using formal specifications as interfaces
-between the correctness proofs of various components %, covering a range of abstraction levels
-\cite{deepspec}.
-To~this end,
-\anon{}{we have proposed}
-a synthesis of game semantics and the refinement calculus
-\anon{has been proposed}{}
-\cite{rbgs-cal}
-as a common setting
-in which various
-certified component could be embedded and
-made interoperable.
-If successful,
-this would represent a deployment of formal methods
+the research community is attempting
+to construct large-scale, heterogenous certified systems
+by using formal specifications as interfaces between
+the correctness proofs of various components %, covering a range of abstraction levels
+\cite{deepspec},
+%To~this end,
+%\anon{}{we have proposed}
+%a synthesis of game semantics and the refinement calculus
+%\anon{has been proposed}{}
+%\cite{rbgs-cal}
+%as a common setting
+%in which various
+%certified component could be embedded and
+%made interoperable.
+%If successful,
+enabling the deployment of formal methods
 at an unprecedented scale.
 
 %Meanwhile,
@@ -238,16 +238,16 @@ comes with its own challenges.
 
 %}}}
 
-\subsection{Compiler correctness} %{{{
+\subsection{Compositional compiler correctness} %{{{
 
 The most straightforward sense in which
 a compiler can be correct is a
 \emph{semantics preservation} property of the form
-\[
+\begin{equation} \label{eqn:semp}
   \llbracket p \rrbracket_\kw{S} \sim
   \llbracket \kw{C}(p) \rrbracket_\kw{T}
   \,,
-\]
+\end{equation}
 asserting the semantics $\llbracket p \rrbracket_\kw{S}$
 of the source program $p$
 to be related in some sense $\sim$
@@ -260,56 +260,49 @@ In CompCert,
 the semantics of the source and target programs
 are given as labelled transition systems,
 and the relation $\sim$ is a simulation property.
-A more abstract version of the theorem can also be derived,
-where the semantics are given in terms of observable traces,
-and correctness is expressed as a trace containment property.
+%A more abstract version of the theorem can also be derived,
+%where the semantics are given in terms of observable traces,
+%and correctness is expressed as a trace containment property.
 
 However,
-in practice compilation usually operates on program \emph{components}
-rather that whole programs.
-In this context,
-formulating semantics preservation directly
-is challenging.
-The semantics itself must be compositional
-and account for the intricacies
-of linking and cross-component interactions.
-Worse,
-these interactions are often very different
-between the source and target languages,
-so the relation $\sim$ must bridge
-a significant abstraction gap.
-Given these difficulties,
+practical applications involve
+program \emph{components} which we want to compile
+and verify separately from each other.
+In principle,
+this can be addressed by the use of a compositional semantics,
+enabling the formulation of (\ref{eqn:semp})
+at the level of individual components,
+but existing approaches to compositional semantics
+fare poorly in the presence of advanced language features,
+or the kind of data abstraction
+involved in the compilation process.
+In the context of CompCert,
+early attempts along these lines
+have proven excessively
+complex and limited \cite{cpp15,compcompcert}.
+
+As a result,
 common wisdom holds semantics preservation
 to be a lost cause
-for compositional compiler correctness.
-
+for compositional compiler correctness \cite{next700}.
 Instead,
-reserch in the area has mainly focused on
+reserch has focused on
 compositional reasoning methods
-based on contextual equivalence and refinement,
-formulated by reference to (whole-program)
-operational semantics,
-side-stepping the need for a compositional semantics
-\cite{next700}.
-This approach has been successfully applied
-to CompCert, turning it
-into a platform enabling compositional verification
+based on contextual notions of equivalence and refinement,
+side-stepping the need for compositional semantics preservation
 \cite{sepcompcert,compcertm}.
 
 %}}}
 
 \subsection{Decomposing heterogenous systems} %{{{
 
-However, by necessity,
-its horizon is a completed assembly program to be run as a user-level process.
-Interactions between the completed program and its environment
-are expressed through event traces,
-but compositionality breaks at the boundary between
-the completed program and the rest of the system.
-This becomes a limitation
-when we seek to use the resulting compiler
-in the construction and verification
-of complex heterogenous systems.
+Unfortunately,
+these methods share an intrinsic limitation:
+they presuppose the existence of a completed system
+to be proven correct,
+and compositionality only operates within this boundary.
+This becomes a serious impediment
+in the context of large-scale heterogeneous systems.
 
 %Indeed, while
 %CompCertM allows the user to reason about components with C and assembly
@@ -323,21 +316,6 @@ of complex heterogenous systems.
 %at various levels of abstraction.
 %In the context of the verification of heterogenous systems
 %where software and hardware component
-
-\begin{figure}
-  \centering
-  \includegraphics[scale=0.09]{hetsys}
-  \caption{A futuristic verification scenario.
-    Contextual approaches to compositional reasoning
-    impose a boundary between
-    the completed program and its environment;
-    compositionality operates only within this boundary.
-    However,
-    the verification of large-scale, heterogenous systems
-    requires modelling components which cross this boundary
-    in various ways and at various levels of abstraction.}
-  \label{fig:hetsys}
-\end{figure}
 
 \begin{example} \label{ex:nicdriver} %{{{
 Consider the problem of verifying
@@ -377,94 +355,122 @@ it would be possible to establish a relationship between
 the overall specification $\sigma : \kw{Net} \rightarrow \mathcal{C}$ and
 the composition
 $\sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC}$.
-\end{example}
-
-
 Then a \emph{compiler of certified components}
-would help us transport specifications and proofs
+should help us transport specifications and proofs
 obtained with respect to the driver's C code
 to the compiled code operating at the level of assembly
 ($\sigma' : \kw{Net} \rightarrow \mathcal{A}$).
+\end{example}
+%}}}
 
-The example above is by no means contrived,
-and the pattern is pervasive even in more mundane situations.
-Indeed,
-\emph{most} libraries available to contemporary programmers
-are used to mediate access to external
-network services, file systems, user interfaces, \ldots
-or use them in specific ways.
-Proper high-level specifications
-of software components of this kind
-must model the resources they access
+This problem posed by this example is illustrated in Fig.~\ref{fig:hetsys}.
+Under existing contextual approaches,
+the NIC driver can only be specified in terms of
+its interactions at the boundary of the C program code,
+but abstracting away from these interactions
+is the role of a driver in the first place!
 
 To be sure,
-given a specific situation
-such as the one described in Example~\ref{ex:nicdriver},
-existing techniques could be extended to
-bring the NIC hardware model
+existing techniques could be extended
+to address this specific problem.
+For example,
+the NIC hardware model could be brought
 within the scope of the ``whole program'' being considered,
 and the exchange of Ethernet packets
-as part of its observable behavior.
+modeled as part of its observable behavior.
+
 However, this approach does not scale.
-[explain why:
-there are hundreads of such situations involved in verifying
-a large-scale heterogenous system;
-this subordinates everything to the compiler correctness theoerm
-when it should just be one component;
-we seek to build an extensible framework once and for all;
-what happens when the NIC manufacturer,
-database engine vendor,
-network service provider
-all give us their own modified version of CompCertM]
-
-Scaling up verification requires
-giving an account of the operation
-of such components
-directly in terms of their interactions with
-the resources they access.
-
-[A satisfactory formal account of
-the functionality of such libraries
-\emph{cannot} be formulated in terms of the interaction
-of a postulated ``completed program'' with its environment
-(say, the operating system),
-because this interaction is precisely the thing
-that such libraries seek to abstract.]
-
-[We need a compositional semantics there's no way around it]
-
-%}}}
-
-\subsection{Refinement-based game semantics} %{{{
+Example~\ref{ex:nicdriver}
+is by no means a contrived corner case.
+In fact, patterns of this kind are pervasive even in more mundane situations.
+Many libraries available to contemporary programmers
+are used to mediate access to external resources.
+%such as network services, file systems, \ldots{}
+%or to use them in specific ways.
+Proper high-level specifications
+for software components of this kind
+must model these resources.
+Expecting the verification framework
+to fix \emph{a priori}
+the dozens or hundreads
+of kinds of resources and
+forms of communications
+which may be involved
+in the course of verifying a large-scale system
+is unreasonable.
 
 Fortunately,
+advances in the realm of compositional semantics
+make them a realistic alternatives
+to tackle problems of this kind.
+In particular,
+game semantics (\S\ref{sec:gamesem})
+provide a general framework
+to model interactions between typed components
+of various kinds,
+and has been successfully applied
+to model the advanced features
+of various programming languages.
+Recent work proposes integrating
+dual nondeterminism and refinement
+into this frameworm,
+extending it with powerful mechanisms
+to account for abstraction \cite{rbgs-cal}.
 
+However,
+to allow explorations in this direction,
+a necessary first step
+is to formulate a correctness theorem for CompCert
+which can survive the use of these methods.
 
-
-
-
-
-In this paper, we show how to adapt
-the semantic model and correctness proofs of CompCert
-so that they can be used in this way.
-Our model is not intended to reach the level of generality
-required to handle all aspects of the problem above;
-indeed we want it to remain tailored to CompCert's
-verification as much as possible.
-Instead, we envision a hierarchy
-where components could be verified in suitable models,
-then soundly embedded in more general ones
-to be made interoperable.
-To make it possible for CompCert to be used in this context,
-the ability to treat the driver code as an
-independent component is crucial.
-This excludes approaches to
-compositional compiler correctness
-which are formulated in terms of completed programs.
-%rather than characterizing a component's interactions
-%with its environment directly.
+\begin{figure} \label{fig:hetsys} %{{{
+  \centering
+  \includegraphics[scale=0.09]{hetsys}
+	\caption{A futuristic verification scenario (draft figure).
+    Contextual approaches to compositional reasoning
+    impose a boundary,
+    depicted as a thick black line,
+    between the completed program and its environment;
+    compositionality operates only within this boundary.
+    However,
+    the verification of large-scale, heterogeneous systems
+    requires modelling components which cross this boundary.}
+  \label{fig:hetsys}
+\end{figure}
+%}}}
 
 %}}}
+
+%\subsection{Refinement-based game semantics} %{{{
+%
+%Fortunately,
+%
+%
+%
+%
+%
+%
+%In this paper, we show how to adapt
+%the semantic model and correctness proofs of CompCert
+%so that they can be used in this way.
+%Our model is not intended to reach the level of generality
+%required to handle all aspects of the problem above;
+%indeed we want it to remain tailored to CompCert's
+%verification as much as possible.
+%Instead, we envision a hierarchy
+%where components could be verified in suitable models,
+%then soundly embedded in more general ones
+%to be made interoperable.
+%To make it possible for CompCert to be used in this context,
+%the ability to treat the driver code as an
+%independent component is crucial.
+%This excludes approaches to
+%compositional compiler correctness
+%which are formulated in terms of completed programs.
+%%rather than characterizing a component's interactions
+%%with its environment directly.
+%
+%%}}}
 
 \begin{table*} % tbl:compcerts {{{
   \small
@@ -522,57 +528,35 @@ which are formulated in terms of completed programs.
 
 \subsection{Requirements for CompCert} \label{sec:compcertreq} %{{{
 
-To handle use cases like the one we have presented above,
-the compiler's correctness proof
-should satisfy the following requirements:
+This paper introduces CompCertO,
+the first compositional extension of CompCert
+satisfying the following requirements simultaneously:
 \begin{enumerate}
 \item \label{req:opensem}
-  The semantics of the source and target languages
-  should characterize the behavior of \emph{open} components
-  in terms of their interactions with the rest of the program.
+  A compositional semantics
+  characterize the behavior of
+  source and target components.
 \item \label{req:opensim}
-  The correctness theorem
-  should go beyond refinement under a fixed notion of program context, and relate
-  the interactions of the source and target modules directly.
+  The correctness theorem relates
+  the behaviors of corresponding
+  source and target components directly.
 \item \label{req:openabs}
   The abstraction gap between C and assembly-level
-  interactions should be made explicit.
+  interactions is modelled explicitly.
 \item \label{req:linking}
-  Some form of certified \emph{linking}
-  should be provided as well as certified compilation.
+  A form of certified \emph{linking}
+  is provided in addition to certified compilation.
 \item \label{req:complexity}
-  To facilitate integration into the official release,
-  changes to the existing proofs of CompCert
-  should be minimal.
+  Changes to existing proofs of CompCert
+  are minimal.
 \end{enumerate}
 As outlined in Table~\ref{tbl:compcerts},
 each of these requirements is fulfilled
 by some exisiting CompCert extension,
 however none satisfies them all.
-%
 
-%With each step,
-%the user can gain more confidence in the reliability of CompCert:
-%existing work %testing the correctness of existing compilers
-%has found fewer bugs in CompCert,
-%compared to unverified alternatives \cite{csmith},
-%and efforts to make CompCert's correctness theorem more realistic
-%have uncovered and removed some of the few remaining bugs \cite{sepcompcert}.
-%Much of this work has focused on making
-%the correctness proof of CompCert more compositional,
-%making it possible to prove properties about
-%programs constructed from several independently compiled units,
-%and to compositionally verify programs.
-
-%}}}
-
-\subsection{Contributions} %{{{
-
-This paper introduces CompCertO,
-the first extension of CompCert to address
-all of these requirements simultaneously.
-The key to this achievement
-is the expressivity of our model.
+%The key to this achievement
+%is the expressivity of our model.
 %and our unreserved adoption of relational reasoning,
 %which provides flexibility in
 %describing complex phenomena
