@@ -2514,7 +2514,14 @@ in the file \texttt{common/Smallstep.v}.
 
 \subsection{Compiler correctness} \label{sec:comppass} %{{{
 
-We can now present our result and some of its consequences.
+The passes of CompCertO are shown in Table~\ref{tbl:passes}.
+The techniques outlined above allow us to formulate
+a simulation convention
+$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
+for the compiler %which is both compositional
+%and independent of the exact sequence of passes
+%included in the compiler.
+and to establish the following correctness property.
 
 \begin{theorem}[Compositional Correctness of CompCertO] \label{thm:compc} %{{{
 For a \kw{Clight} program $p$
@@ -2528,28 +2535,11 @@ the following simulation holds:
 \end{theorem}
 %}}}
 
-The simulation convention $\mathbb{C}$ is defined in \S\ref{sec:callconv}.
-It formalizes the correspondance between C and assembly interactions.
-By necessity,
-it follows $\kw{Clight}$ and $\kw{Asm}$ in its use of
-the CompCert memory model,
-but is otherwise independent of the compiler
-and in particular is not sensitive to the inclusion of optional optimization passes.
-
-\subsection{Compositional compilation and verification} \label{sec:cver} %{{{
-
-While the main focus of this paper is to
-the present techniques we used to obtain this result,
-we first outline some of the ways in which
-it can be used to carry out compositional reasoning
-in the presence of compilation.
-
-\paragraph{Separate compilation}
-
 %Recalling Fig.~\ref{fig:process},
-Consider the translation units
+As an immediate consequence,
+suppose
 $\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
-compiled and linked to
+are compiled and linked to
 $\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
 We~can use
 Thms.~\ref{thm:fsim-hcomp},
@@ -2566,142 +2556,18 @@ That is,
 the linked \kw{Asm} program
 $\mathtt{M.s}$
 faithfully implements
-the horizontal composition of the source modules' behaviors,
-following the simulation convention $\mathbb{C}$.
+the horizontal composition of the source modules' behaviors.
 
-\paragraph{Compositional verification}
-
-Additionally,
-suppose we wish to verify that the composite program
-satisfies a specification $\Sigma$,
-also expressed as a transition system
-for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
-We must first decompose $\Sigma$
-%along the lines of the program's components:
-into:
-\[
-    \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
-    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
-\]
-Then for each module, we prove that
-$\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
-This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
-to establish the correctness property
-$\Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-        \kw{Asm}(\mathtt{M.s})$.
-
-\paragraph{Mixed compilation}
-
-Note that Eqn.~\ref{eqn:sepcomp} can be established
-as long as the property
-$\kw{Clight}(\mathtt{Mi.c})
- \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
- \kw{Asm}(\mathtt{Mi.s})$
-holds independently for each module.
-It is possible for the different $\mathtt{Mi.s}$
-to be obtained by different compilers,
-as long as each one satisfies a correctness property
-following the simulation convention in Thm.~\ref{thm:compc}.
-Indeed this is the case for versions of CompCertO
-obtained by enabling different optimization passes.
-Moreover, if some of the $\mathtt{Mi.s}$
-are hand-written assembly modules satisfying
-$\mathcal{C}$-style specifications,
-then we can prove on a case-by-case basis that
-$\Sigma_i \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{Mi.s})$
-and proceed with the rest of the proof as before.
-
-\paragraph{Granular use of $\mathbb{C}$}
-
-In addition to the high-level principles outlined above,
-Theorem~\ref{thm:compc} enables low-level reasoning
-about the interaction between $\kw{Asm}$ code
-and components implementing $\mathcal{C}$-style specifications
-(including assembly modules compiler from $\kw{Clight}$ code),
-and conversely between $\kw{Clight}$ code
-and components implementing $\mathcal{A}$-style specifications,
-(including hand-written assembly
-which may offer some guarantees to a $\mathcal{C}$ caller, or none).
-Indeed,
-the simulation convention $\mathbb{C}$
-serves as a formalization of the C calling convention
-and precisely capture the guarantees that a C compiler must provide
-at the granularity of individual calls.
-
-To illustrate this,
-consider two transition systems
-$\Sigma_\mathcal{C}
- \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
- \Sigma_\mathcal{A}$
-related by the simulation convention $\mathbb{C}$.
-We will first consider
-what we can learn about the interaction
-$\kw{Asm}(p) \oplus \Sigma_\mathcal{A}$
-of an arbitrary assembly program $p$ with $\Sigma_\mathcal{A}$,
-using only $\Sigma_\mathcal{C}$
-and its relationship with $\Sigma_\mathcal{A}$.
-
-To show that the combination admits a certain behavior
-when $p$ calls into $\Sigma_\mathcal{A}$ with a query $m_\mathcal{A}$,
-we may choose any world and related query
-$w \Vdash m_\mathcal{C} \mathrel{\mathbb{C}^\que} m_\mathcal{A}$,
-establishing that $p$ performed the call
-in accordance with the C calling convention in use.
-As we unroll the behavior of $\Sigma_\mathcal{C}$ on $m_\mathcal{C}$,
-the simulation property ensures that
-for any eventual answer $n_\mathcal{C}$ produced by $\Sigma_\mathcal{C}$,
-there exists a related answer
-$w \Vdash n_\mathcal{C} \mathrel{\mathbb{C}^\ans} n_\mathcal{A}$,
-allowing us to deduce that the execution of $p$ eventually resumes.
-The answer $n_\mathcal{A}$ is not completely determined,
-since for instance $\Sigma_\mathcal{A}$ is free to allocate
-new blocks in the target memory
-and leave caller-save registers in an abitrary state,
-however its relationship with $w$ and $n_\mathcal{C}$
-captures all of the guarantees provided by the C calling convention.
-
-Conversely,
-consider the combination $\kw{Clight}(p) \oplus \Sigma_\mathcal{C}$
-and what we can learn of the interaction between $p$ and $\Sigma_\mathcal{C}$
-based on the latter's relationship with $\Sigma_\mathcal{A}$.
-To show that the combination admits a certain behavior when
-$p$ calls into $\Sigma_\mathcal{C}$ with a query $m_\mathcal{C}$,
-we must show this behavior hold for \emph{all} possible choices of
-$w$ and $m_\mathcal{A}$ such that
-$w \Vdash m_\mathcal{C} \mathrel{\mathbb{C}^\que} m_\mathcal{A}$,
-knowing that if $\Sigma_\mathcal{A}$ eventually returns with
-
-
----
-
-
-
-Using C functions from
-arbitrary assembly contexts is also possible,
-because the compiler's simulation convention $\mathbb{C}$
-captures all of the guarantees provided by CompCertO and
-directly specifies the behavior of the compiled assembly code.
-A proof involving an arbitrary assembly context
-which invokes a function compiled by CompCertO
-must establish that the call is performed
-according to the C calling convention.
-Then Thm.~\ref{thm:compc}
-can be used to reason about the behavior of the call
-in terms of the semantics of the source code
-or a $\mathcal{C}$ specification that it satisfies.
-
-\paragraph{}
-
-
-
-The passes of CompCertO are shown in Table~\ref{tbl:passes}.
-The techniques outlined above allow us to formulate
-a simulation convention
-$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
-for the compiler, %which is both compositional
-%and independent of the exact sequence of passes
-%included in the compiler.
-and to establish the following correcntess property.
+The simulation convention $\mathbb{C}$
+formalizes the correspondance between C and assembly interactions.
+By necessity,
+it follows $\kw{Clight}$ and $\kw{Asm}$ in its use of
+the CompCert memory model,
+but is otherwise independent of the compiler
+and in particular is not sensitive to the inclusion of optional optimization passes.
+The details of $\mathbb{C}$
+and some further applications of Thm.~\ref{thm:compc}
+are discussed in \S\ref{sec:callconv}.
 
 %\begin{proof}
 %%\begin{optional}
@@ -2723,8 +2589,93 @@ and to establish the following correcntess property.
 %\end{proof}
 %%}}}
 
-%}}}
-
+\begin{table} % tbl:passes Passes of CompCertO %{{{
+  \figsize
+  \begin{tabular}{l r @{$\: \twoheadrightarrow \:$} l r @{\ } r r}
+    \hline
+    Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC}
+    \\
+    \hline
+%   \textbf{Csem} & $\mathcal{C}$ & $\mathcal{C}$ & & \\
+%   - & $\kw{id}$ & $\kw{id}$ \\
+%   \textbf{Cstrategy} & $\mathcal{C}$ & $\mathcal{C}$ & & \\
+%   \kw{SimplExpr} & $\kw{id}$ & $\kw{id}$ \\
+%   \hline
+    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
+    \emph{Thm.~\ref{thm:cklr-props}} &
+      $(\kw{ext} + \kw{injp})^*$ &
+      $(\kw{ext} + \kw{injp})^*$ &
+      & \\
+    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -4 & (-1\%) \\
+    \kw{Cshmgen} & \kw{id} & \kw{id} & +0 & (+0\%) \\
+    \hline
+    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+4\%) \\
+    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ & -21 & (-2\%) \\
+    \hline
+    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ & +27 & (+3\%) \\
+    \kw{Selection} & $\kw{wt} \cdot \kw{ext}$ & $\kw{wt} \cdot \kw{ext}$ &
+      +43 & (+0\%) \\
+    \hline
+    \textbf{CminorSel} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+3\%) \\
+    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ & +8 & (+0\%) \\
+    \hline
+    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ & +11 & (+2\%) \\
+    $\kw{Tailcall}^\dagger$ & $\kw{ext}$ & $\kw{ext}$ & -1 & (-1\%) \\
+    \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ & +58 & (+3\%) \\
+    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -14 & (-7\%) \\
+    \emph{Thm.~\ref{thm:cklr-props}} &
+      $\kw{inj}$ &
+      $\kw{inj}$ &
+      & \\
+    $\kw{Constprop}^\dagger$ &
+      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
+      -17 & (-2\%) \\
+    $\kw{CSE}^\dagger$ &
+      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
+      +3 & (+0\%) \\
+    $\kw{Deadcode}^\dagger$ &
+      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
+      -7 & (-1\%) \\
+    %\st{Unusedglob} \\
+    \kw{Allocation} &
+      $\kw{wt} \cdot \kw{alloc}$ & $\kw{wt} \cdot \kw{alloc}$ &
+      +13 & (+0\%) \\
+    \hline
+    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ & +15 & (+6\%) \\
+    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ & +2 & (+0\%) \\
+    \kw{Linearize} & \kw{id} & \kw{id} & -15 & (-3\%) \\
+    \hline
+    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ & +16 & (+7\%) \\
+    \kw{CleanupLabels} & \kw{id} & \kw{id} & -10 & (-4\%) \\
+    \kw{Debugvar} & \kw{id} & \kw{id} & -12 & (-3\%) \\
+    \kw{Stacking} & \kw{stacking} & \kw{stacking} & +291 & (+11\%) \\
+    \hline
+    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ & +100 & (+26\%) \\
+    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} & +179 & (+6\%) \\
+    \hline
+    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +53 & (+5\%) \\
+    \emph{Thm.~\ref{thm:cklr-props}} &
+      $\kw{injn}$ &
+      $\kw{injn}$ \\
+    \hline
+    \multicolumn{3}{r}{Total:} & +765 & (+2\%)
+  \end{tabular}
+  \caption{Languages and passes of CompCertO.
+    Passes are grouped by their source language.
+    $\dagger$ indicates an optional optimization.
+    %The simulation conventions $\kw{ext}, \kw{inj}, \kw{injp}$
+    %are explained in \S\ref{sec:cklr}.
+    %The invariants $\kw{wt}, \kw{va}$
+    %are explained in \S\ref{sec:inv}.
+    %The conventions $\kw{alloc}, \kw{stacking}, \kw{asmgen}$
+    %are explained in \S\ref{sec:backend}.
+    In addition to compilation passes,
+    self-simulation properties are inserted as pseudo-passes
+    (Thm.~\ref{thm:cklr-props}).
+    Significant lines of code (SLOC) measured by \texttt{coqwc},
+    compared to CompCert v3.6.}
+  \label{tbl:passes}
+\end{table}
 %}}}
 
 %}}}
@@ -2828,95 +2779,6 @@ The properties above ensure that these passes
 have no impact on the overall simulation convention
 of CompCertO.
 
-%}}}
-
-\begin{table} % tbl:passes Passes of CompCertO %{{{
-  \figsize
-  \begin{tabular}{l r @{$\: \twoheadrightarrow \:$} l r @{\ } r r}
-    \hline
-    Language/Pass & Outgoing & Incoming & \multicolumn{2}{c}{SLOC}
-    \\
-    \hline
-%   \textbf{Csem} & $\mathcal{C}$ & $\mathcal{C}$ & & \\
-%   - & $\kw{id}$ & $\kw{id}$ \\
-%   \textbf{Cstrategy} & $\mathcal{C}$ & $\mathcal{C}$ & & \\
-%   \kw{SimplExpr} & $\kw{id}$ & $\kw{id}$ \\
-%   \hline
-    \textbf{Clight} & $\mathcal{C}$ & $\mathcal{C}$ & +17 & (+3\%) \\
-    \emph{Thm.~\ref{thm:cklr-props}} &
-      $(\kw{ext} + \kw{injp})^*$ &
-      $(\kw{ext} + \kw{injp})^*$ &
-      & \\
-    \kw{SimplLocals} & $\kw{injp}$ & $\kw{inj}$ & -4 & (-1\%) \\
-    \kw{Cshmgen} & \kw{id} & \kw{id} & +0 & (+0\%) \\
-    \hline
-    \textbf{Csharpminor} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+4\%) \\
-    \kw{Cminorgen} & $\kw{injp}$ & $\kw{inj}$ & -21 & (-2\%) \\
-    \hline
-    \textbf{Cminor} & $\mathcal{C}$ & $\mathcal{C}$ & +27 & (+3\%) \\
-    \kw{Selection} & $\kw{wt} \cdot \kw{ext}$ & $\kw{wt} \cdot \kw{ext}$ &
-      +43 & (+0\%) \\
-    \hline
-    \textbf{CminorSel} & $\mathcal{C}$ & $\mathcal{C}$ & +15 & (+3\%) \\
-    \kw{RTLgen} & $\kw{ext}$ & $\kw{ext}$ & +8 & (+0\%) \\
-    \hline
-    \textbf{RTL} & $\mathcal{C}$ & $\mathcal{C}$ & +11 & (+2\%) \\
-    $\kw{Tailcall}^\dagger$ & $\kw{ext}$ & $\kw{ext}$ & -1 & (-1\%) \\
-    \kw{Inlining} & $\kw{injp}$ & $\kw{inj}$ & +58 & (+3\%) \\
-    \kw{Renumber} & $\kw{id}$ & $\kw{id}$ & -14 & (-7\%) \\
-    \emph{Thm.~\ref{thm:cklr-props}} &
-      $\kw{inj}$ &
-      $\kw{inj}$ &
-      & \\
-    $\kw{Constprop}^\dagger$ &
-      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
-      -17 & (-2\%) \\
-    $\kw{CSE}^\dagger$ &
-      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
-      +3 & (+0\%) \\
-    $\kw{Deadcode}^\dagger$ &
-      $\kw{va} \cdot \kw{ext}$ & $\kw{va} \cdot \kw{ext}$ &
-      -7 & (-1\%) \\
-    %\st{Unusedglob} \\
-    \kw{Allocation} &
-      $\kw{wt} \cdot \kw{alloc}$ & $\kw{wt} \cdot \kw{alloc}$ &
-      +13 & (+0\%) \\
-    \hline
-    \textbf{LTL} & $\mathcal{L}$ & $\mathcal{L}$ & +15 & (+6\%) \\
-    \kw{Tunneling} & $\kw{ext}$ & $\kw{ext}$ & +2 & (+0\%) \\
-    \kw{Linearize} & \kw{id} & \kw{id} & -15 & (-3\%) \\
-    \hline
-    \textbf{Linear} & $\mathcal{L}$ & $\mathcal{L}$ & +16 & (+7\%) \\
-    \kw{CleanupLabels} & \kw{id} & \kw{id} & -10 & (-4\%) \\
-    \kw{Debugvar} & \kw{id} & \kw{id} & -12 & (-3\%) \\
-    \kw{Stacking} & \kw{stacking} & \kw{stacking} & +291 & (+11\%) \\
-    \hline
-    \textbf{Mach} & $\mathcal{M}$ & $\mathcal{M}$ & +100 & (+26\%) \\
-    \kw{Asmgen} & \kw{asmgen} & \kw{asmgen} & +179 & (+6\%) \\
-    \hline
-    \textbf{Asm} & $\mathcal{A}$ & $\mathcal{A}$ & +53 & (+5\%) \\
-    \emph{Thm.~\ref{thm:cklr-props}} &
-      $\kw{injn}$ &
-      $\kw{injn}$ \\
-    \hline
-    \multicolumn{3}{r}{Total:} & +765 & (+2\%)
-  \end{tabular}
-  \caption{Languages and passes of CompCertO.
-    Passes are grouped by their source language.
-    $\dagger$ indicates an optional optimization.
-    %The simulation conventions $\kw{ext}, \kw{inj}, \kw{injp}$
-    %are explained in \S\ref{sec:cklr}.
-    %The invariants $\kw{wt}, \kw{va}$
-    %are explained in \S\ref{sec:inv}.
-    %The conventions $\kw{alloc}, \kw{stacking}, \kw{asmgen}$
-    %are explained in \S\ref{sec:backend}.
-    In addition to compilation passes,
-    self-simulation properties are inserted as pseudo-passes
-    (Thm.~\ref{thm:cklr-props}).
-    Significant lines of code (SLOC) measured by \texttt{coqwc},
-    compared to CompCert v3.6.}
-  \label{tbl:passes}
-\end{table}
 %}}}
 
 \subsection{Kleene algebra} %{{{
@@ -3816,6 +3678,137 @@ and store the $\mathcal{C}$ return value in the appropriate locations,
 leaving all others with the value $\kw{undef}$.
 \end{proof}
 \end{lemma}
+
+%}}}
+
+\subsection{Compositional compilation and verification} \label{sec:cver} %{{{
+
+While the main focus of this paper is to
+the present techniques we used to obtain this result,
+we first outline some of the ways in which
+it can be used to carry out compositional reasoning
+in the presence of compilation.
+
+\paragraph{Compositional verification}
+
+Additionally,
+suppose we wish to verify that the composite program
+satisfies a specification $\Sigma$,
+also expressed as a transition system
+for $\mathcal{C} \twoheadrightarrow \mathcal{C}$.
+We must first decompose $\Sigma$
+%along the lines of the program's components:
+into:
+\[
+    \Sigma \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
+    \Sigma_1 \oplus \cdots \oplus \Sigma_n \,.
+\]
+Then for each module, we prove that
+$\Sigma_i \le_{\kw{id} \twoheadrightarrow \kw{id}} \kw{Clight}(\mathtt{Mi.c})$.
+This can be combined with Thm.~\ref{thm:fsim-hcomp} and Eqn.~\ref{eqn:sepcomp}
+to establish the correctness property
+$\Sigma \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+        \kw{Asm}(\mathtt{M.s})$.
+
+\paragraph{Mixed compilation}
+
+Note that Eqn.~\ref{eqn:sepcomp} can be established
+as long as the property
+$\kw{Clight}(\mathtt{Mi.c})
+ \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+ \kw{Asm}(\mathtt{Mi.s})$
+holds independently for each module.
+It is possible for the different $\mathtt{Mi.s}$
+to be obtained by different compilers,
+as long as each one satisfies a correctness property
+following the simulation convention in Thm.~\ref{thm:compc}.
+Indeed this is the case for versions of CompCertO
+obtained by enabling different optimization passes.
+Moreover, if some of the $\mathtt{Mi.s}$
+are hand-written assembly modules satisfying
+$\mathcal{C}$-style specifications,
+then we can prove on a case-by-case basis that
+$\Sigma_i \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\mathtt{Mi.s})$
+and proceed with the rest of the proof as before.
+
+\paragraph{Granular use of $\mathbb{C}$}
+
+In addition to the high-level principles outlined above,
+Theorem~\ref{thm:compc} enables low-level reasoning
+about the interaction between $\kw{Asm}$ code
+and components implementing $\mathcal{C}$-style specifications
+(including assembly modules compiler from $\kw{Clight}$ code),
+and conversely between $\kw{Clight}$ code
+and components implementing $\mathcal{A}$-style specifications,
+(including hand-written assembly
+which may offer some guarantees to a $\mathcal{C}$ caller, or none).
+Indeed,
+the simulation convention $\mathbb{C}$
+serves as a formalization of the C calling convention
+and precisely capture the guarantees that a C compiler must provide
+at the granularity of individual calls.
+
+To illustrate this,
+consider two transition systems
+$\Sigma_\mathcal{C}
+ \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+ \Sigma_\mathcal{A}$
+related by the simulation convention $\mathbb{C}$.
+We will first consider
+what we can learn about the interaction
+$\kw{Asm}(p) \oplus \Sigma_\mathcal{A}$
+of an arbitrary assembly program $p$ with $\Sigma_\mathcal{A}$,
+using only $\Sigma_\mathcal{C}$
+and its relationship with $\Sigma_\mathcal{A}$.
+
+To show that the combination admits a certain behavior
+when $p$ calls into $\Sigma_\mathcal{A}$ with a query $m_\mathcal{A}$,
+we may choose any world and related query
+$w \Vdash m_\mathcal{C} \mathrel{\mathbb{C}^\que} m_\mathcal{A}$,
+establishing that $p$ performed the call
+in accordance with the C calling convention in use.
+As we unroll the behavior of $\Sigma_\mathcal{C}$ on $m_\mathcal{C}$,
+the simulation property ensures that
+for any eventual answer $n_\mathcal{C}$ produced by $\Sigma_\mathcal{C}$,
+there exists a related answer
+$w \Vdash n_\mathcal{C} \mathrel{\mathbb{C}^\ans} n_\mathcal{A}$,
+allowing us to deduce that the execution of $p$ eventually resumes.
+The answer $n_\mathcal{A}$ is not completely determined,
+since for instance $\Sigma_\mathcal{A}$ is free to allocate
+new blocks in the target memory
+and leave caller-save registers in an abitrary state,
+however its relationship with $w$ and $n_\mathcal{C}$
+captures all of the guarantees provided by the C calling convention.
+
+Conversely,
+consider the combination $\kw{Clight}(p) \oplus \Sigma_\mathcal{C}$
+and what we can learn of the interaction between $p$ and $\Sigma_\mathcal{C}$
+based on the latter's relationship with $\Sigma_\mathcal{A}$.
+To show that the combination admits a certain behavior when
+$p$ calls into $\Sigma_\mathcal{C}$ with a query $m_\mathcal{C}$,
+we must show this behavior hold for \emph{all} possible choices of
+$w$ and $m_\mathcal{A}$ such that
+$w \Vdash m_\mathcal{C} \mathrel{\mathbb{C}^\que} m_\mathcal{A}$,
+knowing that if $\Sigma_\mathcal{A}$ eventually returns with
+
+
+---
+
+
+
+Using C functions from
+arbitrary assembly contexts is also possible,
+because the compiler's simulation convention $\mathbb{C}$
+captures all of the guarantees provided by CompCertO and
+directly specifies the behavior of the compiled assembly code.
+A proof involving an arbitrary assembly context
+which invokes a function compiled by CompCertO
+must establish that the call is performed
+according to the C calling convention.
+Then Thm.~\ref{thm:compc}
+can be used to reason about the behavior of the call
+in terms of the semantics of the source code
+or a $\mathcal{C}$ specification that it satisfies.
 
 %}}}
 
