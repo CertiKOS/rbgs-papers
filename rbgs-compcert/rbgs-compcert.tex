@@ -2118,124 +2118,12 @@ individual components.
 %The operator we use for this purpose
 %can be described in the following way.
 
-Consider the components $L_1, L_2 : A \twoheadrightarrow A$.
-When $L_1$ is running and performs an external call
-to one of the functions implemented by $L_2$,
-the execution of $L_1$ is suspended.
-The question of $L_1$ to $L_2$
-is used to initialize a new state for $L_2$,
-and $L_2$ becomes the active component.
-Once $L_2$ reaches a final state,
-the corresponding answer is used to resume
-the execution of $L_1$.
-In the process
-$L_2$ may itself perform cross-component calls,
-instantiating \emph{new} executions of $L_1$.
-Therefore,
-in addition to the state of the active component,
-we need to maintain a \emph{stack} of suspended states
-for component instances awaiting resumption.
-The corresponding transition system
-is described in Fig.~\ref{fig:hcomp}.
-
-\begin{figure} % fig:hcomp {{{
-  \figsize
-  \begin{tikzpicture}[xscale=0.5,yscale=0.7,
-      baseline=(current bounding box.center)]
-    \node[draw] (L1) at (0, 1) {$L_1$};
-    \node[draw] (L2) at (0,-1) {$L_2$};
-    \begin{scope}[circle, minimum size=3, inner sep=0]
-      \node[draw, fill=black] (X) at (-2,0) {};
-      \node[draw, fill=black] (I) at (+2,0) {};
-    \end{scope}
-    \tiny
-    \node[below right] at (I) {$\kw{inc}$};
-    \draw (L1) -| (-1,0);
-    \draw (L2) -| (-1,0) -- (X);
-    \draw[->] (X) -- node[below] {$\kw{ext}$} (-3,0);
-    \draw[->] (X) |- (0,2) node[above] {$\kw{push}/\kw{pop}$} -| (I);
-    \draw (3,0) -- (1,0);
-    \draw[->] (1,0) |- (L1);
-    \draw[->] (1,0) |- (L2);
-  \end{tikzpicture}
-    \begin{gather*}
-        \AxiomC{$q \in D_i$}
-        \AxiomC{$q \mathrel{I_i} s$}
-        \RightLabel{\tiny $\kw{inc}^\que$}
-        \BinaryInfC{$q \mathrel{I} (i, s)$}
-        \DisplayProof
-        \quad
-        \AxiomC{$s \stackrel{t}{\rightarrow}_i s'$}
-        \RightLabel{\tiny $\kw{run}$}
-        \UnaryInfC{$
-            (i, s) \, k
-            \stackrel{t}{\rightarrow}
-            (i, s') \, k$}
-        \DisplayProof
-        \quad
-        \AxiomC{$s \mathrel{F_i} r$}
-        \RightLabel{\tiny $\kw{inc}^\ans$}
-        \UnaryInfC{$(i, s) \mathrel{F} r$}
-        \DisplayProof
-        \\[1ex]
-        \AxiomC{$s \mathrel{X_i} q$}
-        \AxiomC{$q \in D_j$}
-        \AxiomC{$q \mathrel{I_j} s'$}
-        \RightLabel{\tiny $\kw{push}$}
-        \TrinaryInfC{$
-            (i, s) \, k
-            \stackrel{\epsilon}{\rightarrow}
-            (j, s') \, (i, s) \, k$}
-        \DisplayProof
-        \quad
-        \AxiomC{$s' \mathrel{F_j} r$}
-        \AxiomC{$r \mathrel{Y_i^s} s''$}
-        \RightLabel{\tiny $\kw{pop}$}
-        \BinaryInfC{$
-            (j, s') \, (i, s) \, k
-            \stackrel{\epsilon}{\rightarrow}
-            (i, s'') \, k$}
-        \DisplayProof
-        \\[1ex]
-        \AxiomC{$s \mathrel{X_i} q$}
-        \AxiomC{$\forall j \,.\, q \notin D_j$}
-        \RightLabel{\tiny $\kw{ext}^\que$}
-        \BinaryInfC{$(i, s) \, k \mathrel{X} q$}
-        \DisplayProof
-        \qquad
-        \AxiomC{$r \mathrel{Y_i^s} s'$}
-        \RightLabel{\tiny $\kw{ext}^\ans$}
-        \UnaryInfC{$r \mathrel{Y^{(i, s) \, k}} (i, s') \, k$}
-        \DisplayProof
-    \end{gather*}
-    \caption{Horizontal composition of open semantics.
-      The state is a stack of alternating activations
-      of the two components,
-      initialized as a singleton by an incoming question ($\kw{inc}^\que$).
-      During normal execution ($\kw{run}$),
-      the top-level state is updated.
-      Calls into the other component
-      push a new state onto the stack ($\kw{push}$),
-      initialized to handle the call in question.
-      If a final state is reached
-      while there are suspended activations ($\kw{pop}$),
-      the result is used to resume the most recent one.
-      External calls which are provided by neither component
-      ($\kw{ext}^\que$, $\kw{ext}^\ans$),
-      and final states encountered at the top level
-      ($\kw{inc}^\ans$),
-      are simply passed along to the environment.
-    }
-    \label{fig:hcomp}
-\end{figure}
-%}}}
-
 \begin{definition}[Horizontal composition] \label{def:hcomp} %{{{
 For two transition systems $L_1, L_2 : A \twoheadrightarrow A$
 with
 $L_i = \langle S_i, {\rightarrow}_i, D_i, I_i, X_i, Y_i, F_i \rangle$,
 the \emph{horizontal composition} of $L_1$ and $L_2$
-is defined as:
+is of the form:
 \[
     L_1 \oplus L_2 :=
     \langle
@@ -2247,6 +2135,24 @@ are defined by
 the rules shown in Fig.~\ref{fig:hcomp}.
 \end{definition}
 %}}}
+
+The construction of $L_1 \oplus L_2$
+is similar to that of
+the \emph{semantic linking} operator of
+Compositional CompCert \cite{compcompcert}.
+To enable mutual recursion between $L_1$ and $L_2$
+to an arbitrary depth,
+it maintains an alternating stack of suspended states
+of $L_1$ and $L_2$.
+When a cross-component call occurs,
+the current state is suspended
+and the question is used to initialize
+a new state for the other component.
+When the other component terminates,
+the suspended state is resumed
+using the corresponding answer.
+The details are provided in
+Appendix~\ref{sec:details}.
 
 %}}}
 
@@ -4637,6 +4543,129 @@ to the proofs found in CompCert.
 
 %}}}
 
+\section{Technical details} \label{sec:details} %{{{
+
+\subsection{Horizontal composition} %{{{
+
+The details of the transition system
+given in Def.~\ref{def:hcomp}
+are spelled out in Fig.~\ref{fig:hcomp}.
+Consider the components $L_1, L_2 : A \twoheadrightarrow A$.
+When $L_1$ is running and performs an external call
+to one of the functions implemented by $L_2$,
+the execution of $L_1$ is suspended.
+The question of $L_1$ to $L_2$
+is used to initialize a new state for $L_2$,
+and $L_2$ becomes the active component.
+Once $L_2$ reaches a final state,
+the corresponding answer is used to resume
+the execution of $L_1$.
+In the process
+$L_2$ may itself perform cross-component calls,
+instantiating \emph{new} executions of $L_1$.
+Therefore,
+in addition to the state of the active component,
+we need to maintain a \emph{stack} of suspended states
+for component instances awaiting resumption.
+
+\begin{figure*} % fig:hcomp {{{
+  \figsize
+  \begin{tikzpicture}[%xscale=0.5,yscale=0.7,
+      baseline=(current bounding box.center)]
+    \node[draw] (L1) at (0, 1) {$L_1$};
+    \node[draw] (L2) at (0,-1) {$L_2$};
+    \begin{scope}[circle, minimum size=3, inner sep=0]
+      \node[draw, fill=black] (X) at (-2,0) {};
+      \node[draw, fill=black] (I) at (+2,0) {};
+    \end{scope}
+    \tiny
+    \node[below right] at (I) {$\kw{inc}$};
+    \draw (L1) -| (-1,0);
+    \draw (L2) -| (-1,0) -- (X);
+    \draw[->] (X) -- node[below] {$\kw{ext}$} (-3,0);
+    \draw[->] (X) |- (0,2) node[above] {$\kw{push}/\kw{pop}$} -| (I);
+    \draw (3,0) -- (1,0);
+    \draw[->] (1,0) |- (L1);
+    \draw[->] (1,0) |- (L2);
+  \end{tikzpicture}
+  \begin{minipage}{0.6\textwidth}
+    \begin{gather*}
+        \AxiomC{$q \in D_i$}
+        \AxiomC{$q \mathrel{I_i} s$}
+        \RightLabel{$\kw{inc}^\que$}
+        \BinaryInfC{$q \mathrel{I} (i, s)$}
+        \DisplayProof
+        \qquad
+        \AxiomC{$s \stackrel{t}{\rightarrow}_i s'$}
+        \RightLabel{$\kw{run}$}
+        \UnaryInfC{$
+            (i, s) \, k
+            \stackrel{t}{\rightarrow}
+            (i, s') \, k$}
+        \DisplayProof
+        \qquad
+        \AxiomC{$s \mathrel{F_i} r$}
+        \RightLabel{$\kw{inc}^\ans$}
+        \UnaryInfC{$(i, s) \mathrel{F} r$}
+        \DisplayProof
+        \\[1em]
+        \AxiomC{$s \mathrel{X_i} q$}
+        \AxiomC{$q \in D_j$}
+        \AxiomC{$q \mathrel{I_j} s'$}
+        \RightLabel{$\kw{push}$}
+        \TrinaryInfC{$
+            (i, s) \, k
+            \stackrel{\epsilon}{\rightarrow}
+            (j, s') \, (i, s) \, k$}
+        \DisplayProof
+        \qquad
+        \AxiomC{$s' \mathrel{F_j} r$}
+        \AxiomC{$r \mathrel{Y_i^s} s''$}
+        \RightLabel{$\kw{pop}$}
+        \BinaryInfC{$
+            (j, s') \, (i, s) \, k
+            \stackrel{\epsilon}{\rightarrow}
+            (i, s'') \, k$}
+        \DisplayProof
+        \\[1em]
+        \AxiomC{$s \mathrel{X_i} q$}
+        \AxiomC{$\forall j \,.\, q \notin D_j$}
+        \RightLabel{$\kw{ext}^\que$}
+        \BinaryInfC{$(i, s) \, k \mathrel{X} q$}
+        \DisplayProof
+        \qquad
+        \AxiomC{$r \mathrel{Y_i^s} s'$}
+        \RightLabel{$\kw{ext}^\ans$}
+        \UnaryInfC{$r \mathrel{Y^{(i, s) \, k}} (i, s') \, k$}
+        \DisplayProof
+    \end{gather*}
+  \end{minipage}
+    \caption{Horizontal composition of open semantics.
+      The state is a stack of alternating activations
+      of the two components,
+      initialized as a singleton by an incoming question ($\kw{inc}^\que$).
+      During normal execution ($\kw{run}$),
+      the top-level state is updated.
+      Calls into the other component
+      push a new state onto the stack ($\kw{push}$),
+      initialized to handle the call in question.
+      If a final state is reached
+      while there are suspended activations ($\kw{pop}$),
+      the result is used to resume the most recent one.
+      External calls which are provided by neither component
+      ($\kw{ext}^\que$, $\kw{ext}^\ans$),
+      and final states encountered at the top level
+      ($\kw{inc}^\ans$),
+      are simply passed along to the environment.
+    }
+    \label{fig:hcomp}
+\end{figure*}
+%}}}
+
+%}}}
+
+%}}}
+
 \section{Invariants} \label{sec:inv} %{{{
 
 % preamble {{{
@@ -4808,9 +4837,7 @@ to match this convention nonetheless.
 
 %}}}
 
-%}}}
-
-\section{Simulations modulo invariants} \label{sec:fsim-inv} %{{{
+\subsection{Simulations modulo invariants} \label{sec:fsim-inv} %{{{
 
 \begin{figure*} % fig:fsim-inv {{{
   \[
@@ -4956,6 +4983,8 @@ the standard forward simulation techniques
 defined by CompCert
 in \texttt{Smallstep.v}
 remain available.
+
+%}}}
 
 %}}}
 
