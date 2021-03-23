@@ -1,0 +1,571 @@
+\documentclass{article}
+%\usepackage{geometry}
+\usepackage[colorlinks]{hyperref}
+\usepackage{ebproof}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{libertine}
+\usepackage{stmaryrd}
+\usepackage{tikz}
+\usepackage{tikz-cd}
+
+\title{CompCertO\hspace{-0.5ex}\raisebox{-0.5ex}{X}!}
+\author{J\'er\'emie Koenig}
+
+\begin{document}
+
+%\begin{titlepage}
+%  \centering
+%  \vspace*{5em}
+%  \Huge
+%  CompCertO\hspace{-0.5ex}\raisebox{-0.5ex}{X}! \\[2em]
+%  \Large
+%  J\'er\'emie Koenig \\[1em]
+%  \today
+%\end{titlepage}
+
+%\begin{abstract}
+%  This note explains how
+%  CompCertO can be used to replace CompCertX,
+%  and outlines some extensions made possible
+%  by the features of CompCertO.
+%\end{abstract}
+
+\maketitle
+
+\vfill
+
+\begin{figure}[h]
+  \begin{center}
+    \begin{tikzcd}[row sep=1cm, column sep=1.5cm]
+      1 \ar[d, double, dash] \ar[rrr, ->>, "L_1"] &&&
+      \mathcal{C}@K_1
+        \ar[d, <->, "R"]
+        \ar[r, "\llbracket C \rrbracket@K_1"] &
+      \mathcal{C}@K_1
+        \ar[ddd, <->, "R \cdot S"]
+      \\
+      1 \ar[d, double, dash] \ar[rr, ->>, "L_2"] &&
+      \mathcal{C}@K_2
+        \ar[d, <->, "S"]
+        \ar[r, ->>, "\llbracket M \rrbracket@K_2"] &
+      \mathcal{C}@K_2
+        \ar[d, <->, "S"]
+      \\
+      1 \ar[dd, double, dash] \ar[r, ->>, "L_3"] &
+      \mathcal{C}@K_3
+        \ar[d, double, dash] 
+        \ar[r, ->>, "\llbracket N \rrbracket@K_3"] &
+      \mathcal{C}@K_3
+        \ar[r, ->>, "\llbracket M \rrbracket@K_3"] &
+      \mathcal{C}@K_3
+        \ar[d, double, dash]
+      \\ &
+      \mathcal{C}@K_3
+        \ar[d, double, dash] 
+        \ar[rr, ->>, "\llbracket M + N \rrbracket@K_3"] &&
+      \mathcal{C}@K_3
+        \ar[r, ->>, "\llbracket C \rrbracket@K_3"] &
+      \mathcal{C}@K_3
+        \ar[d, double, dash] 
+      \\
+      1 \ar[r, ->>, "L_3"] &
+      \mathcal{C}@K_3
+        \ar[rrr, ->>, "\llbracket C + M + N \rrbracket@K_3"] &&&
+      \mathcal{C}@K_3
+    \end{tikzcd}
+  \end{center}
+  \caption{%
+    Contextual refinement for a composite layer.
+    Every square is a simulation.
+  }
+  \label{fig:ex}
+\end{figure}
+
+\vfill
+
+\section{Overview}
+
+Our usual
+\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf\#chapter.4}%
+  {theory of abstraction layers}
+can be formulated in CompCertO's double category of
+language interfaces, simulation conventions and transition systems:
+\begin{itemize}
+  \item A layer interface $L$ with abstract states in $K$
+    is represented as $L : 1 \twoheadrightarrow \mathcal{C}@K$
+  \item Clight semantics define
+    $\llbracket M \rrbracket : \mathcal{C} \twoheadrightarrow \mathcal{C}$
+    and lift to
+    $\llbracket M \rrbracket @ K :
+     \mathcal{C}@K \twoheadrightarrow \mathcal{C}@K$
+  \item Abstraction relations define simulation conventions
+    $R : \mathcal{C}@K_1 \Leftrightarrow \mathcal{C}@K_2$
+  \item Layer correctness
+    $L_2 \vdash_R M : L_1$
+    is encoded as
+    $L_1 \le_{\mathsf{id} \twoheadrightarrow R}
+     \llbracket M \rrbracket @K_2 \circ L_2$
+\end{itemize}
+\autoref{fig:ex}
+demonstrates how these ingredients may fit together
+in a typical situation.
+
+\newpage
+The following operators
+model vertical and horizontal composition.
+In the symmetric case ($A \twoheadrightarrow A$),
+they under-approximate $\oplus$
+and can be implemented by linking.
+\begin{itemize}
+  \item Categorical composition \hfill
+    $\circ :
+      (B \twoheadrightarrow C) \times
+      (A \twoheadrightarrow B) \rightarrow
+      (A \twoheadrightarrow C) \qquad$
+  \item Flat composition \hfill
+    $\uplus :
+      (A \twoheadrightarrow B) \times
+      (A \twoheadrightarrow B) \rightarrow
+      (A \twoheadrightarrow B) \qquad$
+\end{itemize}
+To reconnect formally with Yu's work,
+we can investigate the following further:
+\begin{itemize}
+  \item A CompCertO transition system $L : A \twoheadrightarrow B$
+    can be embedded into $\dagger A \multimap B$.
+  \item The cliques of $\dagger \mathcal{C}$
+    are universal abstract states.
+  \item We can map between effect signatures $E$
+    and the language interfaces $\mathcal{C}, \mathcal{A}$.
+\end{itemize}
+We can then define
+a principled embedding
+into game semantics or coherence spaces.
+
+
+%A certified abstraction layer
+%$L_2 \vdash_R M : L_1$
+%establishes that:
+%\[
+%  L_1 \le_{\mathsf{id} \twoheadrightarrow R}
+%  \llbracket M \rrbracket @K_2 \circ L_2
+%\]
+%Various properties of the operators involved
+%ensure that
+%for any context $C$,
+%\[
+%  \llbracket C \rrbracket@K_1 \circ L_1
+%  \: \le_{\mathsf{id} \twoheadrightarrow R} \:
+%  \llbracket C \rrbracket@K_2 \circ \llbracket M \rrbracket@K_2 \circ L_2
+%  \: \le_{\mathsf{id} \twoheadrightarrow \mathsf{id}} \:
+%  \llbracket C + M \rrbracket@K_2 \circ L_2
+%  \,.
+%\]
+%In particular,
+%this enables vertical composition:
+%\[
+%  L_1
+%  \: \le_{\mathsf{id} \twoheadrightarrow R} \:
+%  \llbracket M \rrbracket@K_2 \circ L_2
+%  \: \le_{\mathsf{id} \twoheadrightarrow S} \:
+%  \llbracket M + N \rrbracket@K_3 \circ L_3
+%\]
+%On the other hand,
+%the flat composition operator:
+%\[
+%  L_1, L_2 : A \twoheadrightarrow B
+%  \vdash
+%  L_1 \uplus L_2 : A \twoheadrightarrow B
+%\]
+%allows us to carry out a similar
+
+
+\section{Basic setup} %{{{
+
+I will use the notations and concepts outlined in
+\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf\#chapter.4}{Chapter 4}
+of my thesis.
+In particular,
+\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf#section.4.4}{\S 4.4}
+reframes our CompCertX-based approach
+into our more abstract formalism
+and is a starting point for the following definitions.
+
+\subsection{Abstract states} %{{{
+
+In CompCertX,
+the memory model is extended with an \emph{abstract state} component
+which is used to specify the behavior of underlay primitives.
+
+To extend CompCertO in a similar way,
+given a set $K$ of abstract states,
+we can introduce an operator to transform the language interface
+$A = \langle A^\circ, A^\bullet \rangle$
+into
+\[
+    A@K := \langle A^\circ \times K, \: A^\bullet \times K \rangle
+    \,.
+\]
+Then,
+a CompCertO transition system $L : A \twoheadrightarrow B$
+can be lifted to \[ L@K : A@K \twoheadrightarrow B@K \,, \]
+which maintains an abstract state component
+and threads it through the computation.
+If $L = \langle S, {\rightarrow}, D, I, X, Y, F \rangle$,
+then we can define:
+\[
+    L@K \:\: := \:\:
+      \langle S \times K, \:\: {\rightarrow} \times {=}_K, \:\:
+            D \times K, \:\: I \times {=}_K, \:\: X \times {=}_K, \:\:
+            Y_K, \:\: F \times {=}_K \rangle
+\]
+The state is extended with an abstract state component ($S \times K$).
+Most of the relations involved in $L@K$
+simply thread this component through unchanged (${-} \times {=}_K$).
+At external calls,
+we update it with the
+corresponding component of the reply:
+\[
+  \begin{prooftree}
+    \hypo{n \mathrel{Y^s} s'}
+    \infer1{n@{k'} \mathrel{Y_K^{s@k}} s'@k'}
+  \end{prooftree} 
+\]
+
+%}}}
+
+\subsection{Layer interfaces} %{{{
+
+Per the definitions in my thesis and our LICS'20 paper,
+a layer interface can be described as a family of specifications:
+\[
+    \sigma^m : K \rightarrow \mathcal{P}^1(N \times K)
+\]
+where $(m \mathbin: N) \in E$ is an operation of the layer's signature.
+In the case of the $\mathcal{C}$ language interface of CompCertO,
+operations are of the form:
+\[
+    f(\vec{v}) : \mathsf{val}
+    \qquad
+    \text{where}
+    \qquad
+    f \in \mathsf{val}
+    \qquad
+    \vec{v} \in \mathsf{val}^*
+\]
+
+A layer interface specified in this style
+can easily be represented as a CompCertO transition system
+$\hat{\sigma} : 1 \twoheadrightarrow \mathcal{C}@K$,
+defined as:
+\[
+  \hat{\sigma} := \langle
+    \mathsf{val} \times \mathsf{mem} \times K,
+    \varnothing,
+    D,
+    I,
+    \varnothing,
+    \varnothing,
+    F
+  \rangle
+\]
+A call into this transition system involves a single state.
+At invocation,
+we immediately query $\sigma$ to obtain the call's outcome
+and save it in the transition system's state:
+\[
+  \begin{prooftree}
+    \hypo{\sigma^{f(\vec{v})}(k) \ni (v', k')}
+    \infer1{f(\vec{v})@m@k \mathrel{I} (v', m, k')}
+  \end{prooftree}
+\]
+This single state admits no transition but is immediately final:
+\[
+  \begin{prooftree}
+    \infer0{(v', m, k') \mathrel{F} v'@m@k'}
+  \end{prooftree}
+\]
+
+The domain $D$ has to be specified in addition to $\sigma$,
+which does not carry this information.
+Alternatively,
+we could use a more sophisticated embedding,
+where $\sigma$ is defined in terms of a more abstract
+effect signature $E$,
+and where we specify a correspondance between
+the operations of $E$ and $\mathcal{C}$ calls.
+
+Using the definitions above
+and the categorical composition $\circ$ which I define later,
+the semantics of a Clight program $M$
+on top of a layer interface
+$L : 1 \twoheadrightarrow \mathcal{C}@K$
+can be given as
+\[
+  \llbracket M \rrbracket_L \: := \:
+  \mathsf{Clight}(M)@K \circ L \: : \:
+  1 \twoheadrightarrow \mathcal{C}@K
+  \,.
+\]
+
+%}}}
+
+\subsection{Abstraction relations} %{{{
+
+In CompCertX-based CertiKOS,
+the abstraction relation between
+an overlay with abstract states in $K_1$ and
+an underlay with abstract states in $K_2$
+is given as a pair of relations:
+\[
+  R^\mathsf{r} \subseteq K_1 \times K_2
+  \qquad
+  R^\mathsf{m} \subseteq K_1 \times \mathsf{mem}
+\]
+We also associate with each layer a set of global variables $G$
+such that:
+\[
+  \begin{prooftree}
+    \hypo{k_1 \mathrel{R^\mathsf{r}} m_2}
+    \hypo{m_2 \cong_G m_2'}
+    \infer2{k_1 \mathrel{R^\mathsf{r}} m_2'}
+  \end{prooftree}
+\]
+where $\cong_G$ denotes the usual $\mathsf{Mem.unchanged\_on}$
+relationship asserting that the two memories
+associates the same content to the global variable in $G$.
+
+In CompCertO,
+we can use these relations to define a
+memory-extension-based simulation convention
+$R : \mathcal{C}@K_1 \Leftrightarrow \mathcal{C}@K_2$
+which captures CertiKOS-style abstraction between
+overlay and underlay behaviors:
+\begin{gather*}
+ {\begin{prooftree}
+    \hypo{k_1 \mathrel{R^\mathsf{r}} k_2}
+    \hypo{k_1 \mathrel{R^\mathsf{m}} m_2}
+    \hypo{m_1 \le_\mathsf{m} m_2}
+    \hypo{m_1 \mathrel\text{no-perms-on} G}
+    \hypo{\vec{v}_1 \le_\mathsf{v} \vec{v}_2}
+    \infer5{f(\vec{v}_1)@m_1@k_1 \mathrel{R^\circ} f(\vec{v}_2)@m_2@k_2}
+  \end{prooftree}}
+\\
+ {\begin{prooftree}
+    \hypo{k_1 \mathrel{R^\mathsf{r}} k_2}
+    \hypo{k_1 \mathrel{R^\mathsf{m}} m_2}
+    \hypo{m_1 \le_\mathsf{m} m_2}
+    \hypo{m_1 \mathrel\text{no-perms-on} G}
+    \hypo{v'_1 \le_\mathsf{v} v'_2}
+    \infer5{v'_1@m_1@k_1 \mathrel{R^\bullet} v'_2@m_2@k_2}
+  \end{prooftree}}
+\end{gather*}
+Then we can
+formulate the layer correctness property
+$L_2 \vdash_R M : L_1$ as
+\[
+    L_1 \le_{\mathsf{id} \twoheadrightarrow R}
+    \mathsf{Clight}(M)@K_2 \circ L_2
+    \,.
+\]
+
+%}}}
+
+%}}}
+
+\section{Categorical composition} %{{{
+
+I have used the categorical composition operator
+\[
+  \begin{prooftree}
+    \hypo{L_1 : B \twoheadrightarrow C}
+    \hypo{L_2 : A \twoheadrightarrow B}
+    \infer2{L_1 \circ L_2 : A \twoheadrightarrow C}
+  \end{prooftree}
+\]
+without spelling out the details.
+Categorical composition is both
+more general and more restricted
+than the horizontal composition operator $\oplus$:
+\begin{itemize}
+  \item The types of $L_1$ and $L_2$
+    are more general than $A \twoheadrightarrow A$.
+  \item 
+    $L_1$ is allowed to call into $L_2$
+    but not the other way around.
+\end{itemize}
+
+\subsection{Definition} %{{{
+
+Suppose we have the transition systems:
+\begin{align*}
+  L_1 &= \langle S_1, {\rightarrow_1}, D_1, I_1, X_1, Y_1, F_1 \rangle
+    : B \twoheadrightarrow C
+  \\
+  L_2 &= \langle S_2, {\rightarrow_2}, D_2, I_2, X_2, Y_2, F_2 \rangle
+    : A \twoheadrightarrow B
+\end{align*}
+The composite transition system is defined as
+\[
+  L_1 \circ L_2 :=
+  \langle S, {\rightarrow}, D_1 \cup D_2, I, X, Y, F \rangle
+\]
+with the following components.
+States are of the form:
+\[
+    S := S_1 + (S_2 \times S_1)
+\]
+Initially, the environment question activates $L_1$:
+\[
+  \begin{prooftree}
+    \hypo{q_C \mathrel{I_1} s_1}
+    \infer1{q_C \mathrel{I} \iota_1(s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \rightarrow_1 s_1'}
+    \infer1{\iota_1(s_1) \rightarrow \iota_1(s_1')}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{F_1} r_C}
+    \infer1{\iota_1(s_1) \mathrel{F} r_C}
+  \end{prooftree}
+\]
+When an external call is encountered,
+the question is used to activate $L_2$:
+\[
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{X_1} q_B}
+    \hypo{q_B \mathrel{I_2} s_2}
+    \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
+  \end{prooftree}
+\]
+Execution proceeds according to $L_2$,
+\[
+  \begin{prooftree}
+    \hypo{s_2 \rightarrow_2 s_2'}
+    \infer1{\iota_2(s_2, s_1) \rightarrow \iota_2(s_2', s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{X_2} q_A}
+    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_A}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{r_A \mathrel{Y_2^{s_2}} s_2'}
+    \infer1{r_A \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
+  \end{prooftree}
+\]
+until a final state of $L_2$ is reached,
+at which point $L_1$ is resumed:
+\[
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{F_2} r_B}
+    \hypo{r_B \mathrel{Y_1^{s_1}} s_1'}
+    \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
+  \end{prooftree}
+\]
+
+%}}}
+
+\subsection{Identity} %{{{
+
+The identity transition system $\mathsf{id}_A : A \twoheadrightarrow A$
+can be defined as:
+\[
+  \mathsf{id}_A :=
+    \langle A^\circ + A^\bullet,\: \varnothing,\: \varnothing,\: I,\: X,\: Y,\: F \rangle
+\]
+The components are defined by:
+\[
+  \begin{prooftree}
+    \infer0{q \mathrel{I} \iota_1(q) \mathrel{X} q}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \infer0{r \mathrel{Y^{\iota_1(q)}} \iota_2(r) \mathrel{F} r}
+  \end{prooftree}
+\]
+It should be straightforward to verify:
+\[
+  L
+  \le_{\mathsf{id} \twoheadrightarrow \mathsf{id}}
+  (\mathsf{id}_B \circ L)
+  \le_{\mathsf{id} \twoheadrightarrow \mathsf{id}}
+  L
+  \qquad
+  L
+  \le_{\mathsf{id} \twoheadrightarrow \mathsf{id}}
+  (L \circ \mathsf{id}_A)
+  \le_{\mathsf{id} \twoheadrightarrow \mathsf{id}}
+  L
+\]
+
+Note that the domain of $\mathsf{id}_A$ is $\varnothing$,
+even though the transition system has initial states
+for every possible query.
+
+%}}}
+
+\subsection{Associativity} %{{{
+
+Associativity can be verified using
+the simulation relation:
+\[
+  \begin{array}{rr}
+    \hline
+    L_1 \circ (L_2 \circ L_3) & (L_1 \circ L_2) \circ L_3 \\
+    \hline
+    \iota_1(s_1) & \iota_1(\iota_1(s_1)) \\
+    \iota_2(\iota_1(s_2), s_1) & \iota_1(\iota_2(s_2, s_1)) \\
+    \iota_2(\iota_2(s_3, s_2), s_1) & \iota_2(s_3, \iota_2(s_2, s_1)) \\
+    \hline
+  \end{array}
+\]
+
+%}}}
+
+\subsection{Relationship with $\oplus$} %{{{
+
+In the case where $A = B = C$,
+the categorical composition $L_1 \circ L_2$
+is an under-approximation of
+the horizontal composition $L_1 \oplus L_2$:
+\[
+    L_1 \circ L_2
+    \le_{\mathsf{id} \twoheadrightarrow \mathsf{id}}
+    L_1 \oplus L_2
+\]
+
+%}}}
+
+%To obtain a proper categorical structure,
+%we will consider $L$ to be ``pass-through''
+%outside of its domain $D$.
+%In other words,
+%composition will work as follows:
+%\[
+%  \begin{tikzpicture}[xscale=2]
+%    \node[draw,rectangle] (L1) at (2, 2) {$L_1$};
+%    \node[draw,rectangle] (L2) at (1, 1) {$L_2$};
+%    \draw[->] (3,2) -- node[above, near start] {$D_1$} (L1);
+%    \draw[->] (3,1) -- node[above, near start] {$D_2$} (L2);
+%    \draw[->] (3,0) -- node[above] {$\overline{D_1 \cup D_2}$} (0,0);
+%    \draw[->] (L1) -- node[above] {$\overline{D_2}$} (0,2);
+%    \draw[->] (L1) .. controls +(-0.5,0) and +(0.5,0) .. (L2);
+%    \draw[->] (L2) -- (0,1);
+%  \end{tikzpicture}
+%\]
+
+%}}}
+
+\section{Flat composition}
+
+\section{Coherence spaces}
+
+\section{Effect signatures}
+
+\end{document}
