@@ -172,199 +172,7 @@ into game semantics or coherence spaces.
 
 %}}}
 
-\section{Basic setup} %{{{
-
-I will use the notations and concepts outlined in
-\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf\#chapter.4}{Chapter 4}
-of my thesis.
-In particular,
-\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf#section.4.4}{\S 4.4}
-reframes our CompCertX-based approach
-into our more abstract formalism
-and is a starting point for the following definitions.
-
-\subsection{Abstract states} %{{{
-
-In CompCertX,
-the memory model is extended with an \emph{abstract state} component
-which is used to specify the behavior of underlay primitives.
-
-To extend CompCertO in a similar way,
-given a set $K$ of abstract states,
-we can introduce an operator to transform the language interface
-$A = \langle A^\circ, A^\bullet \rangle$
-into
-\[
-    A@K := \langle A^\circ \times K, \: A^\bullet \times K \rangle
-    \,.
-\]
-Then,
-a CompCertO transition system $L : A \twoheadrightarrow B$
-can be lifted to \[ L@K : A@K \twoheadrightarrow B@K \,, \]
-which maintains an abstract state component
-and threads it through the computation.
-If $L = \langle S, {\rightarrow}, D, I, X, Y, F \rangle$,
-then we can define:
-\[
-    L@K \:\: := \:\:
-      \langle S \times K, \:\: {\rightarrow} \times {=}_K, \:\:
-            D \times K, \:\: I \times {=}_K, \:\: X \times {=}_K, \:\:
-            Y_K, \:\: F \times {=}_K \rangle
-\]
-The state is extended with an abstract state component ($S \times K$).
-Most of the relations involved in $L@K$
-simply thread this component through unchanged (${-} \times {=}_K$).
-At external calls,
-we update it with the
-corresponding component of the reply:
-\[
-  \begin{prooftree}
-    \hypo{n \mathrel{Y^s} s'}
-    \infer1{n@{k'} \mathrel{Y_K^{s@k}} s'@k'}
-  \end{prooftree} 
-\]
-
-%}}}
-
-\subsection{Layer interfaces} %{{{
-
-Per the definitions in my thesis and our LICS'20 paper,
-a layer interface can be described as a family of specifications:
-\[
-    \sigma^m : K \rightarrow \mathcal{P}^1(N \times K)
-\]
-where $(m \mathbin: N) \in E$ is an operation of the layer's signature.
-In the case of the $\mathcal{C}$ language interface of CompCertO,
-operations are of the form:
-\[
-    f(\vec{v}) : \mathsf{val}
-    \qquad
-    \text{where}
-    \qquad
-    f \in \mathsf{val}
-    \qquad
-    \vec{v} \in \mathsf{val}^*
-\]
-
-A layer interface specified in this style
-can easily be represented as a CompCertO transition system
-$\hat{\sigma} : 1 \twoheadrightarrow \mathcal{C}@K$,
-defined as:
-\[
-  \hat{\sigma} := \langle
-    \mathsf{val} \times \mathsf{mem} \times K,
-    \varnothing,
-    D,
-    I,
-    \varnothing,
-    \varnothing,
-    F
-  \rangle
-\]
-A call into this transition system involves a single state.
-At invocation,
-we immediately query $\sigma$ to obtain the call's outcome
-and save it in the transition system's state:
-\[
-  \begin{prooftree}
-    \hypo{\sigma^{f(\vec{v})}(k) \ni (v', k')}
-    \infer1{f(\vec{v})@m@k \mathrel{I} (v', m, k')}
-  \end{prooftree}
-\]
-This single state admits no transition but is immediately final:
-\[
-  \begin{prooftree}
-    \infer0{(v', m, k') \mathrel{F} v'@m@k'}
-  \end{prooftree}
-\]
-
-The domain $D$ has to be specified in addition to $\sigma$,
-which does not carry this information.
-Alternatively,
-we could use a more sophisticated embedding,
-where $\sigma$ is defined in terms of a more abstract
-effect signature $E$,
-and where we specify a correspondance between
-the operations of $E$ and $\mathcal{C}$ calls.
-
-Using the definitions above
-and the categorical composition $\circ$ which I define later,
-the semantics of a Clight program $M$
-on top of a layer interface
-$L : 1 \twoheadrightarrow \mathcal{C}@K$
-can be given as
-\[
-  \llbracket M \rrbracket @K \circ L \: : \:
-  1 \twoheadrightarrow \mathcal{C}@K
-  \,.
-\]
-
-%}}}
-
-\subsection{Abstraction relations} %{{{
-
-In CompCertX-based CertiKOS,
-the abstraction relation between
-an overlay with abstract states in $K_1$ and
-an underlay with abstract states in $K_2$
-is given as a pair of relations:
-\[
-  R^\mathsf{r} \subseteq K_1 \times K_2
-  \qquad
-  R^\mathsf{m} \subseteq K_1 \times \mathsf{mem}
-\]
-We also associate with each layer a set of global variables $G$
-such that:
-\[
-  \begin{prooftree}
-    \hypo{k_1 \mathrel{R^\mathsf{r}} m_2}
-    \hypo{m_2 \cong_G m_2'}
-    \infer2{k_1 \mathrel{R^\mathsf{r}} m_2'}
-  \end{prooftree}
-\]
-where $\cong_G$ denotes the usual $\mathsf{Mem.unchanged\_on}$
-relationship asserting that the two memories
-associate the same contents to the global variables in $G$.
-
-In CompCertO,
-we can use these relations to define a
-memory-extension-based simulation convention
-$R : \mathcal{C}@K_1 \Leftrightarrow \mathcal{C}@K_2$
-which captures CertiKOS-style abstraction between
-overlay and underlay behaviors:
-\begin{gather*}
- {\begin{prooftree}
-    \hypo{k_1 \mathrel{R^\mathsf{r}} k_2}
-    \hypo{k_1 \mathrel{R^\mathsf{m}} m_2}
-    \hypo{m_1 \le_\mathsf{m} m_2}
-    \hypo{m_1 \mathrel\text{no-perms-on} G}
-    \hypo{\vec{v}_1 \le_\mathsf{v} \vec{v}_2}
-    \infer5{f(\vec{v}_1)@m_1@k_1 \mathrel{R^\circ} f(\vec{v}_2)@m_2@k_2}
-  \end{prooftree}}
-\\[1em]
- {\begin{prooftree}
-    \hypo{k_1 \mathrel{R^\mathsf{r}} k_2}
-    \hypo{k_1 \mathrel{R^\mathsf{m}} m_2}
-    \hypo{m_1 \le_\mathsf{m} m_2}
-    \hypo{m_1 \mathrel\text{no-perms-on} G}
-    \hypo{v'_1 \le_\mathsf{v} v'_2}
-    \infer5{v'_1@m_1@k_1 \mathrel{R^\bullet} v'_2@m_2@k_2}
-  \end{prooftree}}
-\end{gather*}
-Then we can
-formulate the layer correctness property
-$L \vdash_R M : L'$ as
-\[
-    L' \le_{\mathsf{id} \twoheadrightarrow R}
-    \mathsf{Clight}(M)@K \circ L
-    \,.
-\]
-
-%}}}
-
-%}}}
-
-\section{Categorical composition} %{{{
+\section{Categorical structure of CompCertO semantics} %{{{
 
 I have used the categorical composition operator
 \[
@@ -640,30 +448,206 @@ the horizontal composition $L_1 \oplus L_2$:
 
 %}}}
 
-%To obtain a proper categorical structure,
-%we will consider $L$ to be ``pass-through''
-%outside of its domain $D$.
-%In other words,
-%composition will work as follows:
-%\[
-%  \begin{tikzpicture}[xscale=2]
-%    \node[draw,rectangle] (L1) at (2, 2) {$L_1$};
-%    \node[draw,rectangle] (L2) at (1, 1) {$L_2$};
-%    \draw[->] (3,2) -- node[above, near start] {$D_1$} (L1);
-%    \draw[->] (3,1) -- node[above, near start] {$D_2$} (L2);
-%    \draw[->] (3,0) -- node[above] {$\overline{D_1 \cup D_2}$} (0,0);
-%    \draw[->] (L1) -- node[above] {$\overline{D_2}$} (0,2);
-%    \draw[->] (L1) .. controls +(-0.5,0) and +(0.5,0) .. (L2);
-%    \draw[->] (L2) -- (0,1);
-%  \end{tikzpicture}
-%\]
+%}}}
+
+\section{Certified abstraction layers} %{{{
+
+I will use the notations and concepts outlined in
+\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf\#chapter.4}{Chapter 4}
+of my thesis.
+In particular,
+\href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf#section.4.4}{\S 4.4}
+reframes our CompCertX-based approach
+into our more abstract formalism
+and is a starting point for the following definitions.
+
+\subsection{Abstract states} %{{{
+
+In CompCertX,
+the memory model is extended with an \emph{abstract state} component
+which is used to specify the behavior of underlay primitives.
+
+To extend CompCertO in a similar way,
+given a set $K$ of abstract states,
+we can introduce an operator to transform the language interface
+$A = \langle A^\circ, A^\bullet \rangle$
+into
+\[
+    A@K := \langle A^\circ \times K, \: A^\bullet \times K \rangle
+    \,.
+\]
+Then,
+a CompCertO transition system $L : A \twoheadrightarrow B$
+can be lifted to \[ L@K : A@K \twoheadrightarrow B@K \,, \]
+which maintains an abstract state component
+and threads it through the computation.
+If $L = \langle S, {\rightarrow}, D, I, X, Y, F \rangle$,
+then we can define:
+\[
+    L@K \:\: := \:\:
+      \langle S \times K, \:\: {\rightarrow} \times {=}_K, \:\:
+            D \times K, \:\: I \times {=}_K, \:\: X \times {=}_K, \:\:
+            Y_K, \:\: F \times {=}_K \rangle
+\]
+The state is extended with an abstract state component ($S \times K$).
+Most of the relations involved in $L@K$
+simply thread this component through unchanged (${-} \times {=}_K$).
+At external calls,
+we update it with the
+corresponding component of the reply:
+\[
+  \begin{prooftree}
+    \hypo{n \mathrel{Y^s} s'}
+    \infer1{n@{k'} \mathrel{Y_K^{s@k}} s'@k'}
+  \end{prooftree} 
+\]
 
 %}}}
 
-\section{Flat composition}
+\subsection{Layer interfaces} %{{{
 
-\section{Coherence spaces}
+Per the definitions in my thesis and our LICS'20 paper,
+a layer interface can be described as a family of specifications:
+\[
+    \sigma^m : K \rightarrow \mathcal{P}^1(N \times K)
+\]
+where $(m \mathbin: N) \in E$ is an operation of the layer's signature.
+In the case of the $\mathcal{C}$ language interface of CompCertO,
+operations are of the form:
+\[
+    f(\vec{v}) : \mathsf{val}
+    \qquad
+    \text{where}
+    \qquad
+    f \in \mathsf{val}
+    \qquad
+    \vec{v} \in \mathsf{val}^*
+\]
 
-\section{Effect signatures}
+A layer interface specified in this style
+can easily be represented as a CompCertO transition system
+$\hat{\sigma} : 1 \twoheadrightarrow \mathcal{C}@K$,
+defined as:
+\[
+  \hat{\sigma} := \langle
+    \mathsf{val} \times \mathsf{mem} \times K,
+    \varnothing,
+    D,
+    I,
+    \varnothing,
+    \varnothing,
+    F
+  \rangle
+\]
+A call into this transition system involves a single state.
+At invocation,
+we immediately query $\sigma$ to obtain the call's outcome
+and save it in the transition system's state:
+\[
+  \begin{prooftree}
+    \hypo{\sigma^{f(\vec{v})}(k) \ni (v', k')}
+    \infer1{f(\vec{v})@m@k \mathrel{I} (v', m, k')}
+  \end{prooftree}
+\]
+This single state admits no transition but is immediately final:
+\[
+  \begin{prooftree}
+    \infer0{(v', m, k') \mathrel{F} v'@m@k'}
+  \end{prooftree}
+\]
+
+The domain $D$ has to be specified in addition to $\sigma$,
+which does not carry this information.
+Alternatively,
+we could use a more sophisticated embedding,
+where $\sigma$ is defined in terms of a more abstract
+effect signature $E$,
+and where we specify a correspondance between
+the operations of $E$ and $\mathcal{C}$ calls.
+
+Using the definitions above
+and the categorical composition $\circ$ which I define later,
+the semantics of a Clight program $M$
+on top of a layer interface
+$L : 1 \twoheadrightarrow \mathcal{C}@K$
+can be given as
+\[
+  \llbracket M \rrbracket @K \circ L \: : \:
+  1 \twoheadrightarrow \mathcal{C}@K
+  \,.
+\]
+
+%}}}
+
+\subsection{Abstraction relations} %{{{
+
+In CompCertX-based CertiKOS,
+the abstraction relation between
+an overlay with abstract states in $K_1$ and
+an underlay with abstract states in $K_2$
+is given as a pair of relations:
+\[
+  R^\mathsf{r} \subseteq K_1 \times K_2
+  \qquad
+  R^\mathsf{m} \subseteq K_1 \times \mathsf{mem}
+\]
+We also associate with each layer a set of global variables $G$
+such that:
+\[
+  \begin{prooftree}
+    \hypo{k_1 \mathrel{R^\mathsf{r}} m_2}
+    \hypo{m_2 \cong_G m_2'}
+    \infer2{k_1 \mathrel{R^\mathsf{r}} m_2'}
+  \end{prooftree}
+\]
+where $\cong_G$ denotes the usual $\mathsf{Mem.unchanged\_on}$
+relationship asserting that the two memories
+associate the same contents to the global variables in $G$.
+
+In CompCertO,
+we can use these relations to define a
+memory-extension-based simulation convention
+$R : \mathcal{C}@K_1 \Leftrightarrow \mathcal{C}@K_2$
+which captures CertiKOS-style abstraction between
+overlay and underlay behaviors:
+\begin{gather*}
+ {\begin{prooftree}
+    \hypo{k_1 \mathrel{R^\mathsf{r}} k_2}
+    \hypo{k_1 \mathrel{R^\mathsf{m}} m_2}
+    \hypo{m_1 \le_\mathsf{m} m_2}
+    \hypo{m_1 \mathrel\text{no-perms-on} G}
+    \hypo{\vec{v}_1 \le_\mathsf{v} \vec{v}_2}
+    \infer5{f(\vec{v}_1)@m_1@k_1 \mathrel{R^\circ} f(\vec{v}_2)@m_2@k_2}
+  \end{prooftree}}
+\\[1em]
+ {\begin{prooftree}
+    \hypo{k_1 \mathrel{R^\mathsf{r}} k_2}
+    \hypo{k_1 \mathrel{R^\mathsf{m}} m_2}
+    \hypo{m_1 \le_\mathsf{m} m_2}
+    \hypo{m_1 \mathrel\text{no-perms-on} G}
+    \hypo{v'_1 \le_\mathsf{v} v'_2}
+    \infer5{v'_1@m_1@k_1 \mathrel{R^\bullet} v'_2@m_2@k_2}
+  \end{prooftree}}
+\end{gather*}
+Then we can
+formulate the layer correctness property
+$L \vdash_R M : L'$ as
+\[
+    L' \le_{\mathsf{id} \twoheadrightarrow R}
+    \mathsf{Clight}(M)@K \circ L
+    \,.
+\]
+
+%}}}
+
+%}}}
+
+\section{Coherence spaces} %{{{
+
+%}}}
+
+\section{Effect signatures} %{{{
+
+%}}}
 
 \end{document}
