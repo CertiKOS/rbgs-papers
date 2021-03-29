@@ -95,6 +95,12 @@
 \fi
 \newcommand{\anon}[2]{#1}
 
+% TikZ setup
+\pgfdeclarelayer{tint}
+\pgfdeclarelayer{nodes}
+\pgfsetlayers{tint,main,nodes}
+\newcommand{\stens}{0.6}
+
 % }}}
 
 \title{CompCertO:
@@ -2521,40 +2527,15 @@ the following simulation holds:
 \end{theorem}
 %}}}
 
-\begin{corollary}[Separate compilation] \label{cor:sepcomp}
-%Recalling Fig.~\ref{fig:process},
-As an immediate consequence,
-suppose
-$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
-are compiled and linked to
-$\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
-We~can use
-Thms.~\ref{thm:fsim-hcomp},
-\ref{thm:asmlinking} and
-\ref{thm:compc}
-to establish the following separate compilation property:
-\begin{equation}
-  \label{eqn:sepcomp}
-  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
-  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-  \kw{Asm}(\mathtt{M.s})
-\end{equation}
-That is,
-the linked \kw{Asm} program
-$\mathtt{M.s}$
-faithfully implements
-the horizontal composition of the source modules' behaviors.
-\end{corollary}
-
 The simulation convention $\mathbb{C}$
 formalizes the correspondance between C and assembly interactions.
 By necessity,
-it follows $\kw{Clight}$ and $\kw{Asm}$ in its use of
+it follows $\kw{Clight}$ and $\kw{Asm}$ in their use of
 the CompCert memory model,
-but is otherwise independent of the compiler
-and in particular is not sensitive to the inclusion of optional optimization passes.
-The details of $\mathbb{C}$
-and some further applications of Thm.~\ref{thm:compc}
+but is otherwise independent of the compiler.
+In particular, $\mathbb{C}$ is not sensitive to the inclusion of optional optimization passes.
+The details %of $\mathbb{C}$
+%and the construction of the proof of \autoref{thm:compc}
 are discussed in \S\ref{sec:callconv}.
 
 \begin{table} % tbl:passes Passes of CompCertO %{{{
@@ -2638,6 +2619,228 @@ are discussed in \S\ref{sec:callconv}.
   \label{tbl:passes}
 \end{table}
 %}}}
+
+In the remainder of this section,
+we outline possible applications of \autoref{thm:compc},
+beginning with separate compilation.
+
+\begin{corollary}[Separate compilation] \label{cor:sepcomp} %{{{
+%Recalling Fig.~\ref{fig:process},
+%As an immediate consequence,
+Suppose
+$\mathtt{M1.c}, \ldots, \mathtt{Mn.c}$
+are compiled and linked to
+$\mathtt{M1.s} + \ldots + \mathtt{Mn.s} = \mathtt{M.s}$.
+We~can use
+Thms.~\ref{thm:fsim-hcomp},
+\ref{thm:asmlinking} and
+\ref{thm:compc}
+to establish the following separate compilation property:
+\begin{equation}
+  \label{eqn:sepcomp}
+  \kw{Clight}(\mathtt{M1.c}) \oplus \cdots \oplus \kw{Clight}(\mathtt{Mn.c})
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+  \kw{Asm}(\mathtt{M.s})
+\end{equation}
+That is,
+the linked \kw{Asm} program
+$\mathtt{M.s}$
+faithfully implements
+the horizontal composition of the source modules' behaviors.
+\end{corollary}
+%}}}
+
+\subsection{Heterogeneous verification}
+
+Although we focus in this paper on a symmetric form
+of horizontal composition
+which models linking and mutual recursion,
+it is possible to define a more traditional operator
+$
+  {\circ_{A,B,C}} : (B \twoheadrightarrow C) \times (A \twoheadrightarrow B)
+    \rightarrow (A \twoheadrightarrow C)
+$.
+In $L_1 \circ L_2$,
+calls propagate from the environment to $L_1$,
+then to $L_2$,
+then back to the environment again,
+but $L_2$ cannot call directly into $L_1$.
+The homogenous case $\circ_{A,A,A}$ is
+an under-approximation of $\oplus$
+and therefore \autoref{thm:asmlinking} applies:
+\begin{align*}
+  \kw{Asm}(p_1) \circ \kw{Asm}(p_2)
+  &\le_{\kw{id} \twoheadrightarrow \kw{id}}
+  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
+  \\ &\le_{\kw{id} \twoheadrightarrow \kw{id}}
+  \kw{Asm}(p_1 + p_2)
+\end{align*}
+These constructions
+enrich our framework with the structure of a double category,
+and make it possible to use CompCertO
+in a heterogeneous context.
+
+\begin{figure} % fig:nicagain {{{
+  \figsize
+  \begin{tikzpicture}[xscale=1.75,yscale=0.9]
+    \tikzset{to path={
+      .. controls ($(\tikztostart)!\stens!(\tikztostart -| \tikztotarget)$)
+              and ($(\tikztotarget)!\stens!(\tikztostart -| \tikztotarget)$) ..
+      (\tikztotarget) \tikztonodes}}
+
+    \begin{pgfonlayer}{nodes}
+      \begin{scope}[every node/.style={draw,fill=white,rounded corners=2pt}]
+        \path
+          (0.25,1.5) coordinate (NIC1)
+          (1,2) coordinate (IO1)
+          (1.25,3.25) coordinate (Def) node {Eqn. (\ref{eqn:nicspec})}
+          (1,1) coordinate (IO) node {Eqn. (\ref{eqn:iocompat})}
+          (2,2.25) coordinate (CP) node {Eqn. (\ref{eqn:drvcorrect})}
+          (2,1) coordinate (T1) node {Thm. \ref{thm:compc}}
+          (3,1) coordinate (T2) node {Thm. \ref{thm:compc}}
+          (2.5,-0.2) coordinate (LK) node {Thm. \ref{thm:asmlinking}};
+      \end{scope}
+    \end{pgfonlayer}
+
+    % Boundary
+    \begin{scope}
+      % Corners
+      \path (-0.25, 4)       coordinate (ULC)
+            ( 2,   -1)       coordinate (LRC)
+            ($(ULC -| LRC)$) coordinate (URC)
+            ($(ULC |- LRC)$) coordinate (LLC);
+
+      % Source transition systems
+      \path ($(Def |- ULC)$) coordinate (Spec) node[above] {$\sigma$};
+      \path ($(T2 |- ULC)$) coordinate (CC) node[above] {$\kw{Clight}(C)$};
+
+      % Target transition systems
+      \path ($(NIC1 |- LRC)$) coordinate (NIC2) node[below] {$\sigma_\kw{NIC}$};
+      \path ($(IO1 |- LRC)$) coordinate (IO2) node[below] {$\sigma_\kw{io}'$};
+      \path ($(LK |- LRC)$) coordinate (CD2) node[below] {$\kw{Asm}(C' + p')$};
+
+      % Simulation convention
+      \path (3.75,1) coordinate (C) node[right] {$\mathbb{C}$};
+    \end{scope}
+
+    % Transition systems
+    \begin{scope}[inner sep=1.6pt]
+      \footnotesize
+      \draw (Def) to (NIC1) -- (NIC2);
+      \draw (Def) to node[above right] {$\sigma_\kw{drv}$} (CP.center)
+        (CP) -- node[left] {$\kw{Clight}(p)$} (T1)
+        (LK.center) to node[left,pos=0.6] {$\kw{Asm}(p')$} (T1.center)
+        (LK) -- (CD2);
+      \draw (CC) -- (T2)
+        (LK.center) to node[right,pos=0.6] {$\kw{Asm}(C')$} (T2.center);
+      \draw (Spec)
+        -- (Def) to (IO1) node[left] {$\sigma_\kw{io}$}
+        -- (IO)
+        -- (IO2);
+    \end{scope}
+
+    % Simulation convention
+    \draw[very thick] (IO) -- (C);
+
+    % Colors
+    \begin{pgfonlayer}{tint}
+      \begin{scope}[every node/.style={black}]
+        \footnotesize
+        \fill[ACMOrange!50] (ULC) -- (Spec) -- (Def)
+          to (NIC2) -| (ULC);
+        \fill[ACMGreen!50]
+          (Def) to (NIC1) -- (Def) to (IO1) -- (IO2) -| (NIC1) -- cycle;
+        \fill[ACMLightBlue!50]
+          (Spec) -- (Def) to (IO1) -- (IO) -- (C) |- cycle;
+        \fill[ACMRed!50] (IO2) rectangle (C);
+        \node[below right] at (ULC) {$\kw{Net}$};
+        \node[above] at ($(NIC2)!0.5!(IO2)$) {$\kw{IO}$};
+        \node[below left] at ($(CC -| C)$) {$\mathcal{C}$};
+        \node[above left] at ($(CD2 -| C)$) {$\mathcal{A}$};
+      \end{scope}
+    \end{pgfonlayer}
+  \end{tikzpicture}
+  \caption{
+    Heterogeneous scenario outlined
+    in Example~\ref{ex:nicagain},
+    depicted as a string diagram.
+    Thin vertical lines represent transition systems;
+    their horizontal juxtaposition denotes composition.
+    Colored regions correspond to language interfaces and
+    rectangles to simulation properties.
+    The thick horizontal line
+    represents the simulation convention $\mathbb{C}$.}
+  \label{fig:nicagain}
+\end{figure}
+%}}}
+
+\begin{example} \label{ex:nicagain} %{{{
+  Recall that in Example~\ref{ex:nicdriver}
+  we considered:
+  \begin{itemize}
+  \item a network interface card model
+  $\sigma_\kw{NIC} : \kw{Net} \rightarrow \kw{IO}$,
+  \item device I/O primitives modelled as
+  $\sigma_\kw{io} : \kw{IO} \rightarrow \mathcal{C}$,
+  \item a network card driver specified by
+  $\sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}$,
+  \end{itemize}
+  Together, they implement a specification
+  $\sigma : \kw{Net} \rightarrow \mathcal{C}$ as:
+  \begin{equation} \label{eqn:nicspec}
+    \sigma
+    \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
+    \sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC}
+  \end{equation}
+  The interface $\kw{Net}$ models the flow of ethernet packets
+  sent and received by the network adapter,
+  whereas $\kw{IO}$ models its interaction with the CPU.
+  Device I/O primitives are implemented in unverified code
+  and axiomatized in $\sigma_\kw{io}$.
+  The driver itself can be implemented as a Clight program:
+  \begin{equation} \label{eqn:drvcorrect}
+    \sigma_\kw{drv}
+    \le_{\kw{id} \twoheadrightarrow \kw{id}}
+    \kw{Clight}(p)
+  \end{equation}
+  To characterize the compiled driver,
+  we must use an assembly-level specification for I/O primitives
+  $\sigma_\kw{io}' : \kw{IO} \rightarrow \mathcal{A}$
+  such that:
+  \begin{equation} \label{eqn:iocompat}
+    \sigma_\kw{io}
+    \le_{\kw{id} \twoheadrightarrow \mathbb{C}}
+    \sigma_\kw{io}'
+  \end{equation}
+  Then per \autoref{fig:nicagain},
+  the compiled system satifies
+  \[
+    \sigma
+    \: \le_{\kw{id} \twoheadrightarrow \mathbb{C}} \:
+    \kw{Asm}(p') \circ \sigma_\kw{io}' \circ \sigma_\kw{NIC}
+  \]
+  and a client program $C$ interacting with $\sigma$
+  can be soundly compiled and linked with the driver:
+  \[
+    \kw{Clight}(C) \circ \sigma
+    \: \le_{\kw{id} \twoheadrightarrow \mathbb{C}} \:
+    \kw{Asm}(C' + p') \circ \sigma_\kw{io}' \circ \sigma_\kw{NIC}
+    \,.
+  \]
+\end{example}
+%}}}
+
+The model presented in this section
+was designed specifically for the verification of CompCertO.
+It is admittedly unlikely that it could adequately capture
+the complexity of hardware communication
+or the concurrency inherent in composite systems
+of the kind discussed above.
+However,
+our semantics and proofs
+can be embedded into richer game models,
+where the approach outlined in Example~\ref{ex:nicagain}
+could be realistically carried out.
 
 %}}}
 
