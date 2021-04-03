@@ -1,0 +1,479 @@
+\documentclass[11pt]{article}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{ebproof}
+
+\title{Establishing the CompCertO calling convention}
+
+\begin{document}
+
+\maketitle
+
+\section{Background}
+
+The \emph{simulation conventions} of CompCertO
+specify the relationship between
+source and target interactions
+in open simulations.
+We use three kinds of simulation conventions:
+\begin{itemize}
+  \item Memory transformations ($\mathsf{inj}$, $\mathsf{ext}$, $\mathsf{injp}$)
+    do not alter the structure of queries and replies but
+    allow the memory states and surrounding values
+    to be transformed according to a CompCert KLR
+    (see paper draft).
+  \item Calling conventions ($\mathcal{C\!L}, \mathcal{L\!M}, \mathcal{M\!A}$)
+    encode the correspondance between the various language interfaces.
+  \item Invariants ($\mathsf{wt}, \mathsf{wtl}, \mathsf{va}$)
+    require that source and target queries are identical,
+    and additionally that they satify some property of interest.
+    Schematically, they lift a predicate to a relation:
+    \[
+      R[I] := \{ (x, x) \mid x \in I \}
+    \]
+\end{itemize}
+Simulation conventions support a Kleene algebra,
+which involves notions of refinement ($\supseteq$),
+vertical composition ($\cdot$),
+identity ($\mathsf{id}$),
+environment choice ($+$),
+and finite iteration ($*$) of simulation conventions.
+
+Based on these constructions,
+we can assign to each pass of CompCert
+a simulation type $\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B$
+where $\mathbb{R}_A, \mathbb{R}_B$ are simulation conventions.
+Here are some examples:
+\begin{center}
+  \begin{tabular}{lc}
+    \hline
+    Pass & Type \\
+    \hline
+    Typical extension pass &
+      $\mathsf{ext} \twoheadrightarrow \mathsf{ext}$ \\
+    Typical injection pass &
+      $\mathsf{injp} \twoheadrightarrow \mathsf{inj}$ \\
+    $\mathsf{Alloc}$ &
+      $\mathsf{wt} \cdot \mathsf{ext} \cdot \mathcal{C\!L}
+       \twoheadrightarrow
+       \mathsf{wt} \cdot \mathsf{ext} \cdot \mathcal{C\!L}$ \\
+    Value analysis passes &
+      $\mathsf{va} \cdot \mathsf{ext} \twoheadrightarrow
+       \mathsf{va} \cdot \mathsf{ext}$ \\
+    \hline
+  \end{tabular}
+\end{center}
+When the correctness proofs for the various passes
+are vertically composed into one big simulation,
+their simulation conventions are likewise composed
+to obtain the simulation convention for the result.
+
+Unfortunately,
+the simulation convention obtained through this process
+cannot be used as-is for the whole compiler:
+\begin{itemize}
+  \item Because of the asymmetry of injection passes
+    ($\mathsf{injp}$ vs. $\mathsf{inj}$),
+    the result is not horizontally compositional:
+    it provides weaker guarantees on incoming calls ($\mathsf{inj}$)
+    than it expects on outgoing calls ($\mathsf{injp}$).
+  \item The result is also tied to the structure of the compiler,
+    and varies with the inclusion of optional passes.
+\end{itemize}
+To address this,
+we use the Kleene algebra and
+properties of specific simulation conventions
+to rewrite the simulation convention for the whole compiler
+into a more palatable form.
+
+\section{Approach}
+
+\subsection{The CompCertO simulation convention}
+
+Leaving aside invariants for a moment,
+my strategy is to establish the following
+simulation convention for CompCertO:
+\[
+  \mathbb{C} :=
+  (\mathsf{ext} + \mathsf{injp})^* \cdot
+  (\mathcal{C\!L} \cdot
+   \mathcal{L\!M} \cdot
+   \mathcal{M\!A}) \cdot
+  \mathsf{inj}
+\]
+The structure is as follows:
+\begin{itemize}
+  \item
+    The first component
+    allows the environment to introduce
+    memory injections and extensions
+    between the source and target-level interactions.
+    It is similar in spirit to the $\mathsf{extcall\_properties}$
+    formalized in CompCert for external calls.
+  \item
+    The second component 
+    expresses the correspondance between
+    C-style and Asm-style interactions.
+    In the original CompCert this is encoded by
+    the external call case of the Asm semantics,
+    in particular through the predicate
+    $\mathsf{Asm.extcall\_arguments}$.
+  \item
+    The third component allows the compiler to introduce an injection.
+    This is necessary to model the transformation in the structure of the memory
+    between the C and assembly program:
+    local variables and arguments become consolidated into stack frames, etc.
+\end{itemize}
+
+\subsection{Matching it with the passes}
+
+To establish the simulation convention above
+for the whole compiler,
+we need to show two properties:
+\begin{enumerate}
+  \item Incoming calls performed according to $\mathbb{C}$
+    should be compatible with the composite incoming convention
+    of CompCertO's passes ($\mathbb{C} \sqsupseteq \mathbb{C}_\mathsf{in}$).
+  \item Outgoing calls performed by the passes
+    should be compatible with the overall simulation convention
+    ($\mathbb{C}_\mathsf{out} \sqsupseteq \mathbb{C}$).
+\end{enumerate}
+Together, this allows us to establish a final correctness theorem for CompCertO
+expressed exclusively in terms of $\mathbb{C}$:
+\[
+  \mathsf{CompCert}(p_s) = p_t
+  \: \Rightarrow \:
+  \mathsf{Clight}(p_s)
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+  \mathsf{Asm}(p_t)
+\]
+Below I outline a number of strategies
+we can use to make this possible.
+
+\subsection{Self-simulations}
+
+The first arrow in our quiver
+is to introduce identity pseudo-passes
+in the compiler,
+in the form of self-simulations for various language semantics.
+In particular,
+we can establish parametricity properties
+for $\mathsf{Clight}$ and $\mathsf{Asm}$,
+showing that for any CompCert KLR $R$:
+\begin{align*}
+  \mathsf{Clight}(p) &\le_{R \twoheadrightarrow R} \mathsf{Clight}(p) \\
+  \mathsf{Asm}(p) &\le_{R \twoheadrightarrow R} \mathsf{Asm}(p)
+\end{align*}
+These properties can be used to satisfy
+the $(\mathsf{ext} + \mathsf{injp})^*$ and $\mathsf{inj}$
+components of $\mathbb{C}$.
+
+\subsection{Properties of specific conventions}
+
+Once we introduce the self-simulations,
+the conventions for CompCertO passes look something like:
+\begin{gather*}
+  \mathbb{C}_\mathsf{in} :=
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathsf{inj} \cdot
+    \mathsf{inj} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdots
+    \mathsf{ext} \cdot
+    \mathcal{C\!L} \cdot
+    \mathsf{ext} \cdot
+    \mathcal{L\!M} \cdot
+    \mathsf{inj} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{inj}
+    \\
+  \mathbb{C}_\mathsf{out} :=
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathsf{injp} \cdot
+    \mathsf{injp} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdots
+    \mathsf{ext} \cdot
+    \mathcal{C\!L} \cdot
+    \mathsf{ext} \cdot
+    \mathcal{L\!M} \cdot
+    \mathsf{injp} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{inj}
+\end{gather*}
+Again, they need to be matched against the overall simulation convention:
+\[
+  \mathbb{C} :=
+  (\mathsf{ext} + \mathsf{injp})^* \cdot
+  \mathcal{C\!L} \cdot
+  \mathcal{L\!M} \cdot
+  \mathcal{M\!A} \cdot
+  \mathsf{inj}
+\]
+Fortunately,
+we can use properties of various simulation conventions to achieve this.
+
+First,
+it is possible to use the final $\mathsf{inj}$
+to satisfy the various memory transformations
+expected by the passes on incoming calls.
+More precisely,
+the following properties hold:
+\[
+  \mathsf{inj} \sqsupseteq \mathsf{ext} \cdot \mathsf{inj}
+  \qquad
+  \mathsf{inj} \sqsupseteq \mathsf{inj} \cdot \mathsf{inj}
+\]
+Then,
+I was able to defined the calling conventions
+$\mathcal{C\!L}, \mathcal{L\!M}, \mathcal{M\!A}$
+so that they commute with arbitrary CompCert KLRs
+in the following way:
+\[
+  \mathcal{X\!Y} \cdot R
+  \sqsupseteq
+  R \cdot \mathcal{X\!Y}
+\]
+This allows us to rewrite the convention for incoming calls
+as follows:
+\begin{align*}
+  \mathbb{C} &=
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathcal{C\!L} \cdot
+    \mathcal{L\!M} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{inj} \\
+  &\sqsupseteq
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathcal{C\!L} \cdot
+    \mathcal{L\!M} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{inj} \cdot
+    \mathsf{inj} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdots
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{inj} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{inj} \\
+  &\sqsupseteq
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathsf{inj} \cdot
+    \mathsf{inj} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdots
+    \mathsf{ext} \cdot
+    \mathcal{C\!L} \cdot
+    \mathsf{ext} \cdot
+    \mathcal{L\!M} \cdot
+    \mathsf{inj} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{inj}
+  =
+    \mathbb{C}_\mathsf{in}
+\end{align*}
+
+For outgoing calls,
+we can use the same commutation properties
+to continue pushing the memory transformations
+towards the source level,
+where they can be absorbed
+by the $(\mathsf{ext} + \mathsf{injp})^*$ component
+thanks to the Kleene algebra properties:
+\begin{align*}
+  \mathbb{C}_\mathsf{out}
+  &=
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathsf{injp} \cdot
+    \mathsf{injp} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdots
+    \mathsf{ext} \cdot
+    \mathcal{C\!L} \cdot
+    \mathsf{ext} \cdot
+    \mathcal{L\!M} \cdot
+    \mathsf{injp} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{inj} \\
+  &\sqsupseteq
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathsf{injp} \cdot
+    \mathsf{injp} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdots
+    \mathsf{ext} \cdot
+    \mathsf{ext} \cdot
+    \mathsf{injp} \cdot
+    \mathsf{ext} \cdot
+    \mathcal{C\!L} \cdot
+    \mathcal{L\!M} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{inj} \\
+  &\sqsupseteq
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \mathcal{C\!L} \cdot
+    \mathcal{L\!M} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{inj}
+  = \mathbb{C}
+\end{align*}
+
+By combining these two approaches,
+we can establish the calling convention
+by rewriting in the overall simulation for the compiler:
+\[
+  \begin{prooftree}
+    \hypo{\mathbb{C}_\mathsf{out} \sqsupseteq \mathbb{C}}
+    \hypo{\mathsf{Clight}(p_s)
+          \le_{\mathbb{C}_\mathsf{out} \twoheadrightarrow \mathbb{C}_\mathsf{in}}
+          \mathsf{Asm}(p_t)}
+    \hypo{\mathbb{C} \sqsupseteq \mathbb{C}_\mathsf{in}}
+    \infer3{\mathsf{Clight}(p_s)
+          \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+          \mathsf{Asm}(p_t)}
+  \end{prooftree}
+\]
+
+\section{Challenges}
+
+\subsection{Invariants in CompCertO}
+
+The basic principle outlined above is fairly straightforward;
+unfortunately the big picture is complicated by
+three different invariants required by various passes:
+\begin{itemize}
+  \item The $\mathsf{Selection}$ and $\mathsf{Allocation}$ passes,
+    which use the $\mathcal{C}$ language interface,
+    rely on a typing invariant:
+    the values for function call arguments and returns
+    must have the type specified by the corresponding signature.
+    This is expressed by the invariant $\mathsf{wt}_\mathcal{\!C}$.
+  \item The $\mathsf{Stacking}$ pass translates from
+    $\mathsf{Linear}$ to $\mathsf{Mach}$.
+    At the $\mathsf{Linear}$ level,
+    calls are specified by assigning values to
+    \emph{abstract locations} ($\mathsf{loc} \rightarrow \mathsf{val}$)
+    which represent stack slots and registers.
+    Each possible location ($\mathsf{loc}$) is assigned a type,
+    which expresses whether they can hold 32 or 64 bits values.
+    The $\mathsf{Stacking}$ proofs relies on the fact that
+    the location maps found in calls and returns
+    assign to each location a value of the right type.
+    This is expressed as $\mathsf{wt}_\mathcal{\!L}$.
+  \item Finally, passes which use the $\mathsf{ValueAnalysis}$ framework
+    need the memory to satify some properties.
+    In particular, global constants should be initialized
+    as prescribed by the symbol table,
+    and should be read-only.
+\end{itemize}
+
+The main difficulty with these invariants
+is that although they are preserved by the passes that use them,
+they do not commute with CKLRs
+in the way that $\mathcal{C\!L}, \mathcal{L\!M}, \mathcal{M\!A}$ do.
+This is due to issues of mixed variance
+which arise when both queries and replies are involved,
+as well as with the invariant $\mathsf{va}$ itself.
+
+\subsection{Typing invariants}
+
+For typing invariants,
+this can be addressed by defining a simulation convention
+$\hat{\mathsf{wt}}$
+which commutes with CKLRs and is weaker than the original $\mathsf{wt}$,
+but can be shown to be equivalent in some contexts.
+Specifically,
+it satisfies the following properties:
+\[
+  \hat{\mathsf{wt}} \cdot R \equiv \mathsf{wt} \cdot R
+  \qquad
+  \hat{\mathsf{wt}} \equiv \mathsf{wt} \cdot \hat{\mathsf{wt}}
+  \qquad
+  \hat{\mathsf{wt}} \cdot R \sqsupseteq R \cdot \hat{\mathsf{wt}}
+  \,.
+\]
+We can then modify the CompCertO simulation convention
+to require the appropriate typing properties:
+\[
+  \mathbb{C} :=
+    (\mathsf{ext} + \mathsf{injp})^* \cdot
+    \hat{\mathsf{wt}}_\mathcal{\!C} \cdot
+    \mathcal{C\!L} \cdot
+    \hat{\mathsf{wt}}_\mathcal{\!L} \cdot
+    \mathcal{L\!M} \cdot
+    \mathcal{M\!A} \cdot
+    \mathsf{inj}
+\]
+The approach outlined in the previous section
+can then be extended to take the $\mathsf{wt}$s into account.
+
+The idea is that $\hat{\mathsf{wt}}$
+will force the source value to $\mathsf{Vundef}$
+when the corresponding target value
+doesn't have the right type.
+
+\subsection{Value analysis invariant}
+
+The value analysis invariant $\mathsf{va}$
+is more challenging.
+It includes constraints with mixed variance
+with respect to CKLRs.
+For example,
+the global constants should contain the right values
+(covariant with CKLRs),
+but should only be assigned limited permissions
+(contravariant with CKLRs).
+
+On the other hand,
+the $\mathsf{va}$ properties
+are preserved by all of the operations of the memory model,
+because once a global constant has been properly initialized
+and set to read-only,
+it cannot be modified any more.
+Also,
+unlike typing invariants,
+the $\mathsf{va}$ invariant is uniform
+with all language interfaces'
+(although it is currently defined for $\mathcal{C}$-style interactions only).
+This means the invariant applies in the same way
+to all values that appear in queries and replies
+surrounding the memory model,
+unlike typing which depends on \emph{how} a given value is used
+(say, for which function argument).
+
+So my plan is to encode the $\mathsf{va}$
+invariant in terms of CKLRs,
+and use the existing parametricity properties of languages
+to handle it.
+Namely, I want to define a CKLR operator $R^\mathsf{va}$
+which should have properties like:
+\[
+  R^\mathsf{va}_\mathcal{\!C} \equiv \mathsf{va} \cdot R_\mathcal{\!C}
+  \qquad
+  \mathsf{inj}^\mathsf{va} \sqsupseteq \mathsf{injp}
+  \qquad
+  \mathsf{inj}^\mathsf{va} \sqsupseteq \mathsf{inj}^\mathsf{va} \cdot \mathsf{inj}
+\]
+as well as other things.
+I still need to figure out the details,
+but the idea is that we would use this instead of the final $\mathsf{inj}$
+in $\mathbb{C}$ to make sure the proper invariant holds,
+and that as a CKLR it will easily commute with the calling conventions
+and $\hat{\mathsf{wt}}$.
+
+\section{Plan}
+
+\begin{itemize}
+  \item Show the parametricity of $\mathsf{Asm}$ wrt. CompCert KLRs
+  \item Define a CKLR capturing the $\mathsf{va}$ requirements
+  \item Finish the compiler correctness theorem
+    to confirm that things will work out if we can achieve this.
+\end{itemize}
+
+\end{document}
