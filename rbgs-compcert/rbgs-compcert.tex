@@ -471,13 +471,13 @@ composite programs is specified by a
 which is shown to be correctly implemented
 by the existing linking operator for assembly programs
 (\S\ref{sec:sem:ref}).
-To combine and reason about simulation proofs,
+To characterize CompCert's languages and simulation proofs,
 we define a notion of
-\emph{CompCert Kripke logical relation} (\S\ref{sec:cklr})
-and introduce a rich \emph{simulation convention algebra}.
-We then use them to derive our main compiler correctness statement
+\emph{CompCert Kripke logical relation} (\S\ref{sec:cklr}).
+We then use a rich simulation convention algebra
+to derive our main compiler correctness statement
 from the simulation properties
-of CompCertO's individual passes
+of individual passes
 (\S\ref{sec:callconv}).
 
 %The simulation proofs for
@@ -508,6 +508,8 @@ of CompCertO's individual passes
 This paper discusses CompCertO version 0.1,
 available online in the CertiKOS CompCert git repository.%
 \footnote{\url{https://github.com/CertiKOS/compcert/tree/compcerto}}
+A technical report \cite{compcerto21tr}
+provides supplementary appendices.
 
 %}}}
 
@@ -531,6 +533,7 @@ Typically,
 game semantics interpret
 types as two-player games
 and terms as strategies for these games.
+
 Games describe the form of the interaction
 between a program component %of the corresponding type
 (the \emph{system})
@@ -538,18 +541,19 @@ and its execution context
 (the \emph{environment}).
 Strategies
 specify which move the system plays
-at each position in the game.
+for each possible configuration of the game.
 
-Positions are usually identified with sequences of moves,
-and strategies with the set of positions
+Configurations are usually identified with sequences of moves
+(\emph{plays}),
+and strategies with the set of configurations
 a component can reach.
 This representation makes
 game semantics similar to
 the trace semantics of process algebras,
 but game semantics is distinguished
 by a strong polarization between
-actions of the system and the environment,
-and between outputs and inputs.
+the actions of the system and those of the environment.
+%and between outputs and inputs.
 This confers an inherent ``rely-guarantee'' flavor
 to games which facilitates compositional reasoning
 \cite{cspgs}.
@@ -568,10 +572,11 @@ where the players
 each contribute every other move.
 
 When typesetting examples,
-we underline the moves of the system.
-For chess,
-moves are taken in the set $\{a1 \ldots h8\} \times \{a1 \ldots h8\}$,
-and a valid sequence of moves may look like:
+we underline the moves of the system;
+a valid play in the game of chess may look like:
+%For chess,
+%moves are taken in the set $\{a1 \ldots h8\} \times \{a1 \ldots h8\}$,
+%and a valid sequence of moves may look like:
 \[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{d7d5} \cdots \]
 The games we use to model low-level components
 will rely on the following constructions.
@@ -580,8 +585,6 @@ will rely on the following constructions.
 
 \paragraph{Type structure} \label{sec:mainideas:gs:types} %{{{
 
-%While the game $\mathcal{C}$
-%is extremely simple,
 The expressive power of game semantics
 comes from the ways in which complex games can be derived from simple ones,
 and used to interpret compound types.
@@ -598,7 +601,7 @@ where the roles of the players are reversed.
 %the multiple accesses to the argument values
 %allowed by most $\lambda$-calculi.
 
-The games we start from have a particularly simple structure.
+The games we start from are particularly simple. %have a particularly simple structure.
 We call each one a \emph{language interface}.
 Their moves are partitioned into
 questions and answers,
@@ -617,9 +620,7 @@ $A^\ans$ is a set of \emph{answers}.
 
 We focus on games of the form $A \rightarrow B$,
 where $A$ and $B$ are language interfaces.
-In this setting,
-the valid positions of $A \rightarrow B$ are
-sequences of the form:
+The valid configurations are:
 \[
   q\ph{qpos} \cdot
     \underline{m_1}\ph{m1pos} \cdot \pt{m1pos}n_1 \cdots
@@ -647,8 +648,8 @@ The behavior of $\textsf{B.c}$
 as it interacts with $\textsf{A.c}$
 is described by plays of the form:
 \begin{equation} \label{eqn:cplay}
-  \mathsf{sqr}(3) \cdot
-    \underline{\mathsf{mult}(3,3)} \cdot 9 \cdot \underline{9}
+  \mathsf{sqr}(3)\ph{q} \cdot
+    \underline{\mathsf{mult}(3,3)}\ph{m} \cdot \pt{m}9 \cdot \pt{q}\underline{9}
 \end{equation}
 This corresponds to the game
 $\tilde{\mathcal{C}} \rightarrow \tilde{\mathcal{C}}$
@@ -657,7 +658,7 @@ $\tilde{\mathcal{C}} :=
  \langle \kw{ident} \times \kw{val}^*, \kw{val} \rangle$.
 Questions specify the function to invoke
 and its arguments;
-answers carry the value it returns.
+answers carry the return value.
 
 To describe the behavior of \texttt{A.s} and \texttt{B.s},
 we use a set of registers
@@ -679,7 +680,7 @@ is: % described by the play:
       \kw{eax} & 42 \\
       \kw{ebx} & 3 \\
       \kw{ecx} & 7 \\
-      \multicolumn{2}{c}{\textit{stack: } \hfill x \vec{k}}
+      \multicolumn{2}{r}{\textit{stack: } x \vec{k}}
     \end{array}
   \right] %\cdot
   \underline{
@@ -689,16 +690,16 @@ is: % described by the play:
         \kw{eax} & 42 \\
         \kw{ebx} & 3 \\
         \kw{ecx} & 3 \\
-        \multicolumn{2}{c}{\textit{stack: } \: \kw{L1} \, x \vec{k}}
+        \multicolumn{2}{r}{\textit{stack: } \kw{L} x \vec{k}}
       \end{array}
     \right]} %\cdot
   \left[
     \begin{array}{l@{{} \mapsto {}}r}
-      \kw{pc}  & \kw{L1} \\
+      \kw{pc}  & \kw{L} \\
       \kw{eax} & 9 \\
       \kw{ebx} & 3 \\
       \kw{ecx} & 3 \\
-      \multicolumn{2}{c}{\textit{stack: } \hfill x \vec{k}}
+      \multicolumn{2}{r}{\textit{stack: } x \vec{k}}
     \end{array}
   \right] %\cdot
   \underline{
@@ -708,7 +709,7 @@ is: % described by the play:
         \kw{eax} & 9 \\
         \kw{ebx} & 3 \\
         \kw{ecx} & 3 \\
-        \multicolumn{2}{c}{\textit{stack: } \hfill \vec{k}}
+        \multicolumn{2}{r}{\textit{stack: } \vec{k}}
       \end{array}
     \right]}
 }
@@ -736,7 +737,7 @@ This is discussed in \S\ref{sec:simconv}.
                     & \quad return mult(n, n); &
                     & & call mult \\
                     & \} &
-                    & L1: & ret \\
+                    & L: & ret \\
     \hline
   \end{tabular}
   \caption{Two simple C compilation units and corresponding assembly code.
@@ -774,11 +775,13 @@ correspond to system calls and accesses to volatile variables.
 
 \paragraph{Semantic model} %{{{
 
-In order to model components and their interactions,
-we generalize CompCert's labeled transition systems
-to describe strategies for games of the form:
-\[ A \twoheadrightarrow B \: := \:
-   A \times \mathcal{E} \rightarrow B \,. \]
+To model components and their interactions,
+we generalize CompCert's labeled transition systems.
+We will write $L : A \twoheadrightarrow B$
+when the transition system $L$ describes a strategy
+for the game
+$A \times \mathcal{E} \rightarrow B$.
+
 The language interface $B$ describes how a component can be activated,
 and the ways in which it can return control to the caller.
 The language interface $A$ describes the external calls that the component
@@ -786,7 +789,9 @@ may perform during its execution.
 
 This flexibility allows us to treat interactions
 at a level of abstraction adapted to each language.
-For example, CompCertO's source language \kw{Clight} uses the game
+For example,
+the semantics of
+the source language \kw{Clight} has type
 \mbox{$\mathcal{C} \twoheadrightarrow \mathcal{C}$}.
 The questions of $\mathcal{C}$ specify a function to call,
 argument values,
@@ -949,7 +954,7 @@ A simulation relation
 between the transition systems
 $\alpha : A \rightarrow \mathcal{P}(A)$ and
 $\beta : B \rightarrow \mathcal{P}(B)$
-is a relation $R \in \mathcal{R}(A, B)$
+is a relation $R \subseteq A \times B$
 satisfying the following property:
 \[
   \begin{tikzcd}[scale=0.8]
@@ -1026,7 +1031,7 @@ We use the following notations.
 A \emph{Kripke} relation is
 a family of relations $(R_w)_{w \in W}$.
 We write $R \in \mathcal{R}_W(A, B)$
-for a Kripke relation between the sets $A$ and $B$.
+for a $W$-indexed Kripke relation between the sets $A$ and $B$.
 For $w \in W$ we write:
 \[
 \begin{array}{c@{\qquad}c}
@@ -1053,10 +1058,11 @@ More generally, for an $n$-ary relator $F$ we have:
       \rightarrow \mathcal{R}_W(A, B)$}
   \DisplayProof
 \]
-where for the Kripke relations $R_i \in \mathcal{R}_W(A_i, B_i)$:
+where for the Kripke relations $R_i \in \mathcal{R}_W(A_i, B_i)$,
 \[
   [w \Vdash \lceil F \rceil (R_1, \ldots, R_n)] \: := \:
     F(w \Vdash R_1, \ldots, w \Vdash R_n)
+  \,.
 \]
 We use $\lceil - \rceil$ implicitly
 when a relator appears in a context where
@@ -1106,15 +1112,53 @@ $\mathbb{R}_B : B_1 \Leftrightarrow B_2$
 relate the corresponding language interfaces.
 We write
 $L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
+We will use these notations extensively.
+They are summarized in \autoref{tbl:notations}.
 
-All these notations are summarized in Table~\ref{tbl:notations} and
-will be used heavily in the rest of this paper.
-%(notations are summarized in Table~\ref{tbl:notations}.
-%Simulation conventions
-%will often be derived from
-%more elementary relations,
-%following the internal structure of questions and answers
-%(see \S\ref{sec:cklr}).
+\begin{table} % tbl:notations {{{
+  \caption{Summary of notations}
+  \label{tbl:notations}
+  \figsize
+  \begin{tabular}{l@{\hspace{1ex}}cl}
+    \toprule
+    Notation & Examples & Description \\
+    \midrule
+    $R \in \mathcal{R}(S_1, S_2)$ &
+      $\vref$ &
+      Simple relation \\
+    $R \in \mathcal{R}_W(S_1, S_2)$ &
+      $\hookrightarrow_\kw{m}$ &
+      Kripke relation (Def.~\ref{def:klr}) \\
+    $w \Vdash R$ & &
+      Kripke relation at world $w$ \\
+    $w \Vdash x \mathrel{R} y$ & &
+      $x$ and $y$ related at world $w$ \\
+    \midrule
+    $A, B, C$ &
+      $\mathcal{C}, \mathcal{A}, \mathbf{1}$ &
+      Language interface (Def.~\ref{def:li}) \\
+    %$M_A^\que, M_A^\ans$ & &
+    %  Questions and answers of $A$ \\
+    $\mathbb{R} : A_1 \Leftrightarrow A_2$ &
+      $\kw{alloc}$ &
+      Simulation convention (Def.~\ref{def:simconv}) \\
+    $L : A \twoheadrightarrow B$ &
+      $\kw{Clight}(p)$ &
+      LTS for $A \twoheadrightarrow B$ (Def.~\ref{def:lts}) \\
+    $L_1 \oplus L_2$ & &
+      Horizontal composition (Def.~\ref{def:hcomp}) \\
+    $L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$ &
+      Thm.~\ref{thm:compc} &
+      Simulation property (Def.~\ref{def:fsim}) \\
+    %$p_1 + p_2$ & &
+    %  Program linking \\
+    %$\mathbf{R}$ &
+    %  $\kw{ext}, \kw{inj}$ &
+    %  CKLR (Def.~\ref{def:cklr}) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+%}}}
 
 \begin{example} %{{{
 The calling convention used in Example~\ref{ex:abc}
@@ -1151,9 +1195,9 @@ we expect the register $\kw{pc}$ to point to
 the beginning of the function $f$,
 and the registers $\kw{ebx}$ and $\kw{ecx}$
 to contain the first and second arguments (if applicable).
-The register $\kw{eax}$ may contain arbitrary values.
+The register $\kw{eax}$ may contain an arbitrary value.
 The stack $x \vec{k}$ has no relationship to the C question,
-however the assembly answer is expected to pop the return address
+however the assembly answer is expected to pop the return address $x$
 and branch to it, setting the program counter $\kw{pc}$ accordingly.
 In addition,
 the register $\kw{eax}$
@@ -1162,58 +1206,15 @@ the return value $v'$.
 \end{example}
 %}}}
 
-The expressive power of simulation conventions
-makes the adaptation of existing correctness proofs
-for the various passes of CompCert straightforward.
+Simulation conventions
+simplify the adaptation of the correctness proofs
+of the various passes of CompCert.
 Instead of forcing all passes into a single one-size-fits-all mold,
 we can choose conventions matching
 the simulation relation and invariants
 used in each pass.
 The simulations for each pass can then be composed
 in the way shown in \autoref{fig:simcomp}.
-
-\begin{figure} % fig:simcomp {{{
-  \figsize
-  $\begin{array}{c}
-    \kw{id} : A \Leftrightarrow A
-    \qquad
-    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
-    \\[1.5em]
-    \AxiomC{$\mathbb{R} : A_1 \Leftrightarrow A_2$}
-    \AxiomC{$\mathbb{S} : A_2 \Leftrightarrow A_3$}
-    \BinaryInfC{$\mathbb{R} \cdot \mathbb{S} : A_1 \Leftrightarrow A_3$}
-    \DisplayProof
-    \\[1.5em]
-    \AxiomC{$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$}
-    \AxiomC{$L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3$}
-    \BinaryInfC{$
-      L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
-               \mathbb{R}_B \cdot \mathbb{S}_B} L_3$}
-    \DisplayProof
-  \end{array}
-  \qquad
-  \begin{tikzpicture}[baseline,xscale=0.66,yscale=0.55]
-    \node (A1) at (-1,  2) {$A_1$};
-    \node (A2) at (-1,  0) {$A_2$};
-    \node (A3) at (-1, -2) {$A_3$};
-    \node (B1) at ( 1,  2) {$B_1$};
-    \node (B2) at ( 1,  0) {$B_2$};
-    \node (B3) at ( 1, -2) {$B_3$};
-    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
-    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
-    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
-    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
-      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_A$} (A2);
-      \draw (B1) edge[double] node[auto] {$\mathbb{R}_B$} (B2);
-      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_A$} (A3);
-      \draw (B2) edge[double] node[auto] {$\mathbb{S}_B$} (B3);
-    \end{scope}
-  \end{tikzpicture}
-  $
-  \caption{Simulation identity and vertical composition}
-  \label{fig:simcomp}
-\end{figure}
-%}}}
 
 %}}}
 
@@ -1275,60 +1276,58 @@ used by the compiler.
 
 This is achieved using a notion of
 simulation convention refinement ($\screfd$)
-allowing simulation convention
+allowing a simulation convention
 to replace another in all simulation statements.
 We construct a typed Kleene algebra \cite{tka}
 based on this ordering,
 and use it to ensure that
 our compiler correctness statement
-is formulated in terms of a simple,
-compositional calling convention (\S\ref{sec:callconv}).
+uses a simple,
+compositional simulation convention (\S\ref{sec:callconv}).
 
 %}}}
 
-\begin{table} % tbl:notations {{{
-  \caption{Summary of notations}
-  \label{tbl:notations}
+\begin{figure} % fig:simcomp {{{
   \figsize
-  \begin{tabular}{l@{\hspace{1ex}}cl}
-    \toprule
-    Notation & Examples & Description \\
-    \midrule
-    $R \in \mathcal{R}(S_1, S_2)$ &
-      $\vref$ &
-      Simple relation \\
-    $R \in \mathcal{R}_W(S_1, S_2)$ &
-      $\hookrightarrow_\kw{m}$ &
-      Kripke relation (Def.~\ref{def:klr}) \\
-    $w \Vdash R$ & &
-      Kripke relation at world $w$ \\
-    $w \Vdash x \mathrel{R} y$ & &
-      $x$ and $y$ related at world $w$ \\
-    \midrule
-    $A, B, C$ &
-      $\mathcal{C}, \mathcal{A}, \mathbf{1}$ &
-      Language interface (Def.~\ref{def:li}) \\
-    %$M_A^\que, M_A^\ans$ & &
-    %  Questions and answers of $A$ \\
-    $\mathbb{R} : A_1 \Leftrightarrow A_2$ &
-      $\kw{alloc}$ &
-      Simulation convention (Def.~\ref{def:simconv}) \\
-    $L : A \twoheadrightarrow B$ &
-      $\kw{Clight}(p)$ &
-      LTS for $A \twoheadrightarrow B$ (Def.~\ref{def:lts}) \\
-    $L_1 \oplus L_2$ & &
-      Horizontal composition (Def.~\ref{def:hcomp}) \\
-    $L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$ &
-      Thm.~\ref{thm:compc} &
-      Simulation property (Def.~\ref{def:fsim}) \\
-    %$p_1 + p_2$ & &
-    %  Program linking \\
-    %$\mathbf{R}$ &
-    %  $\kw{ext}, \kw{inj}$ &
-    %  CKLR (Def.~\ref{def:cklr}) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+  $\begin{array}{c}
+    \kw{id} : A \Leftrightarrow A
+    \qquad
+    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
+    \\[1.5em]
+    \AxiomC{$\mathbb{R} : A_1 \Leftrightarrow A_2$}
+    \AxiomC{$\mathbb{S} : A_2 \Leftrightarrow A_3$}
+    \BinaryInfC{$\mathbb{R} \cdot \mathbb{S} : A_1 \Leftrightarrow A_3$}
+    \DisplayProof
+    \\[1.5em]
+    \AxiomC{$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$}
+    \AxiomC{$L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3$}
+    \BinaryInfC{$
+      L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
+               \mathbb{R}_B \cdot \mathbb{S}_B} L_3$}
+    \DisplayProof
+  \end{array}
+  \:\:
+  \begin{tikzpicture}[baseline=0.6mm,xscale=0.66,yscale=0.55]
+    \node (A1) at (-1,  2) {$A_1$};
+    \node (A2) at (-1,  0) {$A_2$};
+    \node (A3) at (-1, -2) {$A_3$};
+    \node (B1) at ( 1,  2) {$B_1$};
+    \node (B2) at ( 1,  0) {$B_2$};
+    \node (B3) at ( 1, -2) {$B_3$};
+    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
+    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
+    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
+    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
+      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_A$} (A2);
+      \draw (B1) edge[double] node[auto] {$\mathbb{R}_B$} (B2);
+      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_A$} (A3);
+      \draw (B2) edge[double] node[auto] {$\mathbb{S}_B$} (B3);
+    \end{scope}
+  \end{tikzpicture}
+  $
+  \caption{Simulation identity and vertical composition}
+  \label{fig:simcomp}
+\end{figure}
 %}}}
 
 %}}}
@@ -1337,13 +1336,9 @@ compositional calling convention (\S\ref{sec:callconv}).
 
 \section{Operational semantics} \label{sec:sem} %{{{
 
-%This section describes CompCertO's semantic infrastructure.
-%In \S\ref{sec:sem:overview}--\ref{sec:sem:mm},
-%we review the techniques used in CompCert
-%to formalize the semantics of the various languages involved,
-%then starting with \S\ref{sec:sem:open}
-%we describe the extensions we use
-%to model the behavior of \emph{open} programs.
+This section describes CompCertO's semantic infrastructure.
+We start by reviewing the techniques used in CompCert.
+%to formalize language semantics of the various languages involved.
 
 \subsection{Whole-program semantics in CompCert} \label{sec:sem:closed} %{{{
 
@@ -1432,8 +1427,8 @@ $+$ denotes CompCert's linking operator and
 $\kw{Asm}$ maps an assembly program to its semantics.
 % OPTIONAL: this is not that important
 Note that the loading process
-and the conventional invocation of \texttt{main}.
-are encoded as part of the definition of $\kw{Asm}$,
+and the conventional invocation of \texttt{main}
+are encoded as part of the definition of $\kw{Asm}$.
 
 To formulate compiler correctness,
 we must also specify the behavior of the source program.
@@ -1526,7 +1521,6 @@ associated with modular arithmetic and overflow constraints.
     (b, l, h) \in \kw{ptrrange} =
       \kw{block} \times \mathbb{Z} \times \mathbb{Z}
   \]
-  \normalsize
   \begin{align*}
     \kw{alloc} &:
       \kw{mem} \rightarrow \mathbb{Z} \rightarrow \mathbb{Z} \rightarrow
@@ -1556,7 +1550,7 @@ Each memory block has a unique identifier $b \in \kw{block}$
 %represented as a positive integer,
 and is equipped with its own linear address space.
 Block identifiers and offsets are often manipulated together
-as pointers $p = (b, o) \in \kw{ptr} = \kw{block} \times \mathbb{Z}$.
+as pointers $(b, o) \in \kw{ptr}$.
 New blocks are created with prescribed boundaries
 using the primitive $\kw{alloc}$.
 A runtime value $v \in \kw{val}$ can be stored at
@@ -1597,7 +1591,7 @@ alongside all control transfers.
 \begin{table} % tbl:li Language interfaces {{{
   \caption{Language interfaces used in CompCertO}
   \label{tbl:li}
-  %\figsize
+  \figsize
   \setlength\tabcolsep{4pt}
   \begin{tabular}{clll}
     \toprule
@@ -1615,8 +1609,8 @@ alongside all control transfers.
     $\mathcal{A}$ &
       $\mathit{rs}@m$ & $\mathit{rs}'@m'$ &
       Arch-specific \\
-    %$\mathbf{1}$ & n/a & n/a &
-    %  Empty interface \\
+    $\mathbf{1}$ & n/a & n/a &
+      Empty interface \\
     $\mathcal{W}$ & * & $r$ &
       Whole-program \\
     \bottomrule
@@ -1659,13 +1653,13 @@ this is reflected in the language interfaces we use:
 function arguments are mapped into
 abstract locations alongside local temporary variables
 ($\mathcal{L}$,~used by \kw{LTL} and \kw{Linear}).
-These locations are eventually concretized as
-in-memory stack slots and machine registers
+These locations are eventually concretized into
+stack slots and machine registers
 ($\mathcal{M}$, used by \kw{Mach}).
-Finally, the target assembly language \kw{Asm}
+Finally, the target assembly language
 stores the program counter, stack pointer,
-and return address into their own machine registers,
-which is reflected in its interface $\mathcal{A}$.
+and return address into their own registers
+($\mathcal{A}$, used by $\kw{Asm}$).
 
 % OPTIONAL - already mentioned in Sec 2.2
 The interface of whole-program execution
@@ -1752,19 +1746,17 @@ to continue with state $s'$.
 \paragraph{Horizontal composition} \label{sec:sem:linker} %{{{
 
 To model linking,
-we need to express the external behavior
+the following definition
+expresses the behavior
 of a collection of components
-in terms of the behaviors of
-individual components.
-%The operator we use for this purpose
-%can be described in the following way.
+in terms of the behavior of each one.
 
 \begin{definition}[Horizontal composition] \label{def:hcomp} %{{{
 For two transition systems $L_1, L_2 : A \twoheadrightarrow A$
 with
 $L_i = \langle S_i, {\rightarrow}_i, D_i, I_i, X_i, Y_i, F_i \rangle$,
 the \emph{horizontal composition} of $L_1$ and $L_2$
-is of the form:
+is
 \[
     L_1 \oplus L_2 :=
     \big\langle
@@ -1772,6 +1764,7 @@ is of the form:
       D_1 \cup D_2, \:
       I, \: X, \: Y, \: F
     \big\rangle
+  \,,
 \]
 where %the components
 $\rightarrow$, $I$, $X$, $Y$, $F$
@@ -2187,7 +2180,7 @@ defined by:
     w_R \Vdash x \mathrel{R} y \wedge
     w_S \Vdash y \mathrel{R} z \,.
 \]
-Then for the simulation conventions
+For the simulation conventions
 $\mathbb{R} : A \Leftrightarrow B$ and
 $\mathbb{S} : B \Leftrightarrow C$,
 we define
@@ -2468,17 +2461,19 @@ to establish the following \emph{separate compilation} property:
   \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
   \kw{Asm}(\mathtt{M.s})
 \]
-That is,
-the linked \kw{Asm} program
-$\mathtt{M.s}$
-faithfully implements
-the horizontal composition of the source modules' behaviors.
 \end{corollary}
 %}}}
 
+\noindent
+In other words,
+the horizontal composition of the source modules' behaviors
+is faithfully implemented by
+the compiled and linked \kw{Asm} program
+$\mathtt{M.s}$.
+
 %}}}
 
-\subsection{Towards heterogeneous verification} %{{{
+\subsection{Towards heterogeneous verification} \label{sec:nicagain} %{{{
 
 Although we focus in this paper on a symmetric form
 of horizontal composition
@@ -2612,14 +2607,14 @@ in a heterogeneous context.
   we considered:
   \begin{itemize}
   \item a network interface card model
-  $\sigma_\kw{NIC} : \li{Net} \rightarrow \li{IO}$,
+  $\sigma_\kw{NIC} : \li{Net} \twoheadrightarrow \li{IO}$,
   \item device I/O primitives modeled as
-  $\sigma_\kw{io} : \li{IO} \rightarrow \mathcal{C}$,
+  $\sigma_\kw{io} : \li{IO} \twoheadrightarrow \mathcal{C}$,
   \item a network card driver specified by
-  $\sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}$,
+  $\sigma_\kw{drv} : \mathcal{C} \twoheadrightarrow \mathcal{C}$,
   \end{itemize}
   Together, they implement a specification
-  $\sigma : \li{Net} \rightarrow \mathcal{C}$ as:
+  $\sigma : \li{Net} \twoheadrightarrow \mathcal{C}$ as:
   \begin{equation} \label{eqn:nicspec}
     \sigma
     \: \le_{\kw{id} \twoheadrightarrow \kw{id}} \:
@@ -2682,11 +2677,11 @@ could be realistically carried out.
 \section{Logical relations for CompCert} \label{sec:cklr} %{{{
 
 The questions, answers and states
-used in the semantics of CompCert languages all contain
-a memory state and surrounding runtime values.
+used in the semantics of CompCert languages are each composed of
+a memory state surrounded by runtime values.
 Likewise, simulation conventions and relations
 are constructed around \emph{memory transformations}
-and relate the surrounding components in ways that
+and relate the surrounding values in ways that
 are compatible with the chosen memory transformation.
 
 \subsection{Memory extensions} \label{sec:memext} %{{{
@@ -2708,12 +2703,11 @@ the source memory $m_1$ is extended by
 the target memory $m_2$.
 Together,
 the relations $\vref$ and $\mext$
-constitute a logical relation for the memory model,
-in the sense that
+constitute a logical relation for the memory model:
 loads from memory states related by extension
 yield values related by refinement,
-writing values related by refinement
-preserves memory extension,
+storing values related by refinement
+preserves memory extensions,
 and similarly for the remaining memory operations.
 
 %}}}
@@ -2752,12 +2746,11 @@ hold values related by $f \Vdash {\hookrightarrow_\kw{v}}$.
 %ensuring that the memory states and surrounding values
 %are related consistently.
 
-Note that corresponding memory allocations
-in the source and target states cause $f$ to
-evolve into a more defined injection mapping $f \subseteq f'$
-relating the two newly allocated blocks.
-To handle this,
-we introduce the following constructions.
+Since memory allocations create new block identifiers,
+corresponding allocations
+in the source and target memory states cause $f$ to
+evolve into a more defined mapping $f \subseteq f'$.
+This is handled by the following constructions.
 
 %}}}
 
@@ -2783,8 +2776,8 @@ Then the Kripke relator $\Diamond$ is defined by:
 %}}}
 
 \begin{example}[Injection simulation diagrams] \label{ex:sim} %{{{
-Building on Example~\ref{ex:simrel},
-consider once again the simple transition systems
+Following up on Example~\ref{ex:simrel},
+Consider once again the simple transition systems
 $\alpha : A \rightarrow \mathcal{P}(A)$ and
 $\beta : B \rightarrow \mathcal{P}(B)$.
 An injection-based simulation relation between them
@@ -2833,7 +2826,7 @@ we can express
 \subsection{CompCert Kripke logical relations} \label{sec:cklrdef} %{{{
 
 \begin{figure} % fig:cklr-def (Definition of CKLRs) {{{
-  %\figsize
+  \figsize
   \begin{gather*}
     {\leadsto} \mbox{ is reflexive and transitive}
 % \\
@@ -3147,7 +3140,6 @@ should behave uniformly between the source and target executions.
 These requirements can be formalized as
 a CKLR \kw{injp}
 which includes the following components:
-{\small
 \begin{gather*}
   W_\kw{injp} := \kw{meminj} \times \kw{mem} \times \kw{mem}
   \\
@@ -3158,7 +3150,7 @@ which includes the following components:
   \AxiomC{$f \Vdash m_1 \hookrightarrow_\kw{m} m_2$}
   \UnaryInfC{$(f, m_1, m_2) \Vdash m_1 \mathrel{R^\kw{mem}_\kw{injp}} m_2$}
   \DisplayProof
-\end{gather*}}
+\end{gather*}
 Then, $(f, m_1, m_2) \leadsto_\kw{injp} (f', m_1', m_2')$
 ensures that $f \subseteq f'$ and that the memory states
 satisfy the constraints in \autoref{fig:injp}.
@@ -3289,8 +3281,10 @@ which have been removed from the memory in the target program
 At a granular level,
 the corresponding steps break $\leadsto_\kw{injp}$
 by writing to a memory block
-outside of the injection's footprint.
+outside of the injection's footprint
+(see \autoref{fig:injp}).
 But since the block in question
+is allocated after the function is invoked,
 $\leadsto_\kw{injp}$ is satisfied
 with respect to the initial world.
 
@@ -3344,8 +3338,8 @@ $\cc{C}{A} \equiv \cc{C}{L} \cdot \cc{L}{M} \cdot \cc{M}{A}$
 formalizes the structural aspects of
 the C calling convention,
 in particular
-the encoding of C function arguments
-in assembly registers and on the stack.
+the marshaling of C function arguments
+into assembly registers and onto the stack.
 It guarantees the preservation of
 callee-save registers
 and ensures that the source-level execution
@@ -3387,7 +3381,7 @@ related answers of $\mathbb{S}$.
 Given two simulation conventions
 $\mathbb{R}, \mathbb{S} : A_1 \Leftrightarrow A_2$,
 we say that
-$\mathbb{R}$ is refined by $\mathbb{S}$ and write
+\emph{$\mathbb{R}$ is refined by $\mathbb{S}$} and write
 $\mathbb{R} \screfd \mathbb{S}$
 when the following holds:
 \begin{align*}
@@ -3962,12 +3956,12 @@ can be used to establish the taxonomy presented in
 
 \paragraph{CompCert and SepCompCert} %{{{
 
-As per \S\ref{sec:mainideas:compcerto},
-the whole-program semantics used by CompCert
-express strategies for the game
-$\mathbf{1} \twoheadrightarrow \mathcal{W}$.
-CompCert's original correctness theorem
-stated the refinement property
+%As per \S\ref{sec:mainideas:compcerto},
+%the whole-program semantics used by CompCert
+%express strategies for the game
+%$\mathbf{1} \twoheadrightarrow \mathcal{W}$.
+The original correctness theorem of CompCert
+was stated as
 $\kw{C}_\kw{wp}(p) \refby \kw{Asm}_\kw{wp}(p')$,
 where $\kw{C}_\kw{wp}$ and $\kw{Asm}_\kw{wp}$
 denote the source and target whole-program semantics.
@@ -3985,7 +3979,7 @@ shared across all language semantics.
 The correctness proof assumes that $\chi$ is deterministic
 and that it satisfies a number of healthiness requirements,
 which roughly correspond to
-the $\mathcal{R}^*$ component of our calling convention (\S\ref{sec:callconv}).
+the $\mathcal{R}^*$ component of our simulation convention (\S\ref{sec:callconv}).
 %generalized in CompCertO by \autoref{thm:param}.
 %corresponding roughly to self-simulation
 %under the CKLRs $\kw{ext}$ and $\kw{injp}$.
@@ -4143,7 +4137,7 @@ of Compositional CompCert
 when it comes to composing passes,
 and the flexibility of the simulations used
 makes updating the correctness proofs of passes much easier.
-CompCertM also charts new ground
+CompCertM also charts new ground,
 and goes beyond CompCertO
 in several directions.
 The RUSC relation used to state the final theorem
@@ -4161,8 +4155,8 @@ correctness theorem is not itself expressed as a simulation, it fails
 requirement \#\ref{req:opensim} laid out in \S\ref{sec:compcertreq}.
 Moreover, the parametrization of simulations does not offer the same
 flexibility as our full-blown notion of simulation convention.  As a
-consequence, a cascade of techniques (\emph{repaired} interaction
-semantics, \emph{enriched} memory injections, the mixed simulations of
+consequence, a cascade of techniques (repaired interaction
+semantics, enriched memory injections, the mixed simulations of
 \cite{pilsner}) are deployed to enforce invariants which find a
 natural relational expression under our approach.
 
