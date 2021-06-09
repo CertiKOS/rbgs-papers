@@ -1,28 +1,314 @@
-\documentclass{article}
+\documentclass[acmsmall,anonymous,review]{acmart}
 %\usepackage{geometry}
-\usepackage[colorlinks]{hyperref}
+%\usepackage[colorlinks]{hyperref}
 \usepackage{ebproof}
-\usepackage{amsmath}
-\usepackage{amsthm}
-\usepackage{amssymb}
-\usepackage{libertine}
+%\usepackage{amsmath}
+%\usepackage{amsthm}
+%\usepackage{amssymb}
+%\usepackage{libertine}
 \usepackage{stmaryrd}
 \usepackage{tikz}
 \usepackage{tikz-cd}
 \usetikzlibrary{calc}
 
-\newtheorem{definition}{Definition}
-\newtheorem{theorem}[definition]{Theorem}
-\newtheorem{remark}[definition]{Remark}
+%\newtheorem{definition}{Definition}
+%\newtheorem{theorem}[definition]{Theorem}
+\newtheorem{remark}{Remark}
 
-\title{CompCertO\hspace{-0.5ex}\raisebox{-0.5ex}{X}!}
-\author{J\'er\'emie Koenig}
+\title{Mechanized Game Semantics for Compositional Verification}
+
+\begin{abstract}
+Recent work proposes to use game semantics for
+refinement-based verification
+of complex systems.
+However,
+mechanizing game semantics in a proof assistant presents many challenges.
+%in part due to the complexity of most game models,
+%and in part because the mathematics used in traditional descriptions of games
+%are ill-suited to a type-theoretic formalization.
+We show that the \emph{template games} of P.-A. Melli\`es,
+and a recently proposed \emph{algebraic} formulation of game semantics
+provide a viable approach.
+We mechanize a simple game model in the Coq proof assistant,
+enriched with a dually nondeterministic refinement ordering.
+The result allows us to extend existing verification frameworks
+in various directions.
+
+First,
+we use the model to provide a coarse-grained denotational semantics
+of CompCert program components,
+and use it to characterize and verify
+the traditional C control operators \texttt{setjmp} and \texttt{longjmp}.
+We show that games makes it possible to
+model aspects of the execution environments of programs
+and demonstrate the verification of a system involving
+two separate processes communicating through a pipeline.
+
+Then,
+we develop a theory of certified abstraction layers
+within our new model.
+By decoupling certified abstraction layers
+from their low-level CompCert semantics,
+and by imposing a stronger typing discipline
+on layer interfaces and implementations,
+we address long-standing limitations on their compositionality.
+In particular,
+we verify a page allocator
+which can be used by an arbitrary number of
+independent clients.
+\end{abstract}
 
 \begin{document}
 
 \maketitle
 
-\vfill
+\section*{Plan}
+
+The idea is to:
+\begin{itemize}
+  \item RBGS angle:
+    establish its viability and gain experience
+    with a specialized version
+  \item CAL angle:
+    wrap up CompCertOX with the right tools,
+    explore extensions
+\end{itemize}
+If the scope ends up being too much,
+there's several ways in which we could shrink it:
+\begin{itemize}
+  \item Drop one or both of the CompCert extensions
+    (context switching, process environment)
+  \item Have more basic goals for the CAL framework
+\end{itemize}
+But if everything goes well the timeline could be something like:
+\begin{description}
+  \item[By June 15 (Week 1)]
+    \begin{itemize}
+      \item Draft the key definitions and results we want in each section
+      \item Pin down the basics of the game model + its interface
+      \item Clean double category structure for CompCert LTS
+    \end{itemize}
+  \item[By June 22 (Week 2)]
+    \begin{itemize}
+      \item Core maths written out in paper, Coq implementation well underway
+      \item Good plan for the applications we want to demonstrate
+      \item Paper framing settled, intro written
+    \end{itemize}
+  \item[By June 29 (Week 3)]
+    \begin{itemize}
+      \item Paper in submittable form, incl. related work
+      \item Wrap up implementation as much as possible
+    \end{itemize}
+\end{description}
+Generally speaking,
+we could split up the work as follows:
+\begin{itemize}
+  \item J\'er\'emie would work on the RBGS and help more with writing
+  \item Yu would focus on the CAL component and help more with
+    Coq proofs.
+\end{itemize}
+ 
+\section{Introduction}
+\section{Main Ideas}
+
+\section{Mechanized Game Semantics}
+
+\subsection{Overview}
+
+Features of the model:
+\begin{itemize}
+  \item Effect signatures as objects;
+    add possible dagger but that could just be a flag
+  \item Two-sided strategies as morphisms
+  \item Dual nondeterminism
+    (a deterministic subcategory can also be defined)
+  \item Sum of signatures as tensor product
+  \item Dagger comonad
+\end{itemize}
+Things we don't need to support for now:
+\begin{itemize}
+  \item Reentrancy
+  \item More sophisticated games
+\end{itemize}
+
+\subsection{Delineating the model}
+
+The objects of the category must contain at least:
+\[
+  A ::= E \mid A \rhd B \mid {\dagger}A
+\]
+where $E$ is an effect signature.
+There are two ways to proceed:
+\begin{itemize}
+  \item Maybe the simplest way would be to use the grammar above
+    as the definition of objects.
+  \item As I've outlined before,
+    effect signatures come with their own $\dagger$,
+    but there some aspects of it we would need to figure out.
+\end{itemize}
+Once signatures have been defined,
+it is useful to associate endofunctor to them
+along the lines:
+\begin{align*}
+  [E] \:&=\: X \mapsto \sum_{m \in E} \prod_{n \in \mathrm{ar}(m)} X
+  \\
+  [A \rhd B] \:&=\: [A] \circ [B]
+  \\
+  [{\dagger}A] \:&=\: [A]^* \:=\: X \mapsto \mu Y \cdot [A] Y + X
+\end{align*}
+With this in mind we will expect the homomorphisms
+to define natural transformations:
+\[
+  [A \multimap B] : 
+  \forall X \cdot B X \rightarrow A X
+\]
+For the case $E \multimap F$ of signatures,
+this is the same as specifying
+a family $(e^m)_{m \in F}$ with $e^m \in E \big( \mathrm{ar}(m) \big)$,
+in other word mapping each operation $m \in F$
+to an operation $q \in E$ and
+each outcome $r \in \mathrm{ar}(q)$
+to an outcome $n \in \mathrm{ar}(m)$.
+
+We could call those the \emph{linear} maps of our category,
+with the expectation that a \emph{regular} map
+$f^\dagger : {\dagger} A \multimap {\dagger} B$
+would in addition be a \emph{monad homomorphism}
+between the monads $[A]^*$ and $[B]^*$
+and could always be defined in terms of
+$f : {\dagger}A \multimap B$.
+
+That's the basic story for simple algebraic games.
+Then we can use my ACT 2021 techniques and
+work over $\mathbf{DCPO}_{\bot!}$ or $\mathbf{CDLat}$
+by using completions of term models,
+and by tweaking the endofunctors
+to give the result a game semantics flavor
+rather than a coherence space flavor.
+
+
+\section{CompCert Programs}
+
+In this section we would show how to embed CompCert programs into the model:
+\begin{itemize}
+  \item The types would be similar to the coherence space version
+  \item For defining the embedding,
+    high-level constructions instead of low-level traces
+    could be more convenient but we can choose.
+\end{itemize}
+Things that would be new compared to what we've done so far:
+\begin{itemize}
+  \item With a clean double category for LTS,
+    the simulation convention refinement
+    $\mathbb{R} \sqsubseteq \mathbb{R}'$
+    can be encoded as a simulation
+    $\mathsf{id} \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}'} \mathsf{id}$.
+  \item We would use dual nondeterminism to embed simulation conventions.
+\end{itemize}
+Things we can forget about:
+\begin{itemize}
+  \item Don't distinguish crash vs. silent divergence
+  \item Only layered/categorical structure,
+    don't worry too much about mutual recursion
+  \item This means at first we could just forget about component domains.
+    Ultimately we might need to figure out some aspects
+    to establish linking soundness,
+    and definitely if we want to handle upcalls,
+    but I think this is a good candidate for
+    ``work around it for now''
+\end{itemize}
+
+\subsection{Open Transition Systems}
+
+CompCertO denotational semantics with whatever tweaks we need.
+
+\subsection{Denotational Semantics}
+
+Explain the embedding, which goes:
+\[
+  L : A \twoheadrightarrow B
+  \qquad \mapsto \qquad
+  \llbracket L \rrbracket : {\dagger} A \multimap B
+  \qquad \mapsto \qquad
+  \llbracket L \rrbracket^\dagger : {\dagger} A \multimap {\dagger} B
+\]
+For simulation conventions, something like:
+\[
+  \mathbb{R} : A \Leftrightarrow B
+  \quad \mapsto \quad
+  \begin{array}{cc}
+    \mathbb{R}^\circ : A \multimap B & \mathbb{R}^\bullet : B \multimap A \\
+    \mathbb{R}_\circ : B \multimap A & \mathbb{R}_\bullet : A \multimap B
+  \end{array}
+  \quad \mapsto \quad
+  \begin{array}{cc}
+    {\dagger}\mathbb{R}^\circ : {\dagger}A \multimap {\dagger}B &
+    {\dagger}\mathbb{R}^\bullet : {\dagger}B \multimap {\dagger}A \\
+    {\dagger}\mathbb{R}_\circ : {\dagger}B \multimap {\dagger}A &
+    {\dagger}\mathbb{R}_\bullet : {\dagger}A \multimap {\dagger}B
+  \end{array}
+\]
+Establish Galois connection properties
+and corresponding soundness theorem.
+Could be depicted using elbow string diagrams.
+
+\subsection{Control Operators (optional, medium difficulty)}
+
+Although we can't define things like setjmp/longjmp/context switching
+directly in terms of the CompCertO semantics,
+we can define them as operators on embedded games semantics
+of CompCert programs,
+which interpret calls to the relevant primitives
+in the appropriate way.
+In this part we could for example:
+\begin{itemize}
+  \item Give a specification of context switching in these terms
+  \item Give a certified implementation at the assembly level
+\end{itemize}
+This would go a long way towards
+a reformulation of (parts of) CCAL into RBGS.
+
+\subsection{Processes and their Environment (optional, lesser difficulty)}
+
+Define \emph{loaders} to ``close'' the C interface of a component.
+This means we don't have to deal with memory states any more
+and just get the observable behavior of a closed process.
+That behavior could have a degrees of sophistication:
+\begin{itemize}
+  \item Just use CompCert events, but use game semantics to interpret them
+  \item Still allow outgoing calls in the (semi-)closed semantics
+  \item Have the loader include semantics for some standard library functions,
+    and give a higher-level view of what they do
+    using a new outgoing language interface.
+\end{itemize}
+
+If we do that,
+we can model how closed CompCert processes interact
+with the operating system,
+and could give a small example like
+specify and verify simple versions of
+the \texttt{sort} and \texttt{uniq} commands,
+then model the behavior of a
+\texttt{sort|uniq}
+pipeline.
+
+Another reason to do this would be to close a gap in CompCertO,
+where currently we do not prove that the initial invocation of main
+(including the initial memory state)
+is compatible with our calling convention.
+
+\section{Certified Abstraction Layers}
+
+\section{Related Work}
+
+\section{Conclusion}
+
+\appendix
+\newpage
+
+\noindent
+For now,
+the rest of this document contains my previous CompCertOX write-up.
 
 \begin{figure}[h] % fig:ex {{{
   \begin{center}
@@ -73,9 +359,7 @@
 \end{figure}
 %}}}
 
-\vfill
-
-\section*{Overview} %{{{
+\section{Overview} %{{{
 
 Our usual
 \href{https://certikos.github.io/rbgs-papers/thesis/thesis.pdf\#chapter.4}%
@@ -102,7 +386,6 @@ language interfaces, simulation conventions and transition systems:
 demonstrates how these ingredients may fit together
 in a typical situation.
 
-\newpage
 The following operators
 are used to formulate vertical and horizontal composition
 of abstraction layers.
