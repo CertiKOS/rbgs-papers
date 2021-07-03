@@ -16,6 +16,8 @@
 %\newtheorem{theorem}[definition]{Theorem}
 \newtheorem{remark}{Remark}
 
+\newcommand{\kw}[1]{\texttt{#1}}
+
 \title{Mechanized Game Semantics for Compositional Verification}
 
 \begin{abstract} %{{{
@@ -697,7 +699,211 @@ Things we can forget about:
 
 \subsection{Open Transition Systems}
 
-CompCertO denotational semantics with whatever tweaks we need.
+[Maybe it's appropriate to explain the definition of transition systems in section 2]
+
+Given an \emph{incoming} language interface $B$
+and an \emph{outgoing} language interface $A$,
+a \emph{labeled transition system for the game $A \twoheadrightarrow B$}
+is a tuple $L = \langle S, \rightarrow, P, I, X, Y, F \rangle$.
+The footprint $P$ is a set of reserved identifiers.
+The relation
+${\rightarrow^Q} \subseteq S \times \mathbb{E}^* \times S$ is
+a \emph{transition relation} on the set of states $S$
+parametrized by a footprint.
+$I \subseteq D \times S$ 
+assigns to each one a set of \emph{initial states}.
+$F \subseteq S \times B^\bullet$
+designates \emph{final states} together with corresponding answers.
+External calls are specified by
+$X \subseteq S \times A^\circ$,
+which designates \emph{external states} together with
+a question of $A$, and
+$Y \subseteq S \times A^\bullet \times S$,
+which is used to select a \emph{resumption state}
+to follow an external state
+based on the answer provided by the environment.
+We write $L : A \twoheadrightarrow B$ when
+$L$ is a labeled transition system for $A \twoheadrightarrow B$.
+
+The step relation takes a footprint as a parameter, which is only used for
+composite transition system as we will explain shortly. Footprint itself is
+language independent but it can be associated with language interfaces and
+serves as a predicate on questions and the convertion will be implicit when the
+context is clear.
+
+The identity transition system $\mathsf{id}$ simply passes through the calls
+from the environment without doing anything. Two transition systems can be
+composed as $L_1 \circ L_2$ where the outgoing calls from overlay system $L_2$
+are propagated to the underlay $L_1$ as incoming calls.
+
+\begin{definition}[Identity transition system] \label{def:lts-id}
+
+The identity transition system $\mathsf{id}_A : A \twoheadrightarrow A$ can be
+defined as:
+\[
+  \mathsf{id}_A :=
+  \langle A^\circ + A^\bullet,\: \varnothing,\: \varnothing,\: I,\: X,\: Y,\: F \rangle
+\]
+where the components are
+\[
+  \begin{prooftree}
+    \infer0[$\kw{i}^\circ$]{q \mathrel{I} \iota_1(q)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \infer0[$\kw{x}^\circ$]{\iota_1(q) \mathrel{X} q}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \infer0[$\kw{x}^\bullet$]{r \mathrel{Y^{\iota_1(q)}} \iota_2(r)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \infer0[$\kw{i}^\bullet$]{\iota_2(r) \mathrel{F} r}
+  \end{prooftree}
+\]
+The identity transition system permits no internal steps. Questions from the
+environment are immediately passed through as external calls($\kw{i}^\circ$,
+$\kw{x}^\circ$) and the answer it receives is returned to the environment
+without any operation ($\kw{i}^\bullet$, $\kw{x}^\bullet$).
+
+\end{definition}
+
+\begin{definition}[Composition of transition systems] \label{def:lts-comp}
+Given two transition systems
+$L_1 = \langle S_1, {\rightarrow_1}, P_1, I_1, X_1, Y_1, F_1 \rangle
+: B \twoheadrightarrow C$ and
+$L_2 = \langle S_2, {\rightarrow_2}, P_2, I_2, X_2, Y_2, F_2 \rangle
+: A \twoheadrightarrow B$,
+the composite transition system is defined as
+\[
+  L_1 \circ L_2 :=
+  \langle S_1 + (S_2 \times S_1), {\rightarrow}, P_1 \cup P_2, I, X, Y, F \rangle
+\]
+with the following components.
+\[
+  \begin{prooftree}
+    \hypo{q_C \mathrel{I_1} s_1}
+    \infer1[$\kw{i}^\circ$]{q_C \mathrel{I} \iota_1(s_1)}
+  \end{prooftree}
+  \quad
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{F_1} r_C}
+    \infer1[$\kw{i}^\bullet$]{\iota_1(s_1) \mathrel{F} r_C}
+  \end{prooftree}
+  \quad
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{X_2} q_A}
+    \hypo{\forall i\,.\, q_A \notin P_i}
+    \infer2[$\kw{x}^\circ$]{\iota_2(s_2, s_1) \mathrel{X} q_A}
+  \end{prooftree}
+  \quad
+  \begin{prooftree}
+    \hypo{r_A \mathrel{Y_2^{s_2}} s_2'}
+    \infer1[$\kw{x}^\bullet$]{r_A \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
+  \end{prooftree}
+  \quad
+  \begin{prooftree}
+    \hypo{s_1 \rightarrow_1^Q s_1'}
+    \infer1[$\kw{r}_1$]{\iota_1(s_1) \rightarrow^Q \iota_1(s_1')}
+  \end{prooftree}
+\]
+\[
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{X_1} q_B}
+    \hypo{q_B \mathrel{I_2} s_2}
+    \hypo{q_B \notin P_1 \cup Q}
+    \infer3[\kw{push}]{\iota_1(s_1) \rightarrow^Q \iota_2(s_2, s_1)}
+  \end{prooftree}
+  \quad
+  \begin{prooftree}
+    \hypo{s_2 \rightarrow_2^{P_1 \cup Q} s_2'}
+    \infer1[$\kw{r}_2$]{\iota_2(s_2, s_1) \rightarrow^Q \iota_2(s_2', s_1)}
+  \end{prooftree}
+  \quad
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{F_2} r_B}
+    \hypo{r_B \mathrel{Y_1^{s_1}} s_1'}
+    \infer2[\kw{pop}]{\iota_2(s_2, s_1) \rightarrow^Q \iota_1(s_1')}
+  \end{prooftree}
+\]
+\end{definition}
+The environment sends an incoming question to $L_1$ to initiate the execution of
+the composite transition system($\kw{i}^\circ$), and $L_1$ proceeds according to
+its own transition rules($\kw{r}_1$, $\kw{i}^\bullet$). Upon external calls, the
+execution of $L_1$ is suspended and other transition system $L_2$ is activated,
+where questions within the footprint of $L_1$ itself or the inherited footprint
+are rejected($\kw{push}$). Then $L_2$ proceeds according to its transition rules
+and gives the control back to $L_1$ when it has reached the final state
+($\kw{r}_2$, $\kw{x}^\circ$, $\kw{x}^\bullet$, $\kw{pop}$). The footprint $P_1$
+is passed to transition steps of $L_2$ as a restriction on the cross-component
+call if $L_2$ itself is also a composite transition system.
+
+We stick with CompCertO's forward simulation with simulation conventions as a
+refinement order on transition systems. A simulation convention between language
+interfaces $A$ and $B$ is a Kripke relation
+$\mathbb{R} = \langle W, \mathbb{R}^\circ, \mathbb{R}^\bullet \rangle$ where $W$
+is a set, $\mathbb{R}^\circ \in \mathcal{R}_W(A_1^\circ, A_2^\circ)$ and
+$\mathbb{R}^\bullet \in \mathcal{R}_W(A_1^\bullet, A_2^\bullet)$, denoted by
+$\mathbb{R} : A \Leftrightarrow B$. The simulation conventions ensure that
+corresponding pairs of questions and answers are related consistently.  A
+forward simulation on transition systems $L_1: A_1 \twoheadrightarrow B_1$ and
+$L_2: A_2 \twoheadrightarrow B_2$ with simulation conventions
+$\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
+$\mathbb{R}_B : B_1 \Leftrightarrow B_2$ states that any transition in $L_1$ has
+a corresponding transition sequence in $L_2$, denoted by
+$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
+
+The transition system semantics model forms a double category where the objects
+are language interfaces, the horizontal morphisms are transition systems, the
+vertical morphisms are simulation conventions, and the 2-cells are
+simulations. The 2-cells compose along the horizontal morphisms as well as the
+vertical morphisms as depicted in the following properties and diagrams.
+\[
+  \begin{prooftree}
+    \hypo{L_1 \le_{S \twoheadrightarrow T} L_1'}
+    \hypo{L_2 \le_{R \twoheadrightarrow S} L_2'}
+    \infer2{L_1 \circ L_2 \le_{R \twoheadrightarrow T} L_1' \circ L_2'}
+  \end{prooftree}
+  \qquad
+  \begin{tikzcd}
+    A \ar[r, ->>, "L_1"] \ar[d, <->, "R"] &
+    B \ar[r, ->>, "L_2"] \ar[d, <->, "S"] &
+    C \ar[d, <->, "T"] \\
+    A' \ar[r, ->>, "L_1'"'] &
+    B' \ar[r, ->>, "L_2'"'] &
+    C'
+  \end{tikzcd}
+  \Rightarrow
+  \begin{tikzcd}
+    A \ar[rr, ->>, "L_1 \circ L_2"] \ar[d, <->, "R"] &&
+    C \ar[d, <->, "T"] \\
+    A' \ar[rr, ->>, "L_1' \circ L_2'"'] &&
+    C'
+  \end{tikzcd}
+\]
+\[
+  \begin{prooftree}
+    \hypo{L_1 \le_{R \twoheadrightarrow S} L_2}
+    \hypo{L_2 \le_{T \twoheadrightarrow U} L_3}
+    \infer2{L_1 \le_{R \cdot T \twoheadrightarrow S \cdot U} L_3}
+  \end{prooftree}
+  \qquad
+  \begin{tikzcd}
+    A_1 \ar[r, ->>, "L_1"] \ar[d, <->, "R"] & B_1 \ar[d, <->, "S"] \\
+    A_2 \ar[r, ->>, "L_2"] \ar[d, <->, "T"] & B_2 \ar[d, <->, "U"] \\
+    A_3 \ar[r, ->>, "L_3"] & B_3
+  \end{tikzcd}
+  \Rightarrow
+  \begin{tikzcd}[row sep=large]
+    A_1 \ar[r, ->>, "L_1"] \ar[dd, <->, "R \cdot T"] & B_1 \ar[dd, <->, "S \cdot U"] \\ \\
+    A_3 \ar[r, ->>, "L_3"] & B_3
+  \end{tikzcd}
+\]
+
+Finally, we prove that the categorical composition of assembly programs
+approximates the horizontal composition from the original CompCertO
+semantics.
 
 \subsection{Denotational Semantics}
 
