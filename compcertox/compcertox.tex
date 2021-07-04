@@ -701,6 +701,26 @@ Things we can forget about:
 
 [Maybe it's appropriate to explain the definition of transition systems in section 2]
 
+The labeled transition system in CompCertO uses a notion of domain to specify a
+set of questions accepted by the system. The domain also determines whether a
+question should be a cross component call or an external call when two
+transition systems are composed. The composition is used to model linking
+programs so the transition systems being composed use the same language
+interface. As a result, it does not bring much trouble if the domain depends on
+particular language interfaces. However, in a more general setting where
+transition systems with different language interfaces interact with each other
+we need to generalize the notion of domain to \emph{footprint}, which is
+language independent and represents a set of identifiers owned by the transition
+system.
+
+Additionally, in categorical composition the transition systems form a layered
+hierarchy where the function calls flow from the overlays to the underlays but
+not the other way round. As a consequence, any attempts from the underlays to
+call into overlays should be considered undefined behavior. Therefore, the
+transition relation is parametrized by a footprint which is the identifiers
+reserved for overlays.
+
+\begin{definition}[Labeled Transition System]
 Given an \emph{incoming} language interface $B$
 and an \emph{outgoing} language interface $A$,
 a \emph{labeled transition system for the game $A \twoheadrightarrow B$}
@@ -724,12 +744,11 @@ to follow an external state
 based on the answer provided by the environment.
 We write $L : A \twoheadrightarrow B$ when
 $L$ is a labeled transition system for $A \twoheadrightarrow B$.
+\end{definition}
 
-The step relation takes a footprint as a parameter, which is only used for
-composite transition system as we will explain shortly. Footprint itself is
-language independent but it can be associated with language interfaces and
-serves as a predicate on questions and the convertion will be implicit when the
-context is clear.
+Footprint itself is language independent but it can be associated with language
+interfaces and serves as a predicate on questions and the convertion will be
+implicit when the context is clear.
 
 The identity transition system $\mathsf{id}$ simply passes through the calls
 from the environment without doing anything. Two transition systems can be
@@ -924,6 +943,69 @@ For simulation conventions, something like:
   {\dagger}\llbracket \mathbb{R} \rrbracket :
     {\dagger}A \leftrightarrows {\dagger}B
 \]
+Open transition systems and forward simulations can be embedded into
+object-based semantics as follows.
+
+A language interface
+$A = \langle A^\circ, A^\bullet \rangle$ can be read as an effect signature
+which incorporates all the operations in the shape of questions in $A^\circ$ and
+they have the same arity $A^\bullet$.
+\[
+  \llbracket A \rrbracket \mathrel{:=}
+  \{ op \mathrel{:=} A^\circ, ar\ \_ \mathrel{:=} A^\bullet \}
+\]
+
+A transition system
+$L: A \twoheadrightarrow B = \langle S, \rightarrow, P, I, X, Y, F \rangle$ can
+then be interpreted as a linear map
+$\dagger \llbracket A \rrbracket \multimap \llbracket B \rrbracket$, which is a
+signature homomorphism of type
+$ \llbracket B \rrbracket \rightarrow \dagger \llbracket A \rrbracket $
+\[
+  \llbracket L \rrbracket (q_B) \mathrel{:=} \bigsqcup_{q_BIs} run_L(s)
+\]
+\[
+  run_L(s) \mathrel{:=}  \bigsqcup_{s\rightarrow^* s'\wedge s'Fr_B} \underline{r_B}
+  \sqcup \bigsqcup_{s\rightarrow^* s' \wedge s'Xq_A} \underline{q_A}
+  (r_A \mapsto \bigsqcup_{rY^{s'}s''} run_L(s''))
+\]
+The signature homomorphism takes an operation $q_B \in \llbracket B \rrbracket$
+and activates the transition system with the operation by angelically choosing
+an initial state. Starting from the initial state, the operation $run_L(s)$
+builds a term in $E^*(ar(q_B))$ recursively by driving the transitions until a
+final state is reached. The internal states are ignored as the game model
+emphasizes on the externally observable behaviors. The angelic choices help
+preserving all possible execution paths in the embedding.
+
+A simulation convention $R : C \Leftrightarrow A$ between source program
+language interface $C$ and target program language interface $A$ is encoded as
+adjunctions $R^* \dashv R_* : C \leftrightarrows A$. Typically, the source
+program is a high-level specification whereas the target program is specified
+with implementation details.
+\begin{align*}
+  R^*(q_A) \mathrel{:=} \bigsqcup_{q_C R^\circ q_A} \underline{q_C}(r_C \mapsto \bigsqcap_{r_C R^\bullet r_A} r_A) \\
+  R_*(q_C) \mathrel{:=} \bigsqcap_{q_C R^\circ q_A} \underline{q_A}(r_A \mapsto \bigsqcup_{r_C R^\bullet r_A} r_C)
+\end{align*}
+In the first case, the left adjoint $R^*: A \rightarrow C$ translates a
+low-level call into a high-level call by making an angelic choice, which can be
+viewed as a partial function abstracts away the implementation details from a
+call in the target language. In case there is no corresponding representation in
+the source language, the translation goes wrong. On the other hand, the target
+program is allowed to choose the low-level representation it wants to resume
+with.
+
+In the second case, the right adjoint $R_*: C \rightarrow A$ works the other way
+round by making a demonic choice on the operation, which results in the most
+general representation of the specification in the target language. A target
+program that refines such representation is a correct implementation of the
+specification. On the other hand, the translation is free to choose however it
+interprets the result in the form of the low-level interface which corresponds
+to the angelic choice.
+
+The forward simulations between transition systems can be embedded as
+refinements in the game model, which categorically transport the 2-cells in the
+category of language interfaces to the 2-cells in the enriched category of
+effect signatures.
 
 \subsection{Control Operators (optional, medium difficulty)}
 
