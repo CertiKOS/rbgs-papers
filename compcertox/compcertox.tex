@@ -11,6 +11,7 @@
 \usepackage{cmll}
 \usepackage{tikz}
 \usepackage{tikz-cd}
+\usepackage{bbm}
 \usetikzlibrary{calc}
 
 %\newtheorem{definition}{Definition}
@@ -930,6 +931,24 @@ vertical morphisms as depicted in the following properties and diagrams.
 Finally, we prove that the categorical composition of assembly programs
 approximates the horizontal composition from the original CompCertO
 semantics.
+\begin{theorem}[Under-approximation of categorical composition]
+  For two \kw{Asm} programs $p_1$ and $p_2$,
+  \[
+    \kw{Asm}(p_1) \circ \kw{Asm}(p_2) \le_{\kw{id} \twoheadrightarrow \kw{id}}
+    \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
+  \]
+\end{theorem}
+As a corollary, composing two $\kw{Clight}$ programs can be correctly
+implemented by linking the $kw{Asm}$ programs they are compiled to.
+\begin{corollary}[Linking implements categorical composition]
+  For $\kw{Clight}$ programs $p_1$ and $p_2$, and $\kw{Asm}$ programs
+  $p'_1$ and $p'_2$ such that $\kw{CompCert}(p_i) = p'_i$ for $i=1,2$,
+  the following simulation holds:
+  \[
+    \kw{Clight}(p_1)\circ\kw{Clight}(p_2) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+    \kw{Asm}(p'_1 + p'_2)
+  \]
+\end{corollary}
 
 \subsection{Denotational Semantics}
 
@@ -986,14 +1005,16 @@ preserving all possible execution paths in the embedding.
 
 A simulation convention $R : C \Leftrightarrow A$ between source program
 language interface $C$ and target program language interface $A$ is encoded as
-adjunctions $R^* \dashv R_* : C \leftrightarrows A$. Typically, the source
-program is a high-level specification whereas the target program is specified
-with implementation details.
+adjunctions
+$R^* \dashv R_* : \llbracket C \rrbracket \leftrightarrows \llbracket A
+\rrbracket$. Typically, the source program is a high-level specification whereas
+the target program is specified with implementation details.
 \begin{align*}
   R^*(q_A) \mathrel{:=} \bigsqcup_{q_C R^\circ q_A} \underline{q_C}(r_C \mapsto \bigsqcap_{r_C R^\bullet r_A} r_A) \\
   R_*(q_C) \mathrel{:=} \bigsqcap_{q_C R^\circ q_A} \underline{q_A}(r_A \mapsto \bigsqcup_{r_C R^\bullet r_A} r_C)
 \end{align*}
-In the first case, the left adjoint $R^*: A \rightarrow C$ translates a
+In the first case, the left adjoint
+$R^*: \llbracket A \rrbracket \rightarrow \llbracket C \rrbracket$ translates a
 low-level call into a high-level call by making an angelic choice, which can be
 viewed as a partial function abstracts away the implementation details from a
 call in the target language. In case there is no corresponding representation in
@@ -1001,18 +1022,99 @@ the source language, the translation goes wrong. On the other hand, the target
 program is allowed to choose the low-level representation it wants to resume
 with.
 
-In the second case, the right adjoint $R_*: C \rightarrow A$ works the other way
-round by making a demonic choice on the operation, which results in the most
-general representation of the specification in the target language. A target
-program that refines such representation is a correct implementation of the
-specification. On the other hand, the translation is free to choose however it
-interprets the result in the form of the low-level interface which corresponds
-to the angelic choice.
+In the second case, the right adjoint
+$R_*: \llbracket C \rrbracket \rightarrow \llbracket A \rrbracket$ works the
+other way round by making a demonic choice on the operation, which results in
+the most general representation of the specification in the target language. A
+target program that refines such representation is a correct implementation of
+the specification. On the other hand, the translation is free to choose however
+it interprets the result in the form of the low-level interface which
+corresponds to the angelic choice.
+
+\begin{lemma}
+  Given language interfaces $A$ and $B$ together with a simulation convention
+  $R: A \Leftrightarrow B$, the signature homomorphisms satisfy:
+  \begin{itemize}
+  \item $id \sqsubseteq R_* \circ R^*$
+  \item $R^* \circ R_* \sqsubseteq id$
+  \end{itemize}
+\end{lemma}
+
+Thus, the embedded simulation convention
+$\llbracket R \rrbracket = R^* \dashv R_* : \llbracket C \rrbracket
+\leftrightarrows \llbracket A \rrbracket$ indeed forms an adjunction. The
+adjunction can be lifted to
+$\dagger \llbracket R \rrbracket = \dagger R^* \dashv \dagger R_* : \dagger
+\llbracket C \rrbracket \leftrightarrows \dagger \llbracket A \rrbracket$ so
+that it can be applied to sequences of operations.
 
 The forward simulations between transition systems can be embedded as
 refinements in the game model, which categorically transport the 2-cells in the
 category of language interfaces to the 2-cells in the enriched category of
 effect signatures.
+
+\begin{theorem} Embedding preserves the simulation order
+  \[
+    L_1 \le_{R\twoheadrightarrow S} L_2 \Rightarrow \dagger R^* \circ \llbracket
+    L_1 \rrbracket^\dagger \sqsubseteq \llbracket L_2 \rrbracket^\dagger \circ \dagger S_*
+  \]
+\end{theorem}
+Diagrammatically, this theorem can be viewed as bending over vertical morphisms
+in a double category.
+\[
+  \begin{tikzpicture}[baseline]
+    \path[fill=blue!20] rectangle (-1,1);
+    \path[fill=red!20] rectangle (1,1);
+    \path[fill=green!20] rectangle (-1,-1);
+    \path[fill=yellow!25] rectangle (1,-1);
+    \draw (0,0) -- (0,+1) node[anchor=south] {$L_1$};
+    \draw (0,0) -- (+1,0) node[anchor=west] {$S$};
+    \draw (0,0) -- (0,-1) node[anchor=north] {$L_2$};
+    \draw (0,0) -- (-1,0) node[anchor=east] {$R$};
+    \node[draw,circle,fill=white] (sim) {$\le$};
+    \begin{scope}[inner sep=3mm]
+      \node[below right] at (-1,1) {$A$};
+      \node[below left] at (1,1) {$B$};
+      \node[above right] at (-1,-1) {$C$};
+      \node[above left] at (1,-1) {$D$};
+    \end{scope}
+  \end{tikzpicture}
+  \quad \Rightarrow \quad
+  \newcommand{\stens}{0.6}
+  \begin{tikzpicture}[baseline]
+    \tikzset{to path={
+        .. controls ($(\tikztostart)!\stens!(\tikztostart -| \tikztotarget)$)
+        and ($(\tikztotarget)!\stens!(\tikztostart -| \tikztotarget)$) ..
+        (\tikztotarget) \tikztonodes}}
+  
+    \path (-1, +1) coordinate (R1) node[above] {$\dagger R^*$};
+    \path (+1, -1) coordinate (R2) node[below] {$\dagger R_*$};
+    \path (0, +1) coordinate (L1) node[above] {$ \llbracket L_1 \rrbracket^\dagger $};
+    \path (0, -1) coordinate (L2) node[below] {$ \llbracket L_2 \rrbracket^\dagger $};
+
+    
+    \fill[color=red!20] (sim) to (R2) -- (+1.2,-1) -- (+1.2,0) -- cycle;
+    \path[fill=red!20] rectangle (+1.2,+1);
+    \fill[color=green!20] (sim) to (R1) -- (-1.2,+1) -- (-1.2,0) -- cycle;
+    \path[fill=green!20] rectangle (-1.2,-1);
+
+    \fill[color=yellow!20] (sim) to (R2) -- (L2) -- cycle;
+    \fill[color=yellow!20] (0,0) to (R2) -- (L2) -- cycle;
+    \fill[color=blue!20] (sim) to (R1) -- (L1) -- cycle;
+    \fill[color=blue!20] (0,0) to (R1) -- (L1) -- cycle;
+    
+    \node[draw,circle,fill=white] (sim) {$\sqsubseteq$};
+    \node[below right] at (-0.9,+1) {$\dagger \llbracket A \rrbracket$};
+    \node[below left] at (+1,+1) {$\dagger \llbracket B \rrbracket$};
+    \node[above right] at (-1,-1) {$\dagger \llbracket C \rrbracket$};
+    \node[above left] at (0.9,-1) {$\dagger \llbracket D \rrbracket$};
+    
+    \draw (sim) to (R1);
+    \draw (sim) -- (L1);
+    \draw (sim) to (R2);
+    \draw (sim) -- (L2);
+  \end{tikzpicture}
+\]
 
 \subsection{Control Operators (optional, medium difficulty)}
 
@@ -1060,6 +1162,103 @@ where currently we do not prove that the initial invocation of main
 is compatible with our calling convention.
 
 \section{Certified Abstraction Layers}
+
+Certified abstraction layers can be embedded into the category of effect
+signatures.
+
+The signature of a layer interface or implementation
+can be encoded as an effect signature.
+For example:
+\begin{align*}
+  E_\kw{bq} &:= \{
+    \kw{enq}[v] : \mathbbm{1}, \kw{deq} : V \mid
+    v \in V \} \\
+  E_\kw{rb} &:= \{
+    \kw{set}[i, v] \! : \! \mathbbm{1},
+    \kw{get}[i] \! : \! V,
+    \kw{inc}_1 \! : \! \mathbb{N},
+    \kw{inc}_2 \! : \! \mathbb{N} \! \mid \!
+    i \in \mathbb{N}, v \in V \}
+\end{align*}
+
+In order to handle the layer's abstract data,
+we can extend signatures with state in the following way:
+\[
+  E@S :=
+    \{ m@k : \kw{ar}(m) \times S \mid
+       m \in E, k \in S \}
+\]
+
+A layer interface $L$ with a signature $E$
+and states in $S$
+can be interpreted as
+a homomorphism $\llbracket L \rrbracket : I \multimap E@S$.
+Recall that a signature homomorphism of type $I \multimap E$
+chooses arguments for each possible operation.
+\[
+  \llbracket L \rrbracket (m@k) :=
+    \bigsqcup L.m@k
+\]
+
+We introduce a special homomorphism $e^k : \dagger E@S \multimap \dagger E$
+to erase the explicit abstract state and instead use
+strategies as specifications, where $k \in S$
+is a state.
+\[
+  e^k(\underline{m}ns) \mathrel{:=} \bigsqcup_{k'\in S} \underline{m@k}(n@k' \mapsto e^{k'}(s))
+\]
+Given an initial state $k$, the embedded specification
+in terms of the game model is defined as
+\[
+  \llbracket L \rrbracket^k \mathrel{:=} e^k \circ \llbracket L \rrbracket^\dagger : I \multimap \dagger E
+\]
+
+Given an underlay $L$ with signature $F$ and abstract state $S_2$
+a layer implementation $M$
+with an overlay signature $F$
+extending the abstract state to $(S_1, S_2)$
+can be interpreted as
+a signature homomorphism $\llbracket M \rrbracket^m :  \dagger E@S_2 \multimap F@(S_1, S_2)$
+by replacing external calls to underlay primitives
+in the definition of $M$ with the corresponding operations:
+\[
+  \llbracket M \rrbracket^m \mathrel{:=} (M.m)[e \mathrel{:=} ???]
+\]
+The full behavior of implementation relies on
+an underlay specification $I \multimap \dagger E$.
+In order to compose them together
+we introduce an adapter $\iota: E \multimap E@S$
+that store the state upon an invocation of an operation to the underlay
+and adjoin the same state to the next
+incoming move.
+\[
+  \iota(m@k) \mathrel{:=} \underline{m}(n \mapsto n@k)
+\]
+Together with the state eraser,
+a layer implementation $M$
+given an initial state $k=(k_1,k_2)$
+can be interpret as
+\[
+  \llbracket M \rrbracket^k \mathrel{:=}
+  e^k \circ \llbracket M \rrbracket^\dagger \circ \dagger \iota : \dagger E \multimap \dagger F
+\]
+Consequently, running the implementation on top of
+a underlay specification $L$ yield the composition
+\[
+  \llbracket M \rrbracket^{k_1,k_2} \circ \llbracket L \rrbracket^{k_2} : I \multimap \dagger F
+\]
+The layer judgment $L_1 \vdash_R M : L_2$,
+which means that a layer implementation $M$
+correctly implements $L_2$ on top of  $L_1$ through
+a simulation relation $R \subseteq S_2 \times S_1$,
+can then be interpreted as:
+\[
+  L_1 \vdash_R M : L_2 \Leftrightarrow
+  \forall k_2\ R\ k_1\,.\, 
+\llbracket L_2 \rrbracket^{k_2} \sqsubseteq
+\llbracket M \rrbracket^{k_1} \circ \llbracket L \rrbracket^{\iota_2(k_1)}
+\]
+where $\iota_2$ is the projection to extract underlay state from $k_1$.
 
 \section{Related Work}
 
@@ -1858,7 +2057,7 @@ here is a string diagram rendition of \autoref{fig:ex}.
 
     % Transition systems
     \begin{scope}[line width=1pt,inner sep=0.2mm]
-      \draw (L2) to (LC2) to node[above left,pos=0.75] {$L'$} (LC1) to (L);
+      % \draw (L2) to (LC2) to node[above left,pos=0.75] {$L'$} (LC1) to (L);
       \draw (T) to (LK2) to (LK1) to node[below left,pos=0.3] {$\llbracket M \rrbracket$} (LC1);
       \draw (LC2) to node[above right,pos=0.6] {$\llbracket N \rrbracket$} (LK1);
       \draw (LK2) to (C);
