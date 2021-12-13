@@ -1,0 +1,422 @@
+\documentclass[11pt]{article}
+\usepackage{times}
+
+\usepackage{ifthen}
+\usepackage{latexsym}
+\usepackage{url}
+\usepackage{listings} %for code
+%\usepackage{mathpartir} %for typing rules
+
+\usepackage{alltt}
+\usepackage{multirow}
+\usepackage{paralist}
+\usepackage{graphicx} %to include images
+\usepackage{scalerel}
+\usepackage{relsize}
+
+\usepackage{wrapfig}
+
+%\usepackage[utf8]{inputenc} %for utf8 input
+\usepackage{amsthm}
+\usepackage{amssymb} %for shift symbol
+\usepackage{amsmath}
+\usepackage{listings, multicol} %for code
+\usepackage{microtype} %better micro typing
+\usepackage{stmaryrd} %for llbracket
+\usepackage{bussproofs} %for proof trees
+\usepackage{comment}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, decorations.pathmorphing}
+\usepackage{paralist}
+\usepackage{enumitem}
+\usepackage{mathpartir}
+\usepackage{xspace}
+\usepackage{tcolorbox}
+\usepackage{tabularx}
+\usepackage{mathtools}
+\usepackage{relsize}
+\usepackage[font=small,labelfont=bf]{caption}\usepackage[normalem]{ulem}
+\usepackage{cancel}
+\usepackage{caption}
+\usepackage{lipsum}
+\usepackage{xcolor}
+
+\newcommand{\DeepSpec}{\texttt{DeepSEA}\xspace}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+
+
+\long\def\cruzica#1{{\color{red}{\bf Ruzica: }{\small [#1]}}}
+\sloppypar
+
+%\include{defs}
+\input{local}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\voffset             0in    %  top vertical offset
+\hoffset             0in    %  left horizontal offset
+\oddsidemargin       0pt    %  Left margin on odd-numbered pages.
+\evensidemargin      0pt    %  Left margin on even-numbered pages.
+\topmargin           0pt    %  Nominal distance from top of page to top of
+\headheight          0pt    %  Height of box containing running head.
+\headsep             0pt    %  Space between running head and text.
+\textwidth         6.5in    %  Width of text on page
+\textheight          9in    %  Height of text on page
+%\setlength{\parskip}{.035in}
+\renewcommand{\floatpagefraction}{.9}
+\renewcommand{\textfraction}{0.1}
+%\renewcommand{\baselinestretch}{1.03}
+
+\let\cmttdfl\ttdefault          %what for?
+\let\cmsfdfl\sfdefault          %what for?
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+\setcounter{page}{1}
+\pagenumbering{roman}
+
+%\appendix
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\section{Cover Page} 
+
+%\begin{comment}
+\vspace*{1in} 
+\centerline{
+\begin{tabular}{c}
+  {\Large SHF: Medium: End-to-End and Compositional Verified Secure Compilation}
+\\[10ex] 
+\large Zhong Shao (PI) \\[.5ex]
+\large Jeremie Koenig (co-PI) \\[.5ex]
+\large Department of Computer Science \\[.1ex] 
+\large Yale University \\[.1ex]
+\large 51 Prospect Street \\[.1ex]
+\large New Haven, CT 06520-8285, USA \\[.5ex]
+\large Phone: 203-432-6828 \\[.1ex]
+  \large Email: \{zhong.shao, jeremie.koenig\}@yale.edu \\[5ex]
+%%
+  \large {\em{} A proposal for CISE CCF Core Program on Software and Hardware Foundations (SHF)}\\
+\large {\em{} NSF program solicitation 21-616}
+\end{tabular}
+}
+\vspace*{1in} 
+\newpage
+%\end{comment}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\section*{Project Summary}
+
+\thispagestyle{empty}
+\input {summary}
+\newpage
+
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\section{Project Description}
+
+\section{Introduction}
+\label{sec:intro}
+
+
+Distributed systems are difficult to reason about and verify because
+they employ sophisticated protocols to coordinate failure-prone
+distributed nodes over an unreliable network.  Their correctness often
+relies on subtle, implicit global invariants, which hinder the ability
+to understand why the system works and how one system relates to
+another. To further complicate matters, modern applications build on
+top of multiple distributed systems~\cite{hadoop, hadoopeco}, which
+necessitates reasoning about concurrent interactions between systems.
+
+
+Formal models and verification of the code are necessary to guarantee
+the safety and correctness of a distributed system. However, it is
+challenging to verify a standalone distributed system and harder still
+to verify multiple interacting distributed
+systems~\cite{shimlayer}. There exist amazing efforts to apply formal
+reasoning and verification to distributed systems that provide useful
+tools for simplifying some aspects of verification, such as high-level
+state machine refinement methodology~\cite{ironfleet}, network model
+transformation~\cite{verdi}, automatic invariant generation~\cite{i4},
+and modular reasoning for multiple distributed protocols with simple
+interactions~\cite{disel}. However, they work at a relatively low
+level while dealing with implementation details, so verifying
+individual distributed systems requires redundant
+reasoning. Similarly, the low-level details make it difficult to
+address the new challenges that come with composition of systems.
+
+Then how can we facilitate the verification of multiple individual
+distributed systems and their compositions? We claim that providing a
+simple, atomic, and general interface is key to reducing the
+complexity of verifying distributed systems. It is well known that
+providing a simple object model by abstracting away implementation
+details can greatly ease the understanding and verification of complex
+systems~\cite{herlihy90, herlihy08book, wormspace, concurrency}. While
+existing efforts listed above do employ some amount of abstraction,
+non-essential details, such as message orderings and quorum sizes,
+sometimes leak through into the high-level reasoning.  Thus, by
+modeling distributed systems at an even higher level, one can focus on
+just the core logic, and deal with the implementation details
+separately.
+
+We propose to design a new high-level abstraction of distributed
+systems to justify our claim. We aim to realize a specification and
+verification framework, \sysname{}, for individual distributed systems
+and their composition surrounding the abstraction, and model and
+verify distributed systems down to the code level.  \sysname{} stands
+for \sysnamelong{} and targets a general verification approach for
+strongly consistent replicated distributed systems that satisfy the
+replicated state safety property (see
+Theorem~\ref{thm:atomic-spec-prefix}).  Examples of such systems
+include multi-Paxos~\cite{rvrpaxos}, Raft~\cite{raft}, and
+chain-replication~\cite{chainreplication}, which are widely used in
+production systems.  \sysname{} aims to model and verify composition
+of such systems as long as the composition satisfies the replicated
+safety property.
+
+Inspired by work on shared-memory concurrent
+objects~\cite{herlihy08book, lintextbook}, we propose a novel model of
+distributed systems called the atomic distributed object (ADO) and
+plan to build \sysname{} surrounding the ADO.  The ADO models all
+distributed operations as atomic functions on a non-distributed shared
+object, but with added non-determinism to reflect its distributed
+nature. The calls are captured by atomic updates to a linear, logical
+history of events. The ADO model is detailed enough to express
+high-level behaviors of distributed systems, but abstract enough that
+implementation details do not unnecessarily complicate the high-level
+reasoning.
+
+We plan to divide \sysname{} into four major components
+(Figure~\ref{fig:advert}) and implement each component in
+Coq~\cite{coq}: 1) the ADO specification, 2) a multi-ADO reasoning
+framework, 3) a network-based specification, and 4) a code-level
+verification framework.  The ADO specification sits at the center of
+\sysname{} to model individual distributed systems using a simple
+atomic interface. The multi-ADO reasoning framework allows composite
+systems to be built from ADOs and reasoned about modularly. \sysname{}
+fills in the missing details from below with the network-based
+specification, and provides a clear path between implementation and
+ADO by proving a refinement relation. This specification will be
+parameterized such that it can model most protocols with similar
+network patterns. Along the way we will solve the challenges that stem
+from mapping arbitrarily delayed future events in the network-level
+specification to an atomic function call in the ADO model. Verifying
+that different systems refine the ADO model will be made simple and
+convenient through the network-based specification because the
+properties captured by the common network pattern could allow for the
+reuse of proofs. Finally, the code level verification framework will
+use the certified concurrent abstraction layer
+(CCAL)~\cite{concurrency} approach (the PI's prior work).  \sysname{}
+will take care of each step to connect the code-level implementation
+of a system up to multiple distributed system reasoning.
+
+Our proposed research consists of the following four components:
+\begin{itemize}%[leftmargin=*]
+\item We will identify and propose an atomic distributed object model
+  that preserves the key characteristics of distributed systems, but
+  hides the implementation details.
+\item We will explore different distributed protocols to create
+  parameterized network-based specifications that connect individual
+  system implementations to the atomic distributed object model
+  through a refinement relation. Each network-based specification will
+  reuse the refinement proofs and act as a template that connects a
+  similar class of individual systems to the atomic distributed object
+  model.
+\item We will conduct studies of composite distributed applications to
+  illustrate how \sysname{} and atomic distributed object model enable
+  simple reasoning about multiple distributed system interactions. We
+  will explore various patterns of system compositions for broad
+  impact.
+\item To demonstrate the power and real-world applicability of
+  \sysname{}, we will carry out concrete instantiations multiple
+  distributed protocols, including multi-Paxos, and Raft, and extend
+  the instantiations to a large-scale distributed shared memory
+  system.
+\end{itemize}
+
+\paragraph{Related Efforts} The PI is a co-investigator of the NSF-funded DeepSpec/CertiKOS project. 
+The \sysname{} project differs from the CertiKOS project as it focuses
+on distributed systems which run above operating system
+layers. CertiKOS tackles challenges of verifying operating system code
+base and handling concurrency within operating system. The \sysname{}
+project is different from the CertiKOS project as it reasons about
+distributed system concurrency, where completely different failure and
+network conditions are present. The \sysname{} project rather
+complements the CertiKOS project by extending the verified software
+stack up to a composition of distributed applications.
+
+Other efforts to facilitate the verification of distributed systems
+are introduced at the start of this section~\cite{ironfleet, verdi,
+  i4, disel}. All these efforts do little to explore how to expose the
+common high-level behaviors of distributed systems and hide the
+implementation details. They do not explore reusable proofs to verify
+multiple distinct distributed systems using a common framework and do
+not focus on verifying compositions of multiple distributed
+systems. Our grand goal is to realize a distributed system modeling
+and verification framework that can verify both standalone and
+composite distributed systems to create a fully verified distributed
+ecosystem.
+
+
+\section{Compostional Verified Compilation}
+
+\section{End-to-End Verified Compilation}
+
+\section{CompCertOX and Support for CCAL}
+    
+\section{Verified Secure Compilation}
+
+
+\section{Intellectual Merit}
+
+Existing distributed system verification efforts have been focused
+mostly towards handling complex low-level details of individual
+distributed systems, whereas little attention has been paid towards
+verifying multiple individual distributed systems and their
+interactions. The proposed research highlights this overlooked
+challenges and proposes a novel verification and reasoning approach
+surrounding an atomic distributed object (ADO).  Our research will
+introduce two new capabilities that have not been explored: 2) the ADO
+will trivialize the verification of multiple distributed system
+interactions by hiding the low-level details of the system while
+exposing enough semantics to reason about the system compositions; and
+2) \sysname{} will significantly simplify the verification of
+individual systems with a new approach of capturing common distributed
+system properties and exposing reusable proofs structures through
+network-based specifications.
+
+Our research aims to study and verify as many well-established
+distributed systems as possible to extract the generic properties of
+the systems and common patterns of their compositions. Our goal is to
+establish concrete models and verification frameworks for different
+levels of abstractions and apply the findings to verify conventional
+and cutting-edge distributed systems down to the code level. Similar
+to how ADO explains the distributed system behavior at a high-level,
+each step of our research will cover low to high level details of
+distributed systems and promote the general understanding of complex
+distributed systems. We expect the research outcome will greatly
+contribute to guaranteeing the safety and correctness of large-scale
+systems and applications that are widely used everyday for example
+through the cloud.
+
+\section{Broader Impact}
+
+Our proposed research will contribute greatly to build a safe and
+bug-free distributed software ecosystem. Especially, the parameterized
+verification framework and atomic-distributed-object-based composite
+reasoning of distributed systems capture the core properties of
+distributed systems. Because most seemingly different distributed
+systems are developed and optimized while preserving these core
+properties, our verification approach will be able to host a wide
+range of distributed systems and tolerate frequent system updates to
+easily verify the safety properties. In addition, our verification
+framework will guarantee the safety of large-scale distributed systems
+that were considered very challenging. We expect that our research
+will considerably lighten the burden of distributed system testing and
+debugging by making distributed system verification greatly
+approachable and applicable.
+
+Furthermore, our research can be easily extended to different domains,
+such as cyber physical systems and internet of things, where hundreds
+of devices realize a form of a distributed system. For example,
+mission critical health monitoring wireless sensor nodes and
+coordination of self-driving cars and avionics would be able to
+directly benefit from our research. As computing devices are becoming
+more and more common, our research will be able to verify the
+correctness of their interactions and have a greater impact.
+
+We plan to develop innovative distributed system software and formal
+verification curriculum at both the undergraduate and graduate
+level. PI Shao recently started to teach a course on language-based
+security at Yale and the term projects are designed based on initial
+findings of our proposal.  Extending the term project, co-PI Shin is
+planning to develop a distributed system verification course, where
+students can gain hands-on experience on both system design and
+verification. We plan to extend the courses to undergraduate and
+Master's research program where students can participate in the
+proposed research. We will make our course materials freely available
+and encourage our colleagues to use them at other universities.
+
+We are planning to further use our research materials to foster
+diversity and inclusion. Co-PI Soul\'e has been specially focusing
+on supporting Latin American and Hispanic students for few years with
+scholarship programs, student visit programs, and diversity seminars. 
+The PIs plan to continue these efforts jointly and to recruit 
+underrepresented students to get involved in our research.
+
+Several composite distributed system examples that we plan to model
+and verify are motivated by experiences in the commercial sector, 
+and therefore has a clear promise for industrial impact. 
+For example, co-PI Soul\'{e} has worked closely with Western Digital 
+on a project that uses network hardware to build a new breed of 
+distributed shared memory system. Successful modeling and
+verification of the system can directly influence the safety and 
+correctness of the production prototype. 
+
+The design, implementation, and validation of a software artifact 
+is one of our great contributions to our proposal. 
+We plan to release the software developed in this project under 
+a flexible, open-source license.
+
+
+\section{Results from Prior NSF Support}
+\label{ssec:prior}
+
+\paragraph{Expedition in Computing: The Science of Deep Specification (PI: Zhong Shao)} 
+NSF CCF-1521531, \$2,046,445, with Andrew Appel and Lennart Beringer
+(Princeton), Benjamin Pierce and Stephanie Weirich and Steven
+Zdancewic (U. Pennsylvania), and Adam Chlipala (MIT), 2015-2020.  {\em
+  Intellectual Merit:} The Yale Component of this expedition project
+aims to develop a concurrent certified OS kernel (CertiKOS) and
+connect it with the verified RISC-V hardware (developed at MIT) and
+the web server (developed at UPenn, and verified at Princeton). The
+key emphasis is to work out the detailed specification for the machine
+interfaces (e.g., for RISC-V) and the system call interface (e.g., for
+CertiKOS) so that software and hardware components verified by
+multiple DeepSpec groups can indeed be linked togher. During the first
+two years, The Yale team has successfully developed a clean-slate
+CertiKOS hypervisor OS kernel that runs successfully on both Intel and
+AMD multicore platforms with hardware virtualization and can boot
+Ubuntu or Debian Linux as guest~\cite{certikos16}.  We have also
+developed a new compositional approach for formally specifying and
+verifying sequential and concurrent OS
+kernels~\cite{chen16,costanzo16,certikos16}.  {\em Broader Impacts:}
+This award has partly supported multiple postdocs and students in the
+past two years. PhD student Ronghui Gu will join Columbia CS as a new
+tenure track Assistant Professor.  The team has organized multiple
+outreach workshops in 2016-2017, and also a two-week DeepSpec summer
+school in 2017 with more than 150 attendees from all over the
+world. PI Shao has incorporated the layered CertiKOS kernel into an
+innovative undergraduate OS class.  {\em Representative Publications}:
+two PLDI papers~\cite{chen16,costanzo16} and one OSDI
+paper~\cite{certikos16}.
+
+\paragraph{Co-PI Jeremie Koenig}
+There is no prior NSF support for which Koenig is a PI.
+
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\section{References Cited}
+{\bibliographystyle{abbrv}
+\makeatletter
+\renewcommand\small{%
+   \@setfontsize\small{10.46}{12.77}
+   \abovedisplayskip 10\p@ \@plus2\p@ \@minus5\p@
+   \abovedisplayshortskip \z@ \@plus3\p@
+   \belowdisplayshortskip 6\p@ \@plus3\p@ \@minus3\p@
+   \def\@listi{\leftmargin\leftmargini
+               \topsep 6\p@ \@plus2\p@ \@minus2\p@
+               \parsep 3\p@ \@plus2\p@ \@minus\p@
+               \itemsep \parsep}%
+   \belowdisplayskip \abovedisplayskip
+}
+\makeatother
+ \small\bibliography{shao}
+} \newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\end{document}
+
