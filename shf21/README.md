@@ -12,9 +12,9 @@
 
 - facilities statement (1 page)
 - data management plan (2 pages)
-- postdoc mentoring plan (1 page)
-- collaboration plan (2 pages)
-- BPC plan (3 pages)
+- postdoc mentoring plan (1 page)   <--- TODO
+- collaboration plan (2 pages)      <--- TODO
+- BPC plan (3 pages)           
 
 # Proposal Outline and TODOs
 
