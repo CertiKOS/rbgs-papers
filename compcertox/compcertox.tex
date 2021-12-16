@@ -1,4 +1,4 @@
-\documentclass[acmsmall,anonymous,review]{acmart}
+\documentclass[sigplan,10pt,review,anonymous]{acmart}
 \setcopyright{none}
 %\usepackage{geometry}
 %\usepackage[colorlinks]{hyperref}
@@ -19,54 +19,1283 @@
 \newtheorem{remark}{Remark}
 
 \newcommand{\kw}[1]{\texttt{#1}}
+\newcommand{\refby}{\sqsubseteq}
+\newcommand{\bdot}{\cdot}
+\newcommand{\que}{{\circ}}
+\newcommand{\ans}{{\bullet}}
+\newcommand{\ifr}[1]{\mathrel{[{#1}]}}
 
-\title{Mechanized Game Semantics for Compositional Verification}
+\title{%
+  A Framework for Specification, Abstraction, and Refinement
+  in Compositional Semantics}
 
 \begin{abstract} %{{{
-Recent work proposes to use game semantics for
-refinement-based verification
-of complex systems.
-However,
-mechanizing game semantics in a proof assistant presents many challenges.
-%in part due to the complexity of most game models,
-%and in part because the mathematics used in traditional descriptions of games
-%are ill-suited to a type-theoretic formalization.
-We show that the \emph{template games} of P.-A. Melli\`es,
-and a recently proposed \emph{algebraic} formulation of game semantics
-provide a viable approach.
-We mechanize a simple game model in the Coq proof assistant,
-enriched with a dually nondeterministic refinement ordering.
-The result allows us to extend existing verification frameworks
-in various directions.
+Despite significant progress
+in the development of certified software,
+the lack of interoperability between
+verification techniques is a major obstacle
+to the construction of
+large-scale, heterogeneous certified systems.
+Researchers have been able to interface
+certified software projects on a case-by-case basis,
+but a systematic approach has not yet emerged.
 
-First,
-we use the model to provide a coarse-grained denotational semantics
-of CompCert program components,
-and use it to characterize and soundly implement
-the traditional C control operators \texttt{setjmp} and \texttt{longjmp}.
-We show that games makes it possible to
-model aspects of the execution environments of programs
-and demonstrate the verification of a system involving
-two separate processes communicating through a pipeline.
+In principle,
+compositional semantics can provide a mathematical foundation
+for the interoperability of certified systems.
+In practice,
+even compositional \emph{proof techniques}
+are usually formulated with respect to a
+non-compositional, operational semantics.
 
-Then,
-we develop a theory of certified abstraction layers
-within our new model.
-By decoupling certified abstraction layers
-from their low-level CompCert semantics,
-and by imposing a stronger typing discipline
-on layer interfaces and implementations,
-we address long-standing limitations on their compositionality.
-In particular,
-we verify a page allocator
-which can be used by an arbitrary number of
-independent clients.
+We propose a general approach to
+specification, refinement and abstraction
+in the context of compositional semantics.
+As a case study,
+we apply this methodology to the certified compiler CompCert
+and its recent compositional extension CompCertO.
+This allows us to interface CompCertO with
+a particularly simple theory of certified abstraction layers.
+
+%Recent work proposes to use game semantics for
+%refinement-based verification
+%of complex systems.
+%However,
+%mechanizing game semantics in a proof assistant presents many challenges.
+%%in part due to the complexity of most game models,
+%%and in part because the mathematics used in traditional descriptions of games
+%%are ill-suited to a type-theoretic formalization.
+%We show that the \emph{template games} of P.-A. Melli\`es,
+%and a recently proposed \emph{algebraic} formulation of game semantics
+%provide a viable approach.
+%We mechanize a simple game model in the Coq proof assistant,
+%enriched with a dually nondeterministic refinement ordering.
+%The result allows us to extend existing verification frameworks
+%in various directions.
+%
+%First,
+%we use the model to provide a coarse-grained denotational semantics
+%of CompCert program components,
+%and use it to characterize and soundly implement
+%the traditional C control operators \texttt{setjmp} and \texttt{longjmp}.
+%We show that games makes it possible to
+%model aspects of the execution environments of programs
+%and demonstrate the verification of a system involving
+%two separate processes communicating through a pipeline.
+%
+%Then,
+%we develop a theory of certified abstraction layers
+%within our new model.
+%By decoupling certified abstraction layers
+%from their low-level CompCert semantics,
+%and by imposing a stronger typing discipline
+%on layer interfaces and implementations,
+%we address long-standing limitations on their compositionality.
+%In particular,
+%we verify a page allocator
+%which can be used by an arbitrary number of
+%independent clients.
 \end{abstract}
 %}}}
 
 \begin{document}
 
 \maketitle
+
+\section{Introduction}
+
+\subsection{Context}
+\subsection{Gap}
+\subsection{Innovation}
+\subsection{Contributions}
+
+\section{Compositional Semantics}
+
+[Main ideas section describes how compositional semantics
+can be used for verification:
+use completely distributive lattices instead of domains;
+they provide a language for specifications.
+Formal adjunctions can be used to model abstraction
+and construct a double category.]
+
+\section{Semantics in CompCert} %{{{
+
+%% preamble {{{
+%
+%The semantics of CompCert languages
+%are given in terms of a simple notion of process behavior.
+%By \emph{process}, I mean a self-contained computation
+%which can be characterized by
+%the sequence of system calls it performs.
+%%Several steps are involved to go
+%%from a source program to an executing process;
+%%these steps are modeled by CompCert
+%%with varying degrees of sophistication and accuracy.
+%For a C program to be executed as a process,
+%its translation units must be compiled to object files,
+%then linked together
+%into an executable binary
+%loaded by the system.
+%
+%\begin{figure} % fig:process {{{
+%  \centering
+%    \begin{tikzpicture}[scale=1.25]
+%        \tt
+%        \node (Ms) at (1.5, 1) {whole-program.s};
+%        \node (M1c) at (0, 3) {M1.c};
+%        \node (M2c) at (1, 3) {M2.c};
+%        \node (etc) at (2, 3) {\ldots};
+%        \node (Mnc) at (3, 3) {M$n$.c};
+%        \node (M1s) at (0, 2) {M1.s};
+%        \node (M2s) at (1, 2) {M2.s};
+%        \node (ets) at (2, 2) {\ldots};
+%        \node (Mns) at (3, 2) {M$n$.s};
+%        \draw (M1c) edge[->] (M1s);
+%        \draw (M2c) edge[->] (M2s);
+%        \draw (Mnc) edge[->] (Mns);
+%        \draw (M1s) edge[->] (Ms);
+%        \draw (M2s) edge[->] (Ms);
+%        \draw (Mns) edge[->] (Ms);
+%        \rm
+%        \node at (-1.3, 2.5) {Compilation};
+%        \node at (-1.3, 1.5) {Linking};
+%
+%        %\node (Mb) at (1.5, 0) {Running process};
+%        %\node at (-1.3, 0.5) {Loading};
+%        %\draw (Ms) edge[->] (Mb);
+%
+%        %\tt
+%        %\node (Mc) at (1.5, 4) {whole-program.c};
+%        %\draw (M1c) edge[->,dotted] (Mc);
+%        %\draw (M2c) edge[->,dotted] (Mc);
+%        %\draw (Mnc) edge[->,dotted] (Mc);
+%    \end{tikzpicture}
+%    \caption{CompCert's approximation of the C toolchain}
+%    \label{fig:process}
+%\end{figure}
+%%}}}
+%
+%%Finally, the system loads the executable into memory
+%%where initialization code sets up the process
+%%and invokes the program's \texttt{main} function.
+%%Since CompCert is a compiler from C to assembly,
+%%but does not include an assembler or linker,
+%The model used for verifying CompCert accounts for this
+%in the way depicted in Figure~\ref{fig:process}.
+%%The lowest-level objects considered
+%%are CompCert \kw{Asm} programs.
+%Linking is approximated by
+%merging programs, seen as sets of global definitions.
+%The execution
+%of a program composed of the translation units
+%$\texttt{M1.c} \ldots \texttt{M$n$.c}$
+%which compile to
+%$\texttt{M1.s} \ldots \texttt{M$n$.s}$
+%is modeled as:
+%\[
+%    L_\kw{tgt} :=
+%    \kw{Asm}[\texttt{M1.s} +
+%             \cdots +
+%             \texttt{M$n$.s}] \,.
+%\]
+%Here,
+%$+$ denotes CompCert's linking operator and
+%$\kw{Asm}$ maps an assembly program to its semantics.
+%Note that the loading process is encoded
+%as part of the definition of $\kw{Asm}$,
+%which constructs a global environment
+%laying out the program's code and static data
+%into the runtime address space,
+%and models the conventional invocation of \texttt{main}.
+%To formulate compiler correctness,
+%we must also specify the behavior of the source program.
+%To this end,
+%CompCert defines a linking operator
+%and semantics
+%for the language $\kw{Clight}$,%
+%\footnote{
+%  Although CompCert features a frontend for a richer version
+%  of the C language,
+%  the simplified intermediate dialect \kw{Clight}
+%  is usually used as the source language
+%  when using CompCert to build certified artifacts.
+%  %In particular it is the target language of the
+%  %\texttt{clightgen} utility which
+%  %produces Coq code for a C program's AST,
+%  %which the user can then prove to be correct
+%  %either manually or with tools such as the VST program logic
+%  %\citep{vst}.
+%}
+%allowing the desired behavior to be specified as:
+%\[
+%    L_\kw{src} :=
+%    \kw{Clight}[\texttt{M1.c} + \cdots + \texttt{M$n$.c}] \,.
+%\]
+%Given an appropriate notion of refinement,
+%the correctness of CompCert
+%can then be stated as:
+%\[
+%  L_\kw{src} \refby L_\kw{tgt}
+%  \,.
+%\]
+%
+%%}}}
+
+\subsection{Transition systems} %{{{
+
+Language semantics are
+given as labelled transition systems (LTS),
+which characterize a program's behavior in terms of
+sequences of observable events
+taken from a fixed set $\mathbb{E}$.
+
+Schematically, a CompCert LTS
+is a tuple
+$L = \langle S, I, {\rightarrow}, F \rangle$
+consisting of
+a set of states $S$,
+a subset $I \subseteq S$ of initial states,
+a labelled transition relation
+${\rightarrow} \subseteq S \times \mathbb{E}^* \times S$,
+and a set
+$F \subseteq S \times \kw{int}$
+of final states associated with exit statuses.
+The relation~$s \stackrel{t}{\rightarrow} s'$
+indicates that the state $s$ may transition to the state $s'$
+with the externally observable interaction $t \in \mathbb{E}^*$.
+
+The execution of $L$ starts by selecting an initial state $s_0$,
+then uses the transition relation to repeatedly update the state,
+until a final state is reached:
+\[
+  I \ni s_0
+  \xrightarrow{t_1} s_1
+  \xrightarrow{\epsilon} s_2
+  \xrightarrow{t_2} s_3
+  \mathrel{F} r
+\]
+Roughly speaking,
+the externally observable behavior of the program
+consists of the sequence of events generated by transitions
+($t_1 t_2$ in the execution above),
+together with the exit status of the process
+($r$ in the execution above).
+See the next section for a more detailed account.
+
+Note that nondeterministic choices
+are potentially involved at every step of the execution:
+the selection of an initial state from the set $I$,
+the selection of a possible transition $\{ (t, s') \mid s \xrightarrow{t} s' \}$,
+and the selection of an outcome $\{ r \mid s \mathrel{F} r \}$.
+If there is a possible transition out of a final state $s$,
+there will also be a choice of whether the execution should terminate
+or continue.
+
+The angelic, demonic, or mixed nature of these choices
+is key to understanding CompCert's
+notions of \emph{determinacy} and \emph{receptiveness}
+of transition systems,
+and the distinction and correspondence between
+CompCert's notions of \emph{forward} and \emph{backward} simulations.
+
+%}}}
+
+\subsection{Behaviors} %{{{
+
+I outlined above the execution of a labelled transition system
+in terms of terminating traces.
+The model used in CompCert is more general,
+and defines four kinds of behaviors:
+\begin{itemize}
+\item As before, an execution reaching a final state is said to
+    \emph{terminate}.
+    For example,
+    the following execution generates
+    the event trace $t_1 t_2 \cdots t_{n-1}$
+    and terminates with status $r$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \mathrel{F} r
+    \]
+    I will write this behavior as
+    \[
+      t_1 t_2 \cdots t_{n-1} \Downarrow r
+      \,.
+    \]
+\item An execution reaching
+    an infinite sequence of $\epsilon$ transitions
+    is said to \emph{silently diverge}.
+    The following execution diverges after
+    generating the trace $t_1 t_2 \cdots t_{n-1}$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \stackrel{\epsilon}{\rightarrow}
+          s_{n+1} \stackrel{\epsilon}{\rightarrow}
+          \cdots
+    \]
+    I will write the corresponding behavior as
+    \[
+      t_1 t_2 \cdots t_{n-1} \Uparrow
+      \,.
+    \]
+\item By contrast,
+    infinite executions which keep interacting
+    are said to exhibit \emph{reactive} behavior.
+    The following execution
+    is reactive if and only if
+    $\forall i \bdot \exists j \ge i \bdot t_j \ne \epsilon$:
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          s_3 \stackrel{t_3}{\rightarrow}
+          \cdots
+    \]
+    Then the behavior of the transition system
+    is represented by the infinite sequence
+    \[
+      t_1 t_2 t_3 \cdots
+      \,.
+    \]
+\item Finally, an execution which reaches a stuck state
+    is said to \emph{go wrong}. It will have the shape
+    \[
+        I \ni s_1 \stackrel{t_1}{\rightarrow}
+          s_2 \stackrel{t_2}{\rightarrow}
+          \cdots \stackrel{t_{n-1}}{\rightarrow}
+          s_n \,,
+    \]
+    with no $t, s'$ such that
+    $s_n \stackrel{t}{\rightarrow} s'$
+    and no $r$ such that $s_n \mathrel{F} r$.
+    The corresponding, partially defined behavior is written
+    \[
+      t_1 t_2 \cdots t_{n-1} \lightning
+      \,.
+    \]
+    It can be refined by any behavior
+    admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
+\end{itemize}
+A transition system with no initial state ($I = \varnothing$)
+immediately goes wrong.
+In this case,
+the transition system will admit the single undefined behavior
+$\epsilon \lightning$.
+
+Summing up,
+the traces used by CompCert to define
+the possible behaviors of transition systems
+are taken from the following language:
+\[
+  b \in \mathbb{B} =
+    \mathbb{E}^*
+      \{ {\Downarrow} r, {\Uparrow}, {\lightning} \mid r \in \kw{int} \}
+      \cup
+    \mathbb{E}^\omega
+  \,.
+\]
+I will write
+${\refby_\lightning} \subseteq \mathbb{B} \times \mathbb{B}$
+for CompCert's notion of \emph{behavior improvement},
+which allows behaviors which go wrong to
+be refined by more defined ones.
+It can be defined as
+\[
+  {\refby_\lightning} := \{ (b, b) \mid b \in \mathbb{B} \}
+    \cup \{ (t \lightning, t b) \mid
+            t \in \mathbb{E}^*, b \in \mathbb{B} \}
+  \,.
+\]
+Then the overall external behavior
+of a transition system $L$
+is characterized
+as a set $\kw{Beh}(L) \subseteq \mathbb{B}$
+of possible individual behaviors.
+In the remainder of this section I will describe
+the techniques used in CompCert to define and establish
+corresponding notions of refinement.
+
+%I will often simply write $b \in L$
+%to mean that the transition system $L$
+%admits the behavior $b$,
+%overlooking the distinction between $L$
+%and the set of behaviors it admits.
+
+%}}}
+
+\subsection{Events} %{{{
+
+The events used in the traces above are taken from the following set:
+\[
+  e \in \mathbb{E} ::=
+    \kw{syscall}[u, \vec{v}]/v \mid
+    \kw{vload}[i, o]/v \mid
+    \kw{vstore}[i, o, v] \mid
+    \kw{annot}[u, \vec{v}]
+\]
+They correspond to system calls ($\kw{syscall}$),
+volatile loads and stores ($\kw{vload}$, $\kw{vstore}$),
+and annotations ($\kw{annot}$).
+The data involved
+are strings ($u \in \kw{string}$),
+global identifiers ($i \in \kw{ident}$),
+pointer offsets ($o \in \mathbb{Z}$) and
+event values ($v \in \kw{eval}$, $\vec{v} \in \kw{eval}^*$).
+Crucially,
+these data are invariant between the source and target programs,
+so that the corresponding traces can be compared directly.
+For the purposes of this discussion,
+the exact nature and use of these events
+are not important,
+but they correspond to the external interactions
+which need to be preserved between the execution
+of the source and target program.
+
+Events involve both an output component,
+chosen by the program and
+written here to the left of the oblique bar ($/$),
+and a (possibly trivial) input component,
+chosen by the environment and written to the right of the oblique.
+In CompCert,
+this distinction is formulated as a ``$\kw{match\_traces}$'' relation
+which identifies events that have the same output component.
+It can be described as the smallest equivalence relation $\simeq$
+containing:
+\[
+  \kw{syscall}[u, \vec{v}]/v_1' \simeq
+  \kw{syscall}[u, \vec{v}]/v_2'
+  \qquad
+  \kw{vload}[i, o]/v_1 \simeq
+  \kw{vload}[i, o]/v_2
+\]
+Equivalently,
+the set of events can be described as an effect signature
+and used to interpret the behaviors of transition systems
+in terms of strategies.
+
+%}}}
+
+\subsection{Games} \label{sec:sem:games} %{{{
+
+Although CompCert semantics
+are not formulated explicitly as game semantics,
+understanding them in that framework
+will be useful
+when we consider the extensions I present in \S\ref{sec:compcert-ext}
+and in Chapter~\ref{sec:compcerto}.
+Event traces correspond to an interaction
+over the signature
+\begin{align*}
+  \mathcal{E} := \{ {}
+    &\kw{syscall} :
+      \kw{string} \times \kw{eval}^* \rightarrow \kw{eval},
+      \\
+    &\kw{vload} :
+      \kw{ident} \times \mathbb{Z} \rightarrow \kw{eval},
+      \\
+    &\kw{vstore} :
+      \kw{ident} \times \mathbb{Z} \times \kw{eval} \rightarrow \mathbbm{1},
+      \\
+    &\kw{annot} :
+      \kw{string} \times \kw{eval}^* \rightarrow \mathbbm{1}
+  \}
+  \,.
+\end{align*}
+%The set of events can then be recovered as
+%$
+%  \mathbb{E} :=
+%    \{ m / n \mid (m \mathbin: N) \in \mathcal{E} \wedge n \in N \}
+%$.
+Likewise,
+the initial invocation of a program
+and its ultimate outcome can
+be understood as an interaction over the signature
+$
+  \mathcal{W} := \{
+    {*} : \{ {\Downarrow} r, {\Uparrow} \mid r \in \kw{int} \}
+  \}
+$.
+Overall,
+the external behavior of
+a CompCert transition system
+corresponds to a strategy
+for the game $\mathcal{E} \rightarrow \mathcal{W}$.
+
+However,
+the precise behavior of a transition system
+as a strategy of this kind
+depends on how nondeterminism is interpreted:
+\begin{itemize}
+  \item
+    The angelic interpretation
+    is used implicitly in the context of
+    \emph{forward simulations},
+    which entail a \emph{trace inclusion} property
+    for the corresponding sets of behaviors.
+  \item
+    The demonic interpretation
+    is used implicitly in the context of
+    \emph{backward simulations},
+    which entail
+    under some \emph{receptiveness} assumptions
+    a corresponding \emph{trace containment} property.
+\end{itemize}
+This is outlined in Table~\ref{tbl:compcertref}
+and explained in the following sections.
+
+\begin{table} %{{{
+  \centering
+  \begin{tabular}{ccc}
+    \hline
+    Nondeterminism
+      & Transition systems
+      & Sets of traces \\
+    \hline
+    Angelic interpretation
+      & Forward simulations ($\le$)
+      & Trace inclusion ($\mathcal{P}^\le(\refby_\lightning)$) \\
+    Demonic interpretation
+      & Backward simulations ($\ge$)
+      & Trace containment ($\mathcal{P}^\ge(\refby_\lightning)$) \\
+    \hline
+  \end{tabular}
+  \caption{Notions of refinement in CompCert semantics}
+  \label{tbl:compcertref}
+\end{table}
+%}}}
+
+%}}}
+
+\subsection{Angelic interpretation} \label{sec:sem:fsim} %{{{
+
+Under an angelic interpretation of nondeterminism,
+we look at the choice between two possible transitions
+$
+  s \stackrel{t_1}{\longrightarrow} s_1
+$
+and
+$
+  s \stackrel{t_2}{\longrightarrow} s_2
+$
+purely as a choice of the \emph{environment}.
+In terms of sets of behaviors,
+the corresponding notion of refinement
+is the trace inclusion relation
+$\mathcal{P}^\le({\refby_\lightning})$,
+which guarantees that
+all choices available to the environment in the source program
+are available in the target program as well.
+
+Formally speaking,
+the angelic treatment of nondeterminism
+yields a more homogeneous theory
+than its demonic counterpart.
+A behavior $b \in \mathbb{B}$ can be interpreted
+in $\mathcal{I}_\mathcal{E}$ as:
+\begin{align*}
+  \llbracket {\Downarrow}r \rrbracket &:= \eta({\Downarrow} r) &
+  \llbracket {\lightning} \rrbracket &:= \bot \\
+  \llbracket {\Uparrow} \rrbracket &:= \eta({\Uparrow}) &
+  \llbracket m / n \cdot b \rrbracket &:=
+    m n \llbracket b \rrbracket
+\end{align*}
+Then $\kw{Beh}(L)$ can be interpreted as a strategy
+in $\mathcal{E} \rightarrow \mathcal{W}$ given by:
+\[
+  \llbracket \kw{Beh}(L) \rrbracket^* :=
+    \bigsqcup_{b \in \kw{Beh}(L)} \llbracket b \rrbracket
+  \,,
+\]
+where $* \in \mathcal{W}^\que$ denotes the only question
+in the signature $\mathcal{W}$.
+Trace inclusion and refinement then
+coincide in the following way:
+\[
+  \kw{Beh}(L_1)
+  \ifr{\mathcal{P}^\le({\refby_\lightning})}
+  \kw{Beh}(L_2)
+  \: \Leftrightarrow \:
+  \llbracket \kw{Beh}(L_1) \rrbracket
+  \refby
+  \llbracket \kw{Beh}(L_2) \rrbracket
+  \,.
+\]
+
+Often,
+the angelic interpretation of nondeterminism
+is also the most convenient one
+when it comes to proving refinement between
+two transition systems,
+as in the case of correctness proofs for
+a specific compiler pass.
+For transition systems,
+correctness can be proved using simulations of the following kind,
+which assert that every transition of the source program
+is matched by a corresponding transition sequence in the target program.
+Note that the target sequence may be empty,
+but in order to ensure the preservation of silent divergence,
+we must ensure this happens for at most
+finitely many steps in the source program.
+
+\begin{definition}
+A \emph{forward simulation}
+of a transition system
+$L_1 = \langle S_1, I_1, {\rightarrow}_1, F_1 \rangle$
+by a transition system
+$L_2 = \langle S_2, I_2, {\rightarrow}_2, F_2 \rangle$
+is given by a relation $R \subseteq W \times S_1 \times S_2$
+indexed by a well-founded order $(W, {<})$
+such that the following properties hold:
+\begin{itemize}
+  \item For all $s_1 \in I_1$,
+    there exist $i \in W$ and $s_2 \in I_2$
+    such that $(i, s_1, s_2) \in R$.
+  \item For all $(i, s_1, s_2) \in R$
+    and for every transition
+    $s_1 \mathrel{\smash{\stackrel{t}{\rightarrow}}_1} s_1'$,
+    there exist $i' \in W$ and $s_2' \in S_2$
+    such that $(i', s_1', s_2') \in R$ and either
+    $s_2 \mathrel{\smash{\stackrel{t}{\rightarrow}}_2^+} s_2'$ or
+    $s_2 = s_2' \:\wedge\: i' < i$.
+  \item For all $(i, s_1, s_2) \in R$
+    and every result $r$ such that $s_1 \mathrel{F_1} r$,
+    there exists $s_2'$ such that
+    $s_2 \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}_2^*} s_2'$ and
+    $s_2' \mathrel{F_2} r$.
+\end{itemize}
+I will write $L_1 \le L_2$.
+\end{definition}
+
+CompCert also includes in \texttt{common/Smallstep.v}
+a number of simplified formulations
+which can be used to establish forward simulations
+in simpler situations.
+Forward simulations imply trace inclusion:
+\[
+  L_1 \le L_2
+  \: \Rightarrow \:
+  \kw{Beh}(L_1) \ifr{\mathcal{P}^\le(\refby_\lightning)} \kw{Beh}(L_2)
+\]
+This is proved as \texttt{forward\_simulation\_behavior\_improves}
+in \texttt{common/Behaviors.v}.
+
+While the angelic interpretation
+of nondeterminism is the most convenient one to work with,
+it does not correspond to the intended interpretation
+of CompCert transition systems,
+detailed in the next section,
+where multiple possible transitions correspond
+primarily to choices of the system.
+However,
+under some conditions
+the two interpretations coincide.
+This makes it possible to use forward simulations
+to prove semantic preservation properties
+for most of CompCert's compilation passes.
+
+%}}}
+
+\subsection{Demonic interpretation} %{{{
+
+Under a demonic interpretation of nondeterminism,
+we look at the choice between two possible transitions
+$s \stackrel{t_1}{\longrightarrow} s_1$ and
+$s \stackrel{t_2}{\longrightarrow} s_2$
+as a choice of the \emph{system}.
+In terms of traces,
+the corresponding notion of refinement
+is the \emph{trace containment} relation
+$\mathcal{P}^\ge({\refby_\lightning})$,
+which guarantees that all possible behaviors of the target program
+are permitted by the specification (source program).
+
+This elegant story is complicated by two phenomena
+involving angelic as well as demonic nondeterminism:
+\begin{itemize}
+  \item
+    While the choice between multiple possible transitions
+    should be interpreted as demonic,
+    stuck states should still denote undefined behaviors.
+    In other words,
+    when there are \emph{no} possible transitions,
+    the ``choice'' between them should be interpreted
+    angelically as $\bot$,
+    rather than demonically as $\top$.
+  \item
+    When interactions with the environment are involved
+    in the form of non-empty event traces,
+    \emph{outputs} should be interpreted as demonic,
+    but \emph{inputs} should still correspond to
+    choices of the environment.
+\end{itemize}
+The first phenomenon creates a discontinuity
+in the interpretation of sets of possible actions,
+as illustrated by the following example.
+
+\begin{example} %{{{
+Consider the following family of transition systems,
+where the initial state $\kw{i}$ may admit zero, one, or more
+transitions to the final state $\kw{f}$:
+\begin{align*}
+  S &:= \{ \kw{i}, \kw{f} \} &
+  L_0 &:= \{ S, I, {\rightarrow_0}, F \} &
+  {\rightarrow_0} &:= \varnothing \\
+  I &:= \{ \kw{i} \} &
+  L_1 &:= \{ S, I, {\rightarrow_1}, F \} &
+  {\rightarrow_1} &:= {\rightarrow_0} \cup
+    \{ (\kw{i}, e_1, \kw{f}) \} \\
+  F &:= \{ (\kw{f}, 42) \} &
+  L_2 &:= \{ S, I, {\rightarrow_2}, F \} &
+  {\rightarrow_2} &:= {\rightarrow_1} \cup
+    \{ (\kw{i}, e_2, \kw{f}) \} \\
+  & & \vdots \: & & \vdots \:\:
+\end{align*}
+The corresponding sets of behaviors are as follows:
+%\begin{align*}
+%  \kw{Beh(L_0)} &= \{ \lightning \} \\
+%  \kw{Beh(L_1)} &= \{ e_1 \Downarrow 42 \} \\
+%  \kw{Beh(L_2)} &= \{ e_1 \Downarrow 42, \: e_2 \Downarrow 42 \} \\
+%  \vdots \quad & \hspace{9em} \ddots
+%\end{align*}
+As a consequence of the discontinuity introduced by $\lightning$,
+we obtain the ordering
+\[
+  L_0 \refby \cdots \refby L_3 \refby L_2 \refby L_1
+\]
+where $L_0$ is pushed to the bottom.
+\end{example}
+%}}}
+
+While so far I have only mentioned
+choices between transitions
+introduced by the step relation $\rightarrow$,
+initial and final states also participate in this phenomenon.
+In general,
+we can consider the way CompCert interprets nondeterminism
+in a set of possible actions $A$,
+depending on the set's cardinality.
+When $|A| \le 1$, nondeterminism is interpreted as angelic:
+\[
+  \bigsqcup A
+\]
+When $|A| \ge 1$, nondeterminism is interpreted as demonic:
+\[
+  \bigsqcap A
+\]
+In other words, CompCert uses the following form of
+\emph{discontinuous choice}:
+\[
+  \bigoplus A \: := \:
+  \begin{cases}
+    \bot & \mbox{if } A = \varnothing \\
+    \bigsqcap A & \mbox{otherwise}
+  \end{cases}
+\]
+Concretely, this manifests in the form of additional
+\emph{safety} clauses
+in the definition of backward simulations
+as given below.
+A state $s \in S$
+in a transition system $\langle S, I, {\rightarrow}, F \rangle$
+is called \emph{safe}
+if it does not go wrong.
+A state $s \in S$
+\emph{goes wrong} if there exists
+$s \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}^*} s'$
+such that $s'$ is stuck
+(it has no successor and is not a final state).
+
+\begin{definition} %{{{
+A \emph{backward simulation}
+of a transition system
+$L_1 = \langle S_1, I_1, {\rightarrow}_1, F_1 \rangle$
+by a transition system
+$L_2 = \langle S_2, I_2, {\rightarrow}_2, F_2 \rangle$
+is given by a relation $R \subseteq W \times S_1 \times S_2$
+indexed by a well-founded order $(W, {<})$
+such that the following properties hold:
+\begin{itemize}
+  \item If $I_1 \ne \varnothing$, then $I_2 \ne \varnothing$.
+  \item If $I_1 \ne \varnothing$ and $s_2 \in I_2$,
+    there exist $i \in W$ and $s_1 \in I_1$
+    such that $(i, s_1, s_2) \in R$.
+  \item For all $(i, s_1, s_2) \in R$
+    with $s_1$ a \emph{safe} state,
+    $s_2$ either has a successor or
+    is a final state.
+  \item For all $(i, s_1, s_2) \in R$
+    with $s_1$ a \emph{safe} state,
+    and for every transition
+    $s_2 \mathrel{\smash{\stackrel{t}{\rightarrow}}_2} s_2'$,
+    there exist $i' \in W$ and $s_1' \in S_1$
+    such that $(i', s_1', s_2') \in R$ and either
+    $s_1 \mathrel{\smash{\stackrel{t}{\rightarrow}}_1^+} s_1'$ or
+    $s_1 = s_1' \:\wedge\: i' < i$.
+  \item For all $(i, s_1, s_2) \in R$
+    with $s_1$ a \emph{safe} state,
+    and every result $r$ such that $s_2 \mathrel{F_2} r$,
+    there exists $s_1'$ such that
+    $s_1 \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}_1^*} s_1'$ and
+    $s_1' \mathrel{F_1} r$.
+\end{itemize}
+I will write $L_1 \ge L_2$.
+\end{definition}
+%}}}
+
+As with forward simulations,
+stronger but simplified versions
+of these criteria
+are provided in \texttt{common/Smallstep.v}.
+Backward simulations imply trace containment:
+\[
+  L_1 \ge L_2
+  \: \Rightarrow \:
+  \kw{Beh}(L_1) \ifr{\mathcal{P}^\ge(\refby_\lightning)} \kw{Beh}(L_2)
+\]
+This is proved as \texttt{backward\_simulation\_behavior\_improves}
+in \texttt{common/Behaviors.v}.
+
+%}}}
+
+\subsection{Dual interpretation} %{{{
+
+To formulate a proper game semantics for
+CompCert transition systems,
+we must also address the distinction between
+outputs and inputs mentioned
+at the beginning of the previous section.
+In fact,
+this underscores that
+the notions of refinement
+formulated in CompCert
+are only satisfactory under some conditions:
+\begin{itemize}
+  \item
+    The trace inclusion property
+    $\kw{Beh}(L_1)
+     \mathrel{\mathcal{P}^\le(\refby_\lightning)}
+     \kw{Beh}(L_2)$
+    is only appropriate when
+    the target transition system $L_2$
+    is \emph{determinate},
+    in other words \emph{only} contains nondeterminism
+    over environment inputs.
+  \item
+    The trace containment property
+    $\kw{Beh}(L_1)
+     \mathrel{\mathcal{P}^\ge(\refby_\lightning)}
+     \kw{Beh}(L_2)$
+    is only appropriate when
+    the target transition system $L_2$
+    is \emph{receptive},
+    in other words is \emph{maximally} nondeterministic
+    over environment inputs.
+\end{itemize}
+By eliminating variation in one kind of nondeterminism,
+these conditions allow trace refinement properties
+to focus on the other kind
+and to work in one direction only.
+
+Expressing these properties at the level of individual states
+is made complicated when transitions can include
+traces of variable and mismatching lengths.
+For this reason the corresponding definitions below
+require transitions to have at most one event.
+
+\begin{definition}[Determinacy and receptiveness] %{{{
+A transition system
+$\langle S, I, {\rightarrow}, F \rangle$
+has \emph{single-event transitions}
+when $|t| \le 1$ for all $s \stackrel{t}{\rightarrow} s'$.
+
+A single-event transition system is called
+\emph{determinate}
+if whenever
+$s \stackrel{e_1}{\longrightarrow} s_1$ and
+$s \stackrel{e_2}{\longrightarrow} s_2$
+the properties $e_1 \simeq e_2$ and $e_1 = e_2 \Rightarrow s_1 = s_2$ hold.
+
+A single-event transition system is called
+\emph{receptive}
+if for all transitions $s \stackrel{e_1}{\longrightarrow} s_1$
+and all events $e_2 \simeq e_1$,
+there exists $s_2$ such that
+$s \stackrel{e_2}{\longrightarrow} s_2$.
+\end{definition}
+%}}}
+
+\paragraph{Game semantics}
+
+For a single-event transition system
+$L = \langle S, {\rightarrow}, I, F \rangle$,
+the associated strategy
+can be formulated as follows.
+First,
+to compute the behavior
+$\llbracket s \rrbracket \in \mathcal{I}_\mathcal{E}(\mathcal{W}^\ans)$
+of a state $s \in S$,
+we examine the sets of possible actions
+which can be taken by $L$
+for the state $s$,
+then perform a discontinuous choice between them.
+This is formalized as the least $\llbracket s \rrbracket$
+satisfying the equations:
+\begin{align*}
+  \llbracket s \rrbracket &=
+    \bigoplus \:
+    \big(
+      A_\epsilon(s) \cup A_\kw{int}(s) \cup
+      A_\Downarrow(s) \cup A_\Uparrow(s)
+    \big)
+  \\
+  A_\epsilon(s) &=
+    \{ \llbracket s' \rrbracket \mid s \stackrel{\epsilon}{\rightarrow} s' \}
+  \\
+  A_\kw{int}(s) &=
+    \Big\{
+      n \mathbin\leftarrow m \mathbin;
+      \bigsqcap_{s \stackrel{m/n}{\longrightarrow} s'}
+	\llbracket s' \rrbracket
+    \mathrel{\Big\vert}
+      m \in \mathcal{E}^\que \wedge
+      \exists n \, s' \bdot s \stackrel{m/n}{\longrightarrow} s'
+    \Big\}
+  \\
+  A_\Downarrow(s) &=
+    \{ \eta({\Downarrow} r) \mid r \in \kw{int} \wedge s \mathrel{F} r \}
+  \\
+  A_\Uparrow(s) &=
+    \{ {\Uparrow} \mid s \text{ silently diverges} \}
+\end{align*}
+Note that since $\mathcal{I}_\mathcal{E}(\mathcal{W}^\ans)$
+is a complete lattice,
+we can compute the applicable fixpoint without difficulty.
+Then,
+the overall behavior
+$\llbracket L \rrbracket : \mathcal{E} \rightarrow \mathcal{W}$
+can be obtained by defining
+\[
+  \llbracket L \rrbracket^* = \bigoplus_{s \in I} \llbracket s \rrbracket
+  \,.
+\]
+Again, here $*$ denotes the only question in the signature $\mathcal{W}$.
+
+\paragraph{Converting forward to backward simulations}
+
+When $L_1$ is receptive and $L_2$ is determinate,
+a forward simulation $L_1 \le L_2$ can be converted
+into a backward simulation $L_1 \ge L_2$.
+This is proved in CompCert
+as \texttt{forward\_to\_backward\_simulation}
+in the file \texttt{common/Smallstep.v}.
+Note that in this case,
+the states of $L_2$ which correspond
+to safe states of $L_1$ will be receptive as well,
+so that the backward simulation will entail refinement:
+\[
+  L_1 \le L_2 \: \Rightarrow \:
+  L_1 \ge L_2 \: \Rightarrow \:
+  \llbracket L_1 \rrbracket \sqsubseteq \llbracket L_2 \rrbracket
+\]
+
+%}}}
+
+%\subsection{Refinement} %{{{
+%
+%Then, at the level of transition systems
+%and sets of behaviors,
+%CompCert uses the various notions of refinement
+%outlined in Table~\ref{tbl:compcertref}.
+%
+%These notions of refinement are related in various ways.
+%For example,
+%most passes of CompCert are verified in terms of forward simulations.
+%Because of properties of the languages involved,
+%these forward simulations can be converted to backward simulations,
+%which is the paradigm used to formulate
+%the principal correctness theorem of CompCert.
+%This backward simulation is then used to derive
+%various consequences,
+%including a trace containment property.
+%
+%The differences and relationships
+%between these various forms of refinement
+%are fairly subtle,
+%as are the constraints on transition systems
+%which are used in CompCert.
+%However,
+%the conceptual framework of
+%game semantics and dual nondeterminism
+%provides a useful lens
+%through which to understand them.
+%
+%Refinement is defined mostly as trace containment,
+%but the refinement of undefined behaviors
+%must be taken into account as well.
+%Writing the prefix relation between individual behaviors as
+%${\pref} \subseteq \mathbb{B} \times \mathbb{B}$,
+%this notion of refinement can be defined as:
+%\[
+%  L_1 \refby L_2
+%  \: \Leftrightarrow \:
+%  \forall b_2 \in L_2 \bdot
+%  \exists b_1 \in L_1 \bdot
+%  b_1 \pref b_2
+%\]
+%Every behavior $b_2 \in L_2$ of the target program
+%refines a corresponding behavior $b_1 \in L_1$ of the source program.
+%In other words,
+%the behaviors of the target program must largely be contained
+%within the behaviors of the source program,
+%but when the source program goes wrong
+%the target program is free to continue with any behavior.
+
+%}}}
+
+%\subsection{Nondeterminism} %{{{
+%
+%Although
+%the interpretation of transition systems presented above
+%is not typically stated in terms of angelic and demonic nondeterminism,
+%it can be understood as exhibiting both.
+%
+%For the most part,
+%the interpretation is demonic,
+%as underscored by the trace containment aspect
+%of the definition of $\refby$.
+%However,
+%undefined behaviors introduce a discontinuity in this model.
+%
+%As we will see,
+%CompCert's forward simulations
+%correspond to the angelic interpretation $\bigsqcup A$,
+%whereas backward simulations
+%correspond to the discontinuous interpretation $\bigoplus A$.
+%This discontinuity is at the root of the \emph{safety} conditions
+%found in CompCert's definition of backward simulations
+%(\S\ref{sec:bsim}).
+%For determinate transition systems,
+%$A$ will always be of size at most $1$,
+%so that the two interpretations coincide.
+%
+%%}}}
+
+%}}}
+
+\section{Abstraction in Trace Semantics} %{{{
+
+\subsection{Motivation}
+
+The simulations used in CompCert
+to prove the correctness of compilation phases
+are ultimately shown to be sound
+with respect to \emph{trace containment},
+meaning that any event trace which can be generated by the target program
+can already be generated by the source program.
+In the compositional extension CompCertO,
+transition systems and simulations
+are modified to take into account
+the interaction between a program component and its environment.
+However, CompCertO does not extend the trace semantics
+used in CompCert to these \emph{open} transition systems and simulations.
+
+The principal underlying difficulty is that
+in the setting of CompCertO's open semantics,
+the interactions of the source and target program
+may not be identical.
+For example, C- and assembly-level functions calls
+are described in very different ways:
+C-level calls name a function and enumerate its arguments,
+whereas assembly-level calls only consist of register and memory states.
+The correspondence between the two is expressed by
+a \emph{simulation convention},
+which formalizes the mashalling of arguments
+into registers and onto the stack,
+and other aspects of the C calling convention used by the compiler.
+
+This correspondence is not one-to-one:
+many different assembly states may correspond to a given C call,
+as the caller is free to choose arbitrary values
+for the registers which do not encode arguments,
+and for the irrelevant portions of the stack.
+Worse yet,
+when the function returns,
+the \emph{callee} is in turn free to make its own choices,
+regarding for example the values stored in caller-save registers.
+In other words,
+simulation conventions inherently feature \emph{dual} nondeterminism,
+combining \emph{angelic} (environment) choices for incoming calls
+and \emph{demonic} (system) choices for the corresponding returns.
+The polarity is reversed for outgoing calls.
+Under the trace containment relation $\supseteq$,
+the trace semantics of CompCert
+can accomodate demonic choices as the union of sets,
+but cannot represent angelic choices with the same generality.
+In addition,
+while CompCert uses a fixed notion of
+event and interaction with the environment,
+the \emph{language interfaces} of CompCertO
+provide a rudimentary form of typing
+for open transition systems.
+
+In this section,
+we construct a trace semantics capable of accomodating
+dual nondeterminism.
+The type structure of our model
+is inspired by Reddy's work on \emph{object-based semantics},
+and provides a fine-grained control of
+the shape of traces.
+
+%\section{Trace specifications}
+%
+%\begin{definition}
+%A \emph{trace specification} over a set $A$ of \emph{tokens}
+%is an downward-closed set of subsets of $A$.
+%\end{definition}
+%
+%Trace specifications are ordered under set inclusion.
+%
+%
+%
+%
+%\subsection{Overview} %{{{
+%
+%Features of the model:
+%\begin{itemize}
+%  \item Effect signatures as objects;
+%    add possible dagger but that could just be a flag
+%  \item Two-sided strategies as morphisms
+%  \item Dual nondeterminism
+%    (a deterministic subcategory can also be defined)
+%  \item Sum of signatures as tensor product
+%  \item Dagger comonad
+%\end{itemize}
+%Things we don't need to support for now:
+%\begin{itemize}
+%  \item Reentrancy
+%  \item More sophisticated games
+%\end{itemize}
+%
+%%}}}
+%
+%\subsection{Delineating the model} %{{{
+%
+%The objects of the category must contain at least:
+%\[
+%  A ::= E \mid A \rhd B \mid {\dagger}A
+%\]
+%where $E$ is an effect signature.
+%There are two options:
+%\begin{enumerate}
+%  \item Maybe the simplest way would be to use the grammar above
+%    as the definition of objects.
+%  \item Effect signatures come with their own $\rhd$ and $\dagger$,
+%    but it's not clear it can be used as-is
+%\end{enumerate}
+%Once signatures have been defined,
+%it is useful to associate endofunctor to them
+%along the lines:
+%\begin{align*}
+%  [E] \:&=\: X \mapsto \sum_{m \in E} \prod_{n \in \mathrm{ar}(m)} X
+%  \\
+%  [A \rhd B] \:&=\: [A] \circ [B]
+%  \\
+%  [{\dagger}A] \:&=\: [A]^* \:=\: X \mapsto \mu Y \cdot [A] Y + X
+%\end{align*}
+%With this in mind we will expect the homomorphisms
+%to define natural transformations:
+%\[
+%  [A \multimap B] : 
+%  \forall X \cdot B X \rightarrow A X
+%\]
+%For the case $E \multimap F$ of signatures,
+%this is the same as specifying
+%a family $(e^m)_{m \in F}$ with $e^m \in E \big( \mathrm{ar}(m) \big)$,
+%in other word mapping each operation $m \in F$
+%to an operation $q \in E$ and
+%each outcome $r \in \mathrm{ar}(q)$
+%to an outcome $n \in \mathrm{ar}(m)$.
+%
+%We could call those the \emph{linear} maps of our category,
+%with the expectation that a \emph{regular} map
+%$f^\dagger : {\dagger} A \multimap {\dagger} B$
+%would in addition be a \emph{monad homomorphism}
+%between the monads $[B]^*$ and $[A]^*$
+%and could always be defined in terms of
+%$f : {\dagger}A \multimap B$.
+%
+%That's the basic story for simple algebraic games.
+%Then we can use my ACT 2021 techniques and
+%work over $\mathbf{DCPO}_{\bot!}$ or $\mathbf{CDLat}$
+%by using completions of term models,
+%and by tweaking the endofunctors
+%to give the result a game semantics flavor
+%rather than a coherence space flavor.
+%
+%%}}}
+
+\subsection{Double category} %{{{
+
+To prepare the way for embedding simulation conventions,
+we can define a double category based on the model.
+The objects and horizontal morphisms
+are the same as before.
+The vertical morphisms of type $A \leftrightarrows B$
+are \emph{adjunctions} $f^* \dashv f_*$
+where $f^* : A \rightarrow B$ and $f_* : B \rightarrow A$
+such that:
+\[
+  \mathrm{id}_A \le f_* \circ f^*
+  \qquad \qquad
+  f^* \circ f_* \le \mathrm{id}_B
+\]
+The 2-cell $x \le_{f \rightarrow g} y$
+exists for
+$x : A_1 \rightarrow B_1$,
+$y : A_2 \rightarrow B_2$,
+$f^* \dashv f_* : A_1 \rightarrow A_2$ and
+$g^* \dashv g_* : B_1 \rightarrow B_2$
+when one of the following equivalent conditions hold:
+\begin{equation} \label{eqn:gc}
+  x \le_{f \rightarrow g} y
+  \quad :\Leftrightarrow \quad
+  g^* \circ x \le y \circ f^*
+  \quad \Leftrightarrow \quad
+  x \circ f_* \le g_* \circ y
+\end{equation}
+
+This definitions makes sense in any order-enriched category,
+and is a special case of a general construction on 2-categories
+(see the nlab entries \emph{double category} and \emph{mate}).
+Reading it in the context of our game model,
+the lower adjoints $f^*$ and $g^*$
+translate from their incoming low-level interactions
+to their outgoing high-level interactions,
+and the upper adjoints $f_*$ and $g_*$
+translate the other way around.
+
+Complete homomorphisms have both upper and lower adjoints,
+In completely distributive lattices
+they are themselves complete?
+which makes it easy to define vertical morphisms
+from relations (as spans) etc.
+
+Could be depicted using elbow string diagrams.
+
+%}}}
+
+%}}}
+
+\section{Certified Abstraction Layers}
+
+\section{Implementing CAL}
+
+\section{Related Work}
+
+\appendix
 
 \section*{Plan} %{{{
 
@@ -541,134 +1770,6 @@ the simulation relation no longer appears as an explicit
 parameter in correctness.
 
 %}}}
-
-%}}}
-
-\section{Mechanized Game Semantics} %{{{
-
-\subsection{Overview} %{{{
-
-Features of the model:
-\begin{itemize}
-  \item Effect signatures as objects;
-    add possible dagger but that could just be a flag
-  \item Two-sided strategies as morphisms
-  \item Dual nondeterminism
-    (a deterministic subcategory can also be defined)
-  \item Sum of signatures as tensor product
-  \item Dagger comonad
-\end{itemize}
-Things we don't need to support for now:
-\begin{itemize}
-  \item Reentrancy
-  \item More sophisticated games
-\end{itemize}
-
-%}}}
-
-\subsection{Delineating the model} %{{{
-
-The objects of the category must contain at least:
-\[
-  A ::= E \mid A \rhd B \mid {\dagger}A
-\]
-where $E$ is an effect signature.
-There are two options:
-\begin{enumerate}
-  \item Maybe the simplest way would be to use the grammar above
-    as the definition of objects.
-  \item Effect signatures come with their own $\rhd$ and $\dagger$,
-    but it's not clear it can be used as-is
-\end{enumerate}
-Once signatures have been defined,
-it is useful to associate endofunctor to them
-along the lines:
-\begin{align*}
-  [E] \:&=\: X \mapsto \sum_{m \in E} \prod_{n \in \mathrm{ar}(m)} X
-  \\
-  [A \rhd B] \:&=\: [A] \circ [B]
-  \\
-  [{\dagger}A] \:&=\: [A]^* \:=\: X \mapsto \mu Y \cdot [A] Y + X
-\end{align*}
-With this in mind we will expect the homomorphisms
-to define natural transformations:
-\[
-  [A \multimap B] : 
-  \forall X \cdot B X \rightarrow A X
-\]
-For the case $E \multimap F$ of signatures,
-this is the same as specifying
-a family $(e^m)_{m \in F}$ with $e^m \in E \big( \mathrm{ar}(m) \big)$,
-in other word mapping each operation $m \in F$
-to an operation $q \in E$ and
-each outcome $r \in \mathrm{ar}(q)$
-to an outcome $n \in \mathrm{ar}(m)$.
-
-We could call those the \emph{linear} maps of our category,
-with the expectation that a \emph{regular} map
-$f^\dagger : {\dagger} A \multimap {\dagger} B$
-would in addition be a \emph{monad homomorphism}
-between the monads $[B]^*$ and $[A]^*$
-and could always be defined in terms of
-$f : {\dagger}A \multimap B$.
-
-That's the basic story for simple algebraic games.
-Then we can use my ACT 2021 techniques and
-work over $\mathbf{DCPO}_{\bot!}$ or $\mathbf{CDLat}$
-by using completions of term models,
-and by tweaking the endofunctors
-to give the result a game semantics flavor
-rather than a coherence space flavor.
-
-%}}}
-
-\subsection{Double category} %{{{
-
-To prepare the way for embedding simulation conventions,
-we can define a double category based on the model.
-The objects and horizontal morphisms
-are the same as before.
-The vertical morphisms of type $A \leftrightarrows B$
-are \emph{adjunctions} $f^* \dashv f_*$
-where $f^* : A \rightarrow B$ and $f_* : B \rightarrow A$
-such that:
-\[
-  \mathrm{id}_A \le f_* \circ f^*
-  \qquad \qquad
-  f^* \circ f_* \le \mathrm{id}_B
-\]
-The 2-cell $x \le_{f \rightarrow g} y$
-exists for
-$x : A_1 \rightarrow B_1$,
-$y : A_2 \rightarrow B_2$,
-$f^* \dashv f_* : A_1 \rightarrow A_2$ and
-$g^* \dashv g_* : B_1 \rightarrow B_2$
-when one of the following equivalent conditions hold:
-\begin{equation} \label{eqn:gc}
-  x \le_{f \rightarrow g} y
-  \quad :\Leftrightarrow \quad
-  g^* \circ x \le y \circ f^*
-  \quad \Leftrightarrow \quad
-  x \circ f_* \le g_* \circ y
-\end{equation}
-
-This definitions makes sense in any order-enriched category,
-and is a special case of a general construction on 2-categories
-(see the nlab entries \emph{double category} and \emph{mate}).
-Reading it in the context of our game model,
-the lower adjoints $f^*$ and $g^*$
-translate from their incoming low-level interactions
-to their outgoing high-level interactions,
-and the upper adjoints $f_*$ and $g_*$
-translate the other way around.
-
-Complete homomorphisms have both upper and lower adjoints,
-In completely distributive lattices
-they are themselves complete?
-which makes it easy to define vertical morphisms
-from relations (as spans) etc.
-
-Could be depicted using elbow string diagrams.
 
 %}}}
 
@@ -1264,7 +2365,6 @@ where $\iota_2$ is the projection to extract underlay state from $k_1$.
 
 \section{Conclusion}
 
-\appendix
 \newpage
 
 \noindent
