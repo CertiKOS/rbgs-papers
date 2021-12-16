@@ -10,11 +10,10 @@
 
 # Under preparation:
 
-- facilities statement (1 page)
-- data management plan (2 pages)
-- postdoc mentoring plan (1 page)   <--- TODO
+- facilities statement (1 page)     DONE
+- data management plan (2 pages)    DONE
 - collaboration plan (2 pages)      <--- TODO
-- BPC plan (3 pages)           
+- BPC plan (3 pages)                <--- TODO
 
 # Proposal Outline and TODOs
 
@@ -59,6 +58,17 @@ techniques:
 
 - Task 4: Verified Secure Compilation
     (CompCertOX + Full Abstraction + Robustly Secure Compilation)
+
+- Evaluation
+
+PIs should include a plan to evaluate the approaches developed as part
+of the Project Description. Appropriate methods will depend on the
+research area, topic, size and scope of the proposed project. Examples
+include, but are not limited to, peer review of developed theories and
+proofs, controlled experiments on appropriate
+simulators/emulators/testbeds, user studies, or prototype
+deployments. The plan should be appropriate for the size and scope of
+the project.
 
 - Education 
 
