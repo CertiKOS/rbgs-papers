@@ -1,19 +1,7 @@
-# Waiting from Echo:
-
-- budget
-- budget justification
-
 # Waiting from Jeremie:
 
 - his COA form
 - his NSF bio
-
-# Under preparation:
-
-- facilities statement (1 page)     DONE
-- data management plan (2 pages)    DONE
-- collaboration plan (2 pages)      <--- TODO
-- BPC plan (3 pages)                <--- TODO
 
 # Proposal Outline and TODOs
 
@@ -30,7 +18,6 @@ because of the following limitations:
 PI Shao's group has been leading multiple efforts on
 improving CompCert to address these features. However, they have
 not been combined together into a single compiler.
-
 There are a few interesting new opportunities on how to build
 a truly compositional CompCert that is end-to-end and security-presering.
   
@@ -49,17 +36,18 @@ techniques:
 
 - Introduction
 
-- Task 1: Compositonal Verified Compilation
-    (CompCertO + Nominal Memory Model)
+- Task 1: Compositional Verified Compilation via CompCertO
 
-- Task 2: End-To-End (Stack-Aware Assembler + CompCertELF)
+- Task 2: Verified Compilation with a Nominal Memory Model 
 
-- Task 3: CompCertOX (Supporting CAL & CCAL & Concurrency)
+- Task 3: Verified Compilation into ELF Object Files
+          (Stack-Aware Assembler via CompCertELF)
 
-- Task 4: Verified Secure Compilation
+- Task 4: Verified Secure Compilation 
     (CompCertOX + Full Abstraction + Robustly Secure Compilation)
 
-- Evaluation
+- Task 5: Evaluation and Integration
+    Talk more about supporting CCAL, CertiKOS, and DeepSEA
 
 PIs should include a plan to evaluate the approaches developed as part
 of the Project Description. Appropriate methods will depend on the
@@ -70,7 +58,11 @@ simulators/emulators/testbeds, user studies, or prototype
 deployments. The plan should be appropriate for the size and scope of
 the project.
 
-- Education 
+- Broader Impact
+
+  Talk about education plan and BPC 
+
+- Results from Prior NSF Support
 
 ## references cited (auto generated)
 
