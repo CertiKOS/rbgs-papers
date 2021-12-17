@@ -25,11 +25,8 @@ We propose to address these problems by focusing on the following
 techniques:
 
 - CompCertO + Nominal Stack-Aware CompCert
-
 - CompCertELF + CompCertO
-
 - CompCertOX for Certified Abstraction Layer
-
 - Fully Abstract Compilation and Robustly Safe Compilation
 
 ## project description (15 pages)
