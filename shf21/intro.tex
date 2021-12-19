@@ -1,0 +1,290 @@
+\section{Introduction}
+\label{sec:intro}
+
+Over the past decade, researchers have been able to formally verify
+various key components of computer systems, including compilers
+\cite{compcert,cakeml,vellvm}, operating system kernels
+\cite{sel4,popl15,osdi16}, file systems \cite{fscq} and processor
+designs \cite{safe,kami}.  Building on these successes, the research
+community is attempting to construct large-scale, heterogeneous
+certified systems by using formal specifications as interfaces between
+the correctness proofs of various components \cite{deepspec}.  The
+ongoing design of suitable semantic frameworks is an important step
+towards this goal.  However, incorporating certified compilers into
+frameworks of this kind presents a number of difficulties.
+
+\subsection{Compositional Compiler Correctness} %{{{
+
+Compiler correctness is often formulated as a
+\emph{semantics preservation} property,
+asserting that the semantics
+of the compiled program $\kw{C}(p)$
+are related in some particular way
+to the semantics
+of the source program $p$:
+\begin{equation} \label{eqn:semp}
+  \llbracket p \rrbracket_\kw{S} \sim
+  \llbracket \kw{C}(p) \rrbracket_\kw{T}
+  \,.
+\end{equation}
+For whole-program compilers,
+semantics preservation is straightforward enough.
+In CompCert,
+the semantics of the source and target programs
+are given as labeled transition systems,
+and the relation $\sim$ is a simulation property.
+
+However,
+practical applications involve
+program \emph{components} which we want to compile
+and verify separately from each other.
+In principle,
+the use of a compositional semantics
+enables the formulation of (\ref{eqn:semp})
+at the level of individual components.
+Unfortunately, traditional approaches to compositional semantics
+fare poorly in the presence of advanced language features,
+or of the kind of abstraction
+involved in the compilation process.
+For CompCert,
+early attempts along these lines
+have proven
+challenging \cite{cpp15,compcompcert}.
+
+As a result,
+common wisdom holds semantics preservation
+to be a lost cause
+for compositional compiler correctness \cite{next700}.
+Instead,
+research has focused on
+compositional reasoning methods
+based on contextual refinement,
+side-stepping the need for compositional semantics preservation
+\cite{sepcompcert,compcertm}.
+
+%}}}
+
+\subsection{Decomposing Heterogeneous Systems} %{{{
+
+Unfortunately,
+these methods share an intrinsic limitation:
+they presuppose the existence of a completed system
+to be proven correct,
+and compositionality only operates within its boundary.
+This becomes a serious impediment
+in the context of large-scale heterogeneous systems.
+
+\begin{example} \label{ex:nicdriver} %{{{
+Consider the problem of verifying
+a network interface card (NIC) driver.
+The NIC and its driver are closely coupled,
+but the details of their interaction
+are irrelevant to the rest of the system;
+these details should not leak into our large-scale reasoning.
+Instead,
+we wish to treat the NIC and its driver as a unit,
+and establish a direct relationship between C calls into
+the driver and network communication.
+Together, the NIC and driver implement
+a specification $\sigma :
+\li{Net} \rightarrow \mathcal{C}$,
+meaning they \emph{use} the interface $\li{Net}$
+modeling the network,
+and \emph{provide} the interface $\mathcal{C}$
+modeling C function calls.
+
+The driver code could be specified
+($\sigma_\kw{drv}$)
+and verified
+at the level of CompCert semantics,
+whereas device I/O primitives
+($\sigma_\kw{io}$)
+and the NIC itself
+($\sigma_\kw{NIC}$)
+would be specified as additional components
+in the context of a richer model:
+\[
+  \sigma_\kw{NIC} : \li{Net} \rightarrow \li{IO}
+  \qquad
+  \sigma_\kw{io} : \li{IO} \rightarrow \mathcal{C}
+  \qquad
+  \sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}
+\]
+By reasoning about their interaction,
+it would be possible to establish a relationship between
+the overall specification $\sigma : \li{Net} \rightarrow \mathcal{C}$ and
+the composition
+$\sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC}$.
+Then a \emph{compiler of certified components}
+should help us transport specifications and proofs
+obtained at the C level %with respect to the driver's C code
+to the compiled code operating at the level of assembly
+($\sigma' : \li{Net} \rightarrow \mathcal{A}$).
+\end{example}
+%}}}
+
+Under existing contextual approaches,
+the NIC driver can only be specified and verified in terms of
+its interactions at the boundary of the C program code.
+Since abstracting away from these interactions
+is the role of a driver in the first place,
+this is a serious limitation.
+%
+To be sure,
+existing techniques could be extended
+to address this specific problem.
+For example,
+the NIC hardware model could be brought
+within the scope of the ``whole program'' being considered,
+and the exchange of Ethernet packets
+modeled as part of its observable behavior.
+However, this approach does not scale.
+
+Example~\ref{ex:nicdriver}
+is by no means a contrived corner case.
+In fact, patterns of this kind are pervasive even in more mundane situations.
+Programmers often use libraries
+which mediate access to external resources
+(network services, file systems, user interfaces).
+Proper high-level specifications
+for software components of this kind
+must model these resources.
+It would rapidly become burdensome to expect
+the verification framework
+to fix in advance
+the dozens or hundreds
+of kinds of resources
+which may be involved
+in the course of verifying a large-scale system.
+
+Fortunately,
+advances in compositional semantics
+offer a realistic path
+to tackling problems of this kind.
+In particular,
+game semantics (\S\ref{sec:gamesem})
+provides a general and expressive framework
+to model interactions between typed components.
+Recent work proposes integrating
+dual nondeterminism and refinement
+into this framework,
+extending it with powerful mechanisms
+to account for abstraction \cite{rbgs-cal}.
+Establishing a compatible compiler correctness result
+is an important test of this approach
+and practical next step.
+
+%}}}
+
+
+In the last 50 years, the C programming language and its associated
+toolchain (e.g., compiler, assembler, linker, loader, memory model,
+and application binary interface or ABI) have served as the primary
+buiding blocks in the development of today's mainstream system
+software stack. The formally verified C compiler CompCert is a recent
+breakthrough that holds the promise to become the bedrock of future
+{\em certified} heterogeneous system stack.  Indeed, during the last
+decade, researchers have been refining the CompCert language semantics
+and correctness theorem, and used them as components in various
+software verification efforts. Artifacts such as OS kernels and
+hypervisors, processor designs, file systems, and network protocols
+have been successfuly verified. The significance of CompCert rests not
+only on its verified compiler but also on the full formalization of
+the ANSI C memory model and ABIs as well as the operational semantics
+for all of its source, intermediate, target languages.
+
+Unfortunately, the CompCert ecosystem today still suffers from the
+following major shortcomings. First, it does not support compositional
+compilation and linking of heterogeneous C and assembly components.
+Second, it uses a restricted memory model that has a rigid name space
+and is incompatible with multithreaded or multicore programs.  Third,
+it is not end-to-end in that CompCert can only produce assembly code
+but not actually binary machine code; there are still no certified
+linker and loader that can work directly with ELF (Executable and
+Linkable Format) binaries.  Fourth, it does not support secure
+compilation; source program that is provably information-flow secure
+may be compiled into target code that contains information leaks.
+
+In this effort, the PIs propose to
+develop a novel verified compilation toolchain that would address
+all of the above shortcomings. More specifically,
+\begin{itemize}
+%%%%%%%%%%%%%%%
+\item by using game semantics techniques and richer language interfaces,
+they propose to develop a novel {\bf compositional verified compiler} that
+can establish a truly compositional compiler correctness theorem for
+open heterogeneous components;
+%by relating the behaviors of source and target components directly;
+%%%%%%%%%%%%%%%
+\item they propose to develop a novel {\bf nominal memory model}---an
+enhancement to CompCert's block-based memory model with nominal
+techniques---to remove the global constraints for managing memory
+blocks, and enable flexible memory structures for open and concurrent
+programs;
+%%%%%%%%%%%%%%%
+\item basing upon their prior work on CompCertELF, they will develop an
+{\bf end-to-end and compositional verified
+compiler} that can compile C components all the way into ELF
+object files; they will also build {\em verified compositional linker
+and loader} that can work directly with ELF binaries;
+%%%%%%%%%%%%%%%
+\item they will develop a general
+framework for specification, abstraction, and refinement in
+compositional semantics, and apply this framework to connect
+certified abstraction layer with verified compiler and support
+{\bf verified security-preserving compilation};
+%%%%%%%%%%%%%%%
+\item they will evaluate the effectiveness of the new verified compiler
+toolchain in two case studies: one is to use it to build more sophisticated
+certified concurrent OS kernels and hypervisors; another is to
+use it as a compiler backend for the DeepSEA certified programming tool.
+\end{itemize}
+
+
+We plan to divide \sysname{} into four major components
+(Figure~\ref{fig:advert}) and implement each component in
+Coq~\cite{coq}: 1) the ADO specification, 2) a multi-ADO reasoning
+framework, 3) a network-based specification, and 4) a code-level
+verification framework.  The ADO specification sits at the center of
+\sysname{} to model individual distributed systems using a simple
+atomic interface. The multi-ADO reasoning framework allows composite
+systems to be built from ADOs and reasoned about modularly. \sysname{}
+fills in the missing details from below with the network-based
+specification, and provides a clear path between implementation and
+ADO by proving a refinement relation. This specification will be
+parameterized such that it can model most protocols with similar
+network patterns. Along the way we will solve the challenges that stem
+from mapping arbitrarily delayed future events in the network-level
+specification to an atomic function call in the ADO model. Verifying
+that different systems refine the ADO model will be made simple and
+convenient through the network-based specification because the
+properties captured by the common network pattern could allow for the
+reuse of proofs. Finally, the code level verification framework will
+use the certified concurrent abstraction layer
+(CCAL)~\cite{concurrency} approach (the PI's prior work).  \sysname{}
+will take care of each step to connect the code-level implementation
+of a system up to multiple distributed system reasoning.
+
+Our proposed research consists of the following four components:
+\begin{itemize}%[leftmargin=*]
+\item We will identify and propose an atomic distributed object model
+  that preserves the key characteristics of distributed systems, but
+  hides the implementation details.
+\item We will explore different distributed protocols to create
+  parameterized network-based specifications that connect individual
+  system implementations to the atomic distributed object model
+  through a refinement relation. Each network-based specification will
+  reuse the refinement proofs and act as a template that connects a
+  similar class of individual systems to the atomic distributed object
+  model.
+\item We will conduct studies of composite distributed applications to
+  illustrate how \sysname{} and atomic distributed object model enable
+  simple reasoning about multiple distributed system interactions. We
+  will explore various patterns of system compositions for broad
+  impact.
+\item To demonstrate the power and real-world applicability of
+  \sysname{}, we will carry out concrete instantiations multiple
+  distributed protocols, including multi-Paxos, and Raft, and extend
+  the instantiations to a large-scale distributed shared memory
+  system.
+\end{itemize}
