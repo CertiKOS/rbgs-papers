@@ -3,17 +3,18 @@
 
 Over the past decade, researchers have been able to formally verify
 various key components of computer systems, including compilers
-\cite{compcert,cakeml,vellvm}, OS kernels
-\cite{sel4,popl15,osdi16}, file systems \cite{fscq} and processor
-designs \cite{safe,kami}.  Building on these successes, the research
-community is attempting to construct large-scale, heterogeneous
-certified systems by using formal specifications as interfaces between
-the correctness proofs of various components \cite{deepspec}.  The
-ongoing design of suitable semantic frameworks is an important step
-towards this goal.  However, incorporating certified compilers into
-frameworks of this kind presents a number of difficulties.
+\cite{compcert,cakeml,vellvm}, OS kernels \cite{sel4,popl15,osdi16},
+file systems \cite{fscq} and processor designs \cite{safe,kami}.
+Building on these successes, the research community is attempting to
+construct large-scale, heterogeneous certified systems by using formal
+specifications as interfaces between the correctness proofs of various
+components \cite{deepspec}.  The ongoing design of suitable semantic
+frameworks is an important step towards this goal.  However,
+incorporating certified compilers into frameworks of this kind
+presents a number of difficulties.
 
-\subsection{Compositional Compiler Correctness} %{{{
+\subsection{Compositional Compiler Correctness}
+\label{ssec:intro-ccc}
 
 Compiler correctness is often formulated as a \emph{semantics
 preservation} property, asserting that the semantics of the compiled
@@ -31,75 +32,47 @@ and $\llbracket \cdot \rrbracket_\kw{T}$)
 are given as labeled transition systems, and the
 relation $\sim$ is a simulation property.
 
-However,
-practical applications involve
-program \emph{components} which we want to compile
-and verify separately from each other.
-In principle,
-the use of a compositional semantics
-enables the formulation of (\ref{eqn:semp})
-at the level of individual components.
-Unfortunately, traditional approaches to compositional semantics
-fare poorly in the presence of advanced language features,
-or of the kind of abstraction
-involved in the compilation process.
-For CompCert,
-early attempts along these lines
-have proven
-challenging \cite{cpp15,compcompcert}.
+However, practical applications involve program \emph{components}
+which we want to compile and verify separately from each other.  In
+principle, the use of a compositional semantics enables the
+formulation of (\ref{eqn:semp}) at the level of individual components.
+Unfortunately, traditional approaches to compositional semantics fare
+poorly in the presence of advanced language features, or of the kind
+of abstraction involved in the compilation process.  For CompCert,
+early attempts along these lines have proven challenging
+\cite{cpp15,compcompcert}.
 
-As a result,
-common wisdom holds semantics preservation
-to be a lost cause
-for compositional compiler correctness \cite{next700}.
-Instead,
-research has focused on
-compositional reasoning methods
-based on contextual refinement,
-side-stepping the need for compositional semantics preservation
-\cite{sepcompcert,compcertm}.
+As a result, common wisdom holds semantics preservation to be a lost
+cause for compositional compiler correctness \cite{next700}.  Instead,
+research has focused on compositional reasoning methods based on
+contextual refinement, side-stepping the need for compositional
+semantics preservation \cite{sepcompcert,compcertm}.
 
-%}}}
+\subsection{Decomposing Heterogeneous Systems}
+\label{ssec:intro-dhs}
 
-\subsection{Decomposing Heterogeneous Systems} %{{{
+Unfortunately, these methods share an intrinsic limitation: they
+presuppose the existence of a completed system to be proven correct,
+and compositionality only operates within its boundary.  This becomes
+a serious impediment in the context of large-scale heterogeneous
+systems.
 
-Unfortunately,
-these methods share an intrinsic limitation:
-they presuppose the existence of a completed system
-to be proven correct,
-and compositionality only operates within its boundary.
-This becomes a serious impediment
-in the context of large-scale heterogeneous systems.
+\begin{example} \label{ex:nicdriver} 
+Consider the problem of verifying a network interface card (NIC)
+driver.  The NIC and its driver are closely coupled, but the details
+of their interaction are irrelevant to the rest of the system; these
+details should not leak into our large-scale reasoning.  Instead, we
+wish to treat the NIC and its driver as a unit, and establish a direct
+relationship between C calls into the driver and network
+communication.  Together, the NIC and driver implement a specification
+$\sigma : \li{Net} \rightarrow \mathcal{C}$, meaning they \emph{use}
+the interface $\li{Net}$ modeling the network, and \emph{provide} the
+interface $\mathcal{C}$ modeling C function calls.
 
-\begin{example} \label{ex:nicdriver} %{{{
-Consider the problem of verifying
-a network interface card (NIC) driver.
-The NIC and its driver are closely coupled,
-but the details of their interaction
-are irrelevant to the rest of the system;
-these details should not leak into our large-scale reasoning.
-Instead,
-we wish to treat the NIC and its driver as a unit,
-and establish a direct relationship between C calls into
-the driver and network communication.
-Together, the NIC and driver implement
-a specification $\sigma :
-\li{Net} \rightarrow \mathcal{C}$,
-meaning they \emph{use} the interface $\li{Net}$
-modeling the network,
-and \emph{provide} the interface $\mathcal{C}$
-modeling C function calls.
-
-The driver code could be specified
-($\sigma_\kw{drv}$)
-and verified
-at the level of CompCert semantics,
-whereas device I/O primitives
-($\sigma_\kw{io}$)
-and the NIC itself
-($\sigma_\kw{NIC}$)
-would be specified as additional components
-in the context of a richer model:
+The driver code could be specified ($\sigma_\kw{drv}$) and verified at
+the level of CompCert semantics, whereas device I/O primitives
+($\sigma_\kw{io}$) and the NIC itself ($\sigma_\kw{NIC}$) would be
+specified as additional components in the context of a richer model:
 \[
   \sigma_\kw{NIC} : \li{Net} \rightarrow \li{IO}
   \qquad
@@ -107,104 +80,166 @@ in the context of a richer model:
   \qquad
   \sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}
 \]
-By reasoning about their interaction,
-it would be possible to establish a relationship between
-the overall specification $\sigma : \li{Net} \rightarrow \mathcal{C}$ and
-the composition
-$\sigma_\kw{drv} \circ \sigma_\kw{io} \circ \sigma_\kw{NIC}$.
-Then a \emph{compiler of certified components}
-should help us transport specifications and proofs
-obtained at the C level %with respect to the driver's C code
-to the compiled code operating at the level of assembly
-($\sigma' : \li{Net} \rightarrow \mathcal{A}$).
+By reasoning about their interaction, it would be possible to
+establish a relationship between the overall specification $\sigma :
+\li{Net} \rightarrow \mathcal{C}$ and the composition $\sigma_\kw{drv}
+\circ \sigma_\kw{io} \circ \sigma_\kw{NIC}$.  Then a \emph{compiler of
+certified components} should help us transport specifications and
+proofs obtained at the C level %with respect to the driver's C code to
+the compiled code operating at the level of assembly ($\sigma' :
+\li{Net} \rightarrow \mathcal{A}$).
 \end{example}
-%}}}
 
-Under existing contextual approaches,
-the NIC driver can only be specified and verified in terms of
-its interactions at the boundary of the C program code.
-Since abstracting away from these interactions
-is the role of a driver in the first place,
-this is a serious limitation.
+Under existing contextual approaches, the NIC driver can only be
+specified and verified in terms of its interactions at the boundary of
+the C program code.  Since abstracting away from these interactions is
+the role of a driver in the first place, this is a serious limitation.
+To be sure, existing techniques could be extended to address this
+specific problem.  For example, the NIC hardware model could be
+brought within the scope of the ``whole program'' being considered,
+and the exchange of Ethernet packets modeled as part of its observable
+behavior.  However, this approach does not scale.
+
+Example~\ref{ex:nicdriver} is by no means a contrived corner case. In
+fact, patterns of this kind are pervasive even in more mundane
+situations.  Programmers often use libraries which mediate access to
+external resources (network services, file systems, user interfaces).
+Proper high-level specifications for software components of this kind
+must model these resources.  It would rapidly become burdensome to
+expect the verification framework to fix in advance the dozens or
+hundreds of kinds of resources which may be involved in the course of
+verifying a large-scale system.
+
+Fortunately, advances in compositional semantics offer a realistic
+path to tackling problems of this kind.  In particular, game semantics
+(\S\ref{sec:gamesem}) provides a general and expressive framework to
+model interactions between typed components.  Recent work proposes
+integrating dual nondeterminism and refinement into this framework,
+extending it with powerful mechanisms to account for abstraction
+\cite{rbgs-cal,layered22}.  Establishing a compatible compiler
+correctness result is an important test of this approach and practical
+next step.
+
+\subsection{Deficiency of the Block-Based Memory Model}
+\label{ssec:intro-nmm}
+
+Memory models are critical components for formalizing the semantics of
+imperative programming languages. They determine an abstraction over
+memory and provide necessary operations for manipulating memory
+states at the corresponding level of abstraction. In the setting of verified
+compilation of imperative programs, a memory model with
+appropriate abstraction not only reduces the complexity of
+verification but also enables rich forms of semantics preservation.
 %
-To be sure,
-existing techniques could be extended
-to address this specific problem.
-For example,
-the NIC hardware model could be brought
-within the scope of the ``whole program'' being considered,
-and the exchange of Ethernet packets
-modeled as part of its observable behavior.
-However, this approach does not scale.
+Therefore, a lot of research has been done for developing
+memory models for verified compilation, ranging from highly abstract
+models that treat memory states as mappings from addresses to values
+to highly concrete ones that capture the linear layout of physical
+memory~\cite{TuchKN07}. 
 
-Example~\ref{ex:nicdriver}
-is by no means a contrived corner case.
-In fact, patterns of this kind are pervasive even in more mundane situations.
-Programmers often use libraries
-which mediate access to external resources
-(network services, file systems, user interfaces).
-Proper high-level specifications
-for software components of this kind
-must model these resources.
-It would rapidly become burdensome to expect
-the verification framework
-to fix in advance
-the dozens or hundreds
-of kinds of resources
-which may be involved
-in the course of verifying a large-scale system.
+Among the memory models developed so far, the most
+representative one is the \emph{block-based memory
+  model}~\cite{leroy08,compcert-mem-v2} defined in CompCert---the
+state-of-the-art verified C compiler~\cite{compcert}.
+%
+It provides a medium level of abstraction---neither too abstract nor
+too concrete---by modeling memory space as a collection of contiguous
+memory regions (also called \emph{blocks}). Isolation between
+different memory blocks is simply captured by giving each of those
+memory blocks a unique identifier (called its \emph{block
+  id}). Furthermore, pointers are naturally defined as pairs of block
+ids and offsets to memory cells, and definitions of pointer operations
+follow in a straightforward manner. 
+%
+The block-based memory model has been highly successful. By
+uniformly applying it to all of CompCert's languages, the developers
+of CompCert were able to verify over 20 compiler passes containing
+advanced optimizations.
+%
+It has also been widely adopted in other verification projects,
+including various extensions of CompCert for supporting
+compositionality and concurrency
+(e.g.,~\cite{sevcik13,SevcikVNJS11,stewart15,compcertm,cascompcert,wang2019,wang2020,hur16,compcerts})
+and formalization of language semantics for program verification and
+program analysis (e.g.,~\cite{appel11:vst,dscal15,ccal18}).
 
-Fortunately,
-advances in compositional semantics
-offer a realistic path
-to tackling problems of this kind.
-In particular,
-game semantics (\S\ref{sec:gamesem})
-provides a general and expressive framework
-to model interactions between typed components.
-Recent work proposes integrating
-dual nondeterminism and refinement
-into this framework,
-extending it with powerful mechanisms
-to account for abstraction \cite{rbgs-cal}.
-Establishing a compatible compiler correctness result
-is an important test of this approach
-and practical next step.
+Despite its previous success, CompCert's block-based memory model is
+still quite primitive and inflexible, making it difficult to support
+intuitive and flexible reasoning in verified compilation. This includes
+the following points:
+%
+\begin{itemize}
+\item 
+\textbf{Inflexibility 1: Fixed Representation of Block IDs.}
+%
+In the block-based memory model, block ids are represented by a fixed
+type, i.e., positive numbers. With this uniform and fixed
+representation, it is impossible to distinguish between memory regions
+playing different roles (such as the stack, heap, and memory regions
+for global definitions). Therefore, it is difficult to reason about
+specific parts of memory in isolation.
 
-%}}}
+\item
+\textbf{Inflexibility 2: Sequential Numbering of Valid Blocks.}  
+%
+In any memory state, a special positive number named \nextblock
+provides the next available block id. The global memory space is
+divided by \nextblock into two parts: blocks with ids less than
+\nextblock have already been allocated (called \emph{valid blocks}),
+while the remaining blocks are waiting to be allocated (called
+\emph{invalid blocks}). In any program semantics, the ids of valid
+blocks must be numbered sequentially by $[1,\ldots,\nextblock-1]$.
+This creates unintuitive and unnecessary dependency between valid
+blocks playing different roles.
+
+\item
+\textbf{Inflexibility 3: Global Constraint for Allocation.}
+%
+In any memory state, there is only a single \nextblock for assigning
+new block ids upon allocation. In the setting where multiple open
+programs or threads work on the same memory state, every open program or
+thread must keep track of how other programs or threads modify
+\nextblock. This global constraint imposes a complex dependency between
+open programs and threads.
+
+\end{itemize}
+
+Because of the complex dependencies created by the above
+inflexibilities, verification of any compiler transformation must
+treat the memory space \emph{as a whole}. This incurs significant
+difficulties both in verified compilation of whole programs and in
+that of open programs. Specifically, in the former setting, many
+compiler transformations only work on certain sub-regions of memory
+(\eg, transformations on stack frames). However, because of
+\textbf{Inflexibilities 1 and 2}, the reasoning must be lifted to the
+whole memory, therefore becoming significantly more involved and less
+intuitive. In the latter setting, one would like to get a
+compositional approach to verifying open or concurrent
+programs. However, such an approach must be compatible with the
+evolution of \nextblock which is inherently non-compositional by
+\textbf{Inflexibilities 2 and 3}. This problem plagues many projects on
+extending CompCert to support compositionality or concurrency (\eg,
+CASCompCert~\cite{cascompcert} and Thread-Safe
+CompCertX~\cite{ccal18}). To circumscribe it, various ad hoc
+modifications to the block-based memory model were invented, leading to
+verification results that are overly technical and less reusable.
 
 
-In the last 50 years, the C programming language and its associated
-toolchain (e.g., compiler, assembler, linker, loader, memory model,
-and application binary interface or ABI) have served as the primary
-buiding blocks in the development of today's mainstream system
-software stack. The formally verified C compiler CompCert is a recent
-breakthrough that holds the promise to become the bedrock of future
-{\em certified} heterogeneous system stack.  Indeed, during the last
-decade, researchers have been refining the CompCert language semantics
-and correctness theorem, and used them as components in various
-software verification efforts. Artifacts such as OS kernels and
-hypervisors, processor designs, file systems, and network protocols
-have been successfuly verified. The significance of CompCert rests not
-only on its verified compiler but also on the full formalization of
-the ANSI C memory model and ABIs as well as the operational semantics
-for all of its source, intermediate, target languages.
 
-Unfortunately, the CompCert ecosystem today still suffers from the
-following major shortcomings. First, it does not support compositional
-compilation and linking of heterogeneous C and assembly components.
-Second, it uses a restricted memory model that has a rigid name space
-and is incompatible with multithreaded or multicore programs.  Third,
-it is not end-to-end in that CompCert can only produce assembly code
-but not actually binary machine code; there are still no certified
-linker and loader that can work directly with ELF (Executable and
-Linkable Format) binaries.  Fourth, it does not support secure
-compilation; source program that is provably information-flow secure
-may be compiled into target code that contains information leaks.
+\subsection{Intellectual Merit}
+\label{ssec:intro-itm}
 
-In this effort, the PIs propose to
-develop a novel verified compilation toolchain that would address
-all of the above shortcomings. More specifically,
+In additon to the lack of support for compositonal compilation and
+compositoinal memory models, the current CompCert is not end-to-end in
+that it can only produce assembly code but not actually binary machine
+code; there are still no certified linker and loader that can work
+directly with ELF binaries.  It does not support secure compilation;
+source program that is provably information-flow secure may be
+compiled into target code that contains information leaks.
+
+In this effort, we propose to develop a novel verified compilation
+toolchain that would address all of the above shortcomings. Our
+proposed effort consists of the following five components:
 \begin{itemize}
 %%%%%%%%%%%%%%%
 \item by using game semantics techniques and richer language interfaces,
@@ -237,30 +272,6 @@ certified concurrent OS kernels and hypervisors; another is to
 use it as a compiler backend for the DeepSEA certified programming tool.
 \end{itemize}
 
-
-We plan to divide \sysname{} into four major components
-(Figure~\ref{fig:advert}) and implement each component in
-Coq~\cite{coq}: 1) the ADO specification, 2) a multi-ADO reasoning
-framework, 3) a network-based specification, and 4) a code-level
-verification framework.  The ADO specification sits at the center of
-\sysname{} to model individual distributed systems using a simple
-atomic interface. The multi-ADO reasoning framework allows composite
-systems to be built from ADOs and reasoned about modularly. \sysname{}
-fills in the missing details from below with the network-based
-specification, and provides a clear path between implementation and
-ADO by proving a refinement relation. This specification will be
-parameterized such that it can model most protocols with similar
-network patterns. Along the way we will solve the challenges that stem
-from mapping arbitrarily delayed future events in the network-level
-specification to an atomic function call in the ADO model. Verifying
-that different systems refine the ADO model will be made simple and
-convenient through the network-based specification because the
-properties captured by the common network pattern could allow for the
-reuse of proofs. Finally, the code level verification framework will
-use the certified concurrent abstraction layer
-(CCAL)~\cite{concurrency} approach (the PI's prior work).  \sysname{}
-will take care of each step to connect the code-level implementation
-of a system up to multiple distributed system reasoning.
 
 Our proposed research consists of the following four components:
 \begin{itemize}%[leftmargin=*]
