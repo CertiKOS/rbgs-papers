@@ -45,8 +45,7 @@ techniques:
   - Task 2b building norminal compcerto (simplified injection proofs)
   - Task 2c building norminal compcerto for concurrent programs
 
-- Task 3: Verified Compilation into ELF Object Files
-          (Stack-Aware Assembler via CompCertELF)
+- Task 3: Verified Compilation into ELF Object Files (Stack-Aware Assembler via CompCertELF)
 
   - Task 3a nominal multistack compcerto 
   - Task 3b building certified assembler with encoder & decoder.
