@@ -31,35 +31,49 @@ techniques:
 
 ## project description (15 pages)
 
-- Introduction
+- Introduction (3 pages)
 
 - Task 1: Compositional Verified Compilation via CompCertO
 
+  - Task 1a Add support for unused-globals and symbol table manipulation
+  - Task 1b Add support for first-class code pointers
+  - Task 1c Extend CompCertO to support multiple backends; and port it to the latest realese.
+
 - Task 2: Verified Compilation with a Nominal Memory Model 
+
+  - Task 2a nominal compcert with structural memory injection 
+  - Task 2b building norminal compcerto (simplified injection proofs)
+  - Task 2c building norminal compcerto for concurrent programs
 
 - Task 3: Verified Compilation into ELF Object Files
           (Stack-Aware Assembler via CompCertELF)
 
-- Task 4: Verified Secure Compilation 
+  - Task 3a nominal multistack compcerto 
+  - Task 3b building certified assembler with encoder & decoder.
+  - Task 3c building certified linker and loader
+
+- Task 4: Verified Secure Compilation  (2 pages)
     (CompCertOX + Full Abstraction + Robustly Secure Compilation)
 
-- Task 5: Evaluation and Integration
+  - Task 4a Initial CompCertOX to support the device driver example
+  - Task 4b General framework for CAL and security-preserving compilation
+  - Task 4c Connection with full abstraction and robustly safe compilation?
+
+- Task 5: Evaluation and Integration (1 page)
     Talk more about supporting CCAL, CertiKOS, and DeepSEA
 
-PIs should include a plan to evaluate the approaches developed as part
-of the Project Description. Appropriate methods will depend on the
-research area, topic, size and scope of the proposed project. Examples
-include, but are not limited to, peer review of developed theories and
-proofs, controlled experiments on appropriate
-simulators/emulators/testbeds, user studies, or prototype
-deployments. The plan should be appropriate for the size and scope of
-the project.
+  - Task 5a CompCertX-style linking of CCAL layers (c and assembly layers)
+  - Task 5b End-to-end security-preserving refinement for CertiKOS
+  - Task 5c Develop the DeepSEA backend and VST backend for building end-to-end verified user-level application on certified OS kernels
+            
 
-- Broader Impact
+- Schedule and Milestones (0.5 pages)
 
-  Talk about education plan and BPC 
+- Broader Impact (1 page)
 
-- Results from Prior NSF Support
+  Talk about the education plan and BPC 
+
+- Results from Prior NSF Support (0.5 pages)
 
 ## references cited (auto generated)
 
