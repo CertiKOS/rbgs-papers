@@ -1,12 +1,21 @@
 \section{Compostional Verified Compilation via CompCertO}
 
+In this section we briefly describe CompCertO,
+our solution to compositional compiler correctness in CompCert.
+We then propose several improvements which will
+allow CompCertO to serve as a cornerstone
+in our approach to large-scale heterogeneous system verification.
 
 \subsection{Game Semantics} \label{sec:gamesem} %{{{
 
 % preamble {{{
 
 Game semantics is a form of denotational semantics which
-incorporates some operational aspects.
+incorporates some operational aspects,
+and which heavily informs the design of CompCertO.
+We start with an exposition of its basic tenets,
+and how we deploy them to prove the compositional correctness of CompCert.
+
 %An early success of this approach was
 %the formulation of the first fully abstract models
 %of the programming language PCF \cite{pcfajm,pcfho}.
@@ -15,10 +24,9 @@ incorporates some operational aspects.
 %and how it can be applied in the context of CompCert.
 Typically,
 game semantics interpret
-types as two-player games
-and terms as strategies for these games.
-
-Games describe the form of the interaction
+\emph{types} as two-player games
+and \emph{terms} as strategies for these games.
+The games describe the form of the interaction
 between a program component %of the corresponding type
 (the \emph{system})
 and its execution context
@@ -26,21 +34,21 @@ and its execution context
 Strategies
 specify which move the system plays
 for each possible configuration of the game.
-
 Configurations are usually identified with sequences of moves
 (\emph{plays}),
 and strategies with the set of configurations
 a component can reach.
-This representation makes
-game semantics similar to
-the trace semantics of process algebras,
-but game semantics is distinguished
-by a strong polarization between
-the actions of the system and those of the environment.
-%and between outputs and inputs.
-This confers an inherent ``rely-guarantee'' flavor
-to games which facilitates compositional reasoning
-\cite{cspgs}.
+
+%This representation makes
+%game semantics similar to
+%the trace semantics of process algebras,
+%but game semantics is distinguished
+%by a strong polarization between
+%the actions of the system and those of the environment.
+%%and between outputs and inputs.
+%This confers an inherent ``rely-guarantee'' flavor
+%to games which facilitates compositional reasoning
+%\cite{cspgs}.
 
 %}}}
 
@@ -54,10 +62,9 @@ We focus on two-player, alternating games
 where the environment plays first and
 where the players
 each contribute every other move.
-
 When typesetting examples,
-we underline the moves of the system;
-a valid play in the game of chess may look like:
+we underline the moves of the system.
+For example, a valid play in the game of chess may look like:
 %For chess,
 %moves are taken in the set $\{a1 \ldots h8\} \times \{a1 \ldots h8\}$,
 %and a valid sequence of moves may look like:
@@ -199,13 +206,14 @@ is: % described by the play:
 \end{equation}
 The correspondence between (\ref{eqn:cplay}) and (\ref{eqn:splay})
 is determined by the C calling convention in use.
-This is discussed in \S\ref{sec:simconv}.
 \end{example}
 %}}}
 
 \begin{figure} % fig:abc {{{
   \figsize
+  \centering
   \tt
+  {\footnotesize
   \begin{tabular}{ll lr@{\ }l}
     \hline
     \underline{A.c} & int mult(n, p) \{ &
@@ -223,6 +231,7 @@ This is discussed in \S\ref{sec:simconv}.
                     & L: & ret \\
     \hline
   \end{tabular}
+  }
   \caption{Two simple C compilation units and corresponding assembly code.
     For this example,
     the calling convention stores arguments in
@@ -241,31 +250,34 @@ This is discussed in \S\ref{sec:simconv}.
 
 \subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
 
-Under the traditional CompCert semantics,
-programs are interpreted as transition systems
-which define strategies for the game
-$\mathcal{E} \rightarrow \mathcal{W}$.
-They are run without any parameters
-and produce a single integer denoting their exit status;
-the corresponding language interface is
-$\mathcal{W} := \langle \unitset, \kw{int} \rangle$,
-where $\unitset = \{ * \}$ is the unit set
-and $\kw{int}$ is the set of machine integers.
-Interaction with the environment
-is captured as a sequence of events from a predefined set.
-%each with an output and input component.
-These events,
-which can be described by a language interface $\mathcal{E}$,
-correspond mainly to system calls and accesses to volatile variables.
+%Under the traditional CompCert semantics,
+%programs are interpreted as transition systems
+%which define strategies for the game
+%$\mathcal{E} \rightarrow \mathcal{W}$.
+%They are run without any parameters
+%and produce a single integer denoting their exit status;
+%the corresponding language interface is
+%$\mathcal{W} := \langle \unitset, \kw{int} \rangle$,
+%where $\unitset = \{ * \}$ is the unit set
+%and $\kw{int}$ is the set of machine integers.
+%Interaction with the environment
+%is captured as a sequence of events from a predefined set.
+%%each with an output and input component.
+%These events,
+%which can be described by a language interface $\mathcal{E}$,
+%correspond mainly to system calls and accesses to volatile variables.
+
+These ideas are used in CompCertO
+to provide compositional language semantics and
+a compositional compiler correctness theorem.
 
 \paragraph{Semantic Model} %{{{
 
-In CompCertO,
-to model components and their interactions,
+To model components and their interactions,
 a transition system $L : A \twoheadrightarrow B$
-will describe a strategy
+describes a strategy
 for the game
-$A \times \mathcal{E} \rightarrow B$.
+$A \rightarrow B$.
 The language interface $B$ describes how a component can be activated,
 and the ways in which it can return control to the caller.
 The language interface $A$ describes the external calls that the component
@@ -285,7 +297,7 @@ On the other hand, the target language \kw{Asm} uses
 $\mathcal{A} \twoheadrightarrow \mathcal{A}$,
 where $\mathcal{A}$ describes control transfers
 in terms of processor registers
-rather than function calls (see \S\ref{sec:sem:open}).
+rather than function calls.
 
 %This allows to accurately model assembly-level control transfers,
 %which is important when verifying system code
@@ -307,7 +319,7 @@ to fit a uniform and transitive notion of pass correctness.
 This makes it easy to derive the correctness
 of the whole compiler
 from the correctness of each pass.
-
+%
 Unfortunately,
 to achieve compositionality across compilation units,
 our model must reveal details
@@ -332,241 +344,247 @@ Unfortunately, these techniques either
 conflict with our requirement~\#2,
 make proofs more complex,
 or cascade into subtle ``impedance mismatch'' problems
-requiring their own solutions
-(see \S\ref{sec:rw}).
-
+requiring their own solutions.
+%
 By contrast,
 we capture the particularities of each simulation proof
 by introducing a notion of \emph{simulation convention}
 expressing the correspondence between
 source- and target-level interactions.
-To describe simulation conventions
-and reason about them,
+%To describe simulation conventions
+%and reason about them,
 %compositionally,
-we use logical relations.
+%we use logical relations.
 
 %}}}
 
+%\subsection{Logical Relations} \label{sec:logrel} %{{{
+%
+%Logical relations are structure-preserving relations
+%in the way homomorphisms are structure-preserving maps.
+%However,
+%logical relations are more compositional than homomorphisms,
+%because they do not suffer from the same problems
+%in the presence of mixed-variance constructions
+%like the function arrow %$\rightarrow$
+%\cite{lrp}.
+%In the context of typed languages,
+%this means that type-indexed logical relations
+%can be defined by recursion over the structure of types.
+%
+%%Logical relations have found widespread use in programming language theory.
+%%Unary logical relations can be used to establish
+%%various properties of type systems:
+%%a type-indexed predicate expressing a property of interest
+%%is shown to be compatible with the language's reduction,
+%%and to contain all of the well-typed terms of the language.
+%%Binary logical relations can be used to capture
+%%contextual equivalence between terms,
+%%as well as notions such as non-interference or compiler correctness.
+%%Relational models of type quantification yield
+%%Reynold's well-known theory of relational parametricity,
+%%and can be used to prove \emph{free theorems} that
+%%all terms of a given parametric type must satisfy.
+%
+%Logical relations can be of any arity,
+%but
+%we restrict our attention to
+%binary logical relations.
+%Given an algebraic structure $\mathcal{S}$,
+%a \emph{logical relation}
+%between two instances $S_1, S_2$ of $\mathcal{S}$
+%is a relation $R$
+%between their carrier sets,
+%such that the corresponding operations of $S_1$ and $S_2$
+%take related arguments to related results.
+%We write $R \in \mathcal{R}(S_1, S_2)$.
+%
+%\begin{example}%[Logical relation of monoids] %{{{
+%\label{ex:monoid}
+%A monoid is a set with
+%an associative operation $\cdot$ and
+%a unit $\epsilon$.
+%A~\emph{logical relation of monoids} between
+%$\langle A, \cdot_A, \epsilon_A \rangle$ and
+%$\langle B, \cdot_B, \epsilon_B \rangle$
+%is a relation $R \subseteq A \times B$
+%such that:
+%\begin{equation}
+%\label{eqn:monoidrel}
+%(u \mathrel{R} u' \wedge v \mathrel{R} v' \: \Rightarrow \:
+% u \cdot_A v \: \mathrel{R} \: u' \cdot_B v')
+%\: \wedge \:
+%\epsilon_A \mathrel{R} \epsilon_B
+%\end{equation}
+%\end{example}
+%%}}}
+%
+%Logical relations between multisorted structures
+%consist of one relation for each sort,
+%between the corresponding carrier sets.
+%In the case of structures which include type operators,
+%we can associate to each base type $A$
+%a relation over its carrier set $\llbracket A \rrbracket$,
+%and to each type operator $T(A_1, \ldots, A_n)$
+%a corresponding \emph{relator}:
+%given relations $R_1, \ldots, R_n$ over
+%the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$,
+%the relator for $T$
+%will construct a relation $T(R_1, \ldots, R_n)$
+%over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
+%Relators for some common constructions are shown in \ref{fig:relators}.
+%In this framework, the proposition (\ref{eqn:monoidrel}) can be reformulated as:
+%\[
+%  \cdot_A \ifr{R \times R \rightarrow R} \cdot_B
+%  \: \wedge \:
+%  \epsilon_A \mathrel{R} \epsilon_B \,.
+%\]
+%
+%\begin{example} \label{ex:simrel} %{{{
+%%Simulation relations are
+%%logical relations of transition systems.
+%A simulation relation
+%between the transition systems
+%$\alpha : A \rightarrow \mathcal{P}(A)$ and
+%$\beta : B \rightarrow \mathcal{P}(B)$
+%is a relation $R \subseteq A \times B$
+%satisfying the following property:
+%\[
+%  \begin{tikzcd}[scale=0.8]
+%    s_1 \arrow[r, "\alpha"]
+%        \arrow[d, dash, "R"'] &
+%    s_1' \arrow[d, dashed, dash, "R"] \\
+%    s_2 \arrow[r, dashed, "\beta"] &
+%    s_2'
+%  \end{tikzcd}
+%  \qquad
+%  \label{eqn:simrel}
+%  \begin{array}{r@{\,.\,}l}
+%    \forall s_1 \, s_2 \, s_1' &
+%      \alpha(s_1) \ni s_1' \wedge s_1 \mathrel{R} s_2 \Rightarrow
+%    \\[0.25ex]
+%    \exists s_2' &
+%      \beta(s_2) \ni s_2' \wedge s_1' \mathrel{R} s_2'
+%  \end{array}
+%\]
+%Using the relators in \ref{fig:relators},
+%we can express the same property
+%concisely and compositionally as
+%$
+%  \alpha \ifr{R \rightarrow \mathcal{P}^\le(R)} \beta
+%$.
+%\end{example}
+%%}}}
+%
+%\begin{figure} % fig:relators {{{
+%  \figsize
+%  \begin{align*}
+%    x \ifr{R_1 \times R_2} y \ \Leftrightarrow\  &
+%      \pi_1(x) \ifr{R_1} \pi_1(y) \wedge
+%      \pi_2(x) \ifr{R_2} \pi_2(y) \\
+%    x \ifr{R_1 + R_2} y \ \Leftrightarrow\  &
+%      (\exists \, x_1 \, y_1 \,.\,
+%        x_1 \ifr{R_1} y_1 \wedge
+%        x = i_1(x_1) \wedge
+%        y = i_1(y_1)) \\ \vee\ &
+%      (\exists \, x_2 \, y_2 \,.\,
+%        x_2 \ifr{R_2} y_2 \wedge
+%        x = i_2(x_2) \wedge
+%        y = i_2(y_2)) \\
+%    f \ifr{R_1 \rightarrow R_2} g \ \Leftrightarrow\  &
+%      \forall \, x \, y \,.\,
+%        x \ifr{R_1} y \Rightarrow
+%        f(x) \ifr{R_2} g(y) \\
+%    A \ifr{\mathcal{P}^\le(R)} B \ \Leftrightarrow\  &
+%      \forall \, x \in A \,.\,
+%      \exists \, y \in B \,.\,
+%      x \ifr{R} y
+%  \end{align*}
+%  \caption{A selection of relators}
+%  \label{fig:relators}
+%\end{figure}
+%%}}}
+%
+%%Logical relations used to reason about contextual equivalence
+%%are often partial equivalence relations (PER).
+%%By contrast, since we mainly focus on refinement,
+%%most of the relations we consider will not be symmetric.
+%
+%\paragraph{Kripke Relations} %{{{
+%
+%Since relations for stateful languages
+%often depend on the current state,
+%Kripke logical relations
+%are parametrized over a set of state-dependent \emph{worlds}.
+%Components related at the same world
+%are guaranteed to be related in compatible ways.
+%We use the following notations.
+%
+%\begin{definition} \label{def:klr} %{{{
+%A \emph{Kripke} relation is
+%a family of relations $(R_w)_{w \in W}$.
+%We write $R \in \mathcal{R}_W(A, B)$
+%for a $W$-indexed Kripke relation between the sets $A$ and $B$.
+%For $w \in W$ we write:
+%\[
+%\begin{array}{c@{\qquad}c}
+%    [w \Vdash R] \: := \: R_w &
+%    [\Vdash R] \: := \: \bigcap_{w} R_w
+%\end{array}
+%\]
+%\end{definition}
+%%}}}
+%
+%A simple relation $R \in \mathcal{R}(A, B)$
+%can be promoted to a Kripke relation
+%$\lceil R \rceil \in \mathcal{R}_W(A, B)$
+%by defining $\lceil R \rceil_w := R$ for all $w \in W$.
+%More generally, for an $n$-ary relator $F$ we have:
+%\[
+%  \AxiomC{$
+%    F :
+%      \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n)
+%      \rightarrow \mathcal{R}(A, B)$}
+%  \UnaryInfC{$
+%    \lceil F \rceil :
+%      \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n)
+%      \rightarrow \mathcal{R}_W(A, B)$}
+%  \DisplayProof
+%\]
+%where for the Kripke relations $R_i \in \mathcal{R}_W(A_i, B_i)$,
+%\[
+%  [w \Vdash \lceil F \rceil (R_1, \ldots, R_n)] \: := \:
+%    F(w \Vdash R_1, \ldots, w \Vdash R_n)
+%  \,.
+%\]
+%We use $\lceil - \rceil$ implicitly
+%when a relator appears in a context where
+%a Kripke logical relation is expected.
+%Since reasoning with logical relations
+%often involves self-relatedness,
+%we use the notation
+%$x :: R$ to denote $x \mathrel{R} x$.
+%For legibility, we will also write
+%$w \Vdash x \mathrel{R} y$ for $x \ifr{w \Vdash R} y$
+%and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
+%
+%%}}}
 %}}}
 
-\subsection{Logical Relations} \label{sec:logrel} %{{{
+\paragraph{Simulation Conventions} \label{sec:simconv} %{{{
 
-Logical relations are structure-preserving relations
-in the way homomorphisms are structure-preserving maps.
-However,
-logical relations are more compositional than homomorphisms,
-because they do not suffer from the same problems
-in the presence of mixed-variance constructions
-like the function arrow %$\rightarrow$
-\cite{lrp}.
-In the context of typed languages,
-this means that type-indexed logical relations
-can be defined by recursion over the structure of types.
-
-%Logical relations have found widespread use in programming language theory.
-%Unary logical relations can be used to establish
-%various properties of type systems:
-%a type-indexed predicate expressing a property of interest
-%is shown to be compatible with the language's reduction,
-%and to contain all of the well-typed terms of the language.
-%Binary logical relations can be used to capture
-%contextual equivalence between terms,
-%as well as notions such as non-interference or compiler correctness.
-%Relational models of type quantification yield
-%Reynold's well-known theory of relational parametricity,
-%and can be used to prove \emph{free theorems} that
-%all terms of a given parametric type must satisfy.
-
-Logical relations can be of any arity,
-but
-we restrict our attention to
-binary logical relations.
-Given an algebraic structure $\mathcal{S}$,
-a \emph{logical relation}
-between two instances $S_1, S_2$ of $\mathcal{S}$
-is a relation $R$
-between their carrier sets,
-such that the corresponding operations of $S_1$ and $S_2$
-take related arguments to related results.
-We write $R \in \mathcal{R}(S_1, S_2)$.
-
-\begin{example}%[Logical relation of monoids] %{{{
-\label{ex:monoid}
-A monoid is a set with
-an associative operation $\cdot$ and
-a unit $\epsilon$.
-A~\emph{logical relation of monoids} between
-$\langle A, \cdot_A, \epsilon_A \rangle$ and
-$\langle B, \cdot_B, \epsilon_B \rangle$
-is a relation $R \subseteq A \times B$
-such that:
-\begin{equation}
-\label{eqn:monoidrel}
-(u \mathrel{R} u' \wedge v \mathrel{R} v' \: \Rightarrow \:
- u \cdot_A v \: \mathrel{R} \: u' \cdot_B v')
-\: \wedge \:
-\epsilon_A \mathrel{R} \epsilon_B
-\end{equation}
-\end{example}
-%}}}
-
-Logical relations between multisorted structures
-consist of one relation for each sort,
-between the corresponding carrier sets.
-In the case of structures which include type operators,
-we can associate to each base type $A$
-a relation over its carrier set $\llbracket A \rrbracket$,
-and to each type operator $T(A_1, \ldots, A_n)$
-a corresponding \emph{relator}:
-given relations $R_1, \ldots, R_n$ over
-the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$,
-the relator for $T$
-will construct a relation $T(R_1, \ldots, R_n)$
-over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
-Relators for some common constructions are shown in \ref{fig:relators}.
-In this framework, the proposition (\ref{eqn:monoidrel}) can be reformulated as:
-\[
-  \cdot_A \ifr{R \times R \rightarrow R} \cdot_B
-  \: \wedge \:
-  \epsilon_A \mathrel{R} \epsilon_B \,.
-\]
-
-\begin{example} \label{ex:simrel} %{{{
-%Simulation relations are
-%logical relations of transition systems.
-A simulation relation
-between the transition systems
-$\alpha : A \rightarrow \mathcal{P}(A)$ and
-$\beta : B \rightarrow \mathcal{P}(B)$
-is a relation $R \subseteq A \times B$
-satisfying the following property:
-\[
-  \begin{tikzcd}[scale=0.8]
-    s_1 \arrow[r, "\alpha"]
-        \arrow[d, dash, "R"'] &
-    s_1' \arrow[d, dashed, dash, "R"] \\
-    s_2 \arrow[r, dashed, "\beta"] &
-    s_2'
-  \end{tikzcd}
-  \qquad
-  \label{eqn:simrel}
-  \begin{array}{r@{\,.\,}l}
-    \forall s_1 \, s_2 \, s_1' &
-      \alpha(s_1) \ni s_1' \wedge s_1 \mathrel{R} s_2 \Rightarrow
-    \\[0.25ex]
-    \exists s_2' &
-      \beta(s_2) \ni s_2' \wedge s_1' \mathrel{R} s_2'
-  \end{array}
-\]
-Using the relators in \ref{fig:relators},
-we can express the same property
-concisely and compositionally as
-$
-  \alpha \ifr{R \rightarrow \mathcal{P}^\le(R)} \beta
-$.
-\end{example}
-%}}}
-
-\begin{figure} % fig:relators {{{
-  \figsize
-  \begin{align*}
-    x \ifr{R_1 \times R_2} y \ \Leftrightarrow\  &
-      \pi_1(x) \ifr{R_1} \pi_1(y) \wedge
-      \pi_2(x) \ifr{R_2} \pi_2(y) \\
-    x \ifr{R_1 + R_2} y \ \Leftrightarrow\  &
-      (\exists \, x_1 \, y_1 \,.\,
-        x_1 \ifr{R_1} y_1 \wedge
-        x = i_1(x_1) \wedge
-        y = i_1(y_1)) \\ \vee\ &
-      (\exists \, x_2 \, y_2 \,.\,
-        x_2 \ifr{R_2} y_2 \wedge
-        x = i_2(x_2) \wedge
-        y = i_2(y_2)) \\
-    f \ifr{R_1 \rightarrow R_2} g \ \Leftrightarrow\  &
-      \forall \, x \, y \,.\,
-        x \ifr{R_1} y \Rightarrow
-        f(x) \ifr{R_2} g(y) \\
-    A \ifr{\mathcal{P}^\le(R)} B \ \Leftrightarrow\  &
-      \forall \, x \in A \,.\,
-      \exists \, y \in B \,.\,
-      x \ifr{R} y
-  \end{align*}
-  \caption{A selection of relators}
-  \label{fig:relators}
-\end{figure}
-%}}}
-
-%Logical relations used to reason about contextual equivalence
-%are often partial equivalence relations (PER).
-%By contrast, since we mainly focus on refinement,
-%most of the relations we consider will not be symmetric.
-
-\paragraph{Kripke Relations} %{{{
-
-Since relations for stateful languages
-often depend on the current state,
-Kripke logical relations
-are parametrized over a set of state-dependent \emph{worlds}.
-Components related at the same world
-are guaranteed to be related in compatible ways.
-We use the following notations.
-
-\begin{definition} \label{def:klr} %{{{
-A \emph{Kripke} relation is
-a family of relations $(R_w)_{w \in W}$.
-We write $R \in \mathcal{R}_W(A, B)$
-for a $W$-indexed Kripke relation between the sets $A$ and $B$.
-For $w \in W$ we write:
-\[
-\begin{array}{c@{\qquad}c}
-    [w \Vdash R] \: := \: R_w &
-    [\Vdash R] \: := \: \bigcap_{w} R_w
-\end{array}
-\]
-\end{definition}
-%}}}
-
-A simple relation $R \in \mathcal{R}(A, B)$
-can be promoted to a Kripke relation
-$\lceil R \rceil \in \mathcal{R}_W(A, B)$
-by defining $\lceil R \rceil_w := R$ for all $w \in W$.
-More generally, for an $n$-ary relator $F$ we have:
-\[
-  \AxiomC{$
-    F :
-      \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n)
-      \rightarrow \mathcal{R}(A, B)$}
-  \UnaryInfC{$
-    \lceil F \rceil :
-      \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n)
-      \rightarrow \mathcal{R}_W(A, B)$}
-  \DisplayProof
-\]
-where for the Kripke relations $R_i \in \mathcal{R}_W(A_i, B_i)$,
-\[
-  [w \Vdash \lceil F \rceil (R_1, \ldots, R_n)] \: := \:
-    F(w \Vdash R_1, \ldots, w \Vdash R_n)
-  \,.
-\]
-We use $\lceil - \rceil$ implicitly
-when a relator appears in a context where
-a Kripke logical relation is expected.
-Since reasoning with logical relations
-often involves self-relatedness,
-we use the notation
-$x :: R$ to denote $x \mathrel{R} x$.
-For legibility, we will also write
-$w \Vdash x \mathrel{R} y$ for $x \ifr{w \Vdash R} y$
-and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
-
-%}}}
-
-\subsection{Simulation Conventions} \label{sec:simconv} %{{{
-
-Kripke relations are used
-to define simulation conventions.
-The worlds ensure that corresponding pairs of
-questions and answers are related consistently.
+A simulation convention establishes a correspondence between
+a source language interface and
+a target language interface.
+For example,
+the C calling convention is formalized as a 
+simulation convention between
+the language interface $\mathcal{C}$ and
+the language interface $\mathcal{A}$.
+This is achieved
+by specifying relations between their questions and between their answers.
+To ensure that questions and answers are related in consistent ways,
+the relations are indexed by a world $w$ chosen by the caller.
 
 \begin{definition} \label{def:simconv} % Simulation convention %{{{
 A \emph{simulation convention} between the language interfaces
@@ -574,8 +592,10 @@ $A_1 = \langle A_1^\que, A_1^\ans \rangle$ and
 $A_2 = \langle A_2^\que, A_2^\ans \rangle$
 is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$,
 where $W$ is a set,
-$\mathbb{R}^\que \in \mathcal{R}_W(A_1^\que, A_2^\que)$
-and $\mathbb{R}^\ans \in \mathcal{R}_W(A_1^\ans, A_2^\ans)$.
+and where
+$\mathbb{R}^\que \subseteq W \times A_1^\que \times A_2^\que$
+and $\mathbb{R}^\ans \subseteq W \times A_1^\ans \times A_2^\ans$
+are ternary relations.
 We will write $\mathbb{R} : A_1 \Leftrightarrow A_2$.
 The \emph{identity} simulation convention
 for a language interface $A$
@@ -596,55 +616,55 @@ $\mathbb{R}_B : B_1 \Leftrightarrow B_2$
 relate the corresponding language interfaces;
 we write
 $L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
-These notations are summarized in \ref{tbl:notations}
-and will be used extensively throughout the paper.
+%These notations are summarized in \ref{tbl:notations}
+%and will be used extensively throughout the paper.
 
-\begin{table} % tbl:notations {{{
-  \caption{Summary of notations}
-  \label{tbl:notations}
-  \figsize
-  \begin{tabular}{l@{\hspace{1ex}}cl}
-    \toprule
-    Notation & Examples & Description \\
-    \midrule
-    $R \in \mathcal{R}(S_1, S_2)$ &
-      $\vref$ &
-      Simple relation \\
-    $R \in \mathcal{R}_W(S_1, S_2)$ &
-      $\hookrightarrow_\kw{m}$ &
-      Kripke relation (Def.~\ref{def:klr}) \\
-    $w \Vdash R$ & &
-      Kripke relation at world $w$ \\
-    $w \Vdash x \mathrel{R} y$ & &
-      $x$ and $y$ related at world $w$ \\
-    $\mathbf{R} \in \kw{CKLR}$ & $\kw{injp}$ &
-      CompCert KLR (\S\ref{sec:cklrdef}) \\
-    \midrule
-    $A, B, C$ &
-      $\mathcal{C}, \mathcal{A}, \mathbf{1}$ &
-      Language interface (Def.~\ref{def:li}) \\
-    %$M_A^\que, M_A^\ans$ & &
-    %  Questions and answers of $A$ \\
-    $\mathbb{R} : A_1 \Leftrightarrow A_2$ &
-      $\cc{C}{L}$ &
-      Simulation convention (Def.~\ref{def:simconv}) \\
-    $L : A \twoheadrightarrow B$ &
-      $\kw{Clight}(p)$ &
-      LTS for $A \twoheadrightarrow B$ (Def.~\ref{def:lts}) \\
-    $L_1 \oplus L_2$ & &
-      Horizontal composition (Def.~\ref{def:hcomp}) \\
-    $L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$ &
-      Thm.~\ref{thm:compc} &
-      Simulation property (Def.~\ref{def:fsim}) \\
-    %$p_1 + p_2$ & &
-    %  Program linking \\
-    %$\mathbf{R}$ &
-    %  $\kw{ext}, \kw{inj}$ &
-    %  CKLR (Def.~\ref{def:cklr}) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-%}}}
+%\begin{table} % tbl:notations {{{
+%  \caption{Summary of notations}
+%  \label{tbl:notations}
+%  \figsize
+%  \begin{tabular}{l@{\hspace{1ex}}cl}
+%    \toprule
+%    Notation & Examples & Description \\
+%    \midrule
+%    $R \in \mathcal{R}(S_1, S_2)$ &
+%      $\vref$ &
+%      Simple relation \\
+%    $R \in \mathcal{R}_W(S_1, S_2)$ &
+%      $\hookrightarrow_\kw{m}$ &
+%      Kripke relation (Def.~\ref{def:klr}) \\
+%    $w \Vdash R$ & &
+%      Kripke relation at world $w$ \\
+%    $w \Vdash x \mathrel{R} y$ & &
+%      $x$ and $y$ related at world $w$ \\
+%    $\mathbf{R} \in \kw{CKLR}$ & $\kw{injp}$ &
+%      CompCert KLR (\S\ref{sec:cklrdef}) \\
+%    \midrule
+%    $A, B, C$ &
+%      $\mathcal{C}, \mathcal{A}, \mathbf{1}$ &
+%      Language interface (Def.~\ref{def:li}) \\
+%    %$M_A^\que, M_A^\ans$ & &
+%    %  Questions and answers of $A$ \\
+%    $\mathbb{R} : A_1 \Leftrightarrow A_2$ &
+%      $\cc{C}{L}$ &
+%      Simulation convention (Def.~\ref{def:simconv}) \\
+%    $L : A \twoheadrightarrow B$ &
+%      $\kw{Clight}(p)$ &
+%      LTS for $A \twoheadrightarrow B$ (Def.~\ref{def:lts}) \\
+%    $L_1 \oplus L_2$ & &
+%      Horizontal composition (Def.~\ref{def:hcomp}) \\
+%    $L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$ &
+%      Thm.~\ref{thm:compc} &
+%      Simulation property (Def.~\ref{def:fsim}) \\
+%    %$p_1 + p_2$ & &
+%    %  Program linking \\
+%    %$\mathbf{R}$ &
+%    %  $\kw{ext}, \kw{inj}$ &
+%    %  CKLR (Def.~\ref{def:cklr}) \\
+%    \bottomrule
+%  \end{tabular}
+%\end{table}
+%%}}}
 
 \begin{example} %{{{
 The calling convention used in Example~\ref{ex:abc}
@@ -694,64 +714,8 @@ the return value $v'$.
 
 %}}}
 
-\subsection{Simulation Convention Algebra} \label{sec:mainideas:simalg} %{{{
-
-Simulation conventions
-simplify the adaptation of the pass correctness proofs of CompCert.
-Instead of forcing all passes into the same mold,
-we can choose conventions matching
-the simulation relation and invariants
-used in each pass.
-The proofs can then be composed
-as shown in \ref{fig:simcomp}.
-
-Unfortunately,
-the simulation convention obtained
-when we vertically compose the updated simulation properties
-suffers two serious problems.
-First,
-it is overly specific to the construction of CompCert
-and the exact sequence of passes included in the compiler.
-%This complicates the use of the correctness theorem
-%in different contexts,
-%for instance linking with assembly code produced
-%manually or by using a different compiler.
-Second,
-because the correctness proofs in CompCert
-sometimes assume more guarantees on outgoing calls
-than they provide for incoming calls,
-outgoing and incoming calls use different simulation conventions.
-This asymmetry breaks %the simulation's
-horizontal compositionality (\ref{thm:fsim-hcomp}).
-
-In CompCertO,
-we rectify this imbalance \emph{outside}
-of the simulation proof itself.
-The requirements of most passes
-on their outgoing calls
-are met using the properties
-of the source language $\kw{Clight}$,
-encoded as self-simulations
-and inserted as a pseudo-pass.
-We can then perform algebraic manipulations
-on simulation statements
-to rewrite the overall simulation convention
-used by the compiler.
-
-This is achieved using a notion of
-simulation convention refinement ($\screfd$)
-allowing a simulation convention
-to replace another in all simulation statements.
-We construct a typed Kleene algebra \cite{tka}
-based on this ordering,
-and use it to ensure that
-our compiler correctness statement
-uses a simple,
-compositional simulation convention (\S\ref{sec:callconv}).
-
-%}}}
-
 \begin{figure} % fig:simcomp {{{
+  \centering
   \figsize
   $\begin{array}{c}
     \kw{id} : A \Leftrightarrow A
@@ -770,8 +734,8 @@ compositional simulation convention (\S\ref{sec:callconv}).
                \mathbb{R}_B \cdot \mathbb{S}_B} L_3$}
     \DisplayProof
   \end{array}
-  \:\:
-  \begin{tikzpicture}[baseline=0.6mm,xscale=0.66,yscale=0.55]
+  \qquad
+  \begin{tikzpicture}[baseline=0.6mm,xscale=0.75,yscale=0.65]
     \node (A1) at (-1,  2) {$A_1$};
     \node (A2) at (-1,  0) {$A_2$};
     \node (A3) at (-1, -2) {$A_3$};
@@ -794,10 +758,65 @@ compositional simulation convention (\S\ref{sec:callconv}).
 \end{figure}
 %}}}
 
+Simulation conventions
+simplify the adaptation of the pass correctness proofs of CompCert.
+Instead of forcing all passes into the same mold,
+we can choose conventions matching
+the simulation relation and invariants
+used in each pass.
+Proofs can then be composed
+as shown in Figure~\ref{fig:simcomp}.
+
+%Unfortunately,
+%the simulation convention obtained
+%when we vertically compose the updated simulation properties
+%suffers two serious problems.
+%First,
+%it is overly specific to the construction of CompCert
+%and the exact sequence of passes included in the compiler.
+%%This complicates the use of the correctness theorem
+%%in different contexts,
+%%for instance linking with assembly code produced
+%%manually or by using a different compiler.
+%Second,
+%because the correctness proofs in CompCert
+%sometimes assume more guarantees on outgoing calls
+%than they provide for incoming calls,
+%outgoing and incoming calls use different simulation conventions.
+%This asymmetry breaks %the simulation's
+%horizontal compositionality. % (\ref{thm:fsim-hcomp}).
+%
+%In CompCertO,
+%we rectify this imbalance \emph{outside}
+%of the simulation proof itself.
+%The requirements of most passes
+%on their outgoing calls
+%are met using the properties
+%of the source language $\kw{Clight}$,
+%encoded as self-simulations
+%and inserted as a pseudo-pass.
+%We can then perform algebraic manipulations
+%on simulation statements
+%to rewrite the overall simulation convention
+%used by the compiler.
+%
+%This is achieved using a notion of
+%simulation convention refinement ($\screfd$)
+%allowing a simulation convention
+%to replace another in all simulation statements.
+%We construct a typed Kleene algebra \cite{tka}
+%based on this ordering,
+%and use it to derive a simple,
+%compositional simulation convention
+%for the whole compiler.
+
+%}}}
+
 %}}}
 
 %}}}
 
+\subsection{Proposed Work}
 
 \paragraph*{Task 1a: Add support for unused-globals with better symbol table manipulation.}
 blah blah blah.
