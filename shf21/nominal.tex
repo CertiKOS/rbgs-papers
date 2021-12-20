@@ -1,11 +1,519 @@
 \section{Verified Compilation with a Nominal Memory Model}
+\label{sec:nominal}
+
+In this section, we describe the limitations of the block-based
+memory model and present our new 
+{\em nominal memory model} which removes the global constraints for
+managing memory blocks and enables flexible memory structures for open
+programs and concurrent threads.
+
+\subsection{Problems with the Block-Based Memory Model}
+\label{ssec:nominal-bbmm}
+
+In the block-based memory model, the memory space is represented as a
+countably infinite set of blocks where each block is given a unique
+identifier called its \emph{block id} (denoted by $b$, represented
+as postitive numbers). The entire memory space is
+divided into two parts by a special block id called
+\emph{\nextblock}. A block with id less than \nextblock has been
+allocated (called a \emph{valid block}). Otherwise, it has not been
+allocated yet (called an \emph{invalid block}). \nextblock---initially
+with the value $1$---denotes the id of the next block to be allocated
+and will be increased after each allocation. A valid memory block is a
+finite array of bytes with a lower and upper bound. A \emph{memory
+state} (denoted by $m$) consists of a mapping from addresses to
+\emph{in-memory values} in valid blocks and the value of
+\nextblock. Its type \coqe{mem} is defined in~\figref{sfig:memstate}
+where \coqe{block} is the type of block ids, \coqe{Z} is the type of
+integers, \coqe{memval} is the type of in-memory values, and
+\coqe{$m$.(mem_contents) $b$ $o$ = $v$} iff $b$ is a valid block in
+$m$ and $v$ is the in-memory value at the $o$-th memory cell (byte) of
+$b$.
+
+A pointer or a memory address is a pair $(b, o)$ where $b$ is the
+memory block it points to and $o$ is an index to a memory cell in block
+$b$ (also called an offset).
+%
+Pointer arithmetic is represented by adjustments to offsets. For
+example, $(b, o) + n$ is defined as $(b, o+n)$.
+%
+This simple block-based abstraction already provides basic support for
+memory isolation, in the sense that given a pointer to block $b_1$ we
+can never reach $b_2$ by performing pointer arithmetic if $b_1 \neq b_2$.
+
+\begin{figure}
+  \begin{subfigure}[b]{.45\textwidth}
+    \begin{coq}
+Definition block : Type := positive.
+Record mem: Type := { 
+  mem_contents: block -> Z -> memval;
+  nextblock: block; }.
+    \end{coq}
+    \caption{Blocks and Memory States}
+    \label{sfig:memstate}
+  \end{subfigure}
+  \begin{subfigure}[b]{.5\textwidth}  
+    \begin{coq}
+alloc : mem -> Z -> Z -> mem \times block
+free  : mem -> block -> Z -> Z -> $\some{\code{mem}}$
+load  : mem -> chunk -> block -> Z -> $\some{\code{val}}$
+store : mem -> chunk -> block -> Z -> val -> $\some{\code{mem}}$
+    \end{coq}
+    \caption{Memory Operations}
+    \label{sfig:memops}
+  \end{subfigure}
+  \caption{Definitions for the Block-Based Memory Model}
+  \label{fig:bbmem}
+%  \vspace{-0.1cm}
+\end{figure}
+
+\figref{sfig:memops} shows the main operations over memory where
+\coqe{val} is the type of \emph{regular values}:
+%
+\begin{coq}
+   Inductive val := Vundef | Vint $i_{32}$ | Vlong $i_{64}$ | Vsingle $f_{32}$ | Vfloat $f_{64}$ | Vptr $(b,o)$.
+\end{coq}
+%
+Here, \coqe{Vundef} represents undefined values, \coqe{Vptr $(b,o)$}
+represents a pointer $(b,o)$, and the remaining forms denote 32- and
+64-bit integer and floating point values.
+%
+\coqe{chunk} is the type of \emph{memory chunks} containing
+information necessary for performing conversion between in-memory
+values and regular values.
+%
+Note that the option type $\lfloor \rfloor$ is used to describe the
+possible failure of some operations.  Given a memory state $m$, a
+lower bound $l$ and a higher bound $h$, \coqe{alloc $m$ $l$ $h$}
+returns a new block whose id is \coqe{$m$.(nextblock)} and whose valid
+offsets are in the range of $[l,h)$. It also returns a new memory state
+  where \nextblock is increased by $1$ and the newly allocated memory
+  cells are initialized with undefined values.
+%
+Note that \coqe{alloc} \emph{always succeeds} because the memory space
+has infinitely many blocks. The \coqe{free} operation frees memory
+cells in a certain range. Given $m$, $k$ $b$ and $o$,
+\coqe{load $m$ $k$ $b$ $o$}
+loads a value starting from the address $(b,o)$ such
+that the size and type of value are determined by $k$.  Conversely,
+\coqe{store} stores a value into a certain location in memory.
+
+A main task of compilers is to transform abstract data structures
+(e.g., stacks) for describing the semantics of the high-level source
+languages into concrete data structures for the low-level target
+languages. These transformations often operate on certain part of
+memory and have local effects.
+
+CompCert introduces \emph{injections} to capture such changes. An
+injection $j$ is a partial function of type
+\coqe{block -> $\some{\code{block} \times \code{Z}}$}, such that $j(b) =
+\some{(b',o)}$ iff a block $b$ is inserted into block $b'$ at offset
+$o$ by the transformation. If $j(b) = \none$ (we use $\none$ to
+represent the \coqe{None} constructor), then $b$ is removed from the
+memory after the transformation.
+
+When proving the correctness of these memory-transforming passes, one
+would expect that we could exploit the locality of memory
+transformations to construct intuitive proofs. For example, for
+\code{SimplLocals}, \coqe{Cminorgen} and \coqe{Stacking}, one would
+like to exploit the facts that \emph{1)} blocks for global definitions
+are unchanged, and \emph{2)} the changes to individual stack frames
+cannot interfere with each other. However, it is impossible to
+formalize these facts directly because we can neither distinguish
+blocks for global definitions from blocks in stack frames, nor tell
+the differences between blocks in different stack frames: they are all
+indexed by positive numbers. This problem is exactly caused by
+\textbf{Inflexibility 1} introduced in~\S\ref{ssec:intro-nmm}.
 
 
-\paragraph*{Task 2a: nominal compcert with structural memory injection.}
-blah blah blah.
+Verification techniques for open programs are compositional only if
+the semantics of open programs are compatible with each other.
+However, the existence of a global \nextblock makes this compatibility
+very difficult to establish, even when different open programs operate
+on completely separate memory regions.
 
-\paragraph*{Task 2b: building norminal compcerto (simplified injection proofs).}
-blah blah blah.
+\begin{wrapfigure}[12]{r}{0.5\textwidth}
+  \begin{tikzpicture}[scale=0.6, every node/.style={scale=0.9},auto]
+    \def\bh{0.2cm}
+    \tikzstyle{af}=[draw,minimum width=0.5cm, minimum height=0.5cm, rounded corners=.05cm];
+    
+    \node[af,fill=yellow] (t1f) {$f$};
+    \node[af, below=\bh of t1f, fill=yellow] (t1g) {$g$};
+    \node[af, below=\bh of t1g, pattern = north east lines] (t1i) {};
+    \node[af, below=\bh of t1i, pattern = north east lines] (t1j) {};
+    \node[af, below=\bh of t1j, fill=yellow] (t1h) {$h$};
+    %% \node[draw = none, below left =\bh and -0.1cm of t1h, rotate = 90] (t1end) {$\ldots$};
+    
+    \draw[->,>=stealth] (t1f) -- (t1g);
+    \draw[->,>=stealth] (t1g) -- (t1i);
+    \draw[->,>=stealth] (t1i) -- (t1j);
+    \draw[->,>=stealth] (t1j) -- (t1h);
+    \draw[->,>=stealth] (t1h) -- ($(t1h.south) + (0cm, -0.3cm)$);
 
-\paragraph*{Task 2c: building norminal compcerto for concurrent programs.}
-blah blah blah.
+    \node[above = 0.1cm of t1f] {Thread $1$};
+
+    \node[af, right = 2cm of t1f, pattern = north east lines] (t2f) {};
+    \node[af, below=0.22cm of t2f, pattern=north east lines] (t2g) {};
+    \node[af, below=\bh of t2g,fill=green] (t2i) {$i$};
+    \node[af, below=\bh of t2i,fill=green] (t2j) {$j$};
+    \node[af, below=\bh of t2j, pattern=north east lines] (t2h) {};
+    %% \node[draw = none, below left =\bh and -0.1cm of t2h, rotate = 90] (t2end) {$\ldots$};
+
+    \draw[->,>=stealth] (t2f) -- (t2g);
+    \draw[->,>=stealth] (t2g) -- (t2i);
+    \draw[->,>=stealth] (t2i) -- (t2j);
+    \draw[->,>=stealth] (t2j) -- (t2h);
+    \draw[->,>=stealth] (t2h) -- ($(t2h.south) + (0cm, -0.3cm)$);
+
+    \node[above = 0.1cm of t2f] (t2txt) {Thread $2$};
+
+    \node[draw=none, right = 1cm of t2i] (comp) {\large\bf $\Longrightarrow$};
+    \node[draw=none, above = 0.1cm of comp] {\small \emph{Thread Linking}};
+
+    \draw[->, dashed, >=stealth] (t1g) -- node [sloped, above] {\small \emph{yield}} (t2i);
+    \draw[->, dashed, >=stealth] (t2j) -- node [sloped, above] {\small \emph{yield}} (t1j);
+
+
+    \node[af, right = 3cm of t2f,fill=yellow] (tf) {$f$};
+    \node[af, below=\bh of tf,fill=yellow] (tg) {$g$};
+    \node[af, below=\bh of tg,fill=green] (ti) {$i$};
+    \node[af, below=\bh of ti,fill=green] (tj) {$j$};
+    \node[af, below=\bh of tj,fill=yellow] (th) {$h$};
+    %% \node[draw = none, below left =\bh and -0.1cm of th, rotate = 90] (tend) {$\ldots$};
+
+    \draw[->,>=stealth] (tf) -- (tg);
+    \draw[->,>=stealth] (tg) -- (ti);
+    \draw[->,>=stealth] (ti) -- (tj);
+    \draw[->,>=stealth] (tj) -- (th);
+    \draw[->,>=stealth] (th) -- ($(th.south) + (0cm, -\bh)$);
+    
+    \node[right = 2cm of t2txt] {Threads $\{1,2\}$};
+    
+
+  \end{tikzpicture}
+  \vspace{-0.2cm}
+  \caption{\scriptsize{}Linking of Multiple Stacks into a Single Stack in CCAL}
+  \vspace{-0.2cm}
+  \label{fig:stack-linking}
+\end{wrapfigure}
+
+We take the compilation and linking of Certified Concurrent
+Abstraction Layers (CCAL) as an example to illustrate the above
+problem~\cite{ccal18}. A concurrent certified abstraction layer $L$
+consists of shared and private memory states, abstract states, and a
+set of possibly shared primitive operations (like external
+functions). The semantics of a language (\eg, C or assembly) built on
+top of $L$ forms an abstract machine in which concurrent programs can
+be formally described. 
+%
+A CCAL object is a formally verified open program built on top of some
+layer $L$. A multi-threaded program is developed by abstracting
+individual threads into CCAL objects. These objects are then
+compiled by an extension of CompCert called Thread-Safe CompCertX into
+assembly code. Finally, CCAL objects need to be linked together to
+form a complete program. 
+
+For the above linking to be possible, the views of memory of CCAL
+objects must be compatible with each other. Achieving this
+compatibility is a non-trivial task.
+%
+To understand this, observe that a new stack block is
+allocated for every function call in CompCert's assembly. To
+link threads together, it is necessary for each thread to have
+the same sequences of
+stack blocks and \nextblock, meanwhile preventing one
+thread from accessing the private stack memory of the others.
+
+To solve the above problem, the authors of Thread-Safe
+CompCertX~\cite{ccal18} modify the assembly semantics so that when a
+thread yields to its context, a sequence of dummy stack blocks is
+allocated to increase \nextblock in accordance with the actual
+allocation of stack blocks by the context. Moreover, to avoid any
+interference between memory operations on the stacks in different
+threads, the dummy blocks do not carry any read or write
+permission---they are ``dead'' memory cells from the perspective of
+the focused thread. With those devices, it is possible to ``thread''
+the private stack frames of each thread into a single stack. As an
+example, the linking of stacks for two threads is depicted in
+\figref{fig:stack-linking}. Here, the call to the yield primitive from
+thread $1$ to $2$ in the function $g$ allocates two dummy blocks
+(marked with diagonal lines) for the corresponding execution in thread
+$2$. Accesses to these dummy blocks are invalid in thread $1$.
+
+
+The solution above has two problems.
+%
+First, intuitively, each thread should have it own private stack:
+the context should not interfere with operations on this stack.
+Contrary to this assumption, the growth of dummy frames depends
+on how contextual threads change \nextblock. This introduces
+unnecessary complication to verification of compilation.
+%
+Second, in the linked program, stack frames for different threads are
+interleaved with each other. This makes the semantics of
+linked programs much more complex. It is also extremely difficult to
+further verify their compilation to actual machine code where each
+thread should have its own contiguous and private stack.
+%
+These problems are exactly caused by
+\textbf{Inflexibility 2 and 3} in~\S\ref{ssec:intro-nmm}.
+
+\subsection{The Nominal Memory Model}
+\label{ssec:nominal-nmm}
+
+We solve the above problems by getting rid of the inflexibilites of
+the block-based memory model through a generalization based on nominal
+techniques.
+
+Nominal techniques~\cite{pitts-nominal,gabby2002} provide a
+mathematical foundation for managing named resources. 
+%
+In this setting, any countably infinite set $\nameset{A}$ can
+represent a set of available names. Elements in these sets are called
+\emph{atomic names} (or simply \emph{names} in short). Dependency of
+objects upon names is captured by the notions of \emph{permutations}
+and \emph{supports}. A permutation $\pi$ is a bijection from
+$\nameset{A}$ to itself that only renames a finite subset of names in
+$\nameset{A}$. Given a set of objects $X$ and some $x \in X$, $A
+\subseteq \nameset{A}$ supports $x$ (or $A$ is a support of $x$) iff,
+for any permutation $\pi$ on $\nameset{A}$ that is an identity mapping
+for names in $A$, we have $\pi \cdot x = x$ where $\_ \cdot \_$
+denotes the ``application'' (known as an \emph{action}) of $\pi$ to the
+object $x$. This effectively means that $x$ is independent of any name
+outside of $A$.
+%
+Only objects that can be supported by a finite set of names are of
+interest to us.
+%
+A binary relation called \emph{freshness} makes the independence
+relation concrete. A name $a\in \nameset{A}$ is fresh w.r.t. $x$
+(written as $\freshness{a}{x}$) iff $x$ is supported by some finite set $A
+\subseteq \nameset{A}$ and $a \not\in A$.
+
+\begin{figure}[t]
+\begin{coq}
+  Module Type BLOCK.
+    Parameter block : Type.
+    Parameter eq_block : $\forall\app x\app y: \scode{block}, \sumbool{x=y}{x \neq y}$.
+  End BLOCK.
+
+  Module Type SUP.
+    Parameter sup: Type.
+    (** Operations *)
+    Parameter sup_empty : sup.  (* Empty support *)
+    Parameter fresh_block : sup -> block.  (* Generation of fresh blocks *)
+    Parameter sup_incr : sup -> sup.  (* Increment of supports *)
+    Parameter sup_in : block -> sup -> Prop.   (* Check validity of block ids *)
+    (** Properties *)
+    Parameter sup_dec : $\forall\app b\app s, \sumbool{\scode{sup\_in}\app b\app s}{\neg \scode{sup\_in}\app b\app s}$.
+    Parameter empty_in: $\forall\app b, \neg \scode{sup\_in}\app b\app \scode{sup\_empty}$.
+    Parameter freshness : $\forall\app s, \neg \scode{sup\_in}\app (\scode{fresh\_block}\app s)\app s$.
+    Parameter sup_incr_in : $\forall\app a\app s, \scode{sup\_in}\app a\app (\scode{sup\_incr}\app s) 
+    \leftrightarrow a = (\scode{fresh\_block}\app s) \lor \scode{sup\_in}\app a\app s$.
+  End SUP.  
+\end{coq}
+%  \vspace{-0.2cm}
+  \caption{Interfaces of the Nominal Memory Model}
+  \label{fig:nm-interface}
+%  \vspace{-0.1cm}
+\end{figure}
+
+The above concepts can be used to characterize the block-based
+memory model. By taking memory states as objects containing names, 
+we adopt the following analogies:
+%
+\begin{itemize}\itemsep 0pt
+\item Block ids represent names that memory states depend upon;
+\item Given a memory state $m$, the set of valid blocks in $m$
+  represents a support of $m$;
+\item Given a memory state $m$, its \nextblock is fresh w.r.t. $m$.
+\end{itemize}
+%
+Note that the set of valid blocks is always finite. To some extent, the
+existing memory operations in CompCert already exploit the properties
+of atomic names and supports. For example,
+\coqe{alloc} always succeeds because there is always an infinite amount
+of ids outside the set of valid blocks.
+
+However, the block-based memory also makes rigid assumptions
+about names and supports:
+%
+\begin{itemize} \itemsep 0pt
+\item Block ids are fixed to positive numbers;
+\item For any memory state $m$ whose \nextblock is $n$, its support
+  must be the fixed set of consecutive numbers $\{1,\ldots,n-1\}$;
+\item For any memory state $m$ whose \nextblock is $n$, its fresh
+  block must be assigned with the id $n$.
+\end{itemize}
+%
+
+We shall remove these rigid assumptions and generalize the block-based
+memory model into the nominal memory model by introducing an
+abstraction of block ids and supports as module types, as depicted
+in~\figref{fig:nm-interface}.
+%
+By the definition of \coqe{BLOCK}, block ids are names with decidable equality.
+%
+By the definition of \coqe{SUP}, a support type must be accompanied by
+four kinds
+of operations: checking the membership of blocks in supports
+(\coqe{sup_in}), creating an empty support (\coqe{sup_empty}),
+generating fresh blocks (\coqe{fresh_block}) and increasing supports
+with new blocks (\coqe{sup_incr}). Furthermore, those operations must
+satisfy some well-formedness properties. 
+
+\begin{figure}
+\begin{coq}
+  Module Block <: BLOCK.
+    Definition block := positive.         Definition eq_block := peq.
+  End Block.
+
+  Module Sup <: SUP.
+    Definition sup := list block.         Definition sup_in ($b$: block) ($s$: sup) : Prop := $b \in s$.
+    Definition sup_empty : sup := [].     Definition fresh_block ($s$: sup) := (find_max_pos $s$) + 1.
+    Definition sup_incr ($s$ :sup) := $(\scode{fresh\_block }s) \cons s$.   $\qquad$ ...
+  End Sup.  
+\end{coq}  
+  \vspace{-0.2cm}
+  \caption{Block-based Memory Model as an Instance}
+  \vspace{-0.1cm}
+  \label{fig:bm-instance}
+\end{figure}
+
+We also note that the above generalization does not exactly match with the
+standard definitions in nominal techniques. For example, \coqe{BLOCK} does not
+enforce that block ids are from a countably infinite set. Instead,
+the \coqe{freshness} property guarantees that any block fresh w.r.t a
+support $s$ must not be already in $s$. Together with the totality of
+\coqe{fresh_block}, it implies the existence of an infinite number of
+block ids.
+%
+We also define supports to be any type that has the interface of
+\coqe{SUP}, instead of a finite set of block ids. This generalization
+allows us to instantiate \coqe{sup} with complex data structures for
+formalizing memory space in fine-grained styles. 
+
+To make use of the above interfaces, we instantiate block ids and
+supports as follows:
+%
+\begin{coq}
+  Module Block <: BLOCK. ... End Block.           Module Sup <: SUP. ... End Sup.
+\end{coq}
+%
+Then the original \coqe{block} type is instantiated with
+\coqe{Block.block}. Moreover, the memory state carries a support instead of
+\nextblock:
+%
+\begin{coq}
+  Record mem: Type := { mem_contents: block -> Z -> memval;   support: Sup.sup;}.
+\end{coq}
+%
+The memory operations are adapted accordingly. For example, checking
+of valid blocks is done by using \coqe{sup_in} instead of comparing
+with \nextblock:
+%
+\begin{coq}
+  Definition valid_block ($m$:mem) ($b$:block) := $b$ < $m$.(nextblock).   (* Old *)
+  Definition valid_block ($m$:mem) ($b$:block) := sup_in $b$ $m$.(support).  (* New *)
+\end{coq}
+%
+For another example, \coqe{alloc} now invokes \coqe{fresh_block} to
+allocate a new block instead of consulting \nextblock.
+The properties of all memory operations can be easily reestablished
+because they are already ignorant of particular instantiations of block ids
+and supports. 
+
+Finally, the block-based memory model becomes a special case of the
+nominal memory model, as depicted in~\figref{fig:bm-instance} where
+\coqe{find_max_pos} finds the maximal positive number in a list.
+
+As a preliminary evidence for its effectiveness, we have recently
+successfully applied the nominal memory model to the full compilation
+chain of CompCert to get Nominal CompCert~\cite{wang2022}.  We updated
+the semantics of every language of CompCert by replacing the old
+memory operations with the new one. We then also updated the
+simulation proofs. Because the generalization of block ids and
+supports is mostly orthogonal to the simulation proofs in CompCert,
+the changes are minimal.
+
+\paragraph*{Task 2a: Nominal CompCert with Structural Memory Space.}
+A big part of our proposed effort is to develop various instantiations
+of the nominal memory model where the whole {\em memory space} is
+divided into memory regions with well-defined structures and clear
+roles. One promising design~\cite{wang2022} separates global memory
+(for global variables and functions) from stack memory; and then
+organizes the stack into a tree structure that mirrors the ``call
+activation'' tree.  Because most memory transformations do not change
+the order of function calls and returns, the stack tree remains stable
+under compilation; this allows us to recover the locality decompose a
+transformation on the entire stack into local transformations on
+individual stack frames, which could lead to much simpler and more
+intuitive proofs for memory injection phases.
+
+\paragraph*{Task 2b: Norminal CompCertO for Open Programs.}
+Another key task is to integrate the norminal memory model into our
+new compositional verified compilation framework in
+\S\ref{sec:compcerto}.  Compositional compilation needs to not only
+keep track of how memory is transformed by internal functions, but
+also do that for external functions.  If the context is fixed, the
+transformation on contextual memory should always be described as
+\emph{an identity mapping} from source to target memory blocks,
+regardless of how complicated the memory transformation is for
+internal executions.  However, this seemingly simple task is extremely
+difficult to complete in the original CompCert because it lacks the
+ability to distinguish memory blocks allocated by internal functions
+from those by external ones. With the nominal memory model and its
+instances, contextual memory can be separated from internal memory and
+be reasoned about via a well-defined interface, leading to simpler and
+more elegant correctness proofs for compiling certain kinds of open
+programs. We believe that these techniques together with others we
+have built on top of the nominal memory model could be particularly
+beneficial in the general context of compositional compiler
+correctness.
+
+\ignore{
+In CompCert, the complexity of memory injections is largely confined
+to the correctness proofs of individual passes: injections are
+existentially quantified as part of the simulation relation and do not
+appear in the correctness statement itself.  This is possible because
+memory states are not part of the externally observable behavior of
+programs. This assumption must be relaxed in compositional extensions
+of CompCert which model interactions between compilation units.  In
+work such as Compositional CompCert~\cite{stewart15},
+CompCertX~\cite{dscal15,wang2019}, CompCertM~\cite{compcertm},
+CASCompCert~\cite{cascompcert} and CompCertO~\cite{koenig21}, memory
+states appear as part of the interactions between components.  As a
+consequence, the memory relations used by compilation passes become
+part of their correctness statements.  This makes correctness theorems
+and the vertical composition of passes much more complex.
+
+Our techniques based on the nominal memory model have the potential to
+significantly simplify the above proofs from the following
+perspectives.  First, the evolving Kripke worlds used in compositional
+compiler correctness are used to store both memory injections (which
+can be determined ahead of time using more structural injection
+functions) and additional permission information (which could be
+stored in our model as part of the information associated with block
+identifiers).  As a result, by incorporating our approach, it may be
+possible to eliminate Kripke worlds entirely, which would
+significantly simplify the semantic frameworks used in these projects.
+Moreover, our techniques could help isolate private memory as internal
+states, for example through the use of a partial commutative monoid
+structure on memory states which would facilitate splitting and
+merging private memory regions used by individual components.
+Finally, they could provide a seamless way to incorporate stack
+awareness to compositional compilers of this kind.
+}
+
+\paragraph*{Task 2c: Norminal CompCertO for Open Threads}
+We will extend Nominal CompCertO to support
+multi-threaded programs. The existing solutions invented ad hoc
+mechanisms~\cite{ccal18} to cope with the global \nextblock which
+prevent further compilation to a realistic machine model in which each
+thread has its own contiguous and private stack. We plan to
+instantiate supports with multiple stack trees where we can grow
+the stacks individually without interference with each other, thereby
+eliminating the problems with \nextblock.
+
+
+
