@@ -120,6 +120,45 @@ and construct a double category.]
 
 \section{Semantics in CompCert} %{{{
 
+In its strongest form,
+the compiler correctness theorem proved in CompCert
+is expressed as a forward simulation of labeled transition systems.
+This simulation is then used to derive
+a trace containment property.
+
+Although CompCertO provides an updated notion of forward simulation,
+in the compositional setting
+it is challenging to
+formulate a theorem analogous to trace containment.
+To do so,
+we must incorporate component interactions
+into event traces.
+Traces then become typed in the same way our transition systems are.
+Because they include internal notions of state and interaction
+which differ between the source and target languages,
+the corresponding traces are no longer directly comparable,
+and we must bring simulation conventions into the picture.
+
+This is challenging because
+simulation conventions involve
+\emph{dual} nondeterminism:
+both the system and the environment contribute choices
+which determine how C-level behavior is realized at the assembly level.
+Because of this,
+neither trace inclusion (angelic nondeterminism)
+nor trace containment (demonic nondeterminism)
+are sufficient to express the relationship
+between these behaviors.
+
+\emph{Refinement-based game semantics} \cite{koenig20}
+offers a solution,
+in the form of a relatively simple game model
+with full support for both angelic and demonic choices.
+We have mechanized this model in the Coq proof assistant.
+In this section,
+we demonstrate how the compositional semantics used in CompCertO
+can be interpreted in this setting.
+
 %% preamble {{{
 %
 %The semantics of CompCert languages
@@ -243,10 +282,10 @@ and construct a double category.]
 
 \subsection{Transition systems} %{{{
 
-Language semantics are
+The semantics of CompCert languages are
 given as labelled transition systems (LTS),
 which characterize a program's behavior in terms of
-sequences of observable events
+sequences of observable events,
 taken from a fixed set $\mathbb{E}$.
 
 Schematically, a CompCert LTS
@@ -319,7 +358,7 @@ and defines four kinds of behaviors:
           \cdots \stackrel{t_{n-1}}{\rightarrow}
           s_n \mathrel{F} r
     \]
-    I will write this behavior as
+    We will write this behavior as
     \[
       t_1 t_2 \cdots t_{n-1} \Downarrow r
       \,.
@@ -337,7 +376,7 @@ and defines four kinds of behaviors:
           s_{n+1} \stackrel{\epsilon}{\rightarrow}
           \cdots
     \]
-    I will write the corresponding behavior as
+    We will write the corresponding behavior as
     \[
       t_1 t_2 \cdots t_{n-1} \Uparrow
       \,.
@@ -371,12 +410,12 @@ and defines four kinds of behaviors:
     with no $t, s'$ such that
     $s_n \stackrel{t}{\rightarrow} s'$
     and no $r$ such that $s_n \mathrel{F} r$.
-    The corresponding, partially defined behavior is written
+    This partially defined behavior is written
     \[
       t_1 t_2 \cdots t_{n-1} \lightning
       \,.
     \]
-    It can be refined by any behavior
+    It is refined by any behavior
     admitting $t_1 t_2 \cdots t_{n-1}$ as a prefix.
 \end{itemize}
 A transition system with no initial state ($I = \varnothing$)
@@ -397,7 +436,7 @@ are taken from the following language:
     \mathbb{E}^\omega
   \,.
 \]
-I will write
+We will write
 ${\refby_\lightning} \subseteq \mathbb{B} \times \mathbb{B}$
 for CompCert's notion of \emph{behavior improvement},
 which allows behaviors which go wrong to
@@ -414,7 +453,7 @@ of a transition system $L$
 is characterized
 as a set $\kw{Beh}(L) \subseteq \mathbb{B}$
 of possible individual behaviors.
-In the remainder of this section I will describe
+In the remainder of this section we will describe
 the techniques used in CompCert to define and establish
 corresponding notions of refinement.
 
@@ -429,13 +468,13 @@ corresponding notions of refinement.
 \subsection{Events} %{{{
 
 The events used in the traces above are taken from the following set:
-\[
+\begin{align*}
   e \in \mathbb{E} ::=
-    \kw{syscall}[u, \vec{v}]/v \mid
-    \kw{vload}[i, o]/v \mid
-    \kw{vstore}[i, o, v] \mid
+    \kw{syscall}[u, \vec{v}]/v & \mid
+    \kw{vload}[i, o]/v \\ \mid
+    \kw{vstore}[i, o, v] & \mid
     \kw{annot}[u, \vec{v}]
-\]
+\end{align*}
 They correspond to system calls ($\kw{syscall}$),
 volatile loads and stores ($\kw{vload}$, $\kw{vstore}$),
 and annotations ($\kw{annot}$).
@@ -462,15 +501,15 @@ chosen by the environment and written to the right of the oblique.
 In CompCert,
 this distinction is formulated as a ``$\kw{match\_traces}$'' relation
 which identifies events that have the same output component.
-It can be described as the smallest equivalence relation $\simeq$
+It can be described as the smallest equivalence relation $\incoh$
 containing:
-\[
-  \kw{syscall}[u, \vec{v}]/v_1' \simeq
+\begin{align*}
+  \kw{syscall}[u, \vec{v}]/v_1' &\incoh
   \kw{syscall}[u, \vec{v}]/v_2'
-  \qquad
-  \kw{vload}[i, o]/v_1 \simeq
+  \\
+  \kw{vload}[i, o]/v_1 &\incoh
   \kw{vload}[i, o]/v_2
-\]
+\end{align*}
 Equivalently,
 the set of events can be described as an effect signature
 and used to interpret the behaviors of transition systems
@@ -478,16 +517,37 @@ in terms of strategies.
 
 %}}}
 
+\begin{table*} %{{{
+  \caption{Notions of refinement in CompCert semantics}
+  \label{tbl:compcertref}
+  \centering
+  \begin{tabular}{ccc}
+    \hline
+    Nondeterminism
+      & Transition systems
+      & Sets of traces \\
+    \hline
+    Angelic interpretation
+      & Forward simulations ($\le$)
+      & Trace inclusion ($\mathcal{P}^\le(\refby_\lightning)$) \\
+    Demonic interpretation
+      & Backward simulations ($\ge$)
+      & Trace containment ($\mathcal{P}^\ge(\refby_\lightning)$) \\
+    \hline
+  \end{tabular}
+\end{table*}
+%}}}
+
 \subsection{Games} \label{sec:sem:games} %{{{
 
-Although CompCert semantics
-are not formulated explicitly as game semantics,
-understanding them in that framework
-will be useful
-when we consider the extensions I present in \S\ref{sec:compcert-ext}
-and in Chapter~\ref{sec:compcerto}.
-Event traces correspond to an interaction
+The starting point for our work
+is to consider CompCert transition systems
+as a way to define \emph{strategies}
+for a particular game.
+Specifically,
+a trace corresponds to an interaction
 over the signature
+[XXX explain $\kw{eval}$ again?]
 \begin{align*}
   \mathcal{E} := \{ {}
     &\kw{syscall} :
@@ -527,45 +587,22 @@ for the game $\mathcal{E} \rightarrow \mathcal{W}$.
 However,
 the precise behavior of a transition system
 as a strategy of this kind
-depends on how nondeterminism is interpreted:
+depends on how nondeterminism is interpreted.
+Implicitly,
 \begin{itemize}
   \item
-    The angelic interpretation
-    is used implicitly in the context of
-    \emph{forward simulations},
-    which entail a \emph{trace inclusion} property
-    for the corresponding sets of behaviors.
+    \emph{forward} simulations
+    correspond to an \emph{angelic} interpretation,
+    and entail a trace \emph{inclusion} property
+    for the corresponding sets of behaviors;
   \item
-    The demonic interpretation
-    is used implicitly in the context of
-    \emph{backward simulations},
-    which entail
+    \emph{backward} simulations
+    correspond to a \emph{demonic} interpretation, and
     under some \emph{receptiveness} assumptions
-    a corresponding \emph{trace containment} property.
+    they entail a trace \emph{containment} property.
 \end{itemize}
 This is outlined in Table~\ref{tbl:compcertref}
 and explained in the following sections.
-
-\begin{table} %{{{
-  \centering
-  \begin{tabular}{ccc}
-    \hline
-    Nondeterminism
-      & Transition systems
-      & Sets of traces \\
-    \hline
-    Angelic interpretation
-      & Forward simulations ($\le$)
-      & Trace inclusion ($\mathcal{P}^\le(\refby_\lightning)$) \\
-    Demonic interpretation
-      & Backward simulations ($\ge$)
-      & Trace containment ($\mathcal{P}^\ge(\refby_\lightning)$) \\
-    \hline
-  \end{tabular}
-  \caption{Notions of refinement in CompCert semantics}
-  \label{tbl:compcertref}
-\end{table}
-%}}}
 
 %}}}
 
@@ -584,7 +621,12 @@ purely as a choice of the \emph{environment}.
 In terms of sets of behaviors,
 the corresponding notion of refinement
 is the trace inclusion relation
-$\mathcal{P}^\le({\refby_\lightning})$,
+\[
+  \mathcal{P}^\le({\refby_\lightning}) =
+  \{ (T, T') \mid \forall t \in T \bdot \exists t' \in T' \bdot
+      t \refby_\lightning t' \}
+  \,,
+\]
 which guarantees that
 all choices available to the environment in the source program
 are available in the target program as well.
@@ -602,7 +644,7 @@ in $\mathcal{I}_\mathcal{E}$ as:
   \llbracket m / n \cdot b \rrbracket &:=
     m n \llbracket b \rrbracket
 \end{align*}
-Then $\kw{Beh}(L)$ can be interpreted as a strategy
+Then $\kw{Beh}(L)$ defines a strategy
 in $\mathcal{E} \rightarrow \mathcal{W}$ given by:
 \[
   \llbracket \kw{Beh}(L) \rrbracket^* :=
@@ -666,7 +708,7 @@ such that the following properties hold:
     $s_2 \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}_2^*} s_2'$ and
     $s_2' \mathrel{F_2} r$.
 \end{itemize}
-I will write $L_1 \le L_2$.
+We will write $L_1 \le L_2$.
 \end{definition}
 
 CompCert also includes in \texttt{common/Smallstep.v}
@@ -701,14 +743,19 @@ for most of CompCert's compilation passes.
 \subsection{Demonic interpretation} %{{{
 
 Under a demonic interpretation of nondeterminism,
-we look at the choice between two possible transitions
+the choice between two possible transitions
 $s \stackrel{t_1}{\longrightarrow} s_1$ and
 $s \stackrel{t_2}{\longrightarrow} s_2$
-as a choice of the \emph{system}.
+is a choice of the \emph{system}.
 In terms of traces,
 the corresponding notion of refinement
 is the \emph{trace containment} relation
-$\mathcal{P}^\ge({\refby_\lightning})$,
+\[
+  \mathcal{P}^\ge({\refby_\lightning}) =
+  \{ (T, T') \mid \forall t' \in T' \bdot \exists t \in T \bdot
+    t \refby_\lightning t' \}
+  \,,
+\]
 which guarantees that all possible behaviors of the target program
 are permitted by the specification (source program).
 
@@ -812,7 +859,7 @@ such that $s'$ is stuck
 A \emph{backward simulation}
 of a transition system
 $L_1 = \langle S_1, I_1, {\rightarrow}_1, F_1 \rangle$
-by a transition system
+by
 $L_2 = \langle S_2, I_2, {\rightarrow}_2, F_2 \rangle$
 is given by a relation $R \subseteq W \times S_1 \times S_2$
 indexed by a well-founded order $(W, {<})$
@@ -841,7 +888,7 @@ such that the following properties hold:
     $s_1 \mathrel{\smash{\stackrel{\epsilon}{\rightarrow}}_1^*} s_1'$ and
     $s_1' \mathrel{F_1} r$.
 \end{itemize}
-I will write $L_1 \ge L_2$.
+We will write $L_1 \ge L_2$.
 \end{definition}
 %}}}
 
@@ -874,7 +921,7 @@ formulated in CompCert
 are only satisfactory under some conditions:
 \begin{itemize}
   \item
-    The trace inclusion property
+    Trace inclusion
     $\kw{Beh}(L_1)
      \mathrel{\mathcal{P}^\le(\refby_\lightning)}
      \kw{Beh}(L_2)$
@@ -884,7 +931,7 @@ are only satisfactory under some conditions:
     in other words \emph{only} contains nondeterminism
     over environment inputs.
   \item
-    The trace containment property
+    Trace containment
     $\kw{Beh}(L_1)
      \mathrel{\mathcal{P}^\ge(\refby_\lightning)}
      \kw{Beh}(L_2)$
@@ -1085,7 +1132,10 @@ so that the backward simulation will entail refinement:
 
 %}}}
 
-\section{Abstraction in Trace Semantics} %{{{
+\section{Abstraction} %{{{
+
+[Explain how to embed CompCertO's simulation conventions as adjunctions,
+and simulations as refinement]
 
 \subsection{Motivation}
 
