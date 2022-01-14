@@ -13,6 +13,7 @@
 \usepackage{tikz-cd}
 \usepackage{bbm}
 \usetikzlibrary{calc}
+\usepackage{minted}
 
 %\newtheorem{definition}{Definition}
 %\newtheorem{theorem}[definition]{Theorem}
@@ -24,6 +25,8 @@
 \newcommand{\que}{{\circ}}
 \newcommand{\ans}{{\bullet}}
 \newcommand{\ifr}[1]{\mathrel{[{#1}]}}
+
+\newcommand{\ISpec}{\mathbf{ISpec}}
 
 \title{%
   A Framework for Specification, Abstraction, and Refinement
@@ -167,15 +170,79 @@ Refinement-based and algebraic game semantics
 
 %}}}
 
-\section{Abstraction in Compositional Semantics} %{{{
+\section{Main Ideas} %{{{
 
-[Main ideas section describes how compositional semantics
+[section describes how compositional semantics
 can be used for verification:
 use completely distributive lattices instead of domains;
 they provide a language for specifications.
 Formal adjunctions can be used to model abstraction
 and construct a double category.]
 
+Introduce the ring buffer example
+and code snippets as our staring point.
+
+\subsection{Engineering Certified Systems}
+
+Need a semantics,
+a way to write specifications,
+a way to relate them.
+They should be compositional,
+ie. give a semantical account of
+the ways systems are constructed
+by assembling simpler components.
+
+\subsubsection{Abstraction Layers}
+
+Remark on the role of layers in actual engineering.
+But compositionality is not the only thing going on.
+For developers,
+there is a very important psychological advantage:
+by introducing a new layer we also introduce
+a new language,
+new concepts,
+new reasoning principles.
+
+in introducing a new layer,
+
+\subsubsection{Specifications and Refinement}
+\subsubsection{Compositional Semantics}
+\subsubsection{Game Semantics}
+\subsubsection{Dual Nondeterminism}
+
+\begin{figure}
+\begin{minted}{C}
+ /* Encapsulated state */
+ static int c1, c2;
+ static V buf[N];
+ 
+ /* Accessors */
+ int inc1() { int i = c1++; c1 %= N; return i; }
+ int inc2() { int i = c2++; c2 %= N; return i; }
+ V get(int i) { return buf[i]; }
+ void set(int i, V val) { buf[i] = val; }
+\end{minted}
+\caption{The state of a ring buffer,
+  made of two counters and a fixed-size array,
+  is encapsulated behind a simple interface.}
+\label{fig:rb}
+\end{figure}
+
+\begin{figure}
+\begin{minted}{C}
+ /* Underlay signature */
+ extern int inc1(void);
+ extern int inc2(void);
+ extern V get(int i);
+ extern void set(int i, V val);
+
+ /* Layer implementation */
+ void enq(V val) { set(inc2(), val); }
+ V deq() { return get(inc1()); }
+\end{minted}
+\caption{This component relies on the ring buffer primitives
+  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+\end{figure}
 %}}}
 
 \section{Interaction Specification Algebras} %{{{
@@ -1383,7 +1450,7 @@ we show that ...
 
 %}}}
 
-\subsection{Generalizing Simulation Conventions}
+\subsection{Refinement Conventions} \label{sec:refconv} %{{{
 
 Before generalizing simulation conventions to effect signatures,
 we first note that the two relations
@@ -1418,8 +1485,8 @@ can easily be generalized to arbitrary effect signatures.
 Given the effect signatures $E$ and $F$,
 a \emph{refinement convention} is a relation
 \[
-  R \subseteq
-    \sum_{m_1 \in E^\que} \sum_{m_2 \in F^\que}
+  R \:\subseteq\:
+    \mathop\Sigma {(m_1, m_2) \in E^\que \times F^\que} \bdot
     \mathcal{P} \big( E^\ans_{m_1} \times F^\ans_{m_2} \big) \,.
 \]
 We will write $R : E \leftrightarrows F$.
@@ -1430,7 +1497,7 @@ when $(m_1, m_2, R^\ans) \in R$
 the refinement convention allows
 the high-level question $m_1 \in E^\que$ to be realized as
 the low-level question $m_2 \in F^\que$.
-The corresponding answers must be related by $R^\ans$, so that
+The subsequent answers must be related by $R^\ans$, so that
 the high-level answer $n_1 \in E^\ans_m$ can be realized as
 the low-level answer $n_2 \in F^\ans_q$ when $n_1 \mathrel{R^\ans} n_2$.
 Refinement conventions compose in the following way.
@@ -1485,6 +1552,194 @@ Effect signatures and refinement conventions
 form a symmetric monoidal category $\mathbf{RC}$.
 \end{theorem}
 
+\noindent
+Refinement conventions induce formal \emph{ajunctions} in $\ISpec$.
+
+%}}}
+
+\subsection{Adjunctions} %{{{
+
+As an order-enriched category,
+$\ISpec$ can be viewed as a (thin) 2-category
+where
+a 2-cell $\alpha : f \Rightarrow g : E \rightarrow F$ exists
+if and only if $f \sqsubseteq g$.
+A central tenet of our approach
+is that abstraction relationships
+between effect signatures
+can be represented as formal adjunctions
+within this 2-category.
+
+\begin{definition}[Adjunction]
+The morphisms
+$f^* : E \rightarrow F$ and $f_* : F \rightarrow E$
+are said to form a formal \emph{adjunction}
+\[ f^* \dashv f_* : F \rightarrow E \in \ISpec \]
+between the effect signatures $E$ and $F$
+when:
+\[
+  f^* \circ f_* \refby \mathrm{id}_F
+  \qquad \qquad
+  \mathrm{id}_E \refby f_* \circ f^*
+\]
+Adjunctions compose in the following way:
+\[
+  \begin{tikzcd}[sep=tiny]
+    E \ar[rr, "f^*", bend left] & \bot &
+    F \ar[ll, "f_*", bend left]
+      \ar[rr, "g^*", bend left] & \bot &
+    G \ar[ll, "g_*", bend left]
+  \end{tikzcd}
+  \qquad
+  \begin{tikzcd}[sep=tiny]
+    E \ar[rr, "\kw{id}_E", bend left] & \bot &
+    E \ar[ll, "\kw{id}_E", bend left]
+  \end{tikzcd}
+\]
+We will write $\kw{Adj}(\ISpec)$ for the corresponding category.
+\end{definition}
+
+In the definition above,
+we interpret
+$E$ as the signature of a high-level interaction, and
+$F$ as the signature of a low-level interaction.
+The morphisms $f^*$ and $f_*$ translate between
+these two different representations;
+our embedding of refinement conventions into $\kw{Adj}(\ISpec)$
+illustrates how this works operationally.
+
+\begin{definition}
+Given a refinement convention $R : E \leftrightarrows F$,
+we define
+$R^* : E \rightarrow F$ and
+$R_* : F \rightarrow E \in \ISpec$ as follows:
+\begin{align*}
+  R^* &:= m_F \mapsto
+    \bigsqcup_{m_E, \rho \mid (m_E, m_F, \rho) \in R}
+    \underline{m}_E \leadsto n_E \mapsto
+    \bigsqcap_{n_F \in \rho(n_E)}
+    \underline{n}_F
+  \\
+  R_* &:= m_E \mapsto
+    \bigsqcap_{m_F, \rho \mid (m_E, m_F, \rho) \in R}
+    \underline{m}_F \leadsto n_E \mapsto
+    \bigsqcup_{n_E \in \rho^{-1}(n_F)}
+    \underline{n}_E
+%  \\
+%  R^* &:= m_F \mapsto
+%    \bigsqcap_{m_E, \rho \mid (m_E, m_F, \rho) \in R}
+%    n_E \mathbin\leftarrow m_E \mathbin;
+%    \bigsqcup_{n_F \mid (n_E, n_F) \in \rho}
+%    \eta(n_F)
+%  \\
+%  R_* &:= m_E \mapsto
+%    \bigsqcup_{m_F, \rho \mid (m_E, m_F, \rho) \in R}
+%    n_F \mathbin\leftarrow m_F \mathbin;
+%    \bigsqcap_{n_E | (n_E, n_F) \in \rho}
+%    \eta(n_E)
+\end{align*}
+This induces a functor from $\mathbf{RC}$ to $\kw{Adj}(\ISpec)$.
+\end{definition}
+
+The strategy specification $R^*$
+accepts a low-level question $m_F$ %$m_F \in F^\que$
+and lets the \emph{environment} interpret it as
+a high-level question $m_E$. %$m_E \in E^\que$.
+When a high-level answer $n_E$ is received, % \in E^\ans_{m_E}$ is received,
+the \emph{system} chooses
+its representation $n_F$ % \in F^\ans_{m_F}$
+among those permitted by $R$.
+Given a high-level specification $\sigma$,
+pre-composing $R^*$ translates incoming interactions,
+so that $R^* \circ \sigma$
+is a specification for low-level components
+which implement $\sigma$
+while respecting the refinement convention $R$.
+
+For outgoing interactions,
+the role of the system and the environment are reversed,
+as .
+Hence we can translate them
+by post-composing $\sigma \circ R_*$
+
+
+The strategy specification $R_*$
+carries out a similar process but
+
+
+
+
+
+In the context of a pre-composition $R^* \circ \sigma$
+
+Conversely,
+
+
+when it asks a related high-level question in $E$.
+
+
+
+To prepare the way for embedding simulation conventions,
+we can define a double category based on the model.
+The objects and horizontal morphisms
+are the same as before.
+The vertical morphisms of type $A \leftrightarrows B$
+are \emph{adjunctions} $f^* \dashv f_*$
+where $f^* : A \rightarrow B$ and $f_* : B \rightarrow A$
+such that:
+\[
+  \mathrm{id}_A \le f_* \circ f^*
+  \qquad \qquad
+  f^* \circ f_* \le \mathrm{id}_B
+\]
+The 2-cell $x \le_{f \rightarrow g} y$
+exists for
+$x : A_1 \rightarrow B_1$,
+$y : A_2 \rightarrow B_2$,
+$f^* \dashv f_* : A_1 \rightarrow A_2$ and
+$g^* \dashv g_* : B_1 \rightarrow B_2$
+when one of the following equivalent conditions hold:
+\begin{equation} \label{eqn:gc}
+  x \le_{f \rightarrow g} y
+  \quad :\Leftrightarrow \quad
+  g^* \circ x \le y \circ f^*
+  \quad \Leftrightarrow \quad
+  x \circ f_* \le g_* \circ y
+\end{equation}
+
+This definitions makes sense in any order-enriched category,
+and is a special case of a general construction on 2-categories
+(see the nlab entries \emph{double category} and \emph{mate}).
+Reading it in the context of our game model,
+the lower adjoints $f^*$ and $g^*$
+translate from their incoming low-level interactions
+to their outgoing high-level interactions,
+and the upper adjoints $f_*$ and $g_*$
+translate the other way around.
+
+Complete homomorphisms have both upper and lower adjoints,
+In completely distributive lattices
+they are themselves complete?
+which makes it easy to define vertical morphisms
+from relations (as spans) etc.
+
+Could be depicted using elbow string diagrams.
+
+%}}}
+
+%}}}
+
+\section{Certified Abstraction Layers}
+
+\section{Implementing CAL}
+
+\section{Related Work}
+
+Multi-languages,
+abstract interpretation
+
+\appendix
+
 %\section{Trace specifications}
 %
 %\begin{definition}
@@ -1493,9 +1748,6 @@ form a symmetric monoidal category $\mathbf{RC}$.
 %\end{definition}
 %
 %Trace specifications are ordered under set inclusion.
-%
-%
-%
 %
 %\subsection{Overview} %{{{
 %
@@ -1572,66 +1824,6 @@ form a symmetric monoidal category $\mathbf{RC}$.
 %rather than a coherence space flavor.
 %
 %%}}}
-
-\subsection{Double category} %{{{
-
-To prepare the way for embedding simulation conventions,
-we can define a double category based on the model.
-The objects and horizontal morphisms
-are the same as before.
-The vertical morphisms of type $A \leftrightarrows B$
-are \emph{adjunctions} $f^* \dashv f_*$
-where $f^* : A \rightarrow B$ and $f_* : B \rightarrow A$
-such that:
-\[
-  \mathrm{id}_A \le f_* \circ f^*
-  \qquad \qquad
-  f^* \circ f_* \le \mathrm{id}_B
-\]
-The 2-cell $x \le_{f \rightarrow g} y$
-exists for
-$x : A_1 \rightarrow B_1$,
-$y : A_2 \rightarrow B_2$,
-$f^* \dashv f_* : A_1 \rightarrow A_2$ and
-$g^* \dashv g_* : B_1 \rightarrow B_2$
-when one of the following equivalent conditions hold:
-\begin{equation} \label{eqn:gc}
-  x \le_{f \rightarrow g} y
-  \quad :\Leftrightarrow \quad
-  g^* \circ x \le y \circ f^*
-  \quad \Leftrightarrow \quad
-  x \circ f_* \le g_* \circ y
-\end{equation}
-
-This definitions makes sense in any order-enriched category,
-and is a special case of a general construction on 2-categories
-(see the nlab entries \emph{double category} and \emph{mate}).
-Reading it in the context of our game model,
-the lower adjoints $f^*$ and $g^*$
-translate from their incoming low-level interactions
-to their outgoing high-level interactions,
-and the upper adjoints $f_*$ and $g_*$
-translate the other way around.
-
-Complete homomorphisms have both upper and lower adjoints,
-In completely distributive lattices
-they are themselves complete?
-which makes it easy to define vertical morphisms
-from relations (as spans) etc.
-
-Could be depicted using elbow string diagrams.
-
-%}}}
-
-%}}}
-
-\section{Certified Abstraction Layers}
-
-\section{Implementing CAL}
-
-\section{Related Work}
-
-\appendix
 
 \section*{Plan} %{{{
 
