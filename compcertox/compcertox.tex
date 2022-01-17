@@ -458,6 +458,7 @@ in introducing a new layer,
 \end{minted}
 \caption{This component relies on the ring buffer primitives
   provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+\label{fig:bq}
 \end{figure}
 %}}}
 
@@ -2227,6 +2228,117 @@ into the refinement
   \llbracket \kw{Clight}(p)@K_2 \rrbracket \circ R^*
 \]
 
+A language interface
+$A = \langle A^\circ, A^\bullet \rangle$ can be read as an effect signature
+which incorporates all the operations in that language.
+\[
+  \llbracket A \rrbracket \mathrel{:=}
+  \{ m : A^\bullet \ |\ m \in A^\circ \}
+\]
+We will omit the notation $\llbracket - \rrbracket$ when the context is clear.
+
+A transition system
+$L: A \twoheadrightarrow B = \langle S, \rightarrow, I, X, Y, F \rangle$ can
+then be interpreted as a morphism
+$\llbracket L \rrbracket :  A \rightarrow B \in ISpec$. We define a simulation function
+$F: S \rightarrow \mathcal{I}_{A}(B^\ans)$ by recursively simulating the
+behavior of the LTS on a given state.
+\begin{align*}
+  F(s)
+  := & \bigsqcup_{s' \mid s \rightarrow^* s'} F(s')
+     \sqcup \bigsqcup_{r \mid (s, r) \in F} \underline{r}\\
+  \sqcup & \bigsqcup_{q \mid (s, q) \in X} \underline{q} \leadsto r \mapsto
+           \bigsqcup_{s' \mid (r, s') \in Y^s} F(s')
+\end{align*}
+Then the transition system is defined by providing an initial state to the
+simulation function
+\[
+  \llbracket L \rrbracket := \bigsqcup_{s\mid (q, s) \in I} F(s)
+\]
+
+The embedding defines a functor from the category of transition systems to
+$\ISpec$.
+
+The simulation conventions can be embedded into $\kw{Adj}(\ISpec)$ by composing
+the functors $\mathbf{SC} \rightarrow \mathbf{RC} $ and
+$\mathbf{RC} \rightarrow \kw{Adj}(\ISpec)$ and the embedding is left implicit
+when there are no ambiguities.
+
+Finally, the forward simulation can be formulated as a refinement as illustrated
+by the following theorem.
+\begin{theorem}
+  Given the simulation conventions $\mathbb{R}_A : A_1 \leftrightarrow A_2$ and
+  $\mathbb{R}_B : B_1 \leftrightarrow B_2$, and given the transition systems
+  $L_1: A_1 \twoheadrightarrow B_1 = \langle S_1, \rightarrow_1, I_1, X_1, Y_1,
+  F_1 \rangle$ and
+  $L_2: A_2 \twoheadrightarrow B_2 = \langle S_2, \rightarrow_2, I_2, X_2, Y_2,
+  F_2 \rangle$, then:
+  \[
+    L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2 \Rightarrow
+    \mathbb{R}_B^* \circ \llbracket L_1 \rrbracket \sqsubseteq
+    \llbracket L_2 \rrbracket \circ \mathbb{R}_A^*
+  \]
+\end{theorem}
+
+\subsection{Implementing Bounded Queue}
+
+In this section, we show the code in Fig.~\ref{fig:rb} and Fig.~\ref{fig:bq} is
+a refinement of the monadic computation $M_{bq}$ by exploiting the embedding
+from the previous section.
+
+Unlike language interfaces, the effect signatures generally do not contain
+states for the flexibility of state representations. To line up with effect
+signatures, we define an effect signature $C$ that contains all the components
+from the language interface $\mathcal{C}$ except the memory.
+
+\[
+  C := \{ \mathit{vf}(\vec{v}) : v' \mid \mathit{vf}\in \kw{val},
+  \vec{v} \in \kw{val}^* , v' \in \kw{val}\}
+\]
+
+There is an obvious isomorphism between $C@\kw{mem}$ and $\mathcal{C}$ and is
+left implicit in the rest of the paper.
+
+We can define refinement conventions $\gamma_{bq} : E_{bq} \leftrightarrows C$
+and $\gamma_{rb} : E_{rb} \leftrightarrows C$ to bridge the gap between $C$ and
+the effect signatures $E_{bq}$ and $E_{rb}$ respectively given the relation
+$R^V \subseteq \kw{val} \times \kw{V}$.
+
+\begin{align*}
+  \gamma_{bq}
+   := & \{ (\mathit{vf}(v), \kw{enq}(x), \top) \mid (v, x) \in R^V, \mathit{vf}\leadsto \kw{enq} \} \\
+  \cup & \{ (\mathit{vf}, \kw{deq}, R^V) \mid \mathit{vf}\leadsto \kw{deq}\} \\
+  \gamma_{rb} := & \{ \kw{get}\} \\
+  \cup & \{ \kw{set}\} \\
+  \cup & \{ \kw{inc_1}\} \\
+  \cup & \{ \kw{inc_2}\}
+\end{align*}
+
+Then we can prove a refinement from the monadic computation $M_{bq}$ to the C code. The
+implementation $M_{bq}$ does not modify states so the refinement relation
+applies to any abstract state and any relation between the state and the memory.
+\[
+  \forall S, \forall R \subseteq S \times \kw{mem},
+  M_{bq}@S \sqsubseteq (\gamma_{bq} \otimes R)_* \circ
+  \llbracket \kw{Clight}(p_{bq}) \rrbracket \circ (\gamma_{bq} \otimes R)^*
+\]
+
+By contrast, $M_{rb}$ implements on the state $S_{rb}$ and we have to provide a
+relation $R_{rb} \subseteq S_{rb} \times \kw{mem}$ to establish the following
+refinement.
+\[
+  M_{rb}@S_{rb} \sqsubseteq (\gamma_{rb} \otimes R_{rb})_* \circ
+  \llbracket \kw{Clight}(p_{rb}) \rrbracket \circ \bot
+\]
+
+The refinement order preserves composition. Thus,
+\[
+  (M_{bq} \circ M_{rb}) @ S_{rb} \sqsubseteq (\gamma_{rb} \otimes R_{rb})_* \circ
+  \llbracket \kw{Clight}(p_{rb} + p_{bq}) \rrbracket \circ bot
+\]
+[TODO: this probably contradicts the principle of certified abstraction layers
+since we are supposed to compose layer by layer.]
+
 \subsection{CAL Interpretation}
 
 We extend the layer calculus with refinement conventions between the effect
@@ -2254,7 +2366,12 @@ and restores the memory when the call is returned. On the other, it pass through
 the abstract state.
 
 The layer composition can be proved using the above self-simulation properties
-and the functorial properties of the embeddings.
+and the functorial properties of the embeddings. [TODO: there is a loose end in
+the composition: the overlay interacts with the underlay through the $\iota$
+operator, which does not pass the memory to the underlay. The underlay memory
+comes from a nondeterministic choice made by the abstraction relation prior to
+the execution of the underlay program. So there is no connection between the two
+memories that are supposed to be associated (by memory extension at least?). ]
 
 The layer calculus can be depicted as the following ``elbows'' diagram and the layer
 composition can simply be viewed as.
