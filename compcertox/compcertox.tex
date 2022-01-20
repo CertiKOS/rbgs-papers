@@ -1740,6 +1740,58 @@ so that the backward simulation will entail refinement:
 
 %}}}
 
+\subsection{Layered Composition}
+
+Transition systems can be composed vertically in the sense that external calls
+are permitted from one component to another but not the other way round. The
+composition of two compilation units can therefore be viewed as building a layer
+on top of another. Formally, the composite transition system is defined as
+follows.
+
+\begin{definition}
+  Given transition systems $L_1$ and $L_2$,
+\end{definition}
+
+\begin{color}{gray}
+  Language interfaces and transition systems form a category.
+\end{color}
+
+The layered composition operator preserves simulations, which allows us to
+decompose the verification of a complex system into the verification of several
+layers.
+
+\begin{theorem}{Layered composition of simulations}
+For simulation conventions and transition systems,  
+\end{theorem}
+
+To establish that the linked assembly program behaves correctly with respect to
+the composite transition system, the programs are first compiled from the source
+language to assembly programs separately. We show that the behavior of layered
+composition of assembly programs approximates by that of horizontal
+composition, which in turn is implemented by the linked assembly programs
+\cite{compcerto21tr}.
+
+\begin{theorem}
+  The layered composition of two \kw{Asm} programs approximates the horizontal
+  composition
+  \[
+    \kw{Asm}(p_1) \circ \kw{Asm}(p_2) \le_{\kw{id} \twoheadrightarrow \kw{id}}
+    \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
+  \]
+\end{theorem}
+
+As a corollary, composing two $\kw{Clight}$ programs can be correctly
+implemented by linking the $\kw{Asm}$ programs they are compiled to.
+\begin{corollary}
+  For $\kw{Clight}$ programs $p_1$ and $p_2$, and $\kw{Asm}$ programs
+  $p'_1$ and $p'_2$ such that $\kw{CompCert}(p_i) = p'_i$ for $i=1,2$,
+  the following simulation holds:
+  \[
+    \kw{Clight}(p_1)\circ\kw{Clight}(p_2) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+    \kw{Asm}(p'_1 + p'_2)
+  \]
+\end{corollary}
+
 \section{Abstraction} %{{{
 
 [Define a category of generalized simulation conventions.
@@ -2134,13 +2186,16 @@ Could be depicted using elbow string diagrams.
 The Certified Abstraction Layer (CAL) centers around the notion of layer
 calculus $L_1 \vdash_R M : L_2$ which states that the implementation $M$
 executes on top of the underlay $L_1$ is a refinement of the overlay $L_2$
-witnessed by the abstraction relation. In this section, we provide an
-interpretation of the layer calculus using the interaction specifications. In
-particular, we use Clight programs as the implementations between the layer
-interfaces.
+witnessed by the abstraction relation $R$. \citet{rbgs-cal} has proposed an
+interpretation of CAL using the interaction specifications. However, the layer
+implementation is interpreted as monad homomorphism which only has limited
+practical use. We demonstrate the applicability of refinement conventions by
+establishing connection between the abstract monad homomorphisms and the
+concrete Clight programs that are later compiled to executable assembly
+programs.
 
+\begin{color}{gray}
 \subsection{CompCertOX}
-
 We introduce CompCertOX that inherits the memory model with \emph{abstract
   state} from CompCertX and the \emph{open semantics} from CompCertO.
 
@@ -2216,9 +2271,14 @@ following self-simulation property can be proved.
 \[
   \kw{Clight}(p)@K_1 \le_{R \twoheadrightarrow R} \kw{Clight}(p)@K_2
 \]
+  
+\end{color}
+
+
 
 \subsection{Embedding CompCertOX Semantics}
 
+\begin{color}{gray}
 Describe how the LTS, calling conventions, forward simulation are embedded into
 the category $\ISpec$. Angelic interpretation is used because the Clight
 programs are deterministic. In particular, the self-simulation property turns
@@ -2227,6 +2287,7 @@ into the refinement
   R^* \circ \llbracket \kw{Clight}(p)@K_1 \rrbracket \sqsubseteq
   \llbracket \kw{Clight}(p)@K_2 \rrbracket \circ R^*
 \]
+\end{color}
 
 A language interface
 $A = \langle A^\circ, A^\bullet \rangle$ can be read as an effect signature
@@ -2235,12 +2296,13 @@ which incorporates all the operations in that language.
   \llbracket A \rrbracket \mathrel{:=}
   \{ m : A^\bullet \ |\ m \in A^\circ \}
 \]
-We will omit the notation $\llbracket - \rrbracket$ when the context is clear.
+We use $\llbracket - \rrbracket$ implicitly when a language interface appears in
+a context where an effect signature is expected.
 
 A transition system
 $L: A \twoheadrightarrow B = \langle S, \rightarrow, I, X, Y, F \rangle$ can
 then be interpreted as a morphism
-$\llbracket L \rrbracket :  A \rightarrow B \in ISpec$. We define a simulation function
+$\llbracket L \rrbracket :  A \rightarrow B \in \ISpec$. We define a simulation function
 $F: S \rightarrow \mathcal{I}_{A}(B^\ans)$ by recursively simulating the
 behavior of the LTS on a given state.
 \begin{align*}
@@ -2289,7 +2351,7 @@ from the previous section.
 Unlike language interfaces, the effect signatures generally do not contain
 states for the flexibility of state representations. To line up with effect
 signatures, we define an effect signature $C$ that contains all the components
-from the language interface $\mathcal{C}$ except the memory.
+from the language interface $\mathcal{C}$ except for the memory.
 
 \[
   C := \{ \mathit{vf}(\vec{v}) : v' \mid \mathit{vf}\in \kw{val},
@@ -2299,47 +2361,125 @@ from the language interface $\mathcal{C}$ except the memory.
 There is an obvious isomorphism between $C@\kw{mem}$ and $\mathcal{C}$ and is
 left implicit in the rest of the paper.
 
-We can define refinement conventions $\gamma_{bq} : E_{bq} \leftrightarrows C$
-and $\gamma_{rb} : E_{rb} \leftrightarrows C$ to bridge the gap between $C$ and
-the effect signatures $E_{bq}$ and $E_{rb}$ respectively given the relation
-$R^V \subseteq \kw{val} \times \kw{V}$.
+Given effect signatures $E$ and $F$ together with refinement conventions
+$\alpha: E \leftrightarrows C$ and $\beta: F \leftrightarrows C$, we define
+a \emph{morphism refinement} of a monad homomorphism $M: E \rightarrow F$ to be
+a Clight program $p$ with the refinement relation:
+\[
+  M \sqsubseteq \alpha_* \circ
+  \llbracket L \rrbracket \circ \beta^*
+\]
+denoted by
+$M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket \kw{Clight}(p)
+\rrbracket$
+
+\begin{color}{gray}
+Given effect signatures $E$ and $F$ together with refinement conventions
+$\gamma_1: E \leftrightarrows C$ and $\gamma_2: F \leftrightarrows C$, we define
+a \emph{morphism refinement} of a monad homomorphism $M: E \rightarrow F$ to be
+a Clight program $p$ with the refinement relation:
+\[
+  \forall S, \forall R \subseteq S \times \kw{mem},
+  M@S \sqsubseteq (\gamma_1 \otimes R)_* \circ
+  \llbracket \kw{Clight}(p) \rrbracket \circ (\gamma \otimes R)^*
+\]
+denoted by
+$M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket \kw{Clight}(p)
+\rrbracket$  
+\end{color}
+
+The morphism refinement can be viewed as an additional ``compiler pass'' from
+monad homomorphisms to transition systems except that it lives in the category
+of interaction specifications. The similarity with compiler passes is obvious by
+observing the shape of the string dragram that expresses a morphism
+refinement. The horizontal morphisms in the category of transition systems that
+represent the simulation conventions are bended over as adjunctions in the
+order-enriched category.
+
+\begin{color}{gray}
+  string diagram here: 1. bended morphism 2. composition
+\end{color}
+
+Morphism refinement preserves composition given an identical intermediate
+refinement convention. Moreover, the composition can be connected with the
+CompCertO's linking theorem allowing the correctness of Clight programs to be
+carried over to the linked assembly program.
+
+\begin{lemma}
+  Given morphisms $M$ and $N$,...
+  \[
+    \begin{prooftree}
+      \hypo{M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket L_1 \rrbracket}
+      \hypo{N \sqsubseteq_{\gamma_2 \rightarrow \gamma_3} \llbracket L_2 \rrbracket}
+      \infer2{M \circ N \sqsubseteq_{\gamma_1 \rightarrow \gamma_3} \llbracket L_1 \circ L_2 \rrbracket}
+    \end{prooftree}
+  \]
+\end{lemma}
+
+\begin{color}{gray}
+In particular,
+\begin{lemma}
+  Given morphisms $M$ and $N$,...
+  \[
+    \begin{prooftree}
+      \hypo{M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket \kw{Clight}(p_1) \rrbracket}
+      \hypo{N \sqsubseteq_{\gamma_2 \rightarrow \gamma_3} \llbracket \kw{Clight}(p_2) \rrbracket}
+      \infer2{M \circ N \sqsubseteq_{\gamma_1 \rightarrow \gamma_3} \llbracket \kw{Asm}(p_1 + p_2) \rrbracket}
+    \end{prooftree}
+  \]
+\end{lemma}
+\end{color}
+
+
+In the example of bounded queue, we can define refinement conventions
+$\gamma_{bq} : E_{bq} \leftrightarrows C$ and
+$\gamma_{rb} : E_{rb} \leftrightarrows C$ to bridge the gap between $C$ and the
+effect signatures $E_{bq}$ and $E_{rb}$ respectively given the relation
+$R^V \subseteq \kw{val} \times \kw{V}$ and
+$R^{\mathbb{N}}\subseteq \kw{val} \times \mathbb{N}$.
 
 \begin{align*}
   \gamma_{bq}
    := & \{ (\mathit{vf}(v), \kw{enq}(x), \top) \mid (v, x) \in R^V, \mathit{vf}\leadsto \kw{enq} \} \\
   \cup & \{ (\mathit{vf}, \kw{deq}, R^V) \mid \mathit{vf}\leadsto \kw{deq}\} \\
-  \gamma_{rb} := & \{ \kw{get}\} \\
-  \cup & \{ \kw{set}\} \\
-  \cup & \{ \kw{inc_1}\} \\
-  \cup & \{ \kw{inc_2}\}
+  \gamma_{rb} := & \{ (\mathit{vf}(v), \kw{get}(i), R^V \mid (v,i)\in R^{\mathbb{N}}, \mathit{vf}\leadsto \kw{get})\} \\
+  \cup & \{ (\mathit{vf}(v_1, v_2), \kw{set}(i, x), \top \mid (v_1,i)\in R^{\mathbb{N}}, (v_2,x)\in R^V, \mathit{vf}\leadsto \kw{get}) \} \\
+  \cup & \{ (\mathit{vf}, \kw{inc_1}, R^{\mathbb{N}} \mid \mathit{vf}\leadsto \kw{inc_1})\} \\
+  \cup & \{ (\mathit{vf}, \kw{inc_2}, R^{\mathbb{N}} \mid \mathit{vf}\leadsto \kw{inc_2})\}
 \end{align*}
 
-Then we can prove a refinement from the monadic computation $M_{bq}$ to the C code. The
-implementation $M_{bq}$ does not modify states so the refinement relation
-applies to any abstract state and any relation between the state and the memory.
-\[
-  \forall S, \forall R \subseteq S \times \kw{mem},
-  M_{bq}@S \sqsubseteq (\gamma_{bq} \otimes R)_* \circ
-  \llbracket \kw{Clight}(p_{bq}) \rrbracket \circ (\gamma_{bq} \otimes R)^*
-\]
-
-By contrast, $M_{rb}$ implements on the state $S_{rb}$ and we have to provide a
-relation $R_{rb} \subseteq S_{rb} \times \kw{mem}$ to establish the following
-refinement.
-\[
-  M_{rb}@S_{rb} \sqsubseteq (\gamma_{rb} \otimes R_{rb})_* \circ
-  \llbracket \kw{Clight}(p_{rb}) \rrbracket \circ \bot
-\]
-
-The refinement order preserves composition. Thus,
-\[
-  (M_{bq} \circ M_{rb}) @ S_{rb} \sqsubseteq (\gamma_{rb} \otimes R_{rb})_* \circ
-  \llbracket \kw{Clight}(p_{rb} + p_{bq}) \rrbracket \circ bot
-\]
-[TODO: this probably contradicts the principle of certified abstraction layers
-since we are supposed to compose layer by layer.]
+Then we can prove the morphism refinement from the monadic computation $M_{bq}$
+to the C code $p_{bq}$ in Fig ~\ref{fig:bq}:
+$M_{bq} \sqsubseteq_{\gamma_{rb} \rightarrow \gamma_{bq}} \llbracket
+\kw{Clight}(p) \rrbracket$
 
 \subsection{CAL Interpretation}
+
+We mostly follow the interpretation of the layer calculus proposed in
+\cite{koenig20} where $L_1 \vdash_R M : L_2$ is defined as
+\[
+  L_2 \sqsubseteq (id \otimes R)_* \circ (M@S_1) \circ L_1
+\]
+
+We further extend the original layer calculus with refinement conventions the
+Clight programs by defining $(L_1, \gamma_1) \vdash_R M : (L_2, \gamma_2)$ as
+\[
+  L_2 \sqsubseteq (\gamma_2 \otimes (R \circ R^m))_* \circ \llbracket \kw{Clight(\kw{M.c})}
+  \rrbracket \circ (\gamma_1 \otimes (R \circ R^m))^* \circ L_1
+\]
+where $R \subseteq S_2 \times S_1$ is an abstraction relation between abstract
+data and $R^m \subseteq S_1 \times \kw{mem}$ is a relation???
+
+It is not hard to prove that
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_R M : L_2 }
+    \hypo{M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket \kw{Clight}(\kw{M.c}) \rrbracket}
+    \infer2{(L_1, \gamma_1) \vdash_R \kw{M.c} : (L_2,\gamma_2)}
+  \end{prooftree}
+\]
+
+\begin{color}{gray}
 
 We extend the layer calculus with refinement conventions between the effect
 signatures and language interfaces to accommodate the interaction between Clight
@@ -2375,6 +2515,52 @@ memories that are supposed to be associated (by memory extension at least?). ]
 
 The layer calculus can be depicted as the following ``elbows'' diagram and the layer
 composition can simply be viewed as.
+  
+\end{color}
+
+\subsection{Ground Layers}
+
+The layer interfaces can also be implemented by concrete code. Layer interfaces
+are prohibited from interacting with other components but may have side effect
+on the states. Therefore, given an effect signature $E$ and language interface
+$B$ with the refinement convention $\gamma: E \leftrightarrows B$, and a state
+type $S$, we define the \emph{interface refinement} of a layer interface
+$L: 1 \rightarrow E@S$ to be a transition system $L: A \twoheadrightarrow B$
+with the refinement:
+\[
+  L \sqsubseteq (\gamma \otimes R^m)_* \circ \llbracket L \rrbracket \circ bot
+\]
+denoted by $L \sqsubseteq_{\gamma}^{R^m} \llbracket L \rrbracket$ where
+$R^m \subset S \times \kw{mem}$.
+
+Back to the bounded queue example, we show the code in ~\ref{fig:rb} implements
+the underlay interface $L_{rb}$ by proving
+\[
+  L_{rb} \sqsubseteq_{\gamma_{rb}}^{R^m} \llbracket \kw{Clight}(\kw{rb.c})
+  \rrbracket
+\]
+
+The interface refinement can be combined with layer calculus to provide a full
+implementation for the top level layer interface.
+\begin{lemma}
+  \[
+    \begin{prooftree}
+      \hypo{(L_1, \gamma_1) \vdash_R M : (L_2, \gamma_2)}
+      \hypo{ L_1 \sqsubseteq_{\gamma_1}^{R^m} \kw{Clight}(N) }
+      \infer2{ L_2 \sqsubseteq_{\gamma_2}^{R^m \circ R} \kw{Clight}(M) \circ \kw{Clight}(N) }
+    \end{prooftree}
+  \]
+\end{lemma}
+
+Applying the above rule to the bounded queue example, we end up with
+\[
+  L_{bq} \sqsubseteq_{\gamma_{bq}}^{R^m \circ R} \kw{Clight}(\kw{rb.c}) \circ \kw{Clight}(\kw{bq.c})
+\]
+which can be further compiled down to assembly
+\[
+  L_{bq} \sqsubseteq_{\gamma_{bq}}^{R^m \circ R} \kw{Asm}(\kw{rb.asm} + \kw{bq.asm})
+\]
+
 
 \subsection{Bounded Queue}
 
