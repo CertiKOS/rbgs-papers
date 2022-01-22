@@ -14,6 +14,7 @@
 \usepackage{bbm}
 \usetikzlibrary{calc}
 \usepackage{minted}
+\usepackage{subcaption}
 
 %\newtheorem{definition}{Definition}
 %\newtheorem{theorem}[definition]{Theorem}
@@ -444,21 +445,84 @@ formulated in simple, high-level terms.
 
 \section{Main Ideas} \label{sec:mainideas} %{{{
 
-[section describes how compositional semantics
-can be used for verification:
-use completely distributive lattices instead of domains;
-they provide a language for specifications.
-Formal adjunctions can be used to model abstraction
-and construct a double category.]
+This section give a high-level overview
+of our approach and of the relevant background.
+We start with a general description of
+refinement-based game semantics \cite{rbgs-cal}
+and of the CompCertO certified compiler \cite{compcerto},
+introduce our notion of refinement convention,
+then explain how it can be used to interface
+the interaction specification model
+of certified abstraction layers
+with concrete C programs
+and with CompCertO's correctness theorem.
 
-Introduce the ring buffer example
-to illustrate the concepts involved:
-start with the code,
-and the techniques /
-psychological tools used by
-software engineers
-to reason about their code.
-Then how can we give a formal account of that?
+Throughout the paper,
+we will use the simple C code presented in Figure~\ref{fig:code}
+as a running example.
+The code is typical in structure:
+one translation unit
+encapsulates a ring buffer data structure
+behind a simple interface.
+The second translation unit then uses the first
+to implement a bounded queue.
+
+Our ultimate goal is to use CompCertO's semantics
+to verify each of these components in terms of
+simple and abstract specifications.
+We will then be able to compose these correctness properties
+with each other and with CompCertO's semantics preservation theorem
+to obtain a formal guarantee on the compiled and linked assembly code.
+
+\begin{figure*} % fig:code {{{
+  \centering
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+/* Encapsulated state */
+static int c1, c2;
+static V buf[N];
+
+/* Accessors */
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.36\textwidth}
+\begin{minted}{C}
+/* Underlay signature */
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+/* Layer implementation */
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Our running example consists of two C components.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    together with two counters. The second component
+    $\kw{bq.c}$ uses this interface to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
+\end{figure*}
+%}}}
 
 \subsection{Semantics} %{{{
 
@@ -528,13 +592,12 @@ we can impose additional structure.
 
 A desirable property of program behaviors
 can be expressed as a predicate $\pi \in \mathcal{P}(D)$
-of the semantic domain.
+over the semantic domain.
 Moreover,
 a set $\Pi \subseteq \mathcal{P}(D)$
 of properties of interest
 induces a \emph{refinement} ordering
-${\sqsubseteq} \subseteq D \times D$
-over the semantic domain.
+${\sqsubseteq} \subseteq D \times D$.
 A behavior $\sigma \in D$ is refined by $\tau \in D$
 when %the following holds:
 \[
@@ -543,29 +606,36 @@ when %the following holds:
   \pi(\sigma) \Rightarrow \pi(\tau)
   \,.
 \]
+In fact, we can even further interpret programs
+into the domain $\mathcal{P}(\Pi)$,
+associating to each one the set of properties
+which it satisfies,
+and using set inclusion as refinement.
+
 Conversely,
 if the domain is equipped \emph{a priori}
 with a partial order $\sqsubseteq$,
-then its elements can themselves be regarded as properties:
+its elements can themselves be regarded as properties:
 \[
   \Pi \: := \:
     \{ \tau \mapsto \sigma \sqsubseteq \tau \mid
        \sigma \in D \}
+  \,.
 \]
-
 When $D$ is rich enough,
-this means that specifications themselves
-can be interpreted as elements of the domain,
-and the correctness of a program $p \in P$
+complete specifications
+can be given as elements of the domain.
+The correctness of $p \in P$
 with respect to a specification $\sigma \in D$
-can be expressed as
+can then be expressed as
 \[
   \sigma \sqsubseteq \llbracket p \rrbracket
   \,.
 \]
 Under this refinement-based approach,
 specifications and correctness proofs
-benefit from the compositionality of $\llbracket - \rrbracket$.
+benefit from the compositionality of $\llbracket - \rrbracket$,
+and correctness proofs can proceed in several steps.
 For example,
 when $\sigma_1 \sqsubseteq \llbracket p_1 \rrbracket$
 and $\sigma_2 \sqsubseteq \llbracket p_2 \rrbracket$,
@@ -582,7 +652,7 @@ with respect to refinement.
 
 \paragraph{String Diagrams}
 
-For categorical semantics,
+In a categorical setting,
 these structure generalize to
 order-enriched categories.
 Every homset $\mathbf{D}(A, B)$
@@ -609,7 +679,8 @@ the objects of $\mathbf{D}$ are represented by regions of the plane.
 A morphism $f : A \rightarrow B \in \mathbf{D}$
 is represented by a vertical line
 separating an $A$ region from a $B$ region,
-and a refinement property
+with horizontal juxtaposition denoting composition.
+A refinement property
 $f \circ g \circ h \sqsubseteq u \circ v$
 is represented as a point
 connecting the lines $f$, $g$, $h$ above the point
@@ -654,13 +725,13 @@ in the game associated with the component's type.
 The games do not usually involve
 a winning condition or notion of payoff.
 
-In the context of heterogeneous certified systems,
+For heterogeneous certified systems,
 this approach is interesting
 because games provide a fairly general way to describe
 the interfaces of certified components.
-For the purposes of the work presented here,
-we will use particularly simple games
-induced by the following notion of signature.
+In the present work,
+we use simple games
+derived from signatures of the following kind.
 
 \begin{definition}
 An \emph{effect signature} is a set $E^\que$ of operations
@@ -672,16 +743,16 @@ We will write
 \]
 \end{definition}
 
-The associated game simply consists of
-a question $m \in E^\que$ from the environment,
-followed by an answer $n \in E^\ans_m$ from the system.
+The game associated with $E$ simply consists of
+a question $m \in E^\que$ of the environment
+followed by an answer $n \in E^\ans_m$ of the system.
 We will be more interested in the composite game $E \rightarrow F$,
 which allows the \emph{system} to ask questions in $E$
 before answering the environment's initial question in $F$.
 
 At a high level of abstraction,
-the interface provided by the C program shown in \autoref{fig:rb}
-and used by the C program shown in \autoref{fig:bq}
+the interface provided by the program $\kw{rb.c}$ (\autoref{fig:rb})
+and used by $\kw{bq.c}$ (\autoref{fig:bq})
 can be described using the signature:
 \[
   E_\kw{rb} := \{
@@ -705,9 +776,8 @@ we will sometimes use the notation
     \kw{get} : \mathbb{N} \rightarrow V \}
   \,.
 \]
-Using this convention,
-the interface provided by the program in \autoref{fig:bq}
-can be described as the following signature:
+The interface provided by $\kw{bq.c}$
+is described by the signature:
 \[
   E_\kw{rb} := \{
     \kw{enq} : V \rightarrow \mathbbm{1},
@@ -716,10 +786,10 @@ can be described as the following signature:
 
 \paragraph{Plays and Strategies}
 
-The program $\kw{bq.c}$
-\emph{uses} the interface $E_\kw{rb}$ to
-\emph{provide} the interface $E_\kw{bq}$.
-Hence, its behavior
+Since $\kw{bq.c}$
+uses the operations of $E_\kw{rb}$ to
+provide those of $E_\kw{bq}$,
+its behavior
 can be described as a proponent strategy for the game
 $E_\kw{rb} \rightarrow E_\kw{bq}$.
 Given a particular value $\diamond \in V$,
@@ -733,8 +803,8 @@ a \emph{play} in this game may look like the sequence of moves:
   \underline*
   \:,
 \]
-where we have underlined moves of the proponent
-and $* \in \mathbbm{1}$ is the unit value.
+where we have underlined the moves of the proponent
+and where $* \in \mathbbm{1}$ is the unit value.
 Traditionally,
 \emph{strategies} are then defined as
 the set of plays a component can generate,
@@ -755,7 +825,7 @@ associated with $\kw{bq.c}$ is
    &\kw{enq}[v] \cdot
     \underline{\kw{inc2}} \cdot
     i \cdot
-    \underline{\kw{set}[i, \diamond]} \cdot
+    \underline{\kw{set}[i, v]} \cdot
     * \cdot
     \underline*
   \mid
@@ -763,8 +833,9 @@ associated with $\kw{bq.c}$ is
   \}
   \,.
 \end{align*}
-Strategies of this kind can be ordered by
-the set inclusion relation $\subseteq$.
+Here again,
+set inclusion $\subseteq$
+can serve as refinement.
 
 \paragraph{Composition}
 
@@ -819,9 +890,7 @@ are then hidden to obtain the strategy:
   \}
 \end{align*}
 
-%}}}
-
-\subsection{Interaction Specifications} %{{{
+\paragraph{Strategies as Specifications}
 
 We have discussed in \S\ref{sec:specs}
 the relationship between
@@ -856,51 +925,44 @@ can only be refined by strategies which refine both:
 In other words,
 unions correspond to \emph{angelic nondeterminism},
 where the environment is free to rely on either behavior
-because the system must be capable of delivering both.
+because the system must exhibit both.
 However,
 to establish a complete refinement calculus
-we also need a form of \emph{demonic nondeterminism},
+we also need a form of \emph{demonic} nondeterminism,
 allowing us to formulate specifications such as
 ``the system may either return 0 or 1''.
+Note that the set $\{0, 1\}$ is not appropriate in this case,
+since it would require the system to return both
+simultaneously.
 
-
-unions of strategies 
-
- correspond t
-
-The union of strategies can only be refined
-by a strategy which 
-
-Strategy \emph{specifications} can then be expressed as
-under-constrained sets of plays.
-A component which refines them must admit 
-
+%}}}
 
 \subsection{Completely Distributive Lattices}
 
-It is well-understood that
-semi-lattices provide the algebraic foundation
-of traditional nondeterminism.
+Semi-lattices provide the algebraic foundation
+of traditional angelic \emph{or} demonic nondeterminism.
 Completely distributive lattices
 provide a similar foundation for
-dual nondeterminism with arbitrary angelic and demonic choices.
+\emph{dual} nondeterminism,
+which combines arbitrary angelic and demonic choices.
 
 \begin{definition}
 A \emph{complete lattice}
-is a partially ordered set $\langle L, {\le} \rangle$
+is a partially ordered set $\langle L, {\sqsubseteq} \rangle$
 with all joins and meets.
 This means in particular that $L$
-has a least element $\bot = \bigvee \varnothing = \bigwedge L$
-and a greatest element $\top = \bigwedge \varnothing = \bigvee L$.
+has a least element $\bot = \bigsqcup \varnothing = \bigsqcap L$
+and a greatest element $\top = \bigsqcap \varnothing = \bigsqcup L$.
+
 A \emph{completely distributive} lattice
 is a complete lattice which satisfies
 the (equivalent) distributivity properties:
 \begin{gather} \label{eqn:compdist}
-  \bigvee_{i \in I} \bigwedge_{j \in J_i} x_{ij} =
-  \bigwedge_{f \in \prod_i J_i} \bigvee_{i \in I} x_{i,f_i}
+  \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} x_{ij} =
+  \bigsqcap_{f \in \prod_i J_i} \bigsqcup_{i \in I} x_{i,f_i}
   \\
-  \bigwedge_{i \in I} \bigvee_{j \in J_i} x_{ij} =
-  \bigvee_{f \in \prod_i J_i} \bigwedge_{i \in I} x_{i,f_i}
+  \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} x_{ij} =
+  \bigsqcup_{f \in \prod_i J_i} \bigsqcap_{i \in I} x_{i,f_i}
 \end{gather}
 \end{definition}
 
@@ -911,12 +973,12 @@ where the proponent and opponent
 take turns making moves.
 The proponent seeks to minimize the payoff.
 If they can choose among the payoffs $(x_i)_{i \in I}$,
-the outcome will be $\bigwedge_i x_i$.
+the outcome will be $\bigsqcap_i x_i$.
 Conversely,
 if the opponent can choose among $(y_j)_{j \in J}$,
-the outcome will be $\bigvee_j y_j$.
+the outcome will be $\bigsqcup_j y_j$.
 Hence the expression
-$\bigwedge_i \bigvee_j x_{ij}$
+$\bigsqcap_i \bigsqcup_j x_{ij}$
 denotes the result of a game where
 the proponent first makes a choice $i \in I$,
 the opponent then chooses $j \in J_i$,
@@ -932,15 +994,54 @@ this game is very different:
 the proponent has access to much more information
 and can make a decision based on the opponent's choice of strategy.
 However,
-the expressions $\bigwedge_i \bigvee_j x_{ij}$
-and $\bigvee_f \bigwedge_i x_{i,f_i}$
+the expressions $\bigsqcap_i \bigsqcup_j x_{ij}$
+and $\bigsqcup_f \bigsqcap_i x_{i,f_i}$
 are only concerned with the case where both players adopt
 an optimal strategy.
 In this particular scenario,
 the opponent choices were in effect already known,
 hence the proponent gains no advantage.
 
+\paragraph{Free Completely Distributive Lattices}
+
+Given a partially ordered set of elementary properties,
+a rich specification model can be constructed as
+the \emph{free completely distributive lattice}
+generated by those properties \cite{augtyp,dndf}.
+This construction can be characterized as follows.
+
+\begin{definition}[Free Completely Distributive Lattice]
+The forgetful functor
+$U : \mathbf{CDLat} \rightarrow \mathbf{Pos}$
+from the category of completely distributive lattices
+and complete homomorphisms
+to the category of partially ordered sets
+and monotonic functions
+has a left adjoint
+$\kw{FCD} : \mathbf{Pos} \rightarrow \mathbf{CDLat}$.
+For a poset $A \in \mathbf{Pos}$,
+we call $\kw{FCD}(A)$ the \emph{free completely distributive lattice}
+generated by $A$.
+\end{definition}
+
+An explicit construction is given by \citet{augtyp}.
+For our purposes,
+the elements of $\kw{FCD}(A)$
+will be terms of the form
+\[
+  \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(a_{ij})
+\]
+identified up to the properties of completely distributive lattices.
+The function $\phi : A \rightarrow \kw{FCD}(A)$
+embeds the underlying order
+into $\kw{FCD}(A)$.
+
 %}}}
+
+\subsection{Interaction Specifications}
+
+[brief summary of interaction specification monad +
+strategy specifications based on the exposition above]
 
 \subsection{CompCertO} %{{{
 
@@ -1240,43 +1341,6 @@ simulation conventions, and
 simulation properties of CompCertO.
 
 \subsection{Certified Abstraction Layers}
-
-\begin{figure} % fig:rb {{{
-\begin{minted}{C}
- /* Encapsulated state */
- static int c1, c2;
- static V buf[N];
- 
- /* Accessors */
- int inc1() { int i = c1++; c1 %= N; return i; }
- int inc2() { int i = c2++; c2 %= N; return i; }
- V get(int i) { return buf[i]; }
- void set(int i, V val) { buf[i] = val; }
-\end{minted}
-\caption{The state of a ring buffer,
-  made of two counters and a fixed-size array,
-  is encapsulated behind a simple interface.}
-\label{fig:rb}
-\end{figure}
-%}}}
-
-\begin{figure} % fig:bq {{{
-\begin{minted}{C}
- /* Underlay signature */
- extern int inc1(void);
- extern int inc2(void);
- extern V get(int i);
- extern void set(int i, V val);
-
- /* Layer implementation */
- void enq(V val) { set(inc2(), val); }
- V deq() { return get(inc1()); }
-\end{minted}
-\caption{This component relies on the ring buffer primitives
-  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
-\label{fig:bq}
-\end{figure}
-%}}}
 
 \begin{figure*} % fig:cal {{{
   \begin{minipage}{.9\textwidth}
