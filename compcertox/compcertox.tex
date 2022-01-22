@@ -2261,8 +2261,8 @@ satisfied by the strategy $M$ are also satisfied by the corresponding programs.
 
 \begin{definition}
   Given a morphism $M: E \rightarrow F$ and a transition system
-  $L: A \twoheadrightarrow B$, together with refinement conventions
-  $\phi: E \leftrightarrows A$ and $\psi: F \leftrightarrows B$, the
+  $L: A@\kw{mem} \twoheadrightarrow B@\kw{mem}$, together with refinement
+  conventions $\phi: E \leftrightarrows A$ and $\psi: F \leftrightarrows B$, the
   \emph{morphism refinement}:
   \[
     M \sqsubseteq_{\phi \rightarrow \psi} \llbracket L \rrbracket
@@ -2270,7 +2270,7 @@ satisfied by the strategy $M$ are also satisfied by the corresponding programs.
   is defined as the refinement:
   \[
     M@S \sqsubseteq (\phi @ R^m)_* \circ
-    \llbracket \kw{Clight}(\kw{M.c}) \rrbracket \circ (\psi @ R^m)^*
+    \llbracket L \rrbracket \circ (\psi @ R^m)^*
   \]
   forall state $S$ and relation $R^m \subseteq S \times \kw{mem}$
 \end{definition}
@@ -2462,7 +2462,7 @@ rule holds:
 \[
   \begin{prooftree}
     \hypo{L \sqsubseteq_{\gamma_1}^{R^m} \llbracket T_1 \rrbracket}
-    \hypo{M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket T_2 \llbracket}
+    \hypo{M \sqsubseteq_{\gamma_1 \rightarrow \gamma_2} \llbracket T_2 \rrbracket}
     \infer2{ (M @ S) \circ L \sqsubseteq_{\gamma_2}^{R^m} \llbracket T_2 \circ T_1 \rrbracket}
   \end{prooftree}
 \]
@@ -2494,12 +2494,98 @@ which can be further compiled down to assembly
 \]
 
 
-\subsection{Bounded Queue}
+\subsection{General Case}
 
-\begin{itemize}
-  \item the refinement convention $E_{bq} \leftrightarrows \mathcal{C}$
-  \item the monadic computation vs the code implementation
-\end{itemize}
+The code verification primarily focuses on the abstraction between the CompCert
+memory model and abstract data, while the layer calculus in \cite{rbgs-cal}
+gradually refines the abstract data from a low level representation to a high
+level one. In this section, we combine the code verification and the layer
+calculus to give a full characterization of layer calculus where both
+abstractions are accounted for.
+
+For the bounded queue, we prove
+\[
+  L_{bq} @ \kw{mem} \sqsubseteq (\gamma_{bq} \otimes R)_* \circ
+  (\llbracket \kw{Clight}(\kw{bq.c}) \rrbracket @ S_{rb}) \circ
+  (\gamma_{rb} \otimes \kw{id})^* \circ
+  (L_{rb} @ \kw{mem})
+\]
+The layer interfaces $L_{bq}$ and $L_{rb}$ are lifted with the memory and the
+Clight semantics is lifted with an abstract data so that the memory model and
+different representations of abstract states are incorporated within the unified
+formalization. The abstraction relation $R$ combines both
+$R^m \subseteq S_{rb} \times \kw{mem}$ from the code verification and
+$R^s \subseteq S_{bq} \times S_{rb}$ and forms a refinement convention
+$R: S_{bq} \times \kw{mem} \leftrightarrows S_{rb} \times \kw{mem}$.  The
+refinement convention may additionally impose rely-guarantee conditions about the
+ownership of memory blocks so that they can be abstracted at different levels.
+
+For the ring buffer, we prove
+\[
+  L_{rb} @ \kw{mem} \sqsubseteq (\gamma_{rb} \otimes R')_* \circ
+  (\kw{Clight}(\kw{rb.c}) @ \mathbbm{1}) \circ
+  (\bot \otimes \kw{id})^* \circ
+  \bot
+\]
+In this case, the abstraction convention
+$R': S_{rb} \times \kw{mem} \leftrightarrows \mathbbm{1} \times \kw{mem}$ guarantees
+only the memory blocks that are related with $S_{rb}$ are modified by the
+programs so that other components can rely on the fact that the memory blocks of
+their interest will not be modified given that the abstractions of memory blocks
+do not overlap.
+
+In other words, the following property hold for all Clight program $p$:
+\[
+  \kw{Clight}(\kw{p})@S_{rb} \sqsubseteq_{\kw{id}\otimes R' \rightarrow \kw{id}\otimes R'}
+      \kw{Clight}(\kw{p})@\mathbbm{1}
+\]
+The above property comes into play when we compose the refinements for the
+bounded queue and ring buffer together:
+\[
+  L_{rb} @ \kw{mem} \sqsubseteq (\gamma_{rb} \otimes (R'\circ R))_* \circ
+  (\kw{Clight}(\kw{rb.c} + \kw{bq.c}) @ \mathbbm{1}) \circ
+  (\bot \otimes \kw{id})^* \circ
+  \bot
+\]
+
+The pattern can be generalized to the following definition.
+\begin{definition}
+  Given layer interfaces $L_1: 1 \rightarrow E@S_1$ and
+  $L_2: 1 \rightarrow F@S2$ with refinement conventions
+  $\gamma_1: E \leftrightarrows C$ and $\gamma_2: F \leftrightarrows C$, the
+  Clight programs $\kw{M.c}$ is said to implement $L_2$ on top of $L_1$ through
+  the refinement convention $R : S_2\times \kw{mem} \leftrightarrows S_1 \times \kw{mem}$
+  \[
+    (L_1, \gamma_1) \vdash_R \kw{M.c} : (L_2, \gamma_2)
+  \]
+  if and only if
+  \[
+    L_2@\kw{mem} \sqsubseteq (\gamma_2 \otimes R)_*
+    \circ (\llbracket \kw{Clight}(\kw{M.c}) \rrbracket @ S_1)
+    \circ (\gamma_1 \otimes \kw{id})^*
+    \circ (L_1@\kw{mem})
+  \]
+\end{definition}
+
+\begin{theorem}
+  Given layer interfaces $L_1: 1 \rightarrow E@S_1$, $L_2: 1 \rightarrow F@S_2$,
+  and $L_3: 1 \rightarrow G@S_3$ where $L_3$ is implemented by $\kw{N.c}$ on top
+  of $L_2$ with the refinement convention $T: \kw{mem}\times S_3 \leftrightarrows \kw{mem}\times
+  S_2$ and $L_2$ is implemented by $\kw{M.c}$ on top of $L_1$ with $R: \kw{mem}\times S_2 \leftrightarrows
+  \kw{mem}\times S_1$, suppose the refinement convention $T$ satisfies
+  \[
+    \kw{Clight}(\kw{p})@S_2 \sqsubseteq_{\kw{id}\otimes T \rightarrow \kw{id}\otimes T}
+    \kw{Clight}(\kw{p})@S_1
+  \]
+  then the certified abstraction layers compose by the following rule:
+  \[
+    \begin{prooftree}
+      \hypo{(L_1, \gamma_1) \vdash_R \kw{M.c} : (L_2, \gamma_2)}
+      \hypo{(L_2, \gamma_2) \vdash_T \kw{N.c} : (L_3, \gamma_3)}
+      \infer2{(L_1, \gamma_1) \vdash_{R \circ S} \kw{M.c}+\kw{N.c} : (L_3, \gamma_3)}
+    \end{prooftree}
+  \]
+\end{theorem}
 
 \section{Related Work}
 
