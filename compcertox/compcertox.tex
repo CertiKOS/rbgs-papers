@@ -2351,7 +2351,7 @@ implemented by linking the $\kw{Asm}$ programs they are compiled to.
 
 %}}}
 
-\section{Implementing CAL} \label{sec:cal}
+\section{Certified Abstraction Layers} \label{sec:cal}
 
 The Certified Abstraction Layer (CAL) centers around the notion of layer
 calculus $L_1 \vdash_R M : L_2$ which states that the implementation $M$
@@ -2363,6 +2363,252 @@ practical use. We demonstrate the applicability of refinement conventions by
 establishing connection between the abstract monad homomorphisms and the
 concrete Clight programs that are later compiled to executable assembly
 programs.
+
+\subsection{The Interaction Specification Model} %{{{
+
+In this model:
+\begin{itemize}
+  \item
+    A layer \emph{interface} is given as
+    a signature $E$ and
+    a set $S$ of abstract states,
+    together with a strategy specification
+    \[ L : 1 \rightarrow E@S \,. \]
+  \item
+    A layer \emph{implementation}
+    of $L_2 : 1 \rightarrow E_2@S_2$
+    in terms of $L_1 : 1 \rightarrow E_1@S_1$
+    consists of
+    a strategy $M : E_1 \rightarrow E_2$ and
+    a relation $R \subseteq S_2 \times S_1$
+    satisfying the property
+    \[ L_1 \vdash_R M : L_2 \]
+    defined in the following.
+\end{itemize}
+
+Layer implementations use a relation $R$
+to establish a correspondence between
+the high-level states of $L_1$ and
+the low-level states of $L_2$.
+The relation can be promoted to a refinement convention:
+\[
+  \hat{R} := \{ (s_2, s_1, R) \mid s_2 \mathrel{R} s_1 \}
+\]
+which uses $R$ both in the context of
+input and output states.
+The correctness property can then be stated as:
+\begin{align*}
+  L_1 \vdash_R M : L_2 \:&\Leftrightarrow\:
+  L_2 \sqsubseteq_{1 \rightarrow E_2@\hat{R}} M@S_1 \circ L_1
+  \\ &\Leftrightarrow\:
+  L_2 \sqsubseteq E_2@\hat{R}_* \circ M@S_1 \circ L_1
+\end{align*}
+
+\paragraph{Limitations} %{{{
+
+The model outlined above
+shows that $\ISpec$ can be used effectively
+as a principled building block to model
+certified abstraction layers.
+However,
+compared with the layers used in the verification of CertiKOS \cite{popl15},
+this model carries a number of limitations,
+which prevent its use for the practical construction
+of certified systems.
+
+First,
+while layer implementations
+can transform the state of their underlay
+to provide a higher-level representation,
+they cannot introduce new state of their own.
+This means that we ultimately have to assume that
+all state in the system is provided---%
+albeit in a low-level form---%
+by a trusted, lowermost layer interface
+such as $L_\kw{rb}$.
+
+In addition,
+while the model presented so far
+provides insight into the formal structure
+of certified abstraction layers,
+and offers a way to describe a system's construction
+in abstract terms,
+it is unclear how to relate
+this abstract description (say, $M_\kw{bq}$)
+to the concrete code (say, $\kw{bq.c}$)
+in a way that allows us to derive guarantees
+regarding the concrete implemented system.
+
+In the remainder of this section,
+we show how these limitations can be overcome,
+and demonstrate the use of refinement conventions
+to connect the abstract layer model of \citet{rbgs-cal}
+with the practical verification techniques
+used in \citet{popl15}.
+
+%}}}
+
+%}}}
+
+\subsection{Introducing New State} %{{{
+
+Update as follows:
+\begin{itemize}
+  \item A layer \emph{implementation} consists of
+    a set of states $U$,
+    a~strategy specification $M : E_1 \rightarrow E_2@U$
+    and a relation $R \subseteq S_2 \times U \times S_1$
+    satisfying $L_1 \vdash^\kw{st}_R M : L_2$.
+\end{itemize}
+Lifting $M$ now essentially yields:
+\[
+  M@S_1 : E_1@S_1 \rightarrow E_2@(U \times S_1)
+\]
+The correctness property can again be formulated as:
+\[
+  L_1 \vdash^\kw{st}_R M : L_2
+  \:\Leftrightarrow\:
+  L_2 \sqsubseteq
+  E_2@\hat{R}_* \circ M@S_1 \circ L_1
+  \,
+\]
+however note that the calls between $E_2@\hat{R}_*$ and $M@S_1$
+now use the signature $E_2@(U \times S_1)$
+rather than simply $E_2@S_1$,
+allowing $M$ to use local state of type $U$
+in addition to its implicit use of the underlay state.
+
+\begin{example}
+Describe $1 \vdash_\kw{id} M_\kw{rb} : L_\kw{rb}$.
+\end{example}
+
+%}}}
+
+\subsection{Layers in CompCertO} %{{{
+
+Until now we have given a fairly abstract account of
+certified abstraction layers.
+However, their original formulation
+for the verification of CertiKOS \cite{popl15}
+is intimately tied to the semantics and memory model
+used in CompCert.
+Here we revisit this model of certified abstraction layers
+in the context of our framework and
+of CompCertO's approach to compositional semantics.
+
+\paragraph{Broad parameters} %{{{
+
+There are two main differences between
+CompCert layers and
+the more abstract layers
+we have considered until now:
+\begin{itemize}
+  \item Instead of layer-specific signatures,
+    CompCert layers use fixed language interfaces
+    such as $\mathcal{C}$.
+  \item Likewise, abstract state is uniformly implemented
+    in terms of the CompCert memory model.
+\end{itemize}
+More precisely,
+formulated in the context of $\ISpec$,
+CompCert layers for a language interface $\mathcal{X}$
+take the following form:
+\begin{itemize}
+  \item A layer \emph{interface}
+    is a set $S$ of abstract states
+    together with a layer specification
+    $L : 1 \rightarrow \mathcal{X}@S$
+  \item A layer \emph{implementation}
+    of $L_2$ on top of $L_1$
+    is a strategy
+    $M : \mathcal{X}@\kw{mem} \rightarrow \mathcal{X}@\kw{mem}$
+    together with a relation
+    $R \subseteq (\kw{mem} \times S_2) \times (\kw{mem} \times S_1)$,
+    satisfying a number of properties.
+\end{itemize}
+Layer correctness can then be defined as:
+\[
+  L_1 \vdash_R^\mathcal{C} M : L_2
+  \:\Leftrightarrow\:
+  L_2@\kw{mem} \sqsubseteq_{1 \rightarrow \mathcal{X}@\hat{R}}
+  %\mathcal{X}@\hat{R}_* \circ
+  M@S_1 \circ L_1@\kw{mem}
+\]
+Note that we have elided the structural transformations
+\begin{align*}
+  (\mathcal{X}@S_2)@\kw{mem}
+  &\cong
+  \mathcal{X}@(\kw{mem} \times S_2)
+  \\
+  \mathcal{X}@(\kw{mem} \times S_1)
+  &\cong
+  (\mathcal{X}@S_1)@\kw{mem}
+\end{align*}
+
+%}}}
+
+\paragraph{Abstraction Relations} %{{{
+
+To enable layer composition,
+the class of strategies and relations
+used in layer implementation must be restricted
+so that for an arbitrary client strategy $N$,
+the following commutation property holds:
+\[
+  N@S_2 \sqsubseteq_{\hat{R} \rightarrow \hat{R}} N@S_1
+\]
+
+[Refine the definitions of layer interfaces and implementations.
+Implementations are sequences of Clight programs $M_1, \ldots, M_n$.
+The semantics commutes with CKLRs.
+Explain how we construct abstraction relations
+so that they commute with the lifted semantics.
+Old text:]
+
+The intention is for the translation units $(M_i)_{1 \le i \le n}$
+to be eventually compiled and linked together.
+Until then,
+their behavior can soundly be under-approximated
+using the strategy
+$M : \mathcal{C}@\kw{mem} \rightarrow \mathcal{C}@\kw{mem}$
+defined as
+\[
+  M := \llbracket \kw{Clight}(M_n) \rrbracket \circ \cdots \circ
+       \llbracket \kw{Clight}(M_1) \rrbracket
+  \,.
+\]
+
+\[
+  L_1 \vdash^\kw{Clight}_R M_1, \ldots M_n : L_2
+\]
+
+%}}}
+
+%}}}
+
+\subsection{Relating Layer Frameworks} %{{{
+
+[Could be before the 'abstraction relations' paragraph]
+
+[Explain how refinement conventions
+can express the correspondence between
+the two kinds of layer interfaces,
+and the associated proof techniques.
+Use bounded queue example]
+
+
+Something along the lines:
+\[
+  \gamma_1^* \circ L_1 \vdash^\kw{Clight}_? \vec{M} : \gamma_2^* \circ L_2
+  \:\Leftrightarrow\:
+  L_1 \vdash_? \gamma_1^* \circ \vec{M} \circ {\gamma_2}_* : L_2
+\]
+Refer to Yu's slide for the details.
+Use notation other than $\gamma$.
+
+%}}}
+
+\section*{Material from Before}
 
 \subsection{Implementing Bounded Queue}
 
