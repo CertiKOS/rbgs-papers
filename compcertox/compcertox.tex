@@ -2715,6 +2715,8 @@ Thus, we have
 \[
   \gamma_i \times \iota : E_i \leftrightarrows \mathcal{X}@\kw{mem}
 \]
+[XXX: introduce the ``echo'' and ``lift'' construction on refinement conventions in Sec 4.1]
+
 The refinement for correctness criteria is defined as
 \[
   \Sigma \le^\rho_{\gamma_1 \rightarrow \gamma_2} M \Leftrightarrow
@@ -2722,6 +2724,13 @@ The refinement for correctness criteria is defined as
   (\mathcal{X}@\rho_{\kw{ext}})_* \circ
     \llbracket M \rrbracket
 \]
+[XXX: probably diagram on $\rho$ and $\kw{ext}$]
+
+Note that to satisfy the invariant from the $\iota$ operator,
+the specification itself is required
+not to modify the memory state,
+and the $\iota$ operator also ensures that the underlay specification
+does not either. The memory state that
 
 \begin{example}
   The strategy $M_\kw{rb}$ and $M_\kw{bq}$ are refined by their corresponding
@@ -2832,6 +2841,197 @@ lemma
     1 \vdash^\mathcal{C}_{R_\kw{rb};\rho_\kw{rb}} \kw{rb.c}, \kw{bq.c} : L_\kw{bq}
   \]
 \end{example}
+
+\subsection{Comparing with Original Layers}
+
+The layer framework presented in this section
+surpasses the original certified abstraction layers
+used for developing CertiKOS
+in several aspects.
+In the original approach,
+a layer interface is tuple $L = \langle E, S, \sigma \rangle$,
+where
+
+\paragraph{Underlay Independence}
+The original certified abstraction layers uses CompCertX
+as the implementation between layers.
+CompCertX is a variant of CompCert
+where the external calls are interpreted
+according to a set of primitives.
+In particular,
+the language $\kw{ClightX}$ is parametrized
+over a layer interface $L$,
+and the language is referred as $\kw{ClightX}_L$.
+For example,
+the behavior of the Clight program $\kw{bq.c}$
+is given by $\kw{ClightX}_{L_\kw{rb}}(\kw{bq.c})$.
+Furthermore, to show the strategy specification $M_{bq}$
+is realized by the program $\kw{bq.c}$,
+it is required to prove the refinement
+\[
+  M_\kw{bq} \circ L_\kw{rb} \sqsubseteq
+  \llbracket \kw{ClightX}_{L_\kw{rb}}(\kw{bq.c}) \rrbracket
+\]
+where the abstraction relation and
+the refinement conventions between signatures
+have been elided for simplicity.
+
+By contrast,
+CompCertO features open semantics,
+which opens up the possibility of
+verifying component independent of
+the behavior of external components.
+In particular,
+as demonstrated in the foregoing example of bounded queue,
+to prove the program $\kw{bq.c}$
+faithfully implements the strategy specification $M_\kw{bq}$,
+we prove the refinement
+\[
+  M_\kw{bq} \sqsubseteq \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
+\]
+and by monotonicity of composition,
+the refinement holds for arbitrary underlay specification $L$
+\[
+  M_\kw{bq} \circ L \sqsubseteq \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket \circ L
+\]
+where details about the abstraction relation have been elided again.
+
+In essence, the new framework separates the \emph{code verification}
+from the \emph{layer verification}
+to break down the process of building abstraction layers
+into more elementary pieces.
+
+\paragraph{Compositional Data Abstraction}
+The original layer framework composes layer horizontally
+following the rule
+\[
+  \begin{prooftree}
+    \hypo{L \vdash_R M_1 : L_1}
+    \hypo{L \vdash_R M_2 : L_2}
+    \infer2{L \vdash_R \langle M_1, M_2 \rangle : L_1 \times L_2}
+  \end{prooftree}
+\]
+where the product of layer interfaces $L_1 = \langle E_1, S, \sigma_1 \rangle$
+and $L_2 = \langle E_2, S, \sigma_2 \rangle$
+is defined as
+\[
+  L_1 \times L_2 := \langle E_1 \oplus E_2, S, \langle \sigma_1, \sigma_2 \rangle \rangle
+\]
+where $\langle \sigma_1, \sigma_2 \rangle^{\iota_i(m)} := \sigma_i^m$.
+Note that the two layer interfaces share
+a common abstract state.
+
+Through horizontal composition,
+the work of building
+a complex layer with multiple methods
+can be decomposed to verifying
+each elementary method individually.
+However, under this approach
+the components of a given layer
+must still be designed around a common abstraction state,
+and it is not possible to horizontally compose layers
+which have been designed and verified independently.
+To do so, one would naturally come up with
+a tensor product composition rule of the form
+given that $\kw{glob}(R_1) \cap \kw{glob}(R_2) = \varnothing$
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_{R_1} M_1 : L_1'}
+    \hypo{L_2 \vdash_{R_2} M_2 : L_2'}
+    \infer2{L_1 \otimes L_2 \vdash_{R_1\times R_2} \langle M_1, M_2 \rangle : L_1' \otimes L_2'}
+  \end{prooftree}
+\]
+where the tensor product of $L_1 = \langle E_1, S_1, \sigma \rangle$
+and $L_2 = \langle E_2, S_2, \sigma \rangle$
+is defined as
+\[
+  L_1 \otimes L_2 := \langle E_1 \oplus E_2, S_1 \times S_2,
+  \langle \hat{\sigma_1}, \hat{\sigma_2} \rangle \rangle
+\]
+where $\hat{\sigma_1}$ and $\hat{\sigma_2}$
+act on their respective halves of the state.
+
+However, the tensor product composition has not been implemented
+because the unified memory model in CompCert
+does not compose in a way similar to the abstract state.
+It requires the evidence that 
+the components being composed do not interfere
+with each other
+on the static variables they own
+to establish the composition rule.
+However, because pointers can be passed across modules, 
+it is difficult to track down 
+the effects that one module may have
+on the variables belong to other modules
+[XXX: probably not true].
+CertiKOS works around this issue by combining
+the abstract states for different layers
+into one giant abstract state
+so that the horizontal composition suffices.
+
+As shown in the example of ring buffer,
+the array and two counters are bundled together
+even though they are independent from each other.
+Consequently, the methods in $\kw{rb.c}$
+have to be combined into a single layer
+instead of verifying them separately.
+
+By contrast,
+in the framework presented in this section,
+the tensor product composition comes for free
+for the layer verification 
+because the states involved are abstract.
+It remains to compose the code verification.
+The challenge of proving non-interference
+between the two components is still present.
+To tackle this problem,
+we slightly modify the embedding to a transition system
+to pose a restriction on the variables it may touch.
+\begin{align*}
+  \llbracket L \rrbracket^p (q,m) :=
+  & (r, m') \mathbin\leftarrow \bigsqcup_{q \mathrel{I} s} \llbracket s \rrbracket \mathbin;\\
+  & \kw{assume}\ (m \cong_{\neg p} m');\\
+  & \eta(r, m')
+\end{align*}
+where the statement $\kw{assume}\ P$
+simply translates to
+\[
+  \bigsqcap_{P} \eta(*)
+\]
+and $m \cong_p m'$ means $m$ and $m'$ agrees
+on the variables in the footprint set $p$.
+The embedding $\llbracket L \rrbracket^p$
+assumes the transition system $L$
+does not modify variables
+outside the scope of $p$.
+Thus, we can compose correctness criteria for two modules
+given they do not interfere with each other.
+\[
+  \begin{prooftree}
+    \hypo{\Sigma_1 \le^{\rho_1}_{\alpha_1 \rightarrow \beta_1} \llbracket L(M_1) \rrbracket^{p_1}}
+    \hypo{\Sigma_2 \le^{\rho_2}_{\alpha_2 \rightarrow \beta_2} \llbracket L(M_2) \rrbracket^{p_2}}
+    \hypo{p_i \cap G(\rho_j) = \varnothing}
+    \infer3{\Sigma_1 \otimes \Sigma_2
+      \le^{\rho_1 \times \rho_2}_{\alpha_1\times\alpha_2 \rightarrow \beta_1\times\beta_2}
+      \llbracket L(M_1, M_2) \rrbracket^{p_1 \cup p_2}}
+  \end{prooftree}
+\]
+where $i \neq j \in \{1,2\}$.
+The additional assumption is justified
+if the transition system
+indeed only modifies the variables defined in the footprint,
+which can be expresses as the refinement
+\[
+  \llbracket L(M) \rrbracket^p \sqsubseteq \llbracket L(M) \rrbracket
+\]
+and obviously
+\[
+  \begin{prooftree}
+    \hypo{\llbracket L(M_1) \rrbracket^{p_1} \sqsubseteq \llbracket L(M_1) \rrbracket}
+    \hypo{\llbracket L(M_2) \rrbracket^{p_2} \sqsubseteq \llbracket L(M_2) \rrbracket}
+    \infer2{\llbracket L(M_1, M_2) \rrbracket^{p_1 \cup p_2} \sqsubseteq \llbracket L(M_1, M_2) \rrbracket}
+  \end{prooftree}
+\]
 
 \section{Related Work}
 
