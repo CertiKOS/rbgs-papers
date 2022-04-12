@@ -58,6 +58,8 @@
 \usetikzlibrary{calc}
 \usepackage{minted}
 \usepackage{subcaption}
+\usepackage{graphicx}
+\graphicspath{ {./images/} }
 %}}}
 
 % Commands {{{
@@ -2423,19 +2425,21 @@ In particular, the CompCertO's correctness theorem can be formulated as
 [XXX: merge into Sec 4.1 maybe?]
 
 \begin{definition}
-The tensor product of effect signatures $E$ and $F$
+The composition of two effect signatures $E$ and $F$
 is defined as
 \[
   E\otimes F := \{ (m,n) : E^\bullet_{m} \times F^\bullet_{n}\ |\ m\in E^\circ,\ n\in F^\circ \}
 \]
 \end{definition}
 
-\begin{definition}
 An abstract type $S$ derives an effect signature
 \[
   [S] := \{ [s]:S\ |\ s \in S \}
 \]
-Given an effect signature $E$, we define
+\begin{definition}
+Given an effect signature $E$
+and an abstract type $S$,
+lifting $E$ with $S$ is defined as
 \[
   E@S := E \otimes [S]
 \]
@@ -2444,17 +2448,17 @@ Given an effect signature $E$, we define
 \begin{definition}
 Given a refinement convention $R:E \leftrightarrows F$
 and an abstract data type $S$,
-we define
+lifting $R$ with $S$ is defined as
 \[
-  R@S := R \otimes \kw{id}_S
+  R@S: E@S  := R \otimes \kw{id}_S
 \]
 \end{definition}
 
-\begin{definition}
 An abstract type $S$ derives an ``echo'' refinement convention
 \[
   \iota_S : 1 \leftrightarrows [S] := \{ (*, s, \{(*, s)\}) \mid s \in S \}
 \]
+\begin{definition}
 Given a refinement convention $R:E \leftrightarrows F$,
 we define
 \[
@@ -2734,6 +2738,7 @@ The formalization mainly includes:
 \end{itemize}
 
 \subsection{Layers in CompCertO}
+\label{sec:cal:compcerto}
 
 The components of CompCert layers:
 \begin{itemize}
@@ -2777,8 +2782,22 @@ $R_T := \langle W, R_T^\circ, R_T^\bullet \rangle$, where
     \infer3{(m_2, s_2)\ R_T^\bullet\ (m_1, s_1)}
   \end{prooftree}
 \]
-Memory extension suffices for relating the memory states between overlay and
-underlay. Thus, layer correctness can then be defined as
+
+\begin{figure}[t]
+  \centering
+  \includegraphics{absrel}
+  \caption{Abstraction relation with memory extension}
+  \label{fig:absrel}
+\end{figure}
+
+For example, \autoref{fig:absrel}
+shows the structure derived by
+combining the $\kw{CKLR}$ $\kw{ext}$
+and an abstraction relation $R$.
+
+Memory extension suffices for relating the memory states
+between overlay and underlay.
+Thus, layer correctness can then be defined as
 \[
   L_1 \vdash_R^\mathcal{X} M : L_2
   \:\Leftrightarrow\:
@@ -2787,7 +2806,6 @@ underlay. Thus, layer correctness can then be defined as
   \llbracket L(M) @S_1 \rrbracket 
   \circ L_1
 \]
-[XXX:introduce the forward simulation style notation]
 
 \paragraph{Composition} The CompCertO layers can be composed vertically.
 
@@ -2835,6 +2853,7 @@ underlay. Thus, layer correctness can then be defined as
 \end{lemma}
 
 \subsection{Relating Layer Frameworks}
+\label{sec:cal:relating}
 
 \paragraph{Correctness Criteria} The correctness criteria states that a strategy
 is refined by the behavior of a Clight module up to refinement conventions, thus
@@ -2941,6 +2960,7 @@ certification carried over to the concrete code as demonstrated by the following
 lemma
 
 \begin{lemma}
+  \label{lemma:relating}
   Given layer specifications $L_i: 1 \rightarrow E_i@S_i$, strategy
   implementation $M: E_1 \rightarrow E_2@U$, abstraction relation
   $R \subseteq S_2 \times (U\times S_1)$, a module of programs $M$, memory
@@ -2992,6 +3012,7 @@ lemma
 \end{example}
 
 \subsection{Comparing with Original Layers}
+\label{sec:cal:compare}
 
 The layer framework presented in this section
 surpasses the original certified abstraction layers
@@ -3133,6 +3154,43 @@ because the states involved are abstract.
 It remains to compose the code verification.
 The challenge of proving non-interference
 between the two components is still present.
+
+To tackle this problem,
+we define the following refinement convention
+based on a memory relation $rho$,
+and memory extension.
+\[
+  \rho^\kw{ext} :=
+  \{
+  (m_2, u), m_1,
+  \{(m'_2, u), m'_1 \mid m'_1\le_\kw{m} m'_2, (u, m'_1)\in\rho, m_1 \cong_{\neg \kw{glob}(\rho)} m'_1 \}
+  \mid m_1\le_\kw{m} m_2, (u, m_1)\in\rho
+  \}
+\]
+The memory relation $\rho_1 \subseteq U \times \kw{mem}$
+and $\rho_2 \subseteq V \times \kw{mem}$
+can be composed as
+\[
+  \rho_1 \times \rho_2 \subseteq (U\times V) \times \kw{mem}:=
+  \{ (u,v), m \mid (u,m) \in \rho_1, (v,m)\in\rho_2 \}
+\]
+with
+\[
+  \kw{glob}(\rho_1\times\rho_2) := \kw{glob}(\rho_1) \cup \kw{glob}(\rho_2)
+\]
+We can prove the following tensor product composition rule
+\[
+  \begin{prooftree}
+    \hypo{\Sigma_1 \le^{\rho_1}_{\alpha_1 \rightarrow \beta_1} M_1}
+    \hypo{\Sigma_2 \le^{\rho_2}_{\alpha_2 \rightarrow \beta_2} M_2}
+    \hypo{\kw{glob}(\rho_1) \cap \kw{glob}(\rho_2) = \varnothing}
+    \infer3{\Sigma_1 \otimes \Sigma_2
+      \le^{\rho_1 \times \rho_2}_{\alpha_1\times\alpha_2 \rightarrow \beta_1\times\beta_2}
+      M_1, M_2}
+  \end{prooftree}
+\]
+
+\begin{color}{gray}  
 To tackle this problem,
 we slightly modify the embedding to a transition system
 to pose a restriction on the variables it may touch.
@@ -3181,6 +3239,7 @@ and obviously
     \infer2{\llbracket L(M_1, M_2) \rrbracket^{p_1 \cup p_2} \sqsubseteq \llbracket L(M_1, M_2) \rrbracket}
   \end{prooftree}
 \]
+\end{color}
 
 \section{Related Work}
 
@@ -3189,6 +3248,46 @@ abstract interpretation,
 Spivak's Poly stuff.
 
 \section{Conclusion}
+
+\section{TODO}
+\begin{itemize}
+\item Unsolved problems
+  \begin{itemize}
+  \item Tensor product composition on code verification,
+    in particular how to design
+    the memory abstraction relation
+  \end{itemize}
+\item Narratives in \S\ref{sec:cal}
+  \begin{itemize}
+  \item Notations for code verification, like $\gamma$, $\rho$, ...
+    Need a discipline on when to use Greek letters and
+    when to use English letters.
+  \item Fill in the missing definitions and explanations
+  \item Merge the two parts
+  \item Reorganize \S\ref{sec:cal:compare},
+    some parts should be moved to introduction
+  \end{itemize}
+\item Figures to draw
+  \begin{itemize}
+  \item string diagram in \S\ref{sec:specs} (composition property)
+  \item string diagram in \S\ref{sec:mainideas:compcerto} (compile Clight programs)
+  \item string diagram in \S\ref{sec:cal:relating}
+    which describes how the layer verification and code verification
+    work together, i.e. the lemma \ref{lemma:relating}
+  \item Might need a string diagram to demonstrate
+    the commutation property,
+    like in the composition part in \ref{sec:cal:compcerto}
+  \item need a diagram to explain how the abstraction relation
+    is extended with a memory extension (or CKLR in general)
+    in \ref{sec:cal:compcerto} and \ref{sec:cal:relating}
+  \end{itemize}
+\item Related work and conclusion
+  \begin{itemize}
+  \item Several aspects that we compare
+  \end{itemize}
+\item 
+\end{itemize}
+
 
 % \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
