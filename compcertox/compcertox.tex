@@ -2494,6 +2494,41 @@ we define
 
 % If we just define 1 -> C@D, can promote using υ
 
+\begin{definition}
+  A \emph{layer interface} is a tuple
+  $\langle D, L \rangle$, where $D$ is
+  a set of states,
+  and $L: 1 \rightarrow \mathcal{C}@(\kw{mem} \times D)$
+  is the specification
+\end{definition}
+
+The layer specification uses
+the memory with abstract data as the state.
+However, for simplicity there are layer specifications
+that only transform the abstract data.
+In such cases,
+a layer specification $L: 1\rightarrow \mathcal{C}@D$
+is promoted as
+\[
+  \hat{L} := L \otimes \upsilon_{\kw{mem}}
+\]
+Note that we have elided the structural transformations
+\begin{align*}
+  (\mathcal{C}@D)@\kw{mem}
+  &\cong
+  \mathcal{C}@(\kw{mem} \times D)
+  \\
+  \mathcal{C}@(\kw{mem} \times D)
+  &\cong
+  \mathcal{C}@(D \times \kw{mem})
+\end{align*}
+and the promotion is left implicit
+when the context is clear.
+
+\begin{example}
+  The interface of $L_\kw{bq} : 1 \rightarrow \mathcal{C}@S_\kw{bq}$
+\end{example}
+
 %}}}
 
 \subsection{Client Code} %{{{
@@ -2509,6 +2544,28 @@ Promoting Clight(M) to use abstract data
 % - definition of abstraction relations
 
 \begin{definition}[Abstraction relation]
+  An \emph{abstraction relation} is a relation
+  between the overlay state $D^\sharp$
+  and the memory with overlay state $D^\flat$
+  \[
+    R \subseteq D^\sharp \times (D^\flat \times \kw{mem})
+  \]
+  with an operation $\kw{glob}$ that returns
+  the set of variables
+  suspectible to the abstraction relation
+  \[
+    \kw{glob}(R): \vec{\kw{ident}}
+  \]
+  satisfying the property that
+  variables outside $\kw{glob}(R)$
+  do not affect the abstraction relation
+  \[
+    \begin{prooftree}
+      \hypo{d^\sharp \mathrel{R} (d^\flat, m)}
+      \hypo{m \cong_{\kw{glob(R)}} m'}
+      \infer2{d^\sharp \mathrel{R} (d^\flat, m')}
+    \end{prooftree}
+  \]
 \end{definition}
 
 % - promoting to refinement conventions
@@ -2517,17 +2574,132 @@ Promoting Clight(M) to use abstract data
 % L [={1 -> [R]} L'
 
 \begin{definition}
-Promote an abstraction relation
-to refinement convention
-with the $\kw{unchanged\_on}$ constraint
+  An abstraction relation
+  $R \subseteq D^\sharp \times (D^\flat \times \kw{mem})$
+  can be promoted to a refinement convention
+  $\hat{R}: \mathcal{C}@(D^\sharp \times \kw{mem})
+  \leftrightarrows \mathcal{C}@(D^\flat \times \kw{mem})$
+  defined by
+  \begin{color}{gray}
+    \begin{align*}
+      \hat{R} :=
+      \big\{
+      & f_\sharp(\vec{v}_\sharp)@(d_\sharp, m_\sharp),
+        f_\flat(\vec{v}_\flat)@(d_\flat, m_\flat),\\
+      & \{ r_\sharp @ (d'_\sharp, m'_\sharp),
+        r_\flat @ (d'_\flat, m'_\flat)
+        \mid
+        d'_\sharp \mathrel{R} (d'_\flat, m'_\flat),
+        m'_\sharp \mathrel{\le^\kw{m}} m'_\flat,
+        r_\sharp \mathrel{\le^\kw{v}} r_\flat,
+        m'_\flat \mathrel{\cong_{B - \kw{glob}(R)}} m_\flat
+        \} \mid\\
+      & d_\sharp \mathrel{R} (d_\flat, m_\flat),
+        f_\sharp \mathrel{\le^\kw{m}} f_\flat,
+        \vec{v}_\sharp \mathrel{\le^\kw{\vec{v}}} \vec{v}_\flat,
+        m_\sharp \le^\kw{m} m_\flat
+        \big\}
+    \end{align*}
+    where $B \mathrel{=} \kw{no\_perm}(m_\flat)$
+    is a set of blocks contains exactly
+    those without permissions in the source memory,
+    and $B$ is a superset of $\kw{glob}(R)$.
+  \end{color}
+  [XXX: the above definition looks messy]
+  
+  \[
+    \begin{prooftree}
+      \hypo{d_\sharp \mathrel{R} (d_\flat, m_\flat)}
+      \hypo{f_\sharp \mathrel{\le^\kw{m}} f_\flat}
+      \hypo{\vec{v}_\sharp \mathrel{\le^\kw{\vec{v}}} \vec{v}_\flat}
+      \hypo{m_\sharp \le^\kw{m} m_\flat}
+      \infer4{f_\sharp(\vec{v}_\sharp)@(d_\sharp, m_\sharp) \mathrel{R^\que}
+        f_\flat(\vec{v}_\flat)@(d_\flat, m_\flat)}
+    \end{prooftree}
+    \quad
+    \begin{prooftree}
+      \hypo{d_\sharp \mathrel{R} (d_\flat, m_\flat)}
+      \hypo{m_\sharp \mathrel{\le^\kw{m}} m_\flat}
+      \hypo{v_\sharp \mathrel{\le^\kw{v}} v_\flat}
+      \infer3{v_\sharp @ (d_\sharp, m_\sharp) \mathrel{R^\ans}v_\flat @ (d_\flat, m_\flat)}
+    \end{prooftree}
+  \]
+  \[
+    \hat{R} :=
+    \big\{ q_\sharp, q_\flat,
+    \{
+    r_\sharp, r_\flat \mid
+    r_\sharp \mathrel{R^\ans} r_\flat,
+    r_\flat.\kw{m} \mathrel{\cong_{B - \kw{glob}(R)}} q_\flat.\kw{m}
+    \}
+    \mid q_\sharp \mathrel{R^\que} q_\flat,
+    B \mathrel{=} \kw{no\_perm}(q_\flat.\kw{m}),
+    \kw{glob}(R) \subseteq B
+    \big\}
+  \]
+  where $q_\flat.\kw{m}$ and $r_\flat.\kw{m}$ projects
+  the memory from the question and answer and
+  $\kw{no\_perm}(m)$
+  is a set of blocks contains exactly
+  those without permissions in $m$.
+
+  [XXX: probably we need a diagram]
 \end{definition}
 
+The derived refinement convention $\hat{R}$
+partitions the memory blocks into three parts.
+The blocks with permissions follow the memory extension
+between source program and target program.
+The blocks correspond to variables in $\kw{glob}(R)$
+do not have permissions in the source program and
+are related to $D^\sharp$ in the target program.
+The rest is those that are not in $\kw{glob}(R)$
+and do not have permissions in the source program,
+and they are required to stay unchanged
+in the target program.
+
+With the promotion of
+an abstraction relation
+$R : D^\sharp \times (D^\flat \times \kw{mem})$,
+layer interfaces $L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp$
+and $L^\flat: 1 \rightarrow \mathcal{C}@D^\flat$
+at different abstraction level
+can be connected by 
+by the following refinement
+\begin{equation}
+  \label{eq:absrel}
+  L^\sharp \sqsubseteq_{1 \rightarrow \hat{R}} L^\flat
+\end{equation}
+
 % - client code using Clight parametricity
+To enable layer composition,
+the abstraction relations
+used in layer implementation must be
+compatible with the Clight semantics.
 
 \begin{lemma}[Compatibility of Clight with abstraction relations]
 % compatibility of Clight vs. abstraction relations
 % so that we can derive Clight(C) ∘ L1 [= Clight(C) ∘ L2
+
+For an arbitrary client program $N \in \kw{Clight}$,
+the following commutation property holds:
+\[
+  \llbracket \kw{Clight}(N) \rrbracket@D^\sharp
+  \sqsubseteq_{\hat{R} \rightarrow \hat{R}}
+  \llbracket \kw{Clight}(N) \rrbracket@D^\flat
+\]
+  
 \end{lemma}
+
+Thus, we can compose the client program
+to \autoref{eq:absrel}
+\[
+  \llbracket \kw{Clight}(N) \rrbracket@D^\sharp
+  \circ L^\sharp
+  \sqsubseteq_{1 \rightarrow \hat{R}}
+  \llbracket \kw{Clight}(N) \rrbracket@D^\flat
+  \circ L^\flat
+\]
 
 %}}}
 
@@ -2536,18 +2708,98 @@ with the $\kw{unchanged\_on}$ constraint
 % layer correctness property
 % client code / L1  [=  client code + M / L2
 
+Layer correctness can then be defined as:
+\[
+  L^\flat \vdash_R^\mathcal{C} M : L^\sharp
+  \:\Leftrightarrow\:
+  L^\sharp \sqsubseteq_{1 \rightarrow \hat{R}}
+  \llbracket \kw{Clight}(M) \rrbracket
+  @D^\flat \circ L^\flat
+\]
+
 %}}}
 
 \subsection{Tensor product} %{{{
 
+The tensor product of layer interfaces
+puts them side by side
+and allows the client
+to invoke the methods
+defined in either of them.
+The client feeds the composite layer interface
+with the abstract states from both components.
+The state belong to the active component
+is consumed
+and a new state is returned,
+while the state belong to the other component
+is simply ``echo''ed back.
+It can be formally defined as follow
+
 \begin{definition}[Tensor product of layer interfaces]
+  The tensor product of layer interfaces
+  $L_1 : 1 \rightarrow \mathcal{C}@D_1$
+  and
+  $L_2 : 1 \rightarrow \mathcal{C}@D_2$
+  is defined as
+  \[
+    L_1 \otimes L_2 : 1 \rightarrow \mathcal{C}@(D_1 \times D_2) :=
+    (L_1 \otimes \upsilon_{D_2}) \oplus
+    (L_2 \otimes \upsilon_{D_1})
+  \]
 \end{definition}
+
+Two abstraction relations with disjoint footprints
+can be composed together
+by imposing both relations on the same memory.
 
 \begin{definition}[Tensor product of abstraction relations]
+  The tensor product of abstraction relations
+  $R_1 \subseteq D_1^\sharp \times (D_1^\flat \times \kw{mem})$
+  and
+  $R_2 \subseteq D_2^\sharp \times (D_2^\flat \times \kw{mem})$
+  is a relation
+  $R_1 \otimes R_2 \subseteq (D_1^\sharp \times D_2^\sharp)
+  \times (D_1^\flat \times D_2^\flat \times \kw{mem})$
+  defined as
+  \[
+    \begin{prooftree}
+      \hypo{d_1^\sharp \mathrel{R_1} (d_1^\flat, m)}
+      \hypo{d_2^\sharp \mathrel{R_2} (d_2^\flat, m)}
+      \hypo{\kw{glob}(R_1) \cap \kw{glob}(R_2) = \varnothing}
+      \infer3{(d_1^\sharp,d_2^\sharp)
+        \mathrel{R_1\otimes R_2} (d_1^\flat,d_2^\flat,m)}
+    \end{prooftree}
+  \]
+  with the footprint defined as
+  \[
+    \kw{glob}(R_1\otimes R_2) := \kw{glob}(R_1) \cup \kw{glob}(R_2)
+  \]
+  and it is straightforward to verify
+  the invariant property.
 \end{definition}
 
-\begin{theorem}[Tensor product correctness]
+Then the tensor product of layers can be defined
+as the following theorem.
+
+\begin{theorem}[Tensor product of CompCert layers]
+  \[
+    \begin{prooftree}
+      \hypo{L_1^\flat \vdash_{R_1} M_1 : L_1^\sharp}
+      \hypo{L_2^\flat \vdash_{R_2} M_2 : L_2^\sharp}
+      \infer2{L_1^\flat \otimes L_2^\flat \vdash_{R_1 \otimes R_2}
+        M_1, M_2 : L_1^\sharp \otimes L_2^\sharp}
+    \end{prooftree}
+  \]
 \end{theorem}
+
+The condition in the refinement convention $\hat{R_1}$
+that the blocks that do not have permissions
+and are not in $\kw{glob}(R_1)$ stay unchanged
+plays an important role in proving the theorem.
+This is because those blocks correspond to
+the variables in $\kw{glob}(R_2)$
+and the fact that they stay unchanged
+allows $R_2$ to be re-establish at the end.
 
 %}}}
 
@@ -2556,15 +2808,38 @@ with the $\kw{unchanged\_on}$ constraint
 % Explain sequence of abstraction relations,
 % and update to the layer correctness definition
 
-\begin{lemma}{Vertical composition of CompCert layers}
+Composition on abstraction relations
+is not compatible with
+memory extension based promotion\cite[\S4.4]{thesis}.
+To work around this issue,
+we keep a sequence of abstraction relations
+$\vec{R} = R_1, R_2, \cdots, R_n$
+and delay the composition
+until they are turned into refinement conventions.
+\[
+  \widehat{R_1, R_2, \cdots} :=
+  \hat{R_1} \circ \hat{R_2} \cdots
+\]
+The layer correctness is changed accordingly
+and an individual abstraction relation
+is implicitly lifted to a singleton list.
+
+\begin{lemma}[Vertical composition of CompCert layers]
+  \[
+    \begin{prooftree}
+      \hypo{L^\flat \vdash_{R} M : L^\natural}
+      \hypo{L^\natural \vdash_{S} N : L^\sharp}
+      \infer2{L^\flat \vdash_{R,S} M, N : L^\sharp}
+    \end{prooftree}
+  \]
 \end{lemma}
 
 %}}}
 
 \subsection{Compiling Certified Abstraction Layers} %{{{
 
-XXX:
-Open question whether/how we want to do this.
+
+XXX: Open question whether/how we want to do this.
 Low priority for now.
 
 %}}}
@@ -2575,125 +2850,11 @@ Low priority for now.
 
 \subsection{Abstract Layers} %{{{
 
-Briefly go over the LICS'20 model.
+% Briefly go over the LICS'20 model.
 % Layer interfaces
 % Layer implementation
 % Abstraction relation, correctness
 % Exemple: implementing bounded queue
-
-Limitations: no new state.
-
-Question: what is the relationship to CompCert CAL?
-
-Outline for the rest of the section.
-
-%}}}
-
-\subsection{Introducing New State} %{{{
-
-% Explain the x U thing
-
-% Updated abstraction relations
-% Updated layer correctness
-
-% Example: implementing array, counters
-
-%}}}
-
-\subsection{Tensor Product} %{{{
-
-\begin{example}
-Combining array and counters
-\end{example}
-
-%}}}
-
-\subsection{Vertical Composition} %{{{
-
-% Explain
-
-% Example: Ring buffer and bounded queue in abstract layers
-
-%}}}
-
-\subsection{Correspondence} %{{{
-
-\subsubsection{Code Verification}
-
-\[
-  \Sigma \le^\mu_{\lambda^\sharp \rightarrow \lambda^\flat} M \Leftrightarrow
-  \Sigma \sqsubseteq_{(\lambda^\sharp \# \kw{mem})
-    \rightarrow (\lambda^\flat \# \kw{mem})@U}
-  \hat{\mu}_* \circ \llbracket \kw{Clight}(M) \rrbracket
-\]
-
-\begin{color}{gray}
-  \subsubsection{Tensor Product Composition}
-  \begin{example}
-    Code verification for array and counter separately
-  \end{example}
-\end{color}
-
-\subsubsection{Complete Correspondence}
-
-\begin{lemma}
-  \label{lemma:relating}
-  Given layer specifications
-  $\Gamma^\sharp: 1 \rightarrow E^\sharp @D^\sharp$ 
-  and $\Gamma^\flat: 1 \rightarrow E^\flat @D^\flat$,
-  with refinement conventions
-  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
-  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$,
-  we define the following CompCertO layer specifications:
-  \begin{align*}
-    L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp
-    & := (\lambda^\sharp @D^\sharp)^* \circ \Gamma^\sharp\\
-    L^\flat: 1 \rightarrow \mathcal{C}@D^\flat
-    & := (\lambda^\flat @D^\flat)^* \circ \Gamma^\flat
-  \end{align*}
-  Then given
-  abstraction relation for strategy layers
-  $\Theta \subseteq D^\sharp \times (D^\flat \times U)$
-  and memory abstraction relation
-  $\mu \subseteq U \times \kw{mem}$,
-  we define the following abstraction relation for CompCertO layers
-  \[
-    R := \{ (d_2, (d_1, m))
-    \mid \exists u. (d_2, (d_1, u)) \in \Theta \wedge (u, m) \in \mu\}
-  \]
-  Finally given strategy implementation
-  $\Sigma: E^\flat \rightarrow E^\sharp @U$
-  and a Clight program module $M$,
-  the following judgment holds
-  \[
-    \begin{prooftree}
-      \hypo{\Gamma^\flat \vdash^\kw{st}_\Theta \Sigma : \Gamma^\sharp}
-      \hypo{\Sigma \le^\mu_{\lambda^\flat \rightarrow \lambda^\sharp} M}
-      \infer2{ L^\flat \vdash^\mathcal{C}_R \kw{Clight}(M): L^\sharp}
-    \end{prooftree}
-  \]
-\end{lemma}
-
-\begin{example}
-Complete the example
-\end{example}
-
-%}}}
-
-%}}}
-
-\section{Implementing CAL}
-
-We have briefly described
-the notion of certified abstraction layers
-in \S\ref{sec:mainideas:cal}.
-In this section, we examine the techniques
-for building certified layers in more details,
-and demonstrate how the layer correctness
-can be transferred from a strategy component
-to a CompCert compilation unit.
-
-\subsection{The Interaction Specification Model} %{{{
 
 In this model:
 \begin{itemize}
@@ -2722,7 +2883,7 @@ the high-level states of $\Gamma^\sharp$ and
 the low-level states of $\Gamma^\flat$.
 The relation can be promoted to a refinement convention:
 \[
-  \hat{\Theta} := \{ (d_2, d_1, \Theta) \mid d_2 \mathrel{\Theta} d_1 \}
+  \hat{\Theta} := \{ (d^\sharp, d^\flat, \Theta) \mid d^\sharp \mathrel{\Theta} d^\flat \}
 \]
 which uses $\Theta$ both in the context of
 input and output states.
@@ -2778,9 +2939,24 @@ used in \citet{popl15}.
 
 %}}}
 
+\begin{example}
+  Bounded queue perfectly fits into this model
+\end{example}
+
+Question: what is the relationship to CompCert CAL?
+
+Outline for the rest of the section.
+
 %}}}
 
 \subsection{Introducing New State} %{{{
+
+% Explain the x U thing
+
+% Updated abstraction relations
+% Updated layer correctness
+
+% Example: implementing array, counters
 
 Update as follows:
 \begin{itemize}
@@ -2818,6 +2994,208 @@ in addition to its implicit use of the underlay state.
 \end{example}
 
 %}}}
+
+\subsection{Tensor Product} %{{{
+
+\begin{example}
+Combining array and counters
+\end{example}
+
+%}}}
+
+\subsection{Vertical Composition} %{{{
+
+% Explain
+
+% Example: Ring buffer and bounded queue in abstract layers
+
+%}}}
+
+\subsection{Correspondence} %{{{
+
+\subsubsection{Code Verification}
+
+\paragraph{Correctness Criteria} The correctness criteria states that a strategy
+is refined by the behavior of a Clight module up to refinement conventions, thus
+allows us to substitute the Clight module for the strategy as the implementation
+between two layer interfaces. The components of correctness criteria include:
+
+\begin{itemize}
+\item A strategy $\Sigma: E^\flat \rightarrow E^\sharp @ U$
+\item A Clight module $\vec{M}$
+\item A pair of refinement conventions that marshall the signatures
+  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
+  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$
+\item A memory relation $\mu \subseteq U \times \kw{mem}$ that explains how the
+  state $U$ is realized in the CompCert memory model. The relation has its
+  footprint and similarly the state relation can be combined with memory
+  extension
+  $\hat{\mu}: \mathcal{C} @ (U \times \kw{mem})
+  \Leftrightarrow \mathcal{C} @ \kw{mem}$
+\end{itemize}
+
+The refinement for correctness criteria is defined as
+
+\[
+  \Sigma \le^\mu_{\lambda^\sharp \rightarrow \lambda^\flat} M \Leftrightarrow
+  \Sigma \sqsubseteq_{(\lambda^\sharp \# \kw{mem})
+    \rightarrow (\lambda^\flat \# \kw{mem})@U}
+  \hat{\mu}_* \circ \llbracket \kw{Clight}(M) \rrbracket
+\]
+
+Explain the how the memory is ``echo''ed.
+
+\begin{example}
+  The strategy $M_\kw{rb}$ and $M_\kw{bq}$ are refined by their corresponding
+  Clight program $\kw{rb.c}$ and $\kw{bq.c}$
+
+  Suppose there is a relation between the abstract data type $V$ and the
+  concrete value type $\kw{val}$ in CompCert
+  \[
+    R_\kw{v} \subseteq V \times \kw{val}
+  \]
+  We then define the relation between the natural numbers and CompCert values,
+  and the relation between the unit type and undefined values.
+  \begin{align*}
+    R_\kw{i} & \subseteq \mathbb{N} \times \kw{val} = \{(n, \kw{Vint}\ i) \mid \cdots \}\\
+    R_\kw{u} & \subseteq \mathbbm{1} \times \kw{val} = \{(*, \kw{Vundef}) \}
+  \end{align*}
+  Next we define the refinement conventions that connect the effect signatures
+  $E_\kw{rb}$ and $E_\kw{bq}$ with the language interface $\mathcal{C}$:
+  \begin{align*}
+    \lambda_\kw{rb} & = \{ (f(v_1, v_2), \kw{set}(i, x), R_\kw{u}) \mid
+                f \leadsto \kw{set},\ v_1\ R_\kw{i}\ i,\ v_2\ R_\kw{v}\ x\} \\
+              & \cup \{ (f(v), \kw{get}(i), R_\kw{v})\mid
+                f \leadsto \kw{get},\ v\ R_\kw{i}\ i\}\\
+              & \cup \{ (f, \kw{inc_1}, R_\kw{i}) \mid
+                f \leadsto \kw{inc_1}\} \cup \{ (f, \kw{inc_2}, R_\kw{i}) \mid
+                f \leadsto \kw{inc_2}\}\\
+    \lambda_\kw{bq} & = \{ (f(v), \kw{enq}(x), R_\kw{u} \mid
+                f \leadsto \kw{enq},\ v\ R_\kw{v}\ x)\} \\
+              & \cup \{ (f, \kw{deq}, R_\kw{v})\mid 
+                f \leadsto \kw{deq}\}
+  \end{align*}
+  where $f \leadsto \kw{fun}$ means the identifier $f$ is mapped to the block
+  where the function $\kw{fun}$ is stored.
+
+  The relation between the abstract state $S_\kw{rb}$ and the memory is defined
+  as
+  \[
+    \begin{prooftree}
+      \hypo{\cdots}
+      \infer1{(f, c_1, c_2)\ \mu_\kw{rb}\ m}
+    \end{prooftree}
+  \]
+
+  The correctness criteria for the ring buffer:
+  \[
+    M_\kw{rb} \le^{\mu_\kw{rb}}_{1 \rightarrow \lambda_\kw{rb}} \kw{rb.c}
+  \]
+  Similarly for the bounded queue:
+  \[
+    M_\kw{bq} \le^{\top}_{\lambda_\kw{rb} \rightarrow \lambda_\kw{bq}} \kw{bq.c}
+  \]
+  where we have implicitly lifted the strategy $M_\kw{bq}$ with a dummy
+  state so that it has type $E_\kw{rb} \rightarrow E_\kw{bq} @ 1$
+\end{example}
+
+\begin{color}{gray}
+  \subsubsection{Tensor Product Composition}
+  \begin{example}
+    Code verification for array and counter separately
+  \end{example}
+\end{color}
+
+\subsubsection{Complete Correspondence}
+
+With the correctness criteria, certified layers
+implemented by strategies can be translated to CompCertO layers with
+certification carried over to the concrete code as demonstrated by the following
+lemma
+
+\begin{lemma}
+  \label{lemma:relating}
+  Given layer specifications
+  $\Gamma^\sharp: 1 \rightarrow E^\sharp @D^\sharp$ 
+  and $\Gamma^\flat: 1 \rightarrow E^\flat @D^\flat$,
+  with refinement conventions
+  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
+  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$,
+  we define the following CompCertO layer specifications:
+  \begin{align*}
+    L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp
+    & := (\lambda^\sharp @D^\sharp)^* \circ \Gamma^\sharp\\
+    L^\flat: 1 \rightarrow \mathcal{C}@D^\flat
+    & := (\lambda^\flat @D^\flat)^* \circ \Gamma^\flat
+  \end{align*}
+  Then given
+  abstraction relation for strategy layers
+  $\Theta \subseteq D^\sharp \times (D^\flat \times U)$
+  and memory abstraction relation
+  $\mu \subseteq U \times \kw{mem}$,
+  we define the following abstraction relation for CompCertO layers
+  \[
+    R := \{ (d_2, (d_1, m))
+    \mid \exists u. (d_2, (d_1, u)) \in \Theta \wedge (u, m) \in \mu\}
+  \]
+  Finally given strategy implementation
+  $\Sigma: E^\flat \rightarrow E^\sharp @U$
+  and a Clight program module $M$,
+  the following judgment holds
+  \[
+    \begin{prooftree}
+      \hypo{\Gamma^\flat \vdash^\kw{st}_\Theta \Sigma : \Gamma^\sharp}
+      \hypo{\Sigma \le^\mu_{\lambda^\flat \rightarrow \lambda^\sharp} M}
+      \infer2{ L^\flat \vdash^\mathcal{C}_R \kw{Clight}(M): L^\sharp}
+    \end{prooftree}
+  \]
+\end{lemma}
+
+The above lemma shows
+how the correctness criteria
+connects the certified layers in the $\ISpec$ model
+with the CompCertO layers.
+Moreover, it reveals the fact
+that the process of building certified layers
+at the CompCert program level
+can be decomposed into
+constructing the certified layers in an abstract domain
+and verified the correctness criteria
+for the concrete code.
+We will call the former \emph{layer verification}
+and the latter \emph{code verification}.
+
+[XXX: fix the example]
+\begin{example}
+  We apply the foregoing theorem to the bounded queue and ring buffer
+  example. For the ring buffer, we prove
+  \[
+    1 \vdash^\mathcal{C}_{1;\rho_\kw{rb}} : \kw{rb.c} : L_\kw{rb}
+  \]
+  Similarly for the bounded queue, we can derive
+  \[
+    L_\kw{rb} \vdash^\mathcal{C}_{R_\kw{rb};\top} : \kw{bq.c} : L_\kw{bq}
+  \]
+  Through the layer composition, we conclude
+  \[
+    1 \vdash^\mathcal{C}_{(1;\rho_\kw{rb}), (R_\kw{rb};\top)}
+    \kw{rb.c}, \kw{bq.c} : L_\kw{bq}
+  \]
+  Although abstraction relations generally do not compose, in this particular
+  case, we can further simplify the abstraction relation and arrive at the
+  conclusion
+  \[
+    1 \vdash^\mathcal{C}_{R_\kw{rb};\rho_\kw{rb}} \kw{rb.c}, \kw{bq.c} : L_\kw{bq}
+  \]
+\end{example}
+
+%}}}
+
+%}}}
+
+\section*{Material From Before}
+
+\section{Implementing CAL}
 
 \subsection{Layers in CompCertO} %{{{
 \label{sec:cal:compcerto}
@@ -2870,29 +3248,10 @@ Layer correctness can then be defined as:
   %\mathcal{X}@\hat{R}_* \circ
   M@S^\flat \circ L^\flat \#\kw{mem}
 \]
-Note that we have elided the structural transformations
-\begin{align*}
-  (\mathcal{X}@D)@\kw{mem}
-  &\cong
-  \mathcal{X}@(\kw{mem} \times D)
-  \\
-  \mathcal{X}@(\kw{mem} \times D)
-  &\cong
-  \mathcal{X}@(D \times \kw{mem})
-\end{align*}
 
 %}}}
 
 \paragraph{Abstraction Relations} %{{{
-
-To enable layer composition,
-the class of strategies and relations
-used in layer implementation must be restricted
-so that for an arbitrary client strategy $N$,
-the following commutation property holds:
-\[
-  N@D_2 \sqsubseteq_{\hat{R} \rightarrow \hat{R}} N@D_1
-\]
 
 [Refine the definitions of layer interfaces and implementations.
 Implementations are sequences of Clight programs $M_1, \ldots, M_n$.
@@ -2978,169 +3337,7 @@ Use notation other than $\gamma$.
 
 \end{color}
 
-\paragraph{Correctness Criteria} The correctness criteria states that a strategy
-is refined by the behavior of a Clight module up to refinement conventions, thus
-allows us to substitute the Clight module for the strategy as the implementation
-between two layer interfaces. The components of correctness criteria include:
 
-\begin{itemize}
-\item A strategy $\Sigma: E^\flat \rightarrow E^\sharp @ U$
-\item A Clight module $\vec{M}$
-\item A pair of refinement conventions that marshall the signatures
-  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
-  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$
-\item A memory relation $\mu \subseteq U \times \kw{mem}$ that explains how the
-  state $U$ is realized in the CompCert memory model. The relation has its
-  footprint and similarly the state relation can be combined with memory
-  extension
-  $\hat{\mu}: \mathcal{C} @ (U \times \kw{mem})
-  \Leftrightarrow \mathcal{C} @ \kw{mem}$
-\end{itemize}
-
-The refinement for correctness criteria is defined as
-\[
-  \Sigma \le^\mu_{\lambda^\sharp \rightarrow \lambda^\flat} M \Leftrightarrow
-  \Sigma \sqsubseteq_{(\lambda^\sharp \# \kw{mem})
-    \rightarrow (\lambda^\flat \# \kw{mem})@U}
-  \hat{\mu}_* \circ \llbracket \kw{Clight}(M) \rrbracket
-\]
-
-Explain the how the memory is ``echo''ed.
-
-\begin{example}
-  The strategy $M_\kw{rb}$ and $M_\kw{bq}$ are refined by their corresponding
-  Clight program $\kw{rb.c}$ and $\kw{bq.c}$
-
-  Suppose there is a relation between the abstract data type $V$ and the
-  concrete value type $\kw{val}$ in CompCert
-  \[
-    R_\kw{v} \subseteq V \times \kw{val}
-  \]
-  We then define the relation between the natural numbers and CompCert values,
-  and the relation between the unit type and undefined values.
-  \begin{align*}
-    R_\kw{i} & \subseteq \mathbb{N} \times \kw{val} = \{(n, \kw{Vint}\ i) \mid \cdots \}\\
-    R_\kw{u} & \subseteq \mathbbm{1} \times \kw{val} = \{(*, \kw{Vundef}) \}
-  \end{align*}
-  Next we define the refinement conventions that connect the effect signatures
-  $E_\kw{rb}$ and $E_\kw{bq}$ with the language interface $\mathcal{C}$:
-  \begin{align*}
-    \lambda_\kw{rb} & = \{ (f(v_1, v_2), \kw{set}(i, x), R_\kw{u}) \mid
-                f \leadsto \kw{set},\ v_1\ R_\kw{i}\ i,\ v_2\ R_\kw{v}\ x\} \\
-              & \cup \{ (f(v), \kw{get}(i), R_\kw{v})\mid
-                f \leadsto \kw{get},\ v\ R_\kw{i}\ i\}\\
-              & \cup \{ (f, \kw{inc_1}, R_\kw{i}) \mid
-                f \leadsto \kw{inc_1}\} \cup \{ (f, \kw{inc_2}, R_\kw{i}) \mid
-                f \leadsto \kw{inc_2}\}\\
-    \lambda_\kw{bq} & = \{ (f(v), \kw{enq}(x), R_\kw{u} \mid
-                f \leadsto \kw{enq},\ v\ R_\kw{v}\ x)\} \\
-              & \cup \{ (f, \kw{deq}, R_\kw{v})\mid 
-                f \leadsto \kw{deq}\}
-  \end{align*}
-  where $f \leadsto \kw{fun}$ means the identifier $f$ is mapped to the block
-  where the function $\kw{fun}$ is stored.
-
-  The relation between the abstract state $S_\kw{rb}$ and the memory is defined
-  as
-  \[
-    \begin{prooftree}
-      \hypo{\cdots}
-      \infer1{(f, c_1, c_2)\ \mu_\kw{rb}\ m}
-    \end{prooftree}
-  \]
-
-  The correctness criteria for the ring buffer:
-  \[
-    M_\kw{rb} \le^{\mu_\kw{rb}}_{1 \rightarrow \lambda_\kw{rb}} \kw{rb.c}
-  \]
-  Similarly for the bounded queue:
-  \[
-    M_\kw{bq} \le^{\top}_{\lambda_\kw{rb} \rightarrow \lambda_\kw{bq}} \kw{bq.c}
-  \]
-  where we have implicitly lifted the strategy $M_\kw{bq}$ with a dummy
-  state so that it has type $E_\kw{rb} \rightarrow E_\kw{bq} @ 1$
-\end{example}
-
-\paragraph{Translate Layers} With the correctness criteria, certified layers
-implemented by strategies can be translated to CompCertO layers with
-certification carried over to the concrete code as demonstrated by the following
-lemma
-
-\begin{lemma}
-  \label{lemma:relating}
-  Given layer specifications
-  $\Gamma^\sharp: 1 \rightarrow E^\sharp @D^\sharp$ 
-  and $\Gamma^\flat: 1 \rightarrow E^\flat @D^\flat$,
-  with refinement conventions
-  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
-  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$,
-  we define the following CompCertO layer specifications:
-  \begin{align*}
-    L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp
-    & := (\lambda^\sharp @D^\sharp)^* \circ \Gamma^\sharp\\
-    L^\flat: 1 \rightarrow \mathcal{C}@D^\flat
-    & := (\lambda^\flat @D^\flat)^* \circ \Gamma^\flat
-  \end{align*}
-  Then given
-  abstraction relation for strategy layers
-  $\Theta \subseteq D^\sharp \times (D^\flat \times U)$
-  and memory abstraction relation
-  $\mu \subseteq U \times \kw{mem}$,
-  we define the following abstraction relation for CompCertO layers
-  \[
-    R := \{ (d_2, (d_1, m))
-    \mid \exists u. (d_2, (d_1, u)) \in \Theta \wedge (u, m) \in \mu\}
-  \]
-  Finally given strategy implementation
-  $\Sigma: E^\flat \rightarrow E^\sharp @U$
-  and a Clight program module $M$,
-  the following judgment holds
-  \[
-    \begin{prooftree}
-      \hypo{\Gamma^\flat \vdash^\kw{st}_\Theta \Sigma : \Gamma^\sharp}
-      \hypo{\Sigma \le^\mu_{\lambda^\flat \rightarrow \lambda^\sharp} M}
-      \infer2{ L^\flat \vdash^\mathcal{C}_R \kw{Clight}(M): L^\sharp}
-    \end{prooftree}
-  \]
-\end{lemma}
-
-The above lemma shows
-how the correctness criteria
-connects the certified layers in the $\ISpec$ model
-with the CompCertO layers.
-Moreover, it reveals the fact
-that the process of building certified layers
-at the CompCert program level
-can be decomposed into
-constructing the certified layers in an abstract domain
-and verified the correctness criteria
-for the concrete code.
-We will call the former \emph{layer verification}
-and the latter \emph{code verification}.
-
-[XXX: fix the example]
-\begin{example}
-  We apply the foregoing theorem to the bounded queue and ring buffer
-  example. For the ring buffer, we prove
-  \[
-    1 \vdash^\mathcal{C}_{1;\rho_\kw{rb}} : \kw{rb.c} : L_\kw{rb}
-  \]
-  Similarly for the bounded queue, we can derive
-  \[
-    L_\kw{rb} \vdash^\mathcal{C}_{R_\kw{rb};\top} : \kw{bq.c} : L_\kw{bq}
-  \]
-  Through the layer composition, we conclude
-  \[
-    1 \vdash^\mathcal{C}_{(1;\rho_\kw{rb}), (R_\kw{rb};\top)}
-    \kw{rb.c}, \kw{bq.c} : L_\kw{bq}
-  \]
-  Although abstraction relations generally do not compose, in this particular
-  case, we can further simplify the abstraction relation and arrive at the
-  conclusion
-  \[
-    1 \vdash^\mathcal{C}_{R_\kw{rb};\rho_\kw{rb}} \kw{rb.c}, \kw{bq.c} : L_\kw{bq}
-  \]
-\end{example}
 % }}}
 
 \subsection{Comparing with Original Layers}
