@@ -3438,44 +3438,125 @@ which is used in the vertical composition.
 \subsection{Correctness Criteria} %{{{
 \label{sec:stcal:cc}
 
-In this section,
-we investigate the correspondence
-between the abstract layers
-the CompCert layers.
+\autoref{tab:correspondence} roughly shows
+the correspondence
+between the strategy layers and CompCert layers
+by showing the correspondence
+between each ingredients.
+In this section, we focus on
+the connection between
+strategy implementations and CompCert programs.
+To build a connection between them,
+we need to concretize effect signatures
+in the shape of $\mathcal{C}$ language interfaces,
+realize the abstract state
+using CompCert memory blocks,
+and prove that the behavior of concrete programs
+refines the strategy.
+Then we call the programs meet
+the \emph{correctness criteria} of the strategy.
 
-The correctness criteria states that a strategy
-is refined by the behavior of a Clight module up to refinement conventions, thus
-allows us to substitute the Clight module for the strategy as the implementation
-between two layer interfaces. The components of correctness criteria include:
+We introduce \emph{memory relation}
+to relate the local abstract state
+with CompCert memory model.
 
-\begin{itemize}
-\item A strategy $\Sigma: E^\flat \rightarrow E^\sharp @ U$
-\item A Clight module $\vec{M}$
-\item A pair of refinement conventions that marshall the signatures
-  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
-  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$
-\item A memory relation $\mu \subseteq U \times \kw{mem}$ that explains how the
-  state $U$ is realized in the CompCert memory model. The relation has its
-  footprint and similarly the state relation can be combined with memory
-  extension
-  $\hat{\mu}: \mathcal{C} @ (U \times \kw{mem})
-  \Leftrightarrow \mathcal{C} @ \kw{mem}$
-\end{itemize}
+\begin{definition}
+  A \emph{memory relation} is a relation
+  between an abstract state $U$
+  and the CompCert memory
+  \[
+    \mu \subseteq U \times \kw{mem}
+  \]
+  with an operation $\kw{glob}$
+  and satisfies the invariant property
+  similar to abstraction relations
+\end{definition}
 
-The refinement for correctness criteria is defined as
-
+A memory relation is also promoted
+to a simulation convention
+$\hat{\mu}: \mathcal{C}@(U\times\kw{mem})\leftrightarrows \mathcal{C}@\kw{mem}
+= \langle \kw{mem}, \mu^\que, \mu^\ans \rangle$
+where
 \[
-  \Sigma \le^\mu_{\lambda^\sharp \rightarrow \lambda^\flat} M \Leftrightarrow
-  \Sigma \sqsubseteq_{(\lambda^\sharp \# \kw{mem})
-    \rightarrow (\lambda^\flat \# \kw{mem})@U}
-  \hat{\mu}_* \circ \llbracket \kw{Clight}(M) \rrbracket
+  \begin{prooftree}
+    \hypo{u \mathrel{\mu} m_\flat}
+    \hypo{\vec{v}_\sharp \mathrel{\le^\kw{\vec{v}}} \vec{v}_\flat}
+    \hypo{m_\sharp \le^\kw{m} m_\flat}
+    \hypo{\kw{glob}(R) \subseteq \kw{no\_perm}(m_\flat)}
+    \infer4
+    {m_\flat \Vdash
+      f(\vec{v}_\sharp)@(u, m_\sharp) \mathrel{\mu^\que}
+      f(\vec{v}_\flat)@m_\flat}
+  \end{prooftree}
+\]
+\[
+  \begin{prooftree}
+    \hypo{u' \mathrel{\mu} m'_\flat}
+    \hypo{m'_\sharp \mathrel{\le^\kw{m}} m'_\flat}
+    \hypo{r_\sharp \mathrel{\le^\kw{v}} r_\flat}
+    \hypo{m'_\flat \cong_{\neg \kw{glob}(R)} m_\flat}
+    \infer4
+    {m_\flat \Vdash
+      r_\sharp @ (u, m_\sharp) \mathrel{\mu^\ans}r_\flat @ m_\flat}
+  \end{prooftree}
 \]
 
-Explain the how the memory is ``echo''ed.
+The simulation convention is similar
+to the case for abstraction relation.
+However, it has a more restricted condition
+that client locations stay unchanged.
+This is because
+in the strategy layer framework
+the abstract states are totally separate
+and the client locations are not
+passed to the underlay specifications
+upon method calls.
+This is obvious
+from the type of the implementation
+$\Sigma: E \rightarrow F@U$
+where the local states $U$
+are not passed to its underlay.
+
+\begin{definition}
+  A module of Clight programs $M$ meets
+  the \emph{correctness criteria} of a strategy
+  $\Sigma: E^\flat \rightarrow E^\sharp @ U$
+  if there exists
+  refinement conventions
+  $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
+  and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$,
+  and a memory relation $\mu \subseteq U \times \kw{mem}$
+  satisfying the refinement
+  \[
+    \Sigma \le^\mu_{\lambda^\sharp \rightarrow \lambda^\flat} M \Leftrightarrow
+    \Sigma \sqsubseteq_{(\lambda^\flat \otimes \upsilon_\kw{mem})
+      \rightarrow (\lambda^\sharp \otimes \upsilon_\kw{mem})@U}
+    \hat{\mu}_* \circ \llbracket \kw{Clight}(M) \rrbracket
+  \]
+\end{definition}
+
+Note that the Clight programs
+can make external calls as a client to its underlay
+but the memory relation with abstract state $U$
+will not be affected.
+This is because
+the $\upsilon_\kw{mem}$ operator
+on the outgoing events
+guarantees that
+the memory passed out
+will be bounced back unchanged.
+Moreover,
+the refinement itself in turn
+provides the guarantee
+that the client memory passed in
+will not be changed
+through the $\upsilon_\kw{mem}$ operator
+on the incoming events.
 
 \begin{example}
-  The strategy $M_\kw{rb}$ and $M_\kw{bq}$ are refined by their corresponding
-  Clight program $\kw{rb.c}$ and $\kw{bq.c}$
+  We show that the Clight programs $\kw{rb.c}$ and $\kw{bq.c}$
+  meet the correctness criteria of strategies
+  $M_\kw{rb}$ and $M_\kw{bq}$.
 
   Suppose there is a relation between the abstract data type $V$ and the
   concrete value type $\kw{val}$ in CompCert
@@ -3515,16 +3596,15 @@ Explain the how the memory is ``echo''ed.
     \end{prooftree}
   \]
 
-  The correctness criteria for the ring buffer:
+  The we prove the correctness criteria for the ring buffer:
   \[
     M_\kw{rb} \le^{\mu_\kw{rb}}_{1 \rightarrow \lambda_\kw{rb}} \kw{rb.c}
   \]
-  Similarly for the bounded queue:
+  and similarly for the bounded queue:
   \[
-    M_\kw{bq} \le^{\top}_{\lambda_\kw{rb} \rightarrow \lambda_\kw{bq}} \kw{bq.c}
+    \tilde{M_\kw{bq}} \le^{\top}_{\lambda_\kw{rb} \rightarrow \lambda_\kw{bq}} \kw{bq.c}
   \]
-  where we have implicitly lifted the strategy $M_\kw{bq}$ with a dummy
-  state so that it has type $E_\kw{rb} \rightarrow E_\kw{bq} @ 1$
+  where $\top$ is the memory relation that accepts all memories.
 \end{example}
 
 \subsection{Complete Correspondence}
