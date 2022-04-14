@@ -2909,9 +2909,10 @@ as the following theorem.
 \begin{theorem}[Tensor product of CompCert layers]
   \[
     \begin{prooftree}
-      \hypo{L_1^\flat \vdash_{R_1} M_1 : L_1^\sharp}
-      \hypo{L_2^\flat \vdash_{R_2} M_2 : L_2^\sharp}
-      \infer2{L_1^\flat \otimes L_2^\flat \vdash_{R_1 \otimes R_2}
+      \hypo{L_1^\flat \vdash^\mathcal{C}_{R_1} M_1 : L_1^\sharp}
+      \hypo{L_2^\flat \vdash^\mathcal{C}_{R_2} M_2 : L_2^\sharp}
+      \infer2{L_1^\flat \otimes L_2^\flat
+        \vdash^\mathcal{C}_{R_1 \otimes R_2}
         M_1, M_2 : L_1^\sharp \otimes L_2^\sharp}
     \end{prooftree}
   \]
@@ -2949,15 +2950,15 @@ The layer correctness is changed accordingly
 and an individual abstraction relation
 is implicitly lifted to a singleton list.
 
-\begin{lemma}[Vertical composition of CompCert layers]
+\begin{theorem}[Vertical composition of CompCert layers]
   \[
     \begin{prooftree}
-      \hypo{L^\flat \vdash_{R} M : L^\natural}
-      \hypo{L^\natural \vdash_{S} N : L^\sharp}
-      \infer2{L^\flat \vdash_{R,S} M, N : L^\sharp}
+      \hypo{L^\flat \vdash^\mathcal{C}_{R} M : L^\natural}
+      \hypo{L^\natural \vdash^\mathcal{C}_{S} N : L^\sharp}
+      \infer2{L^\flat \vdash^\mathcal{C}_{R,S} M, N : L^\sharp}
     \end{prooftree}
   \]
-\end{lemma}
+\end{theorem}
 
 %}}}
 
@@ -3116,6 +3117,21 @@ The correctness property can then be stated as:
   \Gamma^\sharp \sqsubseteq E^\sharp@\hat{\Theta}_* \circ \Sigma@S^\flat \circ \Gamma^\flat
 \end{align*}
 
+\begin{example}
+  The layer interface of the bounded queue
+  $\Gamma_\kw{bq}: 1 \rightarrow E_\kw{bq}@D_\kw{bq}$
+  is implemented by the strategy
+  $\Sigma_\kw{bq}: E_\kw{rb} \rightarrow E_\kw{bq}$
+  on top of the layer interface of the ring buffer
+  $\Gamma_\kw{rb}: 1 \rightarrow E_\kw{rb}@D_\kw{rb}$
+  with the abstraction relation
+  $\Theta \subseteq D_\kw{bq} \times D_\kw{rb}$:
+  \[
+    \Gamma_\kw{rb} \vdash^\kw{st}_\Theta \Sigma_\kw{bq} : \Gamma_\kw{bq}
+  \]
+  
+\end{example}
+
 \paragraph{Limitations} %{{{
 
 The model outlined above
@@ -3159,10 +3175,6 @@ with the practical verification techniques
 used in \citet{popl15}.
 
 %}}}
-
-\begin{example}
-  Bounded queue fits into this model
-\end{example}
 
 %}}}
 
@@ -3209,11 +3221,11 @@ The correctness property can again be formulated as:
     & := \kw{assert}(i < N); \kw{ret}(*@f[i:=v])\\
     M_\kw{arr}.\kw{get}(i@f)
     & := \kw{assert}(i < N); \kw{ret}(f[i]@f)\\
-    & \fbox{$M_\kw{cnt_1}$}\\
-    M_\kw{cnt_1}.\kw{inc_1}(*@c_1)
+    & \fbox{$M_\kw{cnt1}$}\\
+    M_\kw{cnt1}.\kw{inc_1}(*@c_1)
     & := \kw{let}\ c'_1 = (c_1+1)\mathop{\mathrm{mod}} N\ \kw{in}\ \kw{ret}(c_1@c'_1)\\
-    & \fbox{$M_\kw{cnt_2}$}\\
-    M_\kw{cnt_2}.\kw{inc_2}(*@c_2)
+    & \fbox{$M_\kw{cnt2}$}\\
+    M_\kw{cnt2}.\kw{inc_2}(*@c_2)
     & :=
       \kw{let}\ c'_2 = (c_2+1)\mathop{\mathrm{mod}} N\ \kw{in}\ \kw{ret}(c_2@c'_2)
   \end{align*}
@@ -3221,19 +3233,136 @@ The correctness property can again be formulated as:
 \end{figure*}
 
 \begin{example}
-  Describe $1 \vdash_\kw{id} M_\kw{rb} : L_\kw{rb}$.
-
+  The strategy
+  $M_\kw{arr} : 1 \rightarrow E_\kw{arr}@V^N$
+  implements the layer interface
+  $L_\kw{arr} : 1 \rightarrow E_\kw{arr}@V^N$
+  on top of an empty underlay $1$:
+  \[
+    1 \vdash^\kw{st}_\kw{\hat{id}} M_\kw{arr} : L_\kw{arr}
+  \]
+  Because the implementation and specification
+  use the same abstract state,
+  the abstraction relation is
+  the lifted identity relation
+  $\kw{\tilde{id}}\subseteq V^N \times (1 \times V^N)$.
+  Similarly, we can construct the
+  strategy layers for the two counters
+  \[
+    1 \vdash^\kw{st}_\kw{\tilde{id}} M_\kw{cnt1} : L_\kw{cnt1}\quad
+    1 \vdash^\kw{st}_\kw{\tilde{id}} M_\kw{cnt2} : L_\kw{cnt2}
+  \]
+  To fit into the new definitions,
+  the strategy $M_\kw{bq}$
+  can be lifted to
+  take a dummy state
+  $\tilde{M}_\kw{bq}: E_\kw{rb} \rightarrow E_\kw{bq}@1$
+  and the abstraction relation $\Theta$
+  can also be lifted as
+  $\tilde{\Theta} \subseteq D_\kw{bq} \times (D_\kw{rb} \times 1)$.
+  Then the layer correctness is
+  updated accordingly.
+  \[
+    \Gamma_\kw{rb} \vdash^\kw{st}_{\tilde{\Theta}}
+    \tilde{\Sigma}_\kw{bq} : \Gamma_\kw{bq}
+  \]
+  Both the examples of array and counters
+  and the example of bounded queue
+  are special cases
   where
-  $\kw{id}\subseteq S_\kw{rb} \times (1 \times S_\kw{rb})$
-  lifts the identity relation implicitly
+  the former introduces new states and
+  builds on top of empty underlay
+  while the latter does not introduce new states and
+  relies on an underlay.
+  They correspond to the \emph{getter-setter} pattern
+  and \emph{absfun} pattern respectively,
+  and are extensively used in the development
+  of CertiKOS.
 \end{example}
 
 %}}}
 
 \subsection{Tensor Product} %{{{
 \label{sec:stcal:tcomp}
+\begin{definition}
+  The tensor product of layer interfaces
+  $\Gamma_1 : 1 \rightarrow E_1@D_1$
+  and $\Gamma_2 : 1 \rightarrow E_2@D_2$
+  is the strategy
+  $\Gamma_1 \otimes \Gamma_2:
+  1 \rightarrow E_1\oplus E_2 @ D_1 \times D_2$
+  defined as
+  \begin{align*}
+    & (\Gamma_1 \otimes \Gamma_2)(\iota_1(q)@(d_1,d_2)) =
+      r@d'_1 \leftarrow \Gamma_1(q@d_1); \kw{ret}(\iota_1(r)@(d'_1, d_2))\\
+    & (\Gamma_1 \otimes \Gamma_2)(\iota_2(q)@(d_1,d_2)) =
+      r@d'_2 \leftarrow \Gamma_2(q@d_2); \kw{ret}(\iota_2(r)@(d_1, d'_2))
+  \end{align*}
+  with $D_1 \times D_2$ as the abstract state.
+\end{definition}
+
+\begin{definition}
+  The tensor product of layer implementations
+  $\Sigma_1: E_1 \rightarrow F_1@U_1$
+  and $\Sigma_2: E_2 \rightarrow F_2@U_2$
+  is the strategy
+  $\Sigma_1 \otimes \Sigma_2:
+  E_1\oplus E_2 \rightarrow F_1\oplus F_2@(U_1 \times U_2)$
+  defined as
+  \begin{align*}
+    & (\Sigma_1 \otimes \Sigma_2)(\iota_1(q)@(d_1,d_2)) =
+      r@d'_1 \leftarrow \hat{\Sigma}_1(q@d_1); \kw{ret}(\iota_1(r)@(d'_1, d_2))\\
+    & (\Sigma_1 \otimes \Sigma_2)(\iota_2(q)@(d_1,d_2)) =
+      r@d'_2 \leftarrow \hat{\Sigma}_2(q@d_2); \kw{ret}(\iota_2(r)@(d_1, d'_2))
+  \end{align*}
+  with $U_1 \times U_2$ as the local state.
+  And the strategy $\Sigma$ is lifted to $\hat{\Sigma}$
+  by composing it with one of the adapters
+  \begin{align*}
+    & \epsilon_1 : E_1 \oplus E_2 \rightarrow E_1\\
+    & \epsilon_1(q) := \iota_1(r) \leftarrow \iota_1(q); \kw{ret}(r)\\
+    & \epsilon_2 : E_1 \oplus E_2 \rightarrow E_2\\
+    & \epsilon_2(q) := \iota_2(r) \leftarrow \iota_2(q); \kw{ret}(r)
+  \end{align*}
+\end{definition}
+
+Then we can define the tensor product
+on strategy layers.
+Unlike with the unified memory model
+in CompCert,
+the new states introduced
+by each component are separate.
+Therefore, the tensor product
+of the strategy layers
+is straightforward.
+
+\begin{theorem}[Tensor product of strategy layers]
+  \[
+    \begin{prooftree}
+      \hypo{\Gamma_1^\flat \vdash^\kw{st}_{\Theta_1} \Sigma_1 : \Gamma_1^\sharp}
+      \hypo{\Gamma_2^\flat \vdash^\kw{st}_{\Theta_2} \Sigma_2 : \Gamma_2^\sharp}
+      \infer2{\Gamma_1^\flat \otimes \Gamma_2^\flat
+        \vdash^\kw{st}_{\Theta_1 \times \Theta_2}
+        \Sigma_1 \otimes \Sigma_2 : \Gamma_1^\sharp \otimes \Gamma_2^\sharp}
+    \end{prooftree}
+  \]
+\end{theorem}
 \begin{example}
-Combining array and counters
+  The array and two counters constitute the ring buffer
+  \[
+    E_\kw{rb} = E_\kw{arr} \oplus E_\kw{cnt1} \oplus E_\kw{cnt2}\quad
+    \Gamma_\kw{rb} = \Gamma_\kw{arr} \otimes \Gamma_\kw{cnt1} \otimes \Gamma_\kw{cnt2}\quad
+    \Sigma_\kw{rb} = \Sigma_\kw{arr} \otimes \Sigma_\kw{cnt1} \otimes \Sigma_\kw{cnt2}
+  \]
+  Then by the tensor product rule
+  \[
+    \begin{prooftree}
+      \hypo{1 \vdash^\kw{st}_\kw{\tilde{id}} \Sigma_\kw{arr} : \Gamma_\kw{arr}}
+      \hypo{1 \vdash^\kw{st}_\kw{\tilde{id}} \Sigma_\kw{cnt1} : \Gamma_\kw{cnt1}}
+      \hypo{1 \vdash^\kw{st}_\kw{\tilde{id}} \Sigma_\kw{cnt2} : \Gamma_\kw{cnt2}}
+      \infer3{1 \vdash^\kw{st}_\kw{\tilde{id}} \Sigma_\kw{rb} : \Gamma_\kw{rb}}
+    \end{prooftree}
+  \]
 \end{example}
 
 %}}}
@@ -3244,6 +3373,65 @@ Combining array and counters
 % Explain
 
 % Example: Ring buffer and bounded queue in abstract layers
+
+Similar to the CompCert layers,
+strategy layers
+can be composed together vertically
+and
+the composition relies on
+the commutation property in the following form.
+\begin{lemma}[Commutation Property]
+  Given a strategy
+  $\Sigma: E^\flat \rightarrow E^\sharp$
+  and a relation
+  $\Theta \subseteq D^\sharp \times D^\flat$,
+  the refinement holds
+  \[
+    \Sigma@D^\sharp
+    \sqsubseteq_{E^\flat@\Theta \rightarrow E^\sharp@\Theta}
+    \Sigma@D^\flat
+  \]
+\end{lemma}
+The commutation property
+can be generalized to the case
+where the strategy introduces new states,
+which is used in the vertical composition.
+\begin{theorem}[Vertical composition of strategy layers]
+  Given layer interfaces
+  $\Gamma^\sharp$, $\Gamma^\natural$, and $\Gamma^\flat$,
+  layer implementations
+  $\Sigma_1: E^\flat \rightarrow E^\natural @ U$
+  and $\Sigma_2: E^\natural \rightarrow E^\sharp @ V$,
+  and abstraction relations
+  $\Theta_1: D^\natural \times (U \times D^\flat)$
+  and $\Theta_2: D^\sharp \times (V \times D^\natural)$
+  the following rule holds
+  \[
+    \begin{prooftree}
+      \hypo{\Gamma^\flat \vdash^\kw{st}_{\Theta_1} \Sigma_1 : \Gamma^\natural}
+      \hypo{\Gamma^\natural \vdash^\kw{st}_{\Theta_2} \Sigma_2 : \Gamma^\sharp}
+      \infer2{\Gamma^\flat
+        \vdash^\kw{st}_{\Theta_2 \circ (=_V \times \Theta_1)}
+        \Sigma_2@U \circ \Sigma_1 : \Gamma^\sharp}
+    \end{prooftree}
+  \]
+\end{theorem}
+
+\begin{example}
+  Finally we can compose
+  the ring buffer and bounded queue together
+  to obtain an composite strategy
+  that implements the bounded queue
+  without relying on a base layer
+  \[
+    \begin{prooftree}
+      \hypo{1 \vdash^\kw{st}_\kw{\tilde{id}} \Sigma_\kw{rb} : \Gamma_\kw{rb}}
+      \hypo{\Gamma_\kw{rb} \vdash^\kw{st}_\Theta \Sigma_\kw{bq} : \Gamma_\kw{bq}}
+      \infer2{1 \vdash^\kw{st}_\kw{\tilde{\Theta}}
+        (\Sigma_\kw{bq}@D_\kw{rb}) \circ \Sigma_\kw{rb}: \Gamma_\kw{bq}}
+    \end{prooftree}
+  \]
+\end{example}
 
 %}}}
 
