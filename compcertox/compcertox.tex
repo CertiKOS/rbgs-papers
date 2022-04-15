@@ -292,7 +292,7 @@ even when each one is reliable on its own terms.
 For example,
 the assumptions made by one component
 may not match the guarantees provided by another---%
-two perfectly functional logic gates which do not agree
+two reliable logic gates which do not agree
 on the voltages representing 0 and 1
 will not interact in a predictable manner.
 % XXX find another example
@@ -352,6 +352,7 @@ the semantics of these processors' assembly languages.
 In turn, assembly languages work very differently from
 the operating system abstractions and
 high-level languages used to develop application software.
+
 As a result,
 building large-scale certified systems
 which operate across many levels of abstraction
@@ -362,86 +363,198 @@ the relationship between
 different \emph{views} of the system
 %and of its components
 at different levels of abstraction.
-
-%From an engineering perspective,
-%describing the relationship between
-%high-level abstractions and the
-%low-level implementation of
-%cross-component interactions is very common:
-%examples include
-%voltages vs. binary levels,
-%calling conventions for CPU architectures,
-%network protocols, etc.
-
 For programming languages,
 traditional examples of this phenomenon include
 \emph{data refinement} \cite{dataref}
-or simulation relations.
-However,
-while these examples
-are ubiquitous in the context of operational semantics,
-they only connect different views of
-a system's \emph{internal} state.
-%
-By contrast,
-there is little precedent
-for this kind of abstraction
-when it comes to the \emph{interactions} of
-components with their environments.
+and simulation relations.
 
-A limited exception to this rule
-is provided by the certified compiler CompCertO \cite{compcerto},
-which uses \emph{simulation conventions}
-to relate the interaction of the source and target programs
-and model the compiler's calling convention.
+\subsection{CompCert and Certified Abstraction Layers}
+
+For example,
+the context of the certified compiler CompCert \cite{compcert}
+formalizes the semantics of its source and target languages
+as labeled transition systems.
+To establish compiler correctness,
+a simulation is established between
+the execution of the source C program
+(which in this case serves as a high-level specification)
+and that of the assembly program
+emitted by the compiler
+(a corresponding low-level implementation).
+This involves defining a simulation relation
+which defines a correspondence between
+the states of the source and target programs,
+which differ significantly in their structure
+and in the data representations they use.
+However,
+the interaction between the program and its environment
+is modeled as event traces which must remain the same
+throughout the compilation process.
+
+Likewise,
+certified abstraction layers \cite{popl15}
+make it possible to progressively refine
+the data representation used in a complex program
+as more and more of it is verified.
+This allows the verification of high-level code
+to operate in the context of a correspondingly
+high-level data representation.
+However, the final contextual refinement theorem
+follows the same approach as is used in CompCert
+and requires the externally observable behavior of
+the specification and the implementation
+to be identical.
+
+This is possible because in both cases,
+the final correctness theorem
+ultimately uses a \emph{closed} semantics,
+which characterizes the behavior of the running program
+(including any client code in the case of contextual refinement)
+once it has been linked and loaded.
+However,
+this restriction has been an obstacle
+to generalizing CompCert's
+semantics and correctness theorem
+so that they operate at the level of individual translation units.
+In general, modeling cross-component interactions
+requires revealing additional details about
+the internal operation of the system under consideration.
+If these details are different
+across levels of abstraction,
+the different views of the interaction
+between a component and its environment
+are no longer directly comparable.
+
+\subsection{Towards General Models of Abstraction}
+
+Recent work has sought to address these problems
+and to develop more flexible and compositional models.
+For example,
+CompCertO is a version of CompCert
+which features open semantics
+and a notion of \emph{simulation convention}
+to express the relationship between component interactions
+at different levels of abstraction
+\cite{compcerto}.
+However, unlike CompCert,
+CompCertO does not define a trace semantics
+against which the soundness of its open simulations
+can be established.
+
+Likewise,
+various models of certified abstraction layers
+have been proposed
+which feature a richer compositional algebra
+than in their original presentation
+\cite{rbgs-cal,popl22},
+with the goal of facilitating the construction of
+large-scale certified systems out of
+disparate certified components.
+However,
+these models are fairly abstract in nature
+and their use for practical code verification
+has not been demonstrated.
 
 \subsection{Contributions}
 
-This paper builds on the concept of simulation conventions
-to provide a general account of abstraction
-in game semantics:
+The present work 
+seeks to consolidate these efforts
+and to propose a systematic approach
+for connecting semantic models
+operating at different levels of abstraction:
 \begin{itemize}
-  \item We identify \emph{formal adjunctions} in
-    refinement-enriched categories
-    as an expression of the relationship
-    between high-level and low-level views
-    of a given interface.
-  \item We introduce \emph{refinement conventions}
-    as a convenient way to describe adjunctions
-    in the context of refinement-based game semantics.
-  \item We use these constructions to
-    embed CompCertO's language semantics
-    and correctness theorem into this
-    compositional model.
-  \item Finally, we demonstrate the usefulness
-    of our approach by refining abstract descriptions of
-    \emph{certified abstraction layers}
-    into concrete C implementations.
-    The layers can be composed with each other
-    and with the correctness proof of CompCertO.
+  \item We use the interaction specification model of \citet{rbgs-cal}
+    to define a proper trace semantics for CompCertO
+    (\S\ref{sec:compcerto}).
+  \item To account for the abstraction gap between
+    the compiler's source and target languages,
+    we introduce \emph{refinement conventions},
+    which generalize the simulation conventions of CompCertO
+    and transpose them to the setting of
+    interaction specifications,
+    allowing us to derive a soundness property for
+    CompCertO's open simulations
+    (\S\ref{sec:refconv}).
+  \item These building blocks can be used to reconstruct
+    the theory of certified abstraction layers
+    used to verify CertiKOS.
+    Because it is grounded in a more uniform mathematical theory,
+    the resulting framework (\S\ref{sec:compcert-cal})
+    is more tractable.
+    In particular,
+    we were able to formulate a tensor product
+    which can be used to compose independent layers.
+    Nevertheless,
+    it remains formulated at a low level of abstraction,
+    and in particular it must deal with the CompCert memory model.
+  \item To address this, we extend
+    the more abstract model of certified abstraction layers
+    proposed in the context of refinement-based game semantics
+    to allow layers to introduce new abstract state (\S\ref{sec:rbgs-cal}).
+  \item Finally,
+    we use refinement conventions
+    to connect these two theories of certified abstraction layers
+    (\S\ref{sec:correspondence}).
+    This allows us to enjoy the best of both worlds:
+    high-level reasoning can be performed
+    within the mathematically tractable,
+    more abstract model,
+    then transported to the level of the CompCert-based model
+    where it can be connected to concrete code.
 \end{itemize}
-Our starting point is
-the interaction specification model
-of refinement-based game semantics
-proposed by \citet{rbgs-cal}.
-We have mechanized it in the Coq proof assistant
-and used it to formalize our work.
+Our overall approach is summarized in \S\ref{sec:mainideas},
+and the interaction specification models of
+refinement-based game semantics 
+is introduced in \S\ref{sec:rbgs}.
+We have formalized our work as well as
+the interaction specification model of \citet{rbgs-cal}
+in the Coq proof assistant.
 
-Section \ref{sec:mainideas}
-provides some background and
-an overview of our framework.
-In \S\ref{sec:compcerto}
-we discuss the semantic model used in CompCertO
-and its meaning in terms of interaction specifications.
-Refinement conventions are introduced in \S\ref{sec:refconv},
-and we show how they can be used to express
-CompCertO's semantics preservation theorem.
-In \S\ref{sec:cal},
-we build on these results
-to carry out the modular verification of
-a simple program,
-with respect to abstraction layer specifications
-formulated in simple, high-level terms.
+%This paper builds on the concept of simulation conventions
+%to provide a general account of abstraction
+%in game semantics:
+%\begin{itemize}
+%  \item We identify \emph{formal adjunctions} in
+%    refinement-enriched categories
+%    as an expression of the relationship
+%    between high-level and low-level views
+%    of a given interface.
+%  \item We introduce \emph{refinement conventions}
+%    as a convenient way to describe adjunctions
+%    in the context of refinement-based game semantics.
+%  \item We use these constructions to
+%    embed CompCertO's language semantics
+%    and correctness theorem into this
+%    compositional model.
+%  \item Finally, we demonstrate the usefulness
+%    of our approach by refining abstract descriptions of
+%    \emph{certified abstraction layers}
+%    into concrete C implementations.
+%    The layers can be composed with each other
+%    and with the correctness proof of CompCertO.
+%\end{itemize}
+%Our starting point is
+%the interaction specification model
+%of refinement-based game semantics
+%proposed by \citet{rbgs-cal}.
+%We have mechanized it in the Coq proof assistant
+%and used it to formalize our work.
+%
+%Section \ref{sec:mainideas}
+%provides some background and
+%an overview of our framework.
+%In \S\ref{sec:compcerto}
+%we discuss the semantic model used in CompCertO
+%and its meaning in terms of interaction specifications.
+%Refinement conventions are introduced in \S\ref{sec:refconv},
+%and we show how they can be used to express
+%CompCertO's semantics preservation theorem.
+%In \S\ref{sec:cal},
+%we build on these results
+%to carry out the modular verification of
+%a simple program,
+%with respect to abstraction layer specifications
+%formulated in simple, high-level terms.
 
 %In principle,
 %the use of a general-purpose proof assistant
@@ -521,8 +634,6 @@ formulated in simple, high-level terms.
 
 %}}}
 
-\section{Main Ideas} \label{sec:mainideas} %{{{
-
 \begin{table} % Notations {{{
   \begin{tabular}{ll}
     \hline
@@ -589,19 +700,22 @@ formulated in simple, high-level terms.
   \caption{Notations}
 \end{table}
 %}}}
+\newpage
+
+\section{Main Ideas} \label{sec:mainideas} %{{{
 
 This section gives a high-level overview
 of our approach and of the relevant background.
-We start with a general description of
-refinement-based game semantics \cite{rbgs-cal}
-and of the CompCertO certified compiler \cite{compcerto},
-introduce our notion of refinement convention,
-then explain how it can be used to interface
-the interaction specification model
-of certified abstraction layers
-with concrete C programs
-and with CompCertO's correctness theorem.
-
+%We start with a general description of
+%refinement-based game semantics \cite{rbgs-cal}
+%and of the CompCertO certified compiler \cite{compcerto},
+%introduce our notion of refinement convention,
+%then explain how it can be used to interface
+%the interaction specification model
+%of certified abstraction layers
+%with concrete C programs
+%and with CompCertO's correctness theorem.
+%
 Throughout the paper,
 we will use the simple C code presented in Figure~\ref{fig:code}
 as a running example.
@@ -612,7 +726,7 @@ behind a simple interface.
 The second translation unit then uses the first
 to implement a bounded queue.
 
-Our ultimate goal is to use CompCertO's semantics
+Our ultimate goal is to use CompCertO's open semantics
 to verify each of these components in terms of
 simple and abstract specifications.
 We will then be able to compose these correctness properties
@@ -620,7 +734,7 @@ with each other and with CompCertO's semantics preservation theorem
 to obtain a formal guarantee on the compiled and linked assembly code.
 
 \begin{figure*} % fig:code {{{
-  \centering
+  \centering\footnotesize
   \begin{subfigure}{0.45\textwidth}
 \begin{minted}{C}
 /* Encapsulated state */
@@ -637,7 +751,7 @@ void set(int i, V val) { buf[i] = val; }
   \label{fig:rb}
   \end{subfigure}
   \hspace{4em}
-  \begin{subfigure}{0.36\textwidth}
+  \begin{subfigure}{0.38\textwidth}
 \begin{minted}{C}
 /* Underlay signature */
 extern int inc1(void);
@@ -652,11 +766,11 @@ V deq() { return get(inc1()); }
   \subcaption{The translation unit $\kw{bq.c}$}
   \label{fig:bq}
   \end{subfigure}
-  \caption{Our running example consists of two C components.
+  \caption{Running example, consisting of two C components.
     The component $\kw{rb.c}$
     implements a ring buffer by encapsulating an array
-    and two counters. The second component
-    $\kw{bq.c}$ uses this interface to implement a
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
     bounded queue.}
   \label{fig:code}
 %\caption{The state of a ring buffer,
@@ -668,6 +782,578 @@ V deq() { return get(inc1()); }
 %\label{fig:bq}
 \end{figure*}
 %}}}
+
+\subsection{Semantics in CompCert}
+
+The certified compiler CompCert
+models the execution of C and assembly programs
+using labeled transition systems.
+For our purposes,
+we will consider the C dialect Clight
+as the compiler's source language.
+Given a Clight program $M$,
+CompCert defines a transition system $\kw{Clight}[M]$.
+An initial state is constructed
+to model the conventional invocation of $\kw{main}()$,
+and the set $\llbracket \kw{Clight}[M] \rrbracket$ of
+event traces generated by this state
+is taken as the meaning of $M$.
+
+A similar process occurs for the target assembly program $M'$
+emitted by the compiler.
+The correctness of CompCert can then be established
+as the following trace containment property:
+\[
+  \begin{prooftree}
+    \hypo{\kw{CompCert}(M) = M'}
+    \infer1{\llbracket \kw{Clight}[M] \rrbracket \supseteq
+            \llbracket \kw{Asm}[M'] \rrbracket}
+  \end{prooftree}
+\]
+This property is proved in CompCert
+using a simulation between the underlying transition systems:
+\[
+  \kw{Clight}[M] \le \kw{Asm}[M']
+\]
+%This means that the states of $\kw{Clight}[M]$ and $\kw{Asm}[M]$
+%can be related in such a way that
+%the transitions of $\kw{Clight}[M]$ out of a state $s$
+%are matched by transitions in $\kw{Asm}[M]$
+%out of any related state $s'$,
+%in a way which preserves the simulation relation.
+Under some assumptions
+on the behavior of the source and target transition systems,
+a soundness property for simulations
+can then be used to establish trace containment.
+
+To verify $M$ against a specification $\sigma$,
+we can prove a trace containment property
+$\sigma \supseteq \llbracket \kw{Clight}[M] \rrbracket$.
+This property can be composed with
+the compiler's correctness theorem
+in order to ensure that the assembly program $M'$
+meets the specification $\sigma$ as well.
+
+Unfortunately,
+CompCert semantics only characterize the behavior of whole programs.
+In particular,
+since $\kw{rb.c}$ and $\kw{bq.c}$ do not include a $\kw{main}()$ function,
+their semantics will be trivial and cannot be characterized in isolation.
+Several solutions to this problem have been proposed (\S\ref{sec:rw:compcert}).
+Below we outline the use of certified abstraction layers
+in the verification of the operating system kernel CertiKOS,
+and the compositional extension of CompCert known as CompCertO.
+
+\subsection{Certified Abstraction Layers}
+
+Although CompCert only models the execution of whole programs,
+it provides limited support for external function calls.
+Semantics are defined in terms of a parameter $\chi$
+which specifies ahead of time the behavior of external functions.
+Certified abstraction layers \cite{popl15}
+take advantage of this capability to enable compositional verification
+with minimal changes to CompCert itself.
+
+\subsubsection{Contextual Refinement}
+
+First,
+transition systems are generalized so that
+initial states can be constructed
+to invoke an arbitrary function within the program.
+In other words, given
+a function identifier $f$,
+a list of argument $\vec{v}$ and
+an initial memory state $m$,
+we can construct a transition system
+$\kw{Clight}_\chi[M].f(\vec{v})@m$
+which models the corresponding invocation of $f$
+when external functions behave according to $\chi$.
+
+A partial program such as $\kw{rb.c}$
+can then be verified in isolation against a \emph{layer interface} $L$
+which specifies the behavior of the program's individual functions:
+\[
+  \forall f \vec{v} m \:\cdot\:
+    L_\kw{rb}.f(\vec{v})@m \supseteq
+    \llbracket \kw{Clight}_\bot[\kw{rb.c}].f(\vec{v})@m \rrbracket
+\]
+Since \kw{rb.c} does not rely on any external functions,
+we use the least defined behavior $\bot$ as the value for $\chi$.
+However,
+the property above can be used to derive a form of \emph{contextual refinement}.
+Any client code $C$ combined with $\kw{rb.c}$
+can regard the functions of $\kw{rb.c}$ as \emph{primitive} external functions
+whose behavior is given by $L_\kw{rb}$:
+\[
+  \kw{Clight}_{L_\kw{rb}}[C] \:\supseteq\:
+  \kw{Clight}_\bot[C + \kw{rb.c}]
+  \,.
+\]
+In particular, this means that the code of $\kw{bq.c}$
+can in turn be verified in isolation,
+based on the layer interface defined by $L_\kw{bq}$:
+\[
+  \forall f \vec{v} m \:\cdot\:
+    L_\kw{bq}.f(\vec{v})@m \supseteq
+    \llbracket
+    \kw{Clight}_{L_\kw{rb}}[\kw{bq.c}].f(\vec{v})@m
+    \rrbracket
+    \,.
+\]
+We say that $\kw{bq.c}$ implements the \emph{overlay} interface $L_\kw{bq}$
+in terms of the \emph{underlay} interface $L_\kw{rb}$.
+Together, these data constitute a \emph{certified abstraction layer}.
+
+\subsubsection{Data Abstraction}
+
+[Explain abstract data]
+
+
+
+\subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
+
+The certified C compiler CompCert \cite{compcert} is
+written and verified in the Coq proof assistant.
+CompCert comes with a semantics preservation theorem
+which asserts that
+the behavior of the compiled program
+refines that of the source program.
+This ensures that CompCert does not introduce any bugs
+during compilation.
+Moreover,
+when code is verified at the source level,
+the correctness proof of the code
+can be combined with what of the compiler
+to obtain formal guarantees
+about the behavior of the compiled assembly program.
+The CertiKOS operating system kernel
+is one large project
+which has made use of this capability \cite{popl15}.
+
+\paragraph{Separate Compilation} %{{{
+
+For applications of this kind,
+the Clight language---%
+a simplified dialect of C---%
+is often used as the source language of CompCert.
+The correctness theorem is then stated as
+a \emph{separate compilation} \cite{sepcompcert} property:
+\begin{equation} \label{eqn:scc}
+  \begin{prooftree}
+    \hypo{\forall i \cdot \kw{CompCert}(M_i) = M_i'}
+    \infer1{\kw{Clight}[M_1 + \cdots + M_n]
+      \le \kw{Asm}[M_1' + \cdots + M_n']}
+  \end{prooftree}
+\end{equation}
+Here,
+the translation units $M_1, \ldots, M_n$
+are compiled to the assembly programs $M_1', \ldots, M_n'$.
+The semantics of a source program $p$
+is given as a labeled transition system $\kw{Clight}[p]$,
+whereas the semantics of a target program $p'$
+is given as $\kw{Asm}[p']$.
+The linking operator $+$
+combines translation units into a whole program,
+and the relation $\le$ denotes a simulation property
+between the resulting transition systems.
+
+%}}}
+
+\paragraph{Compositional Semantics} %{{{
+
+Property (\ref{eqn:scc})
+describes a situation where
+multiple source files are compiled independently.
+However,
+the semantics itself
+only describes the behavior of the linked whole program.
+CompCertO modifies the semantic model used in CompCert
+to describe the behavior of individual components
+and model their interaction with the environment.
+The compiler correctness property
+is formulated in terms of this compositional semantics.
+A first approximation of this property is:
+\begin{equation} \label{eqn:ccc}
+  \begin{prooftree}
+    \hypo{\kw{CompCert}(M) = M'}
+    \infer1{\kw{Clight}(M) \le \kw{Asm}(M')}
+  \end{prooftree}
+\end{equation}
+Linking is modeled by a semantic operation $\oplus$
+monotone with respect to simulations,
+which satisfies
+\[
+  \kw{Asm}(M_1) \oplus \kw{Asm}(M_2) \le
+  \kw{Asm}(M_1 + M_2)
+  \,.
+\]
+Together,
+these properties make it possible to formulate
+a separate compilation theorem
+similar to (\ref{eqn:scc}).
+However,
+\citet{compcerto} argues that
+the compositional semantics of CompCertO
+provides a more precise account 
+of the guarantees offered by the compiler,
+and a more flexible basis
+for modeling heterogeneous systems.
+
+%}}}
+
+\paragraph{Key Challenge} %{{{
+
+In the original closed semantics of CompCert,
+the behavior of the source and target programs
+can be compared directly:
+there is no abstraction gap between the traces
+of the source and target programs,
+in the sense that
+two corresponding traces will be equal.
+
+The situation becomes more subtle in CompCertO.
+The compositional semantics of CompCertO
+reveals interactions between program components
+which were previously hidden in the internal states
+of the closed semantics.
+However,
+these interactions take very different forms
+in the source program
+(where they correspond to C function calls)
+and in the target program
+(where they correspond to assembly language jumps
+in a particular register state).
+
+%}}}
+
+\paragraph{Language Interfaces} %{{{
+
+To deal with the different forms
+interactions take
+across different languages,
+CompCertO introduces a rudimentary form of typing
+for its transition systems.
+The interactions between a component and its environment
+are described by \emph{language interfaces},
+which are signatures of the form
+$\{ m : E^\ans \mid m \in E^\que \}$,
+where all operations share the same arity set $E^\ans$.
+
+For example, C-~and assembly-level interactions
+can be described as:
+\begin{align*}
+  \mathcal{C} &:=
+    \big\{ f(\vec{v}) : \kw{val} \mathrel{\big|}
+       f \in \kw{ident}, \vec{v} \in \kw{val}^* \big\}
+  \\
+  \mathcal{A} &:=
+    \big\{ \mathit{rs} : \kw{val}^R \mathrel{\big|}
+       \mathit{rs} \in \kw{val}^R \big\}
+  \,,
+\end{align*}
+Here $f \in \kw{ident}$ is the identifier of
+a C function to be called,
+and $v \in \kw{val}^*$ specifies its actual arguments,
+given a sequence of CompCert runtime values of type $\kw{val}$.
+The arity simply corresponds to
+the possible runtime values which the function may return.
+At the assembly level,
+both calls and returns communicate
+the register state $\mathit{rs} \in \kw{val}^R$.
+Register states assign runtime values
+to the register names in the fixed set $R$,
+which includes the program counter and stack pointer.
+
+In addition,
+all interactions in CompCertO
+are annotated with a global memory state of type $\kw{mem}$,
+a situation which we can describe using the construction:
+\[
+  E@\kw{mem} := \{ m@\mathit{ms} : N \times \kw{mem} \mid
+                   (m : N) \in E, \mathit{ms} \in \kw{mem} \}
+\]
+
+Transition systems
+are then assigned a type
+$E \twoheadrightarrow F$,
+where $E$ and $F$ are
+language interfaces (usually the same one).
+The types of Clight and assembly semantics
+can be given as:
+\begin{align*}
+  \kw{Clight}(-) :
+    \mathcal{C}@\kw{mem}
+   &\twoheadrightarrow
+    \mathcal{C}@\kw{mem}
+  \\
+  \kw{Asm}(-) :
+    \mathcal{A}@\kw{mem}
+   &\twoheadrightarrow
+    \mathcal{A}@\kw{mem}
+\end{align*}
+A transition system of type $E \twoheadrightarrow F$
+accepts incoming calls in $F$
+and may perform outgoing calls in $E$.
+In other words,
+it describes a strategy of type $E \rightarrow F$
+(see \S\ref{sec:compcerto} for details).
+
+%}}}
+
+\paragraph{Simulation Conventions} %{{{
+
+It remains to specify the correspondence
+between source- and target-level interactions.
+To this end,
+CompCertO introduces a notion of \emph{simulation convention}
+between language interfaces.
+A simulation convention $\mathbb{R} : E \Leftrightarrow F$
+relates
+the high-level questions in $E^\que$ and
+the low-level questions in $F^\que$,
+as well corresponding
+high-level answers in $E^\ans$ and
+low-level answers in $F^\ans$.
+For example,
+the simulation convention
+$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
+is used to formalize the compiler's
+overall calling convention.
+
+Simulations then operate with respect to
+two different simulation conventions:
+one for outgoing calls and one for incoming calls.
+We will write
+\[
+  L_1 \le_{\mathbb{R}_E \twoheadrightarrow \mathbb{R}_F} L_2
+\]
+when the transition system
+$L_1 : E_1 \twoheadrightarrow F_1$
+is simulated by
+$L_2 : E_2 \twoheadrightarrow F_2$
+up to the outgoing convention
+$\mathbb{R}_E : E_1 \Leftrightarrow E_2$
+and the incoming convention
+$\mathbb{R}_F : F_1 \Leftrightarrow F_2$.
+
+\begin{figure} % fig:simcomp {{{
+  $\begin{array}{c}
+    \kw{id} : E \Leftrightarrow E
+    \qquad
+    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
+    \\[1.5em]
+   {\begin{prooftree}
+    \hypo{\mathbb{R} : E_1 \Leftrightarrow E_2}
+    \hypo{\mathbb{S} : E_2 \Leftrightarrow E_3}
+    \infer2{\mathbb{R} \cdot \mathbb{S} : E_1 \Leftrightarrow E_3}
+    \end{prooftree}}
+    \\[1.5em]
+   {\begin{prooftree}
+    \hypo{L_1 \le_{\mathbb{R}_E \twoheadrightarrow \mathbb{R}_F} L_2}
+    \hypo{L_2 \le_{\mathbb{S}_E \twoheadrightarrow \mathbb{S}_F} L_3}
+    \infer2{
+      L_1 \le_{\mathbb{R}_E \cdot \mathbb{S}_E \twoheadrightarrow
+               \mathbb{R}_F \cdot \mathbb{S}_F} L_3}
+    \end{prooftree}}
+  \end{array}
+  \:\:
+  \begin{tikzpicture}[baseline=0.6mm,xscale=0.66,yscale=0.55]
+    \node (A1) at (-1,  2) {$E_1$};
+    \node (A2) at (-1,  0) {$E_2$};
+    \node (A3) at (-1, -2) {$E_3$};
+    \node (B1) at ( 1,  2) {$F_1$};
+    \node (B2) at ( 1,  0) {$F_2$};
+    \node (B3) at ( 1, -2) {$F_3$};
+    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
+    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
+    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
+    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
+      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_E$} (A2);
+      \draw (B1) edge[double] node[auto] {$\mathbb{R}_F$} (B2);
+      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_E$} (A3);
+      \draw (B2) edge[double] node[auto] {$\mathbb{S}_F$} (B3);
+    \end{scope}
+  \end{tikzpicture}
+  $
+  \caption{Simulation identity and vertical composition}
+  \label{fig:simcomp}
+\end{figure}
+%}}}
+
+Simulations and simulation conventions
+compose in the way depicted in \autoref{fig:simcomp}.
+The two-dimensional types of simulations
+are organized in a way reminiscent of double categories.
+As such,
+simulation proofs admit a string diagram calculus \cite{dcsd}
+which extends the one presented earlier
+with simulation conventions,
+shown as horizontal lines.
+In this framework,
+the semantics preservation theorem of CompCertO
+can be presented as:
+\[
+  \begin{prooftree}
+    \hypo{\kw{CompCert}(M) = M'}
+    \infer1{
+      \kw{Clight}(M)
+      \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+      \kw{Asm}(M')}
+  \end{prooftree}
+  \qquad
+  \mbox{[diagram]}
+\]
+
+In \autoref{sec:refconv},
+we extend $\ISpec$ to a double category
+using our generalized notion of \emph{refinement convention}.
+This double category can embed
+the transition systems,
+simulation conventions, and
+simulation properties of CompCertO.
+
+%}}}
+
+%}}}
+
+\begin{figure*} % fig:cal {{{
+  \begin{minipage}{.9\textwidth}
+    \begin{align*}
+      %
+      % Overlay
+      %
+      & \fbox{$L_\kw{bq}$} &
+        S_\kw{bq} &:= V^* \\
+      \kw{enq} &: V \rightarrow \mathbbm{1} &
+        L_\kw{bq}.\kw{enq}(v)@\vec{q} &:= \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
+      \kw{deq} &: \mathbbm{1} \rightarrow V &
+        L_\kw{bq}.\kw{deq}(*)@\vec{q} &:= \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
+      \\[1em]
+      %
+      % Implementation
+      %
+      & \fbox{$M_\kw{bq}$} &
+        R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
+      M_\kw{bq}.\kw{enq}(v) &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) &
+        \vec{q} \mathrel{R} (f, c_1, c_2) &\Leftrightarrow
+        \: (c_1 \le c_2 < N \wedge
+            \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {}
+      \\
+      M_\kw{bq}.\kw{deq}(*) &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
+        & \qquad \! (c_2 \le c_1 < N \wedge
+            \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
+      \\[1em]
+      %
+      % Underlay
+      %
+      & \fbox{$L_\kw{rb}$} &
+        S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
+      \\
+      \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
+        L_\kw{rb}.\kw{set}(i, v)@(f, c_1, c_2) &:=
+        \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
+      \\
+      \kw{get} &: \mathbb{N} \rightarrow V &
+        L_\kw{rb}.\kw{get}(i)@(f, c_1, c_2) &:=
+        \{ f_i@(f, c_1, c_2) \mid i < N \}
+      \\
+      \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
+        L_\kw{rb}.\kw{inc}_1@(f, c_1, c_2) &:=
+        \{ c_1@(f, c_1', c_2) \mid
+           c_1' = (c_1 + 1) \mathop{\mathrm{mod}} N \}
+      \\
+      \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
+        L_\kw{rb}.\kw{inc}_2@(f, c_1, c_2) &:=
+        \{ c_2@(f, c_1, c_2') \mid
+           c_2' = (c_2 + 1) \mathop{\mathrm{mod}} N \}
+    \end{align*}
+  \end{minipage}
+  \caption{
+    A certified abstraction layer
+    $L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
+    implementing a bounded queue of size $N$
+    using a ring buffer.
+    The left-hand side of the figure shows
+    the signatures of the overlay and underlay interfaces,
+    and the code associated with the layer.
+    The right-hand side shows primitive specifications
+    and the simulation relation used by the correctness proof.
+    Reproduced from \citet{rbgs-cal}.}
+  \label{fig:cal}
+\end{figure*}
+%}}}
+
+\subsection{Certified Abstraction Layers}\label{sec:mainideas:cal} %{{{
+
+To an extent,
+the formal tools required for the formulation of refinement conventions
+are already present in the strategy specification model
+of certified abstraction layers \cite[\S 3.7]{rbgs-cal}.
+%
+In this model,
+the layer correctness property
+\begin{equation} \label{eqn:layer}
+  L_1 \vdash_R M : L_2
+\end{equation}
+asserts that the strategy specification
+$M : E_1 \rightarrow E_2$
+faithfully implements the \emph{overlay} interface
+$L_2 : \varnothing \rightarrow E_2@S_2$
+in terms of the \emph{underlay} interface
+$L_1 : \varnothing \rightarrow E_1@S_1$.
+[XXX need to explain $@$ here or before].
+The relation $R \subseteq S_2 \times S_1$
+specifies the correspondence between
+the set of high-level states $S_2$
+used to describe the interface $L_2$
+and the set of low-level states $S_1$
+used to describe the interface $L_1$.
+
+To express property (\ref{eqn:layer})
+in terms of refinement,
+we can use a \emph{formal adjunction}
+in the refinement-enriched category $\ISpec$.
+For an arbitrary signature $E$,
+we can define the two strategies
+$R^* : E@S_2 \rightarrow E@S_1$ and
+$R_* : E@S_1 \rightarrow E@S_2$,
+which use dual nondeterminism to interactively translate
+between high- and low-level states.
+Layer correctness can then be stated as:
+\[
+  L_1 \vdash M : L_2 \: \Leftrightarrow \:
+  L_2 \sqsubseteq R_* \circ M@S_1 \circ L_1
+\]
+The adjunction property $R^* \dashv R_*$
+can then help us prove the composition principle:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_R M : L_2}
+    \hypo{L_2 \vdash_S N : L_3}
+    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
+  \end{prooftree}
+\]
+[XXX not quite true,
+we only need $R_*$ and $M@S$ to commute]
+
+As an example,
+\citet{rbgs-cal} describes the certified abstraction layer
+$L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
+depicted in \autoref{fig:cal},
+which provides a high-level view
+of the code shown in \autoref{fig:code}.
+By relating this high-level view
+to the CompCertO semantics of our code,
+in \S\ref{sec:cal} we are able to transfer
+the correctness of $M_\kw{bq}$
+to the level of the assembly code emitted by CompCert
+when $\kw{rb.c}$ and $\kw{bq.c}$ are compiled.
+
+%}}}
+
+%}}}
+
+\section{Game Semantics and Dual Nondeterminism} \label{sec:rbgs} %{{{
 
 \subsection{Semantics} %{{{
 
@@ -1258,445 +1944,6 @@ We will call $\ISpec$ the resulting category
 of effect signatures and strategy specifications.
 
 %}}}
-
-\subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
-
-The certified C compiler CompCert \cite{compcert} is
-written and verified in the Coq proof assistant.
-CompCert comes with a semantics preservation theorem
-which asserts that
-the behavior of the compiled program
-refines that of the source program.
-This ensures that CompCert does not introduce any bugs
-during compilation.
-Moreover,
-when code is verified at the source level,
-the correctness proof of the code
-can be combined with what of the compiler
-to obtain formal guarantees
-about the behavior of the compiled assembly program.
-The CertiKOS operating system kernel
-is one large project
-which has made use of this capability \cite{popl15}.
-
-\paragraph{Separate Compilation} %{{{
-
-For applications of this kind,
-the Clight language---%
-a simplified dialect of C---%
-is often used as the source language of CompCert.
-The correctness theorem is then stated as
-a \emph{separate compilation} \cite{sepcompcert} property:
-\begin{equation} \label{eqn:scc}
-  \begin{prooftree}
-    \hypo{\forall i \cdot \kw{CompCert}(M_i) = M_i'}
-    \infer1{\kw{Clight}[M_1 + \cdots + M_n]
-      \le \kw{Asm}[M_1' + \cdots + M_n']}
-  \end{prooftree}
-\end{equation}
-Here,
-the translation units $M_1, \ldots, M_n$
-are compiled to the assembly programs $M_1', \ldots, M_n'$.
-The semantics of a source program $p$
-is given as a labeled transition system $\kw{Clight}[p]$,
-whereas the semantics of a target program $p'$
-is given as $\kw{Asm}[p']$.
-The linking operator $+$
-combines translation units into a whole program,
-and the relation $\le$ denotes a simulation property
-between the resulting transition systems.
-
-%}}}
-
-\paragraph{Compositional Semantics} %{{{
-
-Property (\ref{eqn:scc})
-describes a situation where
-multiple source files are compiled independently.
-However,
-the semantics itself
-only describes the behavior of the linked whole program.
-CompCertO modifies the semantic model used in CompCert
-to describe the behavior of individual components
-and model their interaction with the environment.
-The compiler correctness property
-is formulated in terms of this compositional semantics.
-A first approximation of this property is:
-\begin{equation} \label{eqn:ccc}
-  \begin{prooftree}
-    \hypo{\kw{CompCert}(M) = M'}
-    \infer1{\kw{Clight}(M) \le \kw{Asm}(M')}
-  \end{prooftree}
-\end{equation}
-Linking is modeled by a semantic operation $\oplus$
-monotone with respect to simulations,
-which satisfies
-\[
-  \kw{Asm}(M_1) \oplus \kw{Asm}(M_2) \le
-  \kw{Asm}(M_1 + M_2)
-  \,.
-\]
-Together,
-these properties make it possible to formulate
-a separate compilation theorem
-similar to (\ref{eqn:scc}).
-However,
-\citet{compcerto} argues that
-the compositional semantics of CompCertO
-provides a more precise account 
-of the guarantees offered by the compiler,
-and a more flexible basis
-for modeling heterogeneous systems.
-
-%}}}
-
-\paragraph{Key Challenge} %{{{
-
-In the original closed semantics of CompCert,
-the behavior of the source and target programs
-can be compared directly:
-there is no abstraction gap between the traces
-of the source and target programs,
-in the sense that
-two corresponding traces will be equal.
-
-The situation becomes more subtle in CompCertO.
-The compositional semantics of CompCertO
-reveals interactions between program components
-which were previously hidden in the internal states
-of the closed semantics.
-However,
-these interactions take very different forms
-in the source program
-(where they correspond to C function calls)
-and in the target program
-(where they correspond to assembly language jumps
-in a particular register state).
-
-%}}}
-
-\paragraph{Language Interfaces} %{{{
-
-To deal with the different forms
-interactions take
-across different languages,
-CompCertO introduces a rudimentary form of typing
-for its transition systems.
-The interactions between a component and its environment
-are described by \emph{language interfaces},
-which are signatures of the form
-$\{ m : E^\ans \mid m \in E^\que \}$,
-where all operations share the same arity set $E^\ans$.
-
-For example, C-~and assembly-level interactions
-can be described as:
-\begin{align*}
-  \mathcal{C} &:=
-    \big\{ f(\vec{v}) : \kw{val} \mathrel{\big|}
-       f \in \kw{ident}, \vec{v} \in \kw{val}^* \big\}
-  \\
-  \mathcal{A} &:=
-    \big\{ \mathit{rs} : \kw{val}^R \mathrel{\big|}
-       \mathit{rs} \in \kw{val}^R \big\}
-  \,,
-\end{align*}
-Here $f \in \kw{ident}$ is the identifier of
-a C function to be called,
-and $v \in \kw{val}^*$ specifies its actual arguments,
-given a sequence of CompCert runtime values of type $\kw{val}$.
-The arity simply corresponds to
-the possible runtime values which the function may return.
-At the assembly level,
-both calls and returns communicate
-the register state $\mathit{rs} \in \kw{val}^R$.
-Register states assign runtime values
-to the register names in the fixed set $R$,
-which includes the program counter and stack pointer.
-
-In addition,
-all interactions in CompCertO
-are annotated with a global memory state of type $\kw{mem}$,
-a situation which we can describe using the construction:
-\[
-  E@\kw{mem} := \{ m@\mathit{ms} : N \times \kw{mem} \mid
-                   (m : N) \in E, \mathit{ms} \in \kw{mem} \}
-\]
-
-Transition systems
-are then assigned a type
-$E \twoheadrightarrow F$,
-where $E$ and $F$ are
-language interfaces (usually the same one).
-The types of Clight and assembly semantics
-can be given as:
-\begin{align*}
-  \kw{Clight}(-) :
-    \mathcal{C}@\kw{mem}
-   &\twoheadrightarrow
-    \mathcal{C}@\kw{mem}
-  \\
-  \kw{Asm}(-) :
-    \mathcal{A}@\kw{mem}
-   &\twoheadrightarrow
-    \mathcal{A}@\kw{mem}
-\end{align*}
-A transition system of type $E \twoheadrightarrow F$
-accepts incoming calls in $F$
-and may perform outgoing calls in $E$.
-In other words,
-it describes a strategy of type $E \rightarrow F$
-(see \S\ref{sec:compcerto} for details).
-
-%}}}
-
-\paragraph{Simulation Conventions} %{{{
-
-It remains to specify the correspondence
-between source- and target-level interactions.
-To this end,
-CompCertO introduces a notion of \emph{simulation convention}
-between language interfaces.
-A simulation convention $\mathbb{R} : E \Leftrightarrow F$
-relates
-the high-level questions in $E^\que$ and
-the low-level questions in $F^\que$,
-as well corresponding
-high-level answers in $E^\ans$ and
-low-level answers in $F^\ans$.
-For example,
-the simulation convention
-$\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
-is used to formalize the compiler's
-overall calling convention.
-
-Simulations then operate with respect to
-two different simulation conventions:
-one for outgoing calls and one for incoming calls.
-We will write
-\[
-  L_1 \le_{\mathbb{R}_E \twoheadrightarrow \mathbb{R}_F} L_2
-\]
-when the transition system
-$L_1 : E_1 \twoheadrightarrow F_1$
-is simulated by
-$L_2 : E_2 \twoheadrightarrow F_2$
-up to the outgoing convention
-$\mathbb{R}_E : E_1 \Leftrightarrow E_2$
-and the incoming convention
-$\mathbb{R}_F : F_1 \Leftrightarrow F_2$.
-
-\begin{figure} % fig:simcomp {{{
-  $\begin{array}{c}
-    \kw{id} : E \Leftrightarrow E
-    \qquad
-    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
-    \\[1.5em]
-   {\begin{prooftree}
-    \hypo{\mathbb{R} : E_1 \Leftrightarrow E_2}
-    \hypo{\mathbb{S} : E_2 \Leftrightarrow E_3}
-    \infer2{\mathbb{R} \cdot \mathbb{S} : E_1 \Leftrightarrow E_3}
-    \end{prooftree}}
-    \\[1.5em]
-   {\begin{prooftree}
-    \hypo{L_1 \le_{\mathbb{R}_E \twoheadrightarrow \mathbb{R}_F} L_2}
-    \hypo{L_2 \le_{\mathbb{S}_E \twoheadrightarrow \mathbb{S}_F} L_3}
-    \infer2{
-      L_1 \le_{\mathbb{R}_E \cdot \mathbb{S}_E \twoheadrightarrow
-               \mathbb{R}_F \cdot \mathbb{S}_F} L_3}
-    \end{prooftree}}
-  \end{array}
-  \:\:
-  \begin{tikzpicture}[baseline=0.6mm,xscale=0.66,yscale=0.55]
-    \node (A1) at (-1,  2) {$E_1$};
-    \node (A2) at (-1,  0) {$E_2$};
-    \node (A3) at (-1, -2) {$E_3$};
-    \node (B1) at ( 1,  2) {$F_1$};
-    \node (B2) at ( 1,  0) {$F_2$};
-    \node (B3) at ( 1, -2) {$F_3$};
-    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
-    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
-    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
-    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
-      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_E$} (A2);
-      \draw (B1) edge[double] node[auto] {$\mathbb{R}_F$} (B2);
-      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_E$} (A3);
-      \draw (B2) edge[double] node[auto] {$\mathbb{S}_F$} (B3);
-    \end{scope}
-  \end{tikzpicture}
-  $
-  \caption{Simulation identity and vertical composition}
-  \label{fig:simcomp}
-\end{figure}
-%}}}
-
-Simulations and simulation conventions
-compose in the way depicted in \autoref{fig:simcomp}.
-The two-dimensional types of simulations
-are organized in a way reminiscent of double categories.
-As such,
-simulation proofs admit a string diagram calculus \cite{dcsd}
-which extends the one presented earlier
-with simulation conventions,
-shown as horizontal lines.
-In this framework,
-the semantics preservation theorem of CompCertO
-can be presented as:
-\[
-  \begin{prooftree}
-    \hypo{\kw{CompCert}(M) = M'}
-    \infer1{
-      \kw{Clight}(M)
-      \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-      \kw{Asm}(M')}
-  \end{prooftree}
-  \qquad
-  \mbox{[diagram]}
-\]
-
-In \autoref{sec:refconv},
-we extend $\ISpec$ to a double category
-using our generalized notion of \emph{refinement convention}.
-This double category can embed
-the transition systems,
-simulation conventions, and
-simulation properties of CompCertO.
-
-%}}}
-
-%}}}
-
-\begin{figure*} % fig:cal {{{
-  \begin{minipage}{.9\textwidth}
-    \begin{align*}
-      %
-      % Overlay
-      %
-      & \fbox{$L_\kw{bq}$} &
-        S_\kw{bq} &:= V^* \\
-      \kw{enq} &: V \rightarrow \mathbbm{1} &
-        L_\kw{bq}.\kw{enq}(v)@\vec{q} &:= \{ * @ \vec{q} v \mid |\vec{q}| < N \} \\
-      \kw{deq} &: \mathbbm{1} \rightarrow V &
-        L_\kw{bq}.\kw{deq}(*)@\vec{q} &:= \{ v @ \vec{p} \: \mid \vec{q} = v \vec{p} \}
-      \\[1em]
-      %
-      % Implementation
-      %
-      & \fbox{$M_\kw{bq}$} &
-        R &\subseteq S_\kw{bq} \times S_\kw{rb} \\
-      M_\kw{bq}.\kw{enq}(v) &:= i \leftarrow \kw{inc}_2 ; \: \kw{set}(i, v) &
-        \vec{q} \mathrel{R} (f, c_1, c_2) &\Leftrightarrow
-        \: (c_1 \le c_2 < N \wedge
-            \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {}
-      \\
-      M_\kw{bq}.\kw{deq}(*) &:= i \leftarrow \kw{inc}_1 ; \: \kw{get}(i) &
-        & \qquad \! (c_2 \le c_1 < N \wedge
-            \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
-      \\[1em]
-      %
-      % Underlay
-      %
-      & \fbox{$L_\kw{rb}$} &
-        S_\kw{rb} &:= V^N \times \mathbb{N} \times \mathbb{N}
-      \\
-      \kw{set} &: \mathbb{N} \times V \rightarrow \mathbbm{1} &
-        L_\kw{rb}.\kw{set}(i, v)@(f, c_1, c_2) &:=
-        \{ *@(f', c_1, c_2) \mid i < N \wedge f' = f[i := v] \}
-      \\
-      \kw{get} &: \mathbb{N} \rightarrow V &
-        L_\kw{rb}.\kw{get}(i)@(f, c_1, c_2) &:=
-        \{ f_i@(f, c_1, c_2) \mid i < N \}
-      \\
-      \kw{inc}_1 &: \mathbbm{1} \rightarrow \mathbb{N} &
-        L_\kw{rb}.\kw{inc}_1@(f, c_1, c_2) &:=
-        \{ c_1@(f, c_1', c_2) \mid
-           c_1' = (c_1 + 1) \mathop{\mathrm{mod}} N \}
-      \\
-      \kw{inc}_2 &: \mathbbm{1} \rightarrow \mathbb{N} &
-        L_\kw{rb}.\kw{inc}_2@(f, c_1, c_2) &:=
-        \{ c_2@(f, c_1, c_2') \mid
-           c_2' = (c_2 + 1) \mathop{\mathrm{mod}} N \}
-    \end{align*}
-  \end{minipage}
-  \caption{
-    A certified abstraction layer
-    $L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
-    implementing a bounded queue of size $N$
-    using a ring buffer.
-    The left-hand side of the figure shows
-    the signatures of the overlay and underlay interfaces,
-    and the code associated with the layer.
-    The right-hand side shows primitive specifications
-    and the simulation relation used by the correctness proof.
-    Reproduced from \citet{rbgs-cal}.}
-  \label{fig:cal}
-\end{figure*}
-%}}}
-
-\subsection{Certified Abstraction Layers}\label{sec:mainideas:cal}
-
-To an extent,
-the formal tools required for the formulation of refinement conventions
-are already present in the strategy specification model
-of certified abstraction layers \cite[\S 3.7]{rbgs-cal}.
-%
-In this model,
-the layer correctness property
-\begin{equation} \label{eqn:layer}
-  L_1 \vdash_R M : L_2
-\end{equation}
-asserts that the strategy specification
-$M : E_1 \rightarrow E_2$
-faithfully implements the \emph{overlay} interface
-$L_2 : \varnothing \rightarrow E_2@S_2$
-in terms of the \emph{underlay} interface
-$L_1 : \varnothing \rightarrow E_1@S_1$.
-[XXX need to explain $@$ here or before].
-The relation $R \subseteq S_2 \times S_1$
-specifies the correspondence between
-the set of high-level states $S_2$
-used to describe the interface $L_2$
-and the set of low-level states $S_1$
-used to describe the interface $L_1$.
-
-To express property (\ref{eqn:layer})
-in terms of refinement,
-we can use a \emph{formal adjunction}
-in the refinement-enriched category $\ISpec$.
-For an arbitrary signature $E$,
-we can define the two strategies
-$R^* : E@S_2 \rightarrow E@S_1$ and
-$R_* : E@S_1 \rightarrow E@S_2$,
-which use dual nondeterminism to interactively translate
-between high- and low-level states.
-Layer correctness can then be stated as:
-\[
-  L_1 \vdash M : L_2 \: \Leftrightarrow \:
-  L_2 \sqsubseteq R_* \circ M@S_1 \circ L_1
-\]
-The adjunction property $R^* \dashv R_*$
-can then help us prove the composition principle:
-\[
-  \begin{prooftree}
-    \hypo{L_1 \vdash_R M : L_2}
-    \hypo{L_2 \vdash_S N : L_3}
-    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
-  \end{prooftree}
-\]
-[XXX not quite true,
-we only need $R_*$ and $M@S$ to commute]
-
-As an example,
-\citet{rbgs-cal} describes the certified abstraction layer
-$L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
-depicted in \autoref{fig:cal},
-which provides a high-level view
-of the code shown in \autoref{fig:code}.
-By relating this high-level view
-to the CompCertO semantics of our code,
-in \S\ref{sec:cal} we are able to transfer
-the correctness of $M_\kw{bq}$
-to the level of the assembly code emitted by CompCert
-when $\kw{rb.c}$ and $\kw{bq.c}$ are compiled.
 
 %}}}
 
@@ -2474,7 +2721,9 @@ we define
 
 %}}}
 
-\section{CompCert-Based Certified Abstraction Layers} \label{sec:cal} %{{{
+%}}}
+
+\section{CompCert-Based Certified Abstraction Layers} \label{sec:compcert-cal} %{{{
 
 % Use Clight everywhere
 % Thread the example throughout
@@ -3061,7 +3310,7 @@ Low priority for now.
 
 %}}}
 
-\section{Strategy-Based Certified Abstraction Layers} %{{{
+\section{Strategy-Based Certified Abstraction Layers} \label{sec:rbgs-cal} %{{{
 
 \subsection{Overview}
 
