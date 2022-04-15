@@ -2496,13 +2496,13 @@ and it is achieved by the following rules
   \begin{prooftree}
     \hypo{L^\flat \vdash_R M : L^\natural}
     \hypo{L^\natural \vdash_S N : L^\sharp}
-    \infer2[VCOMP]{L^\flat \vdash_{R \circ S} M, N : L^\sharp}
+    \infer2[\scriptsize\kw{VCOMP}]{L^\flat \vdash_{R \circ S} M, N : L^\sharp}
   \end{prooftree}
   \quad
   \begin{prooftree}
     \hypo{L^\flat \vdash_R M_1 : L_1^\sharp}
     \hypo{L^\flat \vdash_R M_2 : L_2^\sharp}
-    \infer2[HCOMP]{L^\flat \vdash_R M_1, M_2 :
+    \infer2[\scriptsize\kw{HCOMP}]{L^\flat \vdash_R M_1, M_2 :
       L_1^\sharp \oplus L_2^\sharp}
   \end{prooftree}
 \]
@@ -2545,7 +2545,8 @@ is necessary
   \begin{prooftree}
     \hypo{L^\flat_1 \vdash_{R_1} M_1 : L^\sharp_1}
     \hypo{L^\flat_2 \vdash_{R_2} M_2 : L^\sharp_2}
-    \infer2[TCOMP]{L^\flat_1 \otimes L^\flat_2 \vdash_{R_1 \otimes R_2}
+    \infer2[\scriptsize\kw{TCOMP}]
+    {L^\flat_1 \otimes L^\flat_2 \vdash_{R_1 \otimes R_2}
       M_1, M_2 : L^\sharp_1 \otimes L^\sharp_2}
   \end{prooftree}
 \]
@@ -2612,11 +2613,16 @@ down to Assembly programs in \ref{sec:ccal:compile}.
 
 The layer specification uses
 the memory with abstract data as the state.
-However, for simplicity there are layer specifications
-that only transform the abstract state.
+However, to simplify the reasoning
+and avoid unintentional leakage of local state
+the majority of layers specifications
+only transform the abstract state.
 In such cases,
-a layer specification $L: 1\rightarrow \mathcal{C}@D$
-is promoted as
+the layer specification
+is derived by
+promoting
+$L: 1\rightarrow \mathcal{C}@D$
+to
 \[
   \hat{L} := L \otimes \upsilon_{\kw{mem}}
 \]
@@ -2633,11 +2639,11 @@ Note that we have elided the structural transformations
 and the promotion is left implicit
 when the context is clear.
 
-[XXX: fix the example]
-\begin{example}
-  The interface of $L_\kw{bq} : 1 \rightarrow \mathcal{C}@D_\kw{bq}$
-\end{example}
-
+For example,
+a layer interface for the ring buffer
+has type
+$L_\kw{rb}: 1 \rightarrow \mathcal{C}@(D_\kw{rb}\times \kw{mem})$
+with $D_\kw{rb}$ as the abstract state.
 %}}}
 
 \subsection{Client Code} %{{{
@@ -2646,11 +2652,14 @@ when the context is clear.
 % Clight(M)@D ∘ L is a layer interface
 [XXX: merge this subsection into the previous one?]
 
-In order to apply a client code $N$
-to a layer interface $L: 1 \rightarrow \mathcal{C}@D$,
-we need to lift it with the underlay state $D$
-so that the memory is accompanied
-with abstract state as in the specifications.
+Given a layer interface
+$L: 1 \rightarrow \mathcal{C}@(D\times \kw{mem})$,
+in order to apply a client code $N$ on top of it,
+we need to lift the Clight semantics
+with the underlay state $D$.
+After the lifting, the memory is accompanied
+with abstract state as in the specifications
+and they can be directly composed together.
 \[
   \llbracket \kw{Clight}(N) \rrbracket @ D \circ L :
   1 \rightarrow \mathcal{C}@(D \times \kw{mem} )
@@ -2663,6 +2672,7 @@ in the following way
 \[
   \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
   @ D_\kw{rb} \circ L_\kw{rb}
+  : 1 \rightarrow \mathcal{C}@ (D_\kw{bq} \times \kw{mem})
 \]
 
 %}}}
@@ -2707,18 +2717,23 @@ in the following way
     \node at (12.8,2) {$R$};
   \end{tikzpicture}
   \[ (m^\sharp, d^\sharp) \mathrel{\hat{R}} (m^\flat, d^\flat) \]
-  \caption{Abstraction relation promoted with memory extension}
+  \caption{Abstraction relation promoted with memory extension.
+    The source and target memory states are depicted at the top
+    and bottom of the figure. The shaded areas are locations
+    without permissions to access and the hatched areas are not
+    modified}
   \label{fig:abrel}
 \end{figure}
 
 The process of building abstraction layers
-is to hide the implementation details by abstractions.
-In particular,
-the operations on the concrete memory and low-level states
-are replaced by those on high-level states
-in layer specifications
-and this is achieved by abstraction relations
-on different representation of states.
+is to hide the implementation details in underlays
+by abstractions in overlays.
+Abstraction relations play an important role
+in this process
+because they reveal
+the correspondence between
+the more abstract states of the overlay
+and the more concrete states of the underlay.
 
 \begin{definition}[Abstraction relation]
   An \emph{abstraction relation} is a relation
@@ -2728,12 +2743,13 @@ on different representation of states.
     R \subseteq D^\sharp \times (D^\flat \times \kw{mem})
   \]
   with an operation $\kw{glob}$ that returns
-  the set of variables
-  suspectible to the abstraction relation
+  the memory locations
+  where variables suspectible to the abstraction relation
+  are stored
   \[
     \kw{glob}(R): \vec{\kw{loc}}
   \]
-  satisfying the property that
+  satisfying the invariant property that
   variables outside $\kw{glob}(R)$
   do not affect the abstraction relation
   \[
@@ -2752,16 +2768,19 @@ on different representation of states.
 
 Note that an abstraction relation $R$
 is not adequate for connecting two layer interfaces
-because CompCert relies on unified memory model
-and it is not possible to separate
+because
+it is not possible to separate
 the part of memory under the relation $R$
-from other part.
+from other part
+under the unified memory model
+used by CompCert.
 So we promote the abstraction relation $R$
 to a refinement convention $\hat{R}$
 that gives a full account for
 all the locations in the memory.
 
-There are three kinds of locations in a memory state.
+As shown in \autoref{fig:abrel},
+there are three kinds of locations in a memory state.
 First, the \emph{client locations} store the variables used
 by the client program.
 These locations have permission bits
@@ -2775,7 +2794,12 @@ operate the abstract states directly
 and the transformation is reflected
 in the target memory according to $R$.
 Finally, \emph{reserved locations} store the variables
-under abstraction relations on the same level.
+under abstraction relation $S$
+that is different from $R$
+but abstracts away part of the memory locations
+on the same level.
+In other words, the abstraction relations
+will be composed as tensor product.
 The permissions for them are erased for the same reason
 and on the target level the contents on these locations
 have to stay unchanged.
@@ -2805,7 +2829,7 @@ have to stay unchanged.
       \hypo{d'_\sharp \mathrel{R} (d'_\flat, m'_\flat)}
       \hypo{m'_\sharp \mathrel{\le^\kw{m}} m'_\flat}
       \hypo{r_\sharp \mathrel{\le^\kw{v}} r_\flat}
-      \hypo{m'_\flat \cong_{\kw{no\_perm} - \kw{glob}(R)} m_\flat}
+      \hypo{m'_\flat \cong_{\kw{no\_perm}(m_\flat) - \kw{glob}(R)} m_\flat}
       \infer4
       {m_\flat \Vdash
         r_\sharp @ (d_\sharp, m_\sharp) \mathrel{R^\ans}r_\flat @ (d_\flat, m_\flat)}
@@ -2814,21 +2838,17 @@ have to stay unchanged.
   where $\kw{no\_perm}(m)$
   is a set of locations contains exactly
   those without permissions in $m$.
-
-  And the simulation convention
-  gives a refinement convention automatically
-  $\hat{R}: \mathcal{C}@(D^\sharp \times \kw{mem})
-  \leftrightarrows \mathcal{C}@(D^\flat \times \kw{mem})$
 \end{definition}
-[XXX: probably we need a diagram]
 
-With the promotion of
-an abstraction relation
-$R : D^\sharp \times (D^\flat \times \kw{mem})$,
-layer interfaces $L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp$
+The simulation convention $\hat{R}$
+automatically gives a refinement convention
+$\hat{R}: \mathcal{C}@(D^\sharp \times \kw{mem})
+\leftrightarrows \mathcal{C}@(D^\flat \times \kw{mem})$.
+Then layer interfaces
+$L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp$
 and $L^\flat: 1 \rightarrow \mathcal{C}@D^\flat$
 at different abstraction level
-can be connected by 
+can be compared
 by the following refinement
 \begin{equation}
   \label{eq:absrel}
@@ -2839,7 +2859,7 @@ by the following refinement
 To compose client code on both sides of the refinement,
 we have to show that
 the abstraction relations
-used in layer implementation must be
+used in layer implementation are
 compatible with the Clight semantics.
 The following lemma proves the compatibility.
 
@@ -2881,7 +2901,21 @@ layer correctness can then be defined as:
   \llbracket \kw{Clight}(M) \rrbracket
   @D^\flat \circ L^\flat
 \]
-
+The layer correctness implies
+the contextual refinement.
+\begin{lemma}[Contextual Refinement]
+  Given arbitrary client code $N$,
+  the following judgment holds
+  \[
+    \begin{prooftree}
+      \hypo{L^\flat \vdash_R^\mathcal{C} M : L^\sharp}
+      \infer1{\llbracket \kw{Clight}(N) \rrbracket @ D^\sharp
+        \sqsubseteq_{1 \rightarrow \hat{R}}
+        \llbracket \kw{Clight}(N) \oplus \kw{Clight}(M) \rrbracket
+        @D^\flat \circ L^\flat}
+    \end{prooftree}
+  \]
+\end{lemma}
 %}}}
 
 \subsection{Tensor product} %{{{
@@ -2947,11 +2981,13 @@ Then the tensor product of layers can be defined
 as the following theorem.
 
 \begin{theorem}[Tensor product of CompCert layers]
+  Two certified abstraction layers can be
+  composed as follows:
   \[
     \begin{prooftree}
       \hypo{L_1^\flat \vdash^\mathcal{C}_{R_1} M_1 : L_1^\sharp}
       \hypo{L_2^\flat \vdash^\mathcal{C}_{R_2} M_2 : L_2^\sharp}
-      \infer2{L_1^\flat \otimes L_2^\flat
+      \infer2[\scriptsize\kw{TCOMP}]{L_1^\flat \otimes L_2^\flat
         \vdash^\mathcal{C}_{R_1 \otimes R_2}
         M_1, M_2 : L_1^\sharp \otimes L_2^\sharp}
     \end{prooftree}
@@ -2984,18 +3020,27 @@ and delay the composition
 until they are turned into refinement conventions.
 \[
   \widehat{R_1, R_2, \cdots} :=
-  \hat{R_1} \circ \hat{R_2} \cdots
+  \hat{R}_1 \circ \hat{R}_2 \cdots
 \]
-The layer correctness is changed accordingly
+The layer correctness
+is generalized to a sequence of
+abstraction relations
+in a straightforward manner
 and an individual abstraction relation
 is implicitly lifted to a singleton list.
 
+Then we present the vertical composition rule
+which is essentially the same as
+in the original layer framework.
+
 \begin{theorem}[Vertical composition of CompCert layers]
+  Two certified abstraction layers compose
+  in the following way:
   \[
     \begin{prooftree}
       \hypo{L^\flat \vdash^\mathcal{C}_{R} M : L^\natural}
       \hypo{L^\natural \vdash^\mathcal{C}_{S} N : L^\sharp}
-      \infer2{L^\flat \vdash^\mathcal{C}_{R,S} M, N : L^\sharp}
+      \infer2[\scriptsize\kw{VCOMP}]{L^\flat \vdash^\mathcal{C}_{R,S} M, N : L^\sharp}
     \end{prooftree}
   \]
 \end{theorem}
@@ -3007,7 +3052,11 @@ is implicitly lifted to a singleton list.
 
 XXX: Open question whether/how we want to do this.
 Low priority for now.
-
+\[
+  L^\flat \vdash^\mathcal{A}_{R}
+  \mathbb{C}_* \circ \kw{CompCertO}(M) \circ \mathbb{C}^* :
+  L^\sharp
+\]
 %}}}
 
 %}}}
@@ -3320,10 +3369,29 @@ The correctness property can again be formulated as:
   of CertiKOS.
 \end{example}
 
+Note that
+it is our design choice
+that the strategy implementation
+do not pass the local state
+to its underlay.
+On one hand, strategy layers are less expressive
+than CompCert layers
+because there are cases
+where the local states are expected be altered
+by external calls.
+On the other hand, by forcefully separate
+the local states belong to different module,
+the model is easy to reason about
+and prevents potential unwanted leakage directly.
+
 %}}}
 
 \subsection{Tensor Product} %{{{
 \label{sec:stcal:tcomp}
+We first define
+the tensor product
+on layer interfaces
+and implementation strategies.
 \begin{definition}
   The tensor product of layer interfaces
   $\Gamma_1 : 1 \rightarrow E_1@D_1$
@@ -3377,11 +3445,13 @@ of the strategy layers
 is straightforward.
 
 \begin{theorem}[Tensor product of strategy layers]
+  Two strategy layers can be compose as follows:
   \[
     \begin{prooftree}
       \hypo{\Gamma_1^\flat \vdash^\kw{st}_{\Theta_1} \Sigma_1 : \Gamma_1^\sharp}
       \hypo{\Gamma_2^\flat \vdash^\kw{st}_{\Theta_2} \Sigma_2 : \Gamma_2^\sharp}
-      \infer2{\Gamma_1^\flat \otimes \Gamma_2^\flat
+      \infer2[\scriptsize\kw{TCOMP}]
+      {\Gamma_1^\flat \otimes \Gamma_2^\flat
         \vdash^\kw{st}_{\Theta_1 \times \Theta_2}
         \Sigma_1 \otimes \Sigma_2 : \Gamma_1^\sharp \otimes \Gamma_2^\sharp}
     \end{prooftree}
@@ -3450,7 +3520,7 @@ which is used in the vertical composition.
     \begin{prooftree}
       \hypo{\Gamma^\flat \vdash^\kw{st}_{\Theta_1} \Sigma_1 : \Gamma^\natural}
       \hypo{\Gamma^\natural \vdash^\kw{st}_{\Theta_2} \Sigma_2 : \Gamma^\sharp}
-      \infer2{\Gamma^\flat
+      \infer2[\scriptsize\kw{VCOMP}]{\Gamma^\flat
         \vdash^\kw{st}_{\Theta_2 \circ (=_V \times \Theta_1)}
         \Sigma_2@U \circ \Sigma_1 : \Gamma^\sharp}
     \end{prooftree}
@@ -3496,9 +3566,38 @@ refines the strategy.
 Then we call the programs meet
 the \emph{correctness criteria} of the strategy.
 
-We introduce \emph{memory relation}
+First, we need refinement conventions
+$\lambda : E \leftrightarrows \mathcal{C}$
+to relate each possible query in $E$
+with a function identifier
+in CompCert environment,
+and relate the arguments
+and return value correspondingly.
+However, the language interfaces in CompCert
+always come with a memory state
+while effect signatures
+are not necessarily accompanied
+with a state.
+In particular,
+as mentioned in \ref{sec:stcal:state},
+the strategies are designed
+in a way such that
+local states belong to
+different module are completely separate.
+Therefore,
+we combine $\lambda$ with the $\upsilon$ operator
+\[
+  \lambda \otimes \upsilon_\kw{mem} : E \leftrightarrows \mathcal{C}\times\kw{mem}
+\]
+so that
+the memory with states of other modules
+are ``bounced back'' without being modified.
+
+Second,
+we introduce the \emph{memory relation}
 to relate the local abstract state
-with CompCert memory model.
+used by the strategy itself
+with concrete values in the CompCert memory.
 
 \begin{definition}
   A \emph{memory relation} is a relation
@@ -3507,13 +3606,22 @@ with CompCert memory model.
   \[
     \mu \subseteq U \times \kw{mem}
   \]
-  with an operation $\kw{glob}$
+  with an operator $\kw{glob}$
   and satisfies the invariant property
   similar to abstraction relations
 \end{definition}
 
-A memory relation is also promoted
+Even though the strategy layers
+enforce the separation on abstract states,
+the Clight programs will eventually be
+put into the context of CompCert layers.
+As a consequence,
+the memory relation is promoted
 to a simulation convention
+in a way similar to abstraction relation
+where the details on memory locations
+are articulated.
+We define
 $\hat{\mu}: \mathcal{C}@(U\times\kw{mem})\leftrightarrows \mathcal{C}@\kw{mem}
 = \langle \kw{mem}, \mu^\que, \mu^\ans \rangle$
 where
@@ -3534,28 +3642,16 @@ where
     \hypo{u' \mathrel{\mu} m'_\flat}
     \hypo{m'_\sharp \mathrel{\le^\kw{m}} m'_\flat}
     \hypo{r_\sharp \mathrel{\le^\kw{v}} r_\flat}
-    \hypo{m'_\flat \cong_{\neg \kw{glob}(R)} m_\flat}
+    \hypo{m'_\flat \cong_{\kw{no\_perm}(m_\flat) - \kw{glob}(R)} m_\flat}
     \infer4
     {m_\flat \Vdash
       r_\sharp @ (u, m_\sharp) \mathrel{\mu^\ans}r_\flat @ m_\flat}
   \end{prooftree}
 \]
 
-The simulation convention is similar
-to the case for abstraction relation.
-However, it has a more restricted condition
-that client locations stay unchanged.
-This is because
-in the strategy layer framework
-the abstract states are totally separate
-and the client locations are not
-passed to the underlay specifications
-upon method calls.
-This is obvious
-from the type of the implementation
-$\Sigma: E \rightarrow F@U$
-where the local states $U$
-are not passed to its underlay.
+Finally, we formulate
+the refinement between the strategy and Clight programs
+as in the following definition.
 
 \begin{definition}
   A module of Clight programs $M$ meets
@@ -3575,7 +3671,17 @@ are not passed to its underlay.
   \]
 \end{definition}
 
-Note that the Clight programs
+The refinement relation
+is similar to a compiler pass CompCert
+where the strategy is the source program
+and the Clight code is the target program.
+Moreover, through the ``compilation'',
+the Clight program inherits
+from the strategy the property
+that memory locations that store local variables
+belong to other modules are not touched.
+
+Also note that the Clight programs
 can make external calls as a client to its underlay
 but the memory relation with abstract state $U$
 will not be affected.
@@ -3584,7 +3690,7 @@ the $\upsilon_\kw{mem}$ operator
 on the outgoing events
 guarantees that
 the memory passed out
-will be bounced back unchanged.
+will be ``bounced back'' unchanged.
 Moreover,
 the refinement itself in turn
 provides the guarantee
