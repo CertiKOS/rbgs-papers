@@ -3065,72 +3065,75 @@ Low priority for now.
 
 \subsection{Overview}
 
-In the previous section,
-we have shown the CompCert-based layer framework
-which achieves further compositionality
-than the original framework.
-However, it remains challenging
-to verify individual layers
-because the monolithic memory model is hard to manipulate.
-
 In \citet{rbgs-cal},
 a \emph{strategy-based layer framework}
 purely based on
 effect signatures and strategies is proposed.
-The model is relatively simple
-because we do not have to deal with
-the complicated CompCert memory model
-and the coarse-grained language interfaces
-are replaced by effect signatures.
-Therefore, it is less onerous
-to build certified abstraction layers
-under this framework.
+Similar to the CompCert-based layer framework,
+the strategy layers can be used effectively
+as a principled building block
+to model certified abstraction layers.
+Without having to worry about
+subtleties in CompCert semantics and memory model,
+the process of constructing certified abstraction layers
+is significantly simpler.
+However,
+this model has limited practical use
+because of several weaknesses.
 
-We will use the strategy-based layer framework
-as the starting point
-to further simplify
-the process of constructing certified abstraction layers.
-It remains to answer the question
-whether the strategy layers
-can be transformed to CompCert layers.
-We study the correspondence between
-the two forms of layers
-and exploit refinement conventions
-to establish the relationship.
-In particular,
-we present the \emph{correctness criteria} for Clight programs
-to refine strategies
-so that
-the programs can safely substitute for
-the strategies as layer implementations
-to obtain a CompCert layer.
-By this approach,
-we have essentially decomposed
-the process of building layers
-into verifying strategy layers
-and verifying the Clight programs meet
-the correctness criteria,
-and the former is called \emph{layer verification}
-and the latter is called \emph{code verification}.
+First,
+while layer implementations
+can transform the state of their underlay
+to provide a higher-level representation,
+they cannot introduce new state of their own.
+This means that we ultimately have to assume that
+all state in the system is provided---%
+albeit in a low-level form---%
+by a trusted, lowermost layer interface
+such as $L_\kw{rb}$.
 
-In the rest of this section,
-we briefly describe the model from \citet{rbgs-cal}
+In addition,
+while the model presented so far
+provides insight into the formal structure
+of certified abstraction layers,
+and offers a way to describe a system's construction
+in abstract terms,
+it is unclear how to relate
+this abstract description (say, $M_\kw{bq}$)
+to the concrete code (say, $\kw{bq.c}$)
+in a way that allows us to derive guarantees
+regarding the concrete implemented system.
+
+
+In the remainder of this section,
+we briefly present the model from \citet{rbgs-cal}
 in \ref{sec:stcal:layer}
-and identify the limitation that
-layer implementations cannot have local states,
-which is fixed in \ref{sec:stcal:state}
-by generalizing the model.
+and show how to overcome the first limitation
+by generalizing the model
+in \ref{sec:stcal:state}.
 Then we study the composition rules
 that amount to the rules
 in CompCert-based layer framework
 in \ref{sec:stcal:tcomp}
 and \ref{sec:stcal:vcomp}.
-Finally we formalize the correctness criteria
+Finally we study the correspondence between
+the strategy layers and CompCert layers,
+and exploit refinement conventions
+to establish the relationship formally.
+In particular,
 in \ref{sec:stcal:cc}
-and present the formal correspondence
-in \ref{sec:stcal:correspondence}.
-\autoref{tab:correspondence} shows an overview
-for the correspondence.
+we discuss the \emph{correctness criteria} for Clight programs
+to simulate the behavior of strategies,
+and
+in \ref{sec:stcal:correspondence}
+we conclude that
+the process of building CompCert layers
+can be decomposed into
+\emph{layer verification} ---
+verifying corresponding strategy layers,
+and \emph{code verification} ---
+verifying the Clight programs meet
+the correctness criteria.
 
 \begin{table}
   \centering
@@ -3159,7 +3162,7 @@ for the correspondence.
   \label{tab:correspondence}
 \end{table}
 
-\subsection{Abstract Layers} %{{{
+\subsection{Strategy Layers} %{{{
 \label{sec:stcal:layer}
 % Briefly go over the LICS'20 model.
 % Layer interfaces
@@ -3167,26 +3170,22 @@ for the correspondence.
 % Abstraction relation, correctness
 % Exemple: implementing bounded queue
 
-In this model:
-\begin{itemize}
-  \item
-    A layer \emph{interface} is given as
-    a signature $E$ and
-    a set $D$ of abstract states,
-    together with a strategy specification
-    \[ \Gamma : 1 \rightarrow E@D \,. \]
-  \item
-    A layer \emph{implementation}
-    of an overlay $\Gamma^\sharp : 1 \rightarrow E^\sharp@D^\sharp$
-    in terms of an underlay
-    $\Gamma^\flat : 1 \rightarrow E^\flat@D^\flat$
-    consists of
-    a strategy $\Sigma : E^\flat \rightarrow E^\sharp$ and
-    a relation $\Theta \subseteq D^\sharp \times D^\flat$
-    satisfying the property
-    \[ \Gamma^\sharp \vdash_\Theta \Sigma : \Gamma^\flat \]
-    defined in the following.
-\end{itemize}
+In this model,
+a layer \emph{interface} is given as
+a signature $E$ and
+a set $D$ of abstract states,
+together with a strategy specification
+\[ \Gamma : 1 \rightarrow E@D \,. \]
+a layer \emph{implementation}
+of an overlay $\Gamma^\sharp : 1 \rightarrow E^\sharp@D^\sharp$
+in terms of an underlay
+$\Gamma^\flat : 1 \rightarrow E^\flat@D^\flat$
+consists of
+a strategy $\Sigma : E^\flat \rightarrow E^\sharp$ and
+a relation $\Theta \subseteq D^\sharp \times D^\flat$
+satisfying the property
+\[ \Gamma^\sharp \vdash_\Theta \Sigma : \Gamma^\flat \]
+defined in the following.
 
 Layer implementations use a relation $\Theta$
 to establish a correspondence between
@@ -3220,50 +3219,6 @@ The correctness property can then be stated as:
   \]
   
 \end{example}
-
-\paragraph{Limitations} %{{{
-
-The model outlined above
-shows that $\ISpec$ can be used effectively
-as a principled building block to model
-certified abstraction layers.
-However,
-compared with the layers used in the verification of CertiKOS \cite{popl15},
-this model carries a number of limitations,
-which prevent its use for the practical construction
-of certified systems.
-
-First,
-while layer implementations
-can transform the state of their underlay
-to provide a higher-level representation,
-they cannot introduce new state of their own.
-This means that we ultimately have to assume that
-all state in the system is provided---%
-albeit in a low-level form---%
-by a trusted, lowermost layer interface
-such as $L_\kw{rb}$.
-
-In addition,
-while the model presented so far
-provides insight into the formal structure
-of certified abstraction layers,
-and offers a way to describe a system's construction
-in abstract terms,
-it is unclear how to relate
-this abstract description (say, $M_\kw{bq}$)
-to the concrete code (say, $\kw{bq.c}$)
-in a way that allows us to derive guarantees
-regarding the concrete implemented system.
-
-In the remainder of this section,
-we show how these limitations can be overcome,
-and demonstrate the use of refinement conventions
-to connect the abstract layer model of \citet{rbgs-cal}
-with the practical verification techniques
-used in \citet{popl15}.
-
-%}}}
 
 %}}}
 
