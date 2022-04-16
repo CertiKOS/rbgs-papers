@@ -845,50 +845,25 @@ Further details are presented in \S\ref{sec:compcert-cal}.
 
 \subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
 
-We have seen that CompCertX and certified abstraction layers
-adapt the whole-program semantics of CompCert
-to enable compositional verification techniques.
-However,
-while these changes allow us to plug in the underlay behavior
-as a parameter to CompCert's semantics,
-this parameter must be fixed before the semantics is evaluated.
-Ultimately,
-the semantic model used in CompCert and CompCertX
-still describes a closed system
-whose behavior is mostly self-contained
-between the initial invocation and its termination.
-
+To an extent,
+the model of certified abstraction layers presented above
+is made less flexible for the lack of a proper
+compositional semantics in CompCert.
+CompCertX allows transition systems
+to model incoming function calls,
+but does not offer the same flexibility for outgoing calls.
 CompCertO is a recent extension to CompCert
-which modifies the semantic model
-to first describe the behavior of individual components \emph{in isolation}.
-Instead of being provided with the behavior of external functions as a parameter,
-external calls are recorded as part of
-a component's externally observable behavior.
-We can then define composition operators
-which compute the semantics of a collection of components
-by letting them interact with each other.
+which allows transition systems
+to describe the behavior of individual components \emph{in isolation},
+without knowing in advance how external functions will behave.
 
-%and then model their interaction with each other.
-%In \S\ref{sec:compcert-cal},
-%we use this more flexible model
-%to develop a reformulation of certified abstraction layers.
-%In the remainder of this section,
-%we describe the semantic model used in CompCertO
-%and some of the challenges associated with it.
+\subsubsection{Compositional Semantics} %{{{
 
-\paragraph{Compositional Semantics} %{{{
-
-While CompCert assigns a close semantics to whole programs,
-CompCertO assigns an \emph{open} semantics to individual translation units.
-The compiler correctness property
-is formulated in terms of this compositional semantics.
-A first approximation of this property is:
-\begin{equation} \label{eqn:ccc}
-  \begin{prooftree}
-    \hypo{\kw{CompCert}(M) = M'}
-    \infer1{\kw{Clight}(M) \le \kw{Asm}(M')}
-  \end{prooftree}
-\end{equation}
+CompCertO assigns a semantics to individual translation units,
+which can characterize their behavior
+in terms of the sequence of external calls they perform.
+The compiler's correctness theorem
+operates at the level of individual units.
 Linking is modeled by a semantic operation $\oplus$
 monotone with respect to simulations,
 which satisfies
@@ -897,6 +872,7 @@ which satisfies
   \kw{Asm}(M_1 + M_2)
   \,.
 \]
+
 %Together,
 %these properties make it possible to formulate
 %a separate compilation theorem
@@ -915,58 +891,61 @@ for modeling heterogeneous systems.
 \subsubsection{Key Challenge} %{{{
 
 In the original closed semantics of CompCert,
-the behavior of the source and target programs
-can be compared directly:
-there is no abstraction gap between the traces
-of the source and target programs,
-in the sense that
-two corresponding traces will be equal.
+the externally observable behavior
+of the source and target programs
+can be compared directly.
 
 The situation becomes more subtle in CompCertO.
 The compositional semantics of CompCertO
 reveals interactions between program components
-which were previously hidden in the internal states
+which were previously hidden in internal states
 of the closed semantics.
-However,
-these interactions take very different forms
+These interactions take very different forms
 in the source program
 (where they correspond to C function calls)
 and in the target program
 (where they correspond to assembly language jumps
-carrying a particular register state).
+and register states).
 
 %}}}
 
-\subsubsection{Language Interfaces} %{{{
+%}}}
+
+\subsection{Open Transition Systems} %{{{
 
 To deal with the different forms
 interactions take
-across different languages,
+across languages,
 CompCertO introduces a rudimentary form of typing
 for its transition systems.
+
+\subsubsection{Language Interfaces} %{{{
+
 The interactions between a component and its environment
-are described by \emph{language interfaces},
-which are signatures of the form
-$\{ m : E^\ans \mid m \in E^\que \}$,
-where all operations share the same arity set $E^\ans$.
+are described by \emph{language interfaces}.
+A language interface $\mathcal{X}$ simply defines
+a set of \emph{questions} $\mathcal{X}^\que$ and
+a set of \emph{answers} $\mathcal{X}^\ans$.
+We will write
+$\mathcal{X} = \{ q : \mathcal{X}^\ans \mid q \in \mathcal{X}^\que \}$.
 
 For example, C-~and assembly-level interactions
 can be described as:
-\begin{align*}
-  \mathcal{C} &:=
+\[
+  \mathcal{C} :=
     \big\{ f(\vec{v}) : \kw{val} \mathrel{\big|}
        f \in \kw{ident}, \vec{v} \in \kw{val}^* \big\}
-  \\
-  \mathcal{A} &:=
+  \qquad
+  \mathcal{A} :=
     \big\{ \mathit{rs} : \kw{val}^R \mathrel{\big|}
        \mathit{rs} \in \kw{val}^R \big\}
-  \,,
-\end{align*}
+  \,.
+\]
 Here $f \in \kw{ident}$ is the identifier of
 a C function to be called,
 and $v \in \kw{val}^*$ specifies its actual arguments,
-given a sequence of CompCert runtime values of type $\kw{val}$.
-The arity simply corresponds to
+given as a sequence of CompCert runtime values.
+The answer $r \in \kw{val}$ simply corresponds to
 the possible runtime values which the function may return.
 At the assembly level,
 both calls and returns communicate
@@ -986,14 +965,12 @@ a situation which we can describe using the construction:
 
 %}}}
 
-%}}}
+\subsubsection{Transition Systems}
 
-\subsection{Open Transition Systems} %{{{
-
-The transition systems of CompCertO
+Open transition systems
 are assigned a type
-$E \twoheadrightarrow F$,
-where $E$ and $F$ are
+$\mathcal{X} \twoheadrightarrow \mathcal{Y}$,
+where $\mathcal{X}$ and $\mathcal{Y}$ are
 language interfaces (usually the same one).
 The types of Clight and assembly semantics
 are:
@@ -1008,9 +985,9 @@ are:
    &\twoheadrightarrow
     \mathcal{A}@\kw{mem}
 \end{align*}
-Transition systems of type $E \twoheadrightarrow F$
-accept incoming calls in $F$
-and perform outgoing calls in $E$.
+A transition systems of type $\mathcal{X} \twoheadrightarrow \mathcal{Y}$
+accepts incoming calls in $\mathcal{Y}$
+and perform outgoing calls in $\mathcal{X}$.
 %They are defined as follows.
 %In other words,
 %it describes a strategy of type $E \rightarrow F$
@@ -1036,21 +1013,18 @@ which terminate the computation with a corresponding outcome.
 External calls are specified by
 $X \subseteq S \times \mathcal{X}^\que$,
 which designates \emph{external states} together with
-an operation of $E$, and
+a question of $\mathcal{X}$, and
 $Y \subseteq S \times \mathcal{X}^\ans \times S$,
 which is used to select a \emph{resumption state}
-based on the operation's outcome.
+based on the answer.
 \end{definition}
 
-\noindent
 As an example,
-the transition system
-\[
+$
  \kw{Clight}(\kw{bq.c}) :
  \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
-\]
+$
 admits transition sequences of the form:
-{ \small
 \begin{align*}
   \kw{enq}(v)@m_0 \mathrel{I}
   s_0 &\rightarrow^*
@@ -1065,7 +1039,7 @@ admits transition sequences of the form:
   s_5 \mathrel{T}
   \kw{undef}@m_5
   \,.
-\end{align*}}
+\end{align*}
 
 \subsubsection{Composition} %{{{
 
@@ -1079,7 +1053,7 @@ it is limited to transition systems which all perform
 both their incoming and outgoing calls
 according to the same language interface:
 \[
-  {\oplus_E} :
+  {\oplus_\mathcal{X}} :
     (\mathcal{X} \twoheadrightarrow \mathcal{X}) \times
     (\mathcal{X} \twoheadrightarrow \mathcal{X}) \rightarrow
     (\mathcal{X} \twoheadrightarrow \mathcal{X})
@@ -1093,14 +1067,15 @@ and handle more general types.
 %the categorical structure of $\ISpec$.
 
 \begin{definition}[Composition of transition systems] %{{{
-Suppose we have the transition systems:
-\begin{align*}
-  L_1 &= \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
+Suppose we have the transition systems
+\[
+  L_1 = \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
     : \mathcal{Y} \twoheadrightarrow \mathcal{Z}
-  \\
-  L_2 &= \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
+  \quad \text{and} \quad
+  L_2 = \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
     : \mathcal{X} \twoheadrightarrow \mathcal{Y}
-\end{align*}
+  \,.
+\]
 Their composition is defined as the transition system
 \[
   L_1 \circ L_2 :=
@@ -1163,6 +1138,7 @@ at which point $L_1$ is resumed:
     \hypo{r_\mathcal{Y} \mathrel{Y_1^{s_1}} s_1'}
     \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
   \end{prooftree}
+  \,.
 \]
 \end{definition}
 %}}}
@@ -1172,13 +1148,13 @@ the composition operator $\circ$ defined above
 is still an \emph{under-approximation}
 of the semantic linking operator $\oplus$ of CompCertO.
 
-\begin{theorem}
+\begin{theorem}[Linking implements composition]
 For $L_1, L_2 : \mathcal{X} \twoheadrightarrow \mathcal{X}$,
-\[
+$
   L_1 \circ L_2
   \le
   L_1 \oplus L_2
-\]
+$.
 \end{theorem}
 
 %}}}
@@ -1194,8 +1170,8 @@ how high-level interactions between components in the source language
 are realized at the assembly level.
 Hence, calling conventions are \emph{relational} in nature.
 When different compilers use the same calling conventions,
-the object files the produce will be interoperable,
-because they will use compatible translations
+the object files the produce are interoperable,
+because they use compatible translations
 of source-level abstractions.
 
 In the closed semantics of CompCert,
@@ -1215,13 +1191,14 @@ CompCertO makes use of the following notion.
 
 \subsubsection{Simulations Conventions} %{{{
 
-A simulation convention $\mathbb{R} : E \Leftrightarrow F$
+A simulation convention
+$\mathbb{R} : \mathcal{X}^\sharp \Leftrightarrow \mathcal{X}^\flat$
 relates
-the high-level questions in $E^\que$ and
-the low-level questions in $F^\que$,
+the high-level questions in $\mathcal{X}_\sharp^\que$ and
+the low-level questions in $\mathcal{X}_\flat^\que$,
 as well corresponding
-high-level answers in $E^\ans$ and
-low-level answers in $F^\ans$.
+high-level answers in $\mathcal{X}_\sharp^\ans$ and
+low-level answers in $\mathcal{X}_\flat^\ans$.
 For example,
 the simulation convention
 $\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
@@ -1231,15 +1208,16 @@ overall calling convention.
 \begin{definition}
 A \emph{simulation convention} between
 the language interfaces
-$\mathcal{X}_1 = \langle \mathcal{X}_1^\que, \mathcal{X}_1^\ans \rangle $ and
-$\mathcal{X}_2 = \langle \mathcal{X}_2^\que, \mathcal{X}_2^\ans \rangle $
+$\mathcal{X}^\sharp = \langle \mathcal{X}_\sharp^\que, \mathcal{X}_\sharp^\ans \rangle $ and
+$\mathcal{X}^\flat = \langle \mathcal{X}_\flat^\que, \mathcal{X}_\flat^\ans \rangle $
 is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$,
 where $W$ is a set of \emph{worlds},
 and where
-$\mathbb{R}^\que \subseteq W \times \mathcal{X}_1^\que \times \mathcal{X}_2^\que$ are
-$\mathbb{R}^\ans \subseteq W \times \mathcal{X}_1^\ans \times \mathcal{X}_2^\ans$
-relate the moves of $\mathcal{X}_1$ and $\mathcal{X}_2$.
-We will write $\mathbb{R} : \mathcal{X}_1 \Leftrightarrow \mathcal{X}_2$.
+$\mathbb{R}^\que \subseteq W \times \mathcal{X}_\sharp^\que \times \mathcal{X}_\flat^\que$
+and
+$\mathbb{R}^\ans \subseteq W \times \mathcal{X}_\sharp^\ans \times \mathcal{X}_\flat^\ans$
+relate the moves of $\mathcal{X}_\sharp$ and $\mathcal{X}_\flat$.
+We will write $\mathbb{R} : \mathcal{X}_\sharp \Leftrightarrow \mathcal{X}_\flat$.
 \end{definition}
 
 Language interfaces and simulation conventions
@@ -1254,30 +1232,30 @@ two different simulation conventions:
 one for outgoing calls and one for incoming calls.
 We will write
 \[
-  L_1 \le_{\mathbb{R}_E \twoheadrightarrow \mathbb{R}_F} L_2
+  L_1 \le_{\mathbb{R}_\mathcal{X} \twoheadrightarrow \mathbb{R}_\mathcal{Y}} L_2
 \]
 when the transition system
-$L_1 : E_1 \twoheadrightarrow F_1$
+$L^\sharp : \mathcal{X}^\sharp \twoheadrightarrow \mathcal{Y}^\sharp$
 is simulated by
-$L_2 : E_2 \twoheadrightarrow F_2$
+$L^\flat : \mathcal{X}^\flat \twoheadrightarrow \mathcal{Y}^\flat$
 up to the outgoing convention
-$\mathbb{R}_E : E_1 \Leftrightarrow E_2$
+$\mathbb{R}_\mathcal{X} : \mathcal{X}^\sharp \Leftrightarrow \mathcal{X}^\flat$
 and the incoming convention
-$\mathbb{R}_F : F_1 \Leftrightarrow F_2$.
+$\mathbb{R}_\mathcal{Y} : \mathcal{Y}^\sharp \Leftrightarrow \mathcal{Y}^\flat$.
 Specifically,
 \begin{itemize}
 \item
 when the environment invokes the transition systems,
-it chooses world $w \in W_\mathbb{S}$
-such that its questions are related by $\mathbb{S}^\que$ at the world $w$.
+it chooses world $w \in W_\mathcal{Y}$
+such that its questions are related by $\mathbb{R}_\mathcal{Y}^\que$ at the world $w$.
 The simulation must then prove that
 the ultimate outcomes of $L_1$ and $L_2$
-are related by $\mathbb{S}^\ans$ at that same world.
+are related by $\mathbb{R}_\mathcal{Y}^\ans$ at that same world.
 Conversely,
 \item
 when $L_1$ and $L_2$ perform external calls in $E_1$ and $E_2$,
-the simulation must exhibit a world $w' \in W_\mathbb{R}$
-such that the calls are related by $\mathbb{R}^\que$ at $w'$.
+the simulation must exhibit a world $w' \in W_\mathcal{X}$
+such that the calls are related by $\mathbb{R}_\mathcal{X}^\que$ at $w'$.
 It is then guaranteed that their outcome
 will be related by $\mathbb{R}^\ans$ at $w'$.
 \end{itemize}
@@ -1289,45 +1267,71 @@ for a formal definition.
 \subsubsection{Compositionality} %{{{
 
 \begin{figure} % fig:simcomp {{{
-  $\begin{array}{c}
-    \kw{id} : E \Leftrightarrow E
+  \small
+  $\begin{array}{cc}
+    \kw{id} : \mathcal{X} \Leftrightarrow \mathcal{X}
     \qquad
     L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
-    \\[1.5em]
+    &
    {\begin{prooftree}
-    \hypo{\mathbb{R} : E_1 \Leftrightarrow E_2}
-    \hypo{\mathbb{S} : E_2 \Leftrightarrow E_3}
-    \infer2{\mathbb{R} \cdot \mathbb{S} : E_1 \Leftrightarrow E_3}
-    \end{prooftree}}
-    \\[1.5em]
-   {\begin{prooftree}
-    \hypo{L_1 \le_{\mathbb{R}_E \twoheadrightarrow \mathbb{R}_F} L_2}
-    \hypo{L_2 \le_{\mathbb{S}_E \twoheadrightarrow \mathbb{S}_F} L_3}
+    \hypo{L^\sharp \le_{\mathbb{R}_\mathcal{X} \twoheadrightarrow
+      \mathbb{R}_F} L^\natural}
+    \hypo{L^\natural \le_{\mathbb{S}_\mathcal{X} \twoheadrightarrow
+      \mathbb{S}_F} L^\flat}
     \infer2{
-      L_1 \le_{\mathbb{R}_E \cdot \mathbb{S}_E \twoheadrightarrow
-               \mathbb{R}_F \cdot \mathbb{S}_F} L_3}
+      L^\sharp
+      \le_{\mathbb{R}_\mathcal{X} \cdot \mathbb{S}_\mathcal{X} \twoheadrightarrow
+               \mathbb{R}_F \cdot \mathbb{S}_F} L^\flat}
     \end{prooftree}}
+    \\[2em]
+   {\begin{prooftree}
+    \hypo{\mathbb{R} : \mathcal{X}^\sharp \Leftrightarrow \mathcal{X}^\natural}
+    \hypo{\mathbb{S} : \mathcal{X}^\natural \Leftrightarrow \mathcal{X}^\flat}
+    \infer2{\mathbb{R} \cdot \mathbb{S} : \mathcal{X}^\sharp \Leftrightarrow \mathcal{X}^\flat}
+    \end{prooftree}}
+    \:
+    &
+   {\begin{prooftree}
+    \hypo{L_1^\sharp \le_{\mathbb{R}_\mathcal{X} \twoheadrightarrow
+      \mathbb{R}_\mathcal{Y}} L_1^\flat}
+    \hypo{L_2^\sharp \le_{\mathbb{R}_\mathcal{Y} \twoheadrightarrow
+      \mathbb{R}_\mathcal{Z}} L_2^\flat}
+    \infer2{L_2^\sharp \circ L_1^\sharp
+      \le_{\mathbb{R}_\mathcal{X} \twoheadrightarrow \mathbb{R}_\mathcal{Z}}
+      L_2^\flat \circ L_1^\flat}
+    \end{prooftree}}
+    \:
   \end{array}
   \:\:
-  \begin{tikzpicture}[baseline=0.6mm,xscale=0.66,yscale=0.55]
-    \node (A1) at (-1,  2) {$E_1$};
-    \node (A2) at (-1,  0) {$E_2$};
-    \node (A3) at (-1, -2) {$E_3$};
-    \node (B1) at ( 1,  2) {$F_1$};
-    \node (B2) at ( 1,  0) {$F_2$};
-    \node (B3) at ( 1, -2) {$F_3$};
-    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
-    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
-    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
+  \begin{tikzpicture}[baseline=0.6mm,xscale=0.66,yscale=0.6]
+    \node (A1) at (-1,  2) {$\mathcal{X}^\sharp$};
+    \node (A2) at (-1,  0) {$\mathcal{X}^\natural$};
+    \node (A3) at (-1, -2) {$\mathcal{X}^\flat$};
+    \node (B1) at ( 1,  2) {$\mathcal{Y}^\sharp$};
+    \node (B2) at ( 1,  0) {$\mathcal{Y}^\natural$};
+    \node (B3) at ( 1, -2) {$\mathcal{Y}^\flat$};
+    \node (C1) at ( 3,  2) {$\mathcal{Z}^\sharp$};
+    \node (C2) at ( 3,  0) {$\mathcal{Z}^\natural$};
+    \node (C3) at ( 3, -2) {$\mathcal{Z}^\flat$};
+
+    \draw (A1) edge[->>] node[auto] {$L_1^\sharp$} (B1);
+    \draw (A2) edge[->>] node[auto] {$L_1^\natural$} (B2);
+    \draw (A3) edge[->>] node[auto] {$L_1^\flat$} (B3);
+    \draw (B1) edge[->>] node[auto] {$L_2^\sharp$} (C1);
+    \draw (B2) edge[->>] node[auto] {$L_2^\natural$} (C2);
+    \draw (B3) edge[->>] node[auto] {$L_2^\flat$} (C3);
+
     \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
-      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_E$} (A2);
-      \draw (B1) edge[double] node[auto] {$\mathbb{R}_F$} (B2);
-      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_E$} (A3);
-      \draw (B2) edge[double] node[auto] {$\mathbb{S}_F$} (B3);
+      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_\mathcal{X}$} (A2);
+      \draw (B1) edge[double] (B2); %node[auto] {$\mathbb{R}_\mathcal{Y}$} (B2);
+      \draw (C1) edge[double] node[auto] {$\mathbb{R}_\mathcal{Z}$} (C2);
+      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_\mathcal{X}$} (A3);
+      \draw (B2) edge[double] (B3); %node[auto] {$\mathbb{S}_\mathcal{Y}$} (B3);
+      \draw (C2) edge[double] node[auto] {$\mathbb{S}_\mathcal{Z}$} (C3);
     \end{scope}
   \end{tikzpicture}
   $
-  \caption{Simulation identity and vertical composition}
+  \caption{Compositional structure of transition systems and simulations}
   \label{fig:simcomp}
 \end{figure}
 %}}}
@@ -1355,14 +1359,6 @@ can be presented as:
   \qquad
   \mbox{[diagram]}
 \]
-
-In \autoref{sec:refconv},
-we extend $\ISpec$ to a double category
-using our generalized notion of \emph{refinement convention}.
-This double category can embed
-the transition systems,
-simulation conventions, and
-simulation properties of CompCertO.
 
 %}}}
 
@@ -1400,6 +1396,14 @@ Hence in the next section we figure it out.
 %}}}
 
 \section*{ORPHAN MATERIAL} %{{{
+
+In \autoref{sec:refconv},
+we extend $\ISpec$ to a double category
+using our generalized notion of \emph{refinement convention}.
+This double category can embed
+the transition systems,
+simulation conventions, and
+simulation properties of CompCertO.
 
 \begin{figure*} % fig:cal {{{
   \begin{minipage}{.9\textwidth}
