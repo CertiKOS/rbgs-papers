@@ -1365,45 +1365,493 @@ can be presented as:
 \subsubsection{Compiler Correctness} %{{{
 
 Based on these notions,
-the correctness theorem of CompCertO
-can be described as follows.
-
-\begin{theorem}[Correctness of CompCertO]
-When a Clight program $p$
-is compiled by CompCertO
-to the program $p'$,
+the correctness CompCertO
+can be stated as:
 \[
-  \kw{Clight}(p)
+  \begin{prooftree}
+    \hypo{\kw{CompCert}(M) = M'}
+    \infer1{
+  \kw{Clight}(M)
   \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-  \kw{Asm}(p')
+  \kw{Asm}(M')
+     }
+  \end{prooftree}
+\]
+
+As in CompCert,
+the correctness of the compiler is first established as a simulation.
+However,
+CompCertO does not define a trace semantics
+for its transition systems.
+External calls could easily be incorporated into traces.
+However,
+because the source and target traces cannot be directly compared,
+trace containement cannot be used to express refinement.
+
+In fact,
+the alternating nature of the relationship between
+source and target interactions
+makes it particularly challenging to
+incorporate the calling convention into
+a proper notion of refinement.
+However,
+\emph{refinement-based game semantics} \cite{rbgs-cal}
+provides a starting point.
+
+%}}}
+
+%}}}
+
+\subsection{Game Semantics} %{{{
+
+A particular kind of compositional semantics
+known as \emph{game semantics} uses
+categories of games and strategies
+as semantic domains.
+The games used in this context are
+two-player games
+which model the interaction between
+a program component (the proponent)
+and its environment (the opponent).
+The behavior of a component
+is described as a proponent \emph{strategy}
+in the game associated with the component's type.
+The games do not usually involve
+a winning condition. % or notion of payoff.
+
+For heterogeneous certified systems,
+this approach is interesting
+because games provide a fairly general way to describe
+the interfaces of certified components.
+In the present work,
+we use simple games
+derived from signatures of the following kind.
+
+\begin{definition}
+An \emph{effect signature} is a set $E^\que$ of operations
+together with a family of sets $\big( E^\ans_m \big)_{m \in E^\que}$
+specifying an \emph{arity} for each operation.
+We will write
+  $E = \{ m : E^\ans_m \mid m \in E^\que \}$.
+\end{definition}
+
+The game associated with $E$ simply consists of
+a \emph{question} $q \in E^\que$ of the environment
+followed by an \emph{answer} $r \in E^\ans_q$ of the system.
+Note that the type of the answers can now depend on the question.
+
+We will be more interested in the composite game $E \rightarrow F$,
+which allows the \emph{system} to ask questions in $E$
+before answering the environment's initial question in $F$.
+At a high level of abstraction,
+the interface provided by the program $\kw{rb.c}$ %(\autoref{fig:rb})
+and used by $\kw{bq.c}$ %(\autoref{fig:bq})
+can be described using the signature:
+\[
+  E_\kw{rb} := \{
+    \kw{inc1} {:} \mathbb{N}, \:
+    \kw{inc2} {:} \mathbb{N}, \:
+    \kw{set}[i, v] {:} \mathbbm{1}, \:
+    \kw{get}[i] {:} V \mid
+    i \in \mathbb{N}, v \in V \}
+\]
+Note that there are individual operations
+$\kw{set}[i, v]$ and $\kw{get}[i]$
+for every possible value of the arguments
+$i \in \mathbb{N}$ and $v \in V$.
+In such circumstances,
+we will sometimes use the notation
+\[
+  E_\kw{rb} := \{
+    \kw{inc1} : \mathbb{N}, \:
+    \kw{inc2} : \mathbb{N}, \:
+    \kw{set} : \mathbb{N} \times V \rightarrow \mathbbm{1}, \:
+    \kw{get} : \mathbb{N} \rightarrow V \}
   \,.
 \]
-\end{theorem}
+The interface provided by $\kw{bq.c}$
+is likewise described by the signature:
+\[
+  E_\kw{rb} := \{
+    \kw{enq} : V \rightarrow \mathbbm{1},
+    \kw{deq} : V \}
+  \,.
+\]
+
+\paragraph{Plays and Strategies}
+
+Since $\kw{bq.c}$
+uses the operations of $E_\kw{rb}$ to
+provide those of $E_\kw{bq}$,
+its behavior
+can be described as a proponent strategy for the game
+$E_\kw{rb} \rightarrow E_\kw{bq}$.
+Given a particular value $\diamond \in V$,
+a \emph{play} in this game may look like the sequence of moves:
+\[
+  \kw{enq}[\diamond] \cdot
+  \underline{\kw{inc2}} \cdot
+  7 \cdot
+  \underline{\kw{set}}[7, \diamond] \cdot
+  * \cdot
+  \underline*
+  \:,
+\]
+where we have underlined the moves of the proponent
+and where $* \in \mathbbm{1}$ is the unit value.
+Traditionally,
+\emph{strategies} are then defined as
+the set of plays a component can generate,
+depending on the environment's behavior.
+For example,
+the strategy
+$\sigma_\kw{bq} : E_\kw{rb} \rightarrow E_\kw{bq}$
+associated with $\kw{bq.c}$ is
+\[
+  \sigma_\kw{bq} =
+  \{ 
+    \kw{deq} \cdot
+    \underline{\kw{inc1}} \cdot
+    i \cdot
+    \underline{\kw{get}[i]} \cdot
+    v \cdot
+    \underline{v} \,, \:\:
+    \kw{enq}[v] \cdot
+    \underline{\kw{inc2}} \cdot
+    i \cdot
+    \underline{\kw{set}[i, v]} \cdot
+    * \cdot
+    \underline*
+  \:\mid\:
+    v \in V, i \in I
+  \}
+  \,.
+\]
+%Here again,
+%set inclusion $\subseteq$
+%can serve as refinement.
+
+\paragraph{Composition} %{{{
+
+Suppose %the strategy
+$\sigma_\kw{rot} : E_\kw{bq} \rightarrow E_\kw{rot}$
+implements %the signature
+$E_\kw{rot} = \{ \kw{rot} : V \}$
+with the following behavior:
+\[
+  \sigma_\kw{rot} := \{
+    \kw{rot} \cdot
+    \underline{\kw{deq}} \cdot
+    v \cdot
+    \underline{\kw{enq}[v]} \cdot
+    * \cdot
+    \underline{v}
+    \mid v \in V
+  \}
+\]
+That is,
+an incoming call to $\kw{rot}$
+uses the interface $E_\kw{bq}$
+to first dequeue a value $v$,
+push it back at the end of the queue,
+and then finally returns the rotated value $v$.
+
+The composite strategy
+$\sigma_\kw{rot} \circ \sigma_\kw{bq} :
+ E_\kw{rb} \rightarrow E_\kw{rot}$
+lets the two components interact,
+by replacing the calls
+$\underline{\kw{deq}} \cdot v$
+and
+$\underline{\kw{enq}[v]} \cdot *$
+in the plays of $\sigma_\kw{rot}$
+by corresponding plays of $\sigma_\kw{bq}$.
+The internal interactions between the two components
+are then hidden to obtain the strategy:
+\[
+  \sigma_\kw{rot} \circ \sigma_\kw{bq} =
+  \{
+    \kw{rot} \cdot
+    \underline{\kw{inc1}} \cdot i \cdot
+    \underline{\kw{get}[i]} \cdot v \cdot
+    \underline{\kw{inc2}} \cdot j \cdot
+    \underline{\kw{set}[j,v]} \cdot * \cdot
+    \underline{v}
+  \mid
+    i \in \mathbb{N}, \:
+    j \in \mathbb{N}, \:
+    v \in V
+  \}
+\]
 
 %}}}
 
+\paragraph{Strategies as Specifications}
+
+%We have discussed in \S\ref{sec:specs}
+%the relationship between
+%properties, refinements and specifications.
+One way to look at the construction of strategies
+in game semantics
+is to read plays as elementary properties
+of the system being modeled.
+
+Within a strategy,
+a play essentially states:
+``if the environment behaves in this way,
+then the system should respond in that way''.
+Program components are then characterized by
+the set of such properties which they satisfy.
+Using set inclusion,
+under-constrained strategies can be refined by
+more defined ones.
+Over-constrained strategies---%
+which contain plays
+making incompatible demands of the system---%
+cannot be implemented by concrete programs.
+
+The union of $\sigma_1$ and $\sigma_2$
+can only be refined by strategies which refine both:
+\[
+  \sigma_1 \cup \sigma_2 \subseteq \tau
+  \quad\Leftrightarrow\quad
+  \sigma_1 \subseteq \tau \:\wedge\:
+  \sigma_2 \subseteq \tau
+  \,.
+\]
+In other words,
+unions correspond to \emph{angelic nondeterminism},
+where the environment is free to rely on either behavior
+because the system must exhibit both.
+However,
+to establish a complete refinement calculus
+we also need a form of \emph{demonic} nondeterminism,
+allowing us to formulate specifications such as
+``the system may either return 0 or 1''.
+Note that the set $\{0, 1\}$ is not appropriate in this case,
+since it would simultaneously require the system
+to return both 0 and 1.
+
 %}}}
 
-\subsection{Game Semantics}
+\subsection{Completely Distributive Lattices} %{{{
 
-XXX elaborate:
-CompCertO is great but it doesn't have a trace semantics.
-Compositional reasoning with transition systems is kind of a PITA.
-However, there is an approach which would work well:
-game semantics.
-Hence in the next section we figure it out.
+Semi-lattices provide the algebraic foundation
+of traditional angelic \emph{or} demonic nondeterminism.
+Completely distributive lattices
+provide a similar foundation for
+\emph{dual} nondeterminism,
+which combines arbitrary angelic and demonic choices.
+
+\begin{definition}
+A \emph{complete lattice}
+is a partially ordered set $\langle L, {\sqsubseteq} \rangle$
+with all joins and meets.
+In particular, $L$
+has a least element $\bot = \bigsqcup \varnothing = \bigsqcap L$
+and a greatest element $\top = \bigsqcap \varnothing = \bigsqcup L$.
+
+A \emph{completely distributive} lattice
+is a complete lattice which satisfies
+the (equivalent) properties:
+\[
+  \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} x_{ij} =
+  \bigsqcap_{f \in \prod_i J_i} \bigsqcup_{i \in I} x_{i,f_i}
+  \qquad\qquad
+  \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} x_{ij} =
+  \bigsqcup_{f \in \prod_i J_i} \bigsqcap_{i \in I} x_{i,f_i}
+\]
+\end{definition}
+
+These properties admit an intuitive game-theoretic interpretation.
+Suppose the elements of $L$
+are \emph{payoffs} in a zero-sum, two-player games
+where the proponent and opponent
+take turns making moves.
+The proponent seeks to minimize the payoff.
+If they can choose among the payoffs $(x_i)_{i \in I}$,
+the outcome will be $\bigsqcap_i x_i$.
+Conversely,
+if the opponent can choose among $(y_j)_{j \in J}$,
+the outcome will be $\bigsqcup_j y_j$.
+Hence the expression
+$\bigsqcap_i \bigsqcup_j x_{ij}$
+denotes the result of a game where
+the proponent first makes a choice $i \in I$,
+the opponent then chooses $j \in J_i$,
+producing the outcome $x_{ij}$.
+
+We can reverse the order of these moves
+by having the opponent play first
+and pre-choose a strategy $f \in \prod_i J_i$.
+The proponent then selects $i \in I$,
+leading to the outcome is $x_{i,f_i}$.
+At first glance,
+this game is very different:
+the proponent has access to much more information
+and can make a decision based on the opponent's choice of strategy.
+However,
+the expressions $\bigsqcap_i \bigsqcup_j x_{ij}$
+and $\bigsqcup_f \bigsqcap_i x_{i,f_i}$
+are only concerned with the case where both players adopt
+an optimal strategy.
+In this particular scenario,
+the opponent choices were in effect already known,
+hence the proponent gains no advantage.
+
+\paragraph{Free Completely Distributive Lattices}
+
+Given a partially ordered set of properties,
+a rich specification model can be constructed as
+the \emph{free completely distributive lattice}
+generated by those properties \cite{augtyp,dndf}.
+This construction can be characterized as follows.
+
+\begin{definition}[Free completely distributive lattice]
+The forgetful functor
+$U : \mathbf{CDLat} \rightarrow \mathbf{Pos}$
+from the category of completely distributive lattices
+and complete homomorphisms
+to the category of partially ordered sets
+and monotonic functions
+has a left adjoint
+$\kw{FCD} : \mathbf{Pos} \rightarrow \mathbf{CDLat}$.
+For a poset $A \in \mathbf{Pos}$,
+we call $\kw{FCD}(A)$ the \emph{free completely distributive lattice}
+generated by $A$.
+\end{definition}
+
+An explicit construction is given by \citet{augtyp}.
+For our purposes,
+the elements of $\kw{FCD}(A)$
+will be terms of the form
+\[
+  \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(a_{ij})
+\]
+identified up to the properties of completely distributive lattices.
+The function $\phi : A \rightarrow \kw{FCD}(A)$
+embeds the underlying partially ordered set
+into $\kw{FCD}(A)$.
 
 %}}}
 
-\section*{ORPHAN MATERIAL} %{{{
+\subsection{Strategy Specifications} %{{{
 
-In \autoref{sec:refconv},
-we extend $\ISpec$ to a double category
-using our generalized notion of \emph{refinement convention}.
-This double category can embed
-the transition systems,
-simulation conventions, and
-simulation properties of CompCertO.
+Refinement-based game semantics \cite{rbgs-cal}
+combines these ideas to introduce a notion of
+\emph{strategy specification},
+which incorporates dual nondeterminism
+into game semantics.
+
+In this model,
+strategies are constructed in terms of a monad $\mathcal{I}_E(X)$.
+This monad describes computations
+which may perform calls as described by the signature $E$,
+and eventually produce a result in the set $X$.
+To define $\mathcal{I}_E(X)$,
+we can start with a notion of plays of the form:
+\[
+  s \in P_E(X) ::=
+    \underline{q} \mid
+    \underline{q}rs \mid
+    \underline{x}
+  \qquad
+  (q \in E^\que, r \in E^\ans_q, x \in X)
+\]
+The plays are ordered by the prefix relation.
+Hence $\underline{q}$ describes a computation
+which starts with a call $q$,
+without placing any constraint on its subsequent behavior.
+Interaction specifications are then obtained
+using the free completely distributive lattice construction:
+\[
+  \mathcal{I}_E(X) := \kw{FCD}(P_E(X)) \,.
+\]
+
+In turn,
+the interaction specification monad can be used to define
+a category of effect signatures and strategy specifications.
+A morphism $\sigma : E \rightarrow F$
+gives for each possible question $q \in F^\que$
+an interaction specification of type $\mathcal{I}_E(F^\ans_q)$:
+\[
+  \sigma^q \in \mathcal{I}_E(F^\ans_q)
+  \qquad
+  (q \in F^\que)
+\]
+The strategy $\sigma : E \rightarrow F$
+can then be invoked by a computation $x \in \mathcal{I}_F(X)$
+to obtain the computation:
+\[
+  x[\sigma] \in \mathcal{I}_E(X) \,,
+\]
+where external interaction have been
+replaced by the behavior prescribed in
+the strategy $\sigma$.
+The composition of strategies can be defined
+in terms of this operator,
+so that for $\tau : F \rightarrow G$,
+we obtain:
+\[
+  (\tau \circ \sigma)^q := \tau^q[\sigma]
+  \qquad
+  (q \in G^\que)
+\]
+We will call $\ISpec$ the resulting category
+of effect signatures and strategy specifications.
+
+%}}}
+
+\subsection{Refinement-Based Game Semantics of CompCertO}
+
+The behavior of a transition system
+$L : \mathcal{X} \twoheadrightarrow \mathcal{Y}$
+can be characterized as a strategy specification
+$\llbracket L \rrbracket : \mathcal{X} \rightarrow \mathcal{Y}$.
+To this end,
+we first interpret the behavior of individual states
+using the following fixpoint construction:
+\[
+  \llbracket - \rrbracket :=
+  \mu F \cdot s \mapsto
+   \bigsqcup_{s \rightarrow s'} F(s') \: \sqcup \:
+   \bigsqcup_{s \mathrel{T} r} \eta(r) \: \sqcup \:
+   \bigsqcup_{s \mathrel{X} q}
+    r \mathbin\leftarrow \underline{q} \mathbin;
+    \bigsqcup_{r \mathrel{Y^s} s'} F(s')
+\]
+Then the strategy specification associated with $L$ is:
+\[
+  \llbracket L \rrbracket(q) :=
+    \bigsqcup_{q \mathrel{I} s} \llbracket s \rrbracket
+    \,.
+\]
+
+Note that this definition makes a few simplifying assumptions.
+First,
+we use a purely angelic interpretation of nondeterminism.
+In the general case,
+the intended meaning of nondeterminism in CompCert transition systems
+is more subtle \cite[\S8.1]{thesis}.
+However,
+the CompCert languages we use are all deterministic,
+so this simplification is benign.
+
+Second,
+both ``stuck states'' and silent divergence
+are interpreted as $\bot$,
+whereas in CompCertO they are distinguished.
+However,
+since our use of CompCert languages
+ultimately occurs on the implementation side of refinement,
+this under-approximation does not compromise
+the soundness of our approach:
+in effect,
+both stuck states and silent divergence
+are undesirable behaviors that can 
+only refine the trivial specification $\bot$.
+
+%}}}
 
 \begin{figure*} % fig:cal {{{
   \begin{minipage}{.9\textwidth}
@@ -1470,773 +1918,6 @@ simulation properties of CompCertO.
     Reproduced from \citet{rbgs-cal}.}
   \label{fig:cal}
 \end{figure*}
-%}}}
-
-\subsection*{Certified Abstraction Layers}\label{sec:mainideas:cal} %{{{
-
-To an extent,
-the formal tools required for the formulation of refinement conventions
-are already present in the strategy specification model
-of certified abstraction layers \cite[\S 3.7]{rbgs-cal}.
-%
-In this model,
-the layer correctness property
-\begin{equation} \label{eqn:layer}
-  L_1 \vdash_R M : L_2
-\end{equation}
-asserts that the strategy specification
-$M : E_1 \rightarrow E_2$
-faithfully implements the \emph{overlay} interface
-$L_2 : \varnothing \rightarrow E_2@S_2$
-in terms of the \emph{underlay} interface
-$L_1 : \varnothing \rightarrow E_1@S_1$.
-[XXX need to explain $@$ here or before].
-The relation $R \subseteq S_2 \times S_1$
-specifies the correspondence between
-the set of high-level states $S_2$
-used to describe the interface $L_2$
-and the set of low-level states $S_1$
-used to describe the interface $L_1$.
-
-To express property (\ref{eqn:layer})
-in terms of refinement,
-we can use a \emph{formal adjunction}
-in the refinement-enriched category $\ISpec$.
-For an arbitrary signature $E$,
-we can define the two strategies
-$R^* : E@S_2 \rightarrow E@S_1$ and
-$R_* : E@S_1 \rightarrow E@S_2$,
-which use dual nondeterminism to interactively translate
-between high- and low-level states.
-Layer correctness can then be stated as:
-\[
-  L_1 \vdash M : L_2 \: \Leftrightarrow \:
-  L_2 \sqsubseteq R_* \circ M@S_1 \circ L_1
-\]
-The adjunction property $R^* \dashv R_*$
-can then help us prove the composition principle:
-\[
-  \begin{prooftree}
-    \hypo{L_1 \vdash_R M : L_2}
-    \hypo{L_2 \vdash_S N : L_3}
-    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
-  \end{prooftree}
-\]
-[XXX not quite true,
-we only need $R_*$ and $M@S$ to commute]
-
-As an example,
-\citet{rbgs-cal} describes the certified abstraction layer
-$L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
-depicted in \autoref{fig:cal},
-which provides a high-level view
-of the code shown in \autoref{fig:code}.
-By relating this high-level view
-to the CompCertO semantics of our code,
-in \S\ref{sec:cal} we are able to transfer
-the correctness of $M_\kw{bq}$
-to the level of the assembly code emitted by CompCert
-when $\kw{rb.c}$ and $\kw{bq.c}$ are compiled.
-
-%}}}
-
-\hrule
-
-We have described in \S\ref{sec:mainideas:compcerto}
-the high-level structure
-of CompCertO's semantic model
-and compositional correctness theorem.
-In this section,
-we describe in more detail
-the transition systems involved
-and their interpretation 
-as strategy specifications.
-
-\subsection*{Assembly Linking}
-
-CompCertO models linking using an operator $\oplus$
-such that:
-\[
-  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
-  \le_{\kw{id} \twoheadrightarrow \kw{id}}
-  \kw{Asm}(p_1 + p_2)
-\]
-The linking operator $\oplus$ allows
-two transition systems to interact with each other
-in a mutually recursive fashion.
-Because of this,
-the operator only works when transition systems
-have identical types of the form $\mathcal{X} \twoheadrightarrow \mathcal{X}$.
-By contrast,
-we wish to use the proper categorical structure
-provided by composition in the category $\ISpec$.
-
-Fortunately,
-the generality of CompCertO's linking operator is superfluous
-in the context of our application domain.
-When certified abstraction layers are composed,
-it is sufficient for the overlay to make calls into the underlay.
-Moreover,
-we can use the following result
-to show that composition soundly approximates
-the linking of assembly programs.
-
-\begin{lemma}[Assembly linking]
-Given two \kw{Asm} programs $p_1$ and $p_2$,
-the following refinement holds:
-\[
-  \llbracket \kw{Asm}(p_1) \rrbracket \circ
-  \llbracket \kw{Asm}(p_2) \rrbracket \:\sqsubseteq\:
-  \llbracket \kw{Asm}(p_1 + p_2) \rrbracket
-  \,.
-\]
-\end{lemma}
-
-%}}}
-
-\section{Refinement-Based Game Semantics} \label{sec:rbgs} %{{{
-
-\subsection{Semantics} %{{{
-
-In order to subject a given system to mathematical analysis,
-we must establish a mathematical model of its operation.
-A~programming language semantics
-does this in a systematic way
-by assigning to each program $p \in P$
-in a given language $P$
-a description $\llbracket p \rrbracket \in D$
-of its behavior within a domain $D$:
-\[
-    \llbracket {-} \rrbracket : P \rightarrow D
-\]
-
-There are many approaches
-for constructing appropriate domains
-and interpretation functions.
-What distinguishes \emph{compositional} semantics
-is that the interpretation function $\llbracket - \rrbracket$
-can be defined alongside the syntactic structure of programs.
-For example,
-if two program phrases $p_1, p_2 \in P$
-can be combined into $p_1 + p_2 \in P$,
-the semantic domain will be equipped with an operation
-$\oplus : D \times D \rightarrow D$
-such that
-\[
-  \llbracket p_1 + p_2 \rrbracket =
-  \llbracket p_1 \rrbracket \oplus
-  \llbracket p_2 \rrbracket
-  \,.
-\]
-
-When \emph{types} are involved,
-the syntax and semantics
-can be given in \emph{categorical} form.
-The syntax is given as a category $\mathbf{P}$
-where objects are types and typing contexts,
-and where the morphisms $p : \Gamma \rightarrow A$
-are program components which
-are assigned type $A$ within a context $\Gamma$,
-or more generally
-which use resources in $\Gamma$ to provide an interface $A$.
-The interpretation function
-then becomes a functor
-$\llbracket - \rrbracket : \mathbf{P} \rightarrow \mathbf{D}$
-into a semantic category $\mathbf{D}$,
-such that a program $p : \Gamma \rightarrow A \in \mathbf{P}$
-is interpreted as
-a morphism
-$\llbracket p \rrbracket :
- \llbracket \Gamma \rrbracket \rightarrow
- \llbracket A \rrbracket
- \in \mathbf{D}$.
-
-%}}}
-
-\subsection{Specifications and Refinement} \label{sec:specs} %{{{
-
-From the perspective of certified software engineering,
-semantics allows us to formulate specifications and
-correctness proofs
-in the context of a well-behaved mathematical domain.
-To make specifications and proofs compositional,
-we can impose additional structure.
-
-A desirable property of program behaviors
-can be expressed as a predicate $\pi \in \mathcal{P}(D)$
-over the semantic domain.
-Moreover,
-a set $\Pi \subseteq \mathcal{P}(D)$
-of properties of interest
-induces a \emph{refinement} ordering
-${\sqsubseteq} \subseteq D \times D$.
-A behavior $\sigma \in D$ is refined by $\tau \in D$
-when %the following holds:
-\[
-  \sigma \sqsubseteq \tau \: :\Leftrightarrow \:
-  \forall \pi \in \Pi \bdot
-  \pi(\sigma) \Rightarrow \pi(\tau)
-  \,.
-\]
-In fact, we can further interpret programs
-into the domain $\mathcal{P}(\Pi)$,
-associating to each one the set of properties
-which it satisfies,
-and using set inclusion as refinement.
-%
-Conversely,
-if the domain is equipped \emph{a priori}
-with a partial order $\sqsubseteq$,
-its elements can themselves be regarded as properties:
-\[
-  \Pi \: := \:
-    \{ \{ \tau \mid \sigma \sqsubseteq \tau \} \mid
-       \sigma \in D \}
-  \,.
-\]
-
-\paragraph{Stepwise Refinement}
-
-When $D$ is rich enough,
-specifications
-can be given as elements of the domain;
-the correctness of $p \in P$
-with respect to a specification $\sigma \in D$
-can then be expressed as
-$
-  \sigma \sqsubseteq \llbracket p \rrbracket
-$.
-Under this refinement-based approach,
-specifications and correctness proofs
-benefit from the compositionality of $\llbracket - \rrbracket$,
-and correctness proofs can proceed by stepwise refinement.
-For example,
-when $\sigma_1 \sqsubseteq \llbracket p_1 \rrbracket$
-and $\sigma_2 \sqsubseteq \llbracket p_2 \rrbracket$,
-we can deduce:
-\begin{equation} \label{eqn:speccomp}
-  \sigma_1 \oplus \sigma_2 \:\sqsubseteq\:
-  \llbracket p_1 \rrbracket \oplus
-  \llbracket p_2 \rrbracket \:\sqsubseteq\:
-  \llbracket p_1 + p_2 \rrbracket
-  \,,
-\end{equation}
-as long as $\oplus$ is monotonic
-with respect to refinement.
-
-\paragraph{String Diagrams}
-
-In a categorical setting,
-these structure generalize to
-order-enriched categories.
-Every homset $\mathbf{D}(A, B)$
-is equipped with a refinement ordering,
-and the composition operation
-\[
-  {\circ}_{A,B,C} :
-    \mathbf{D}(B, C) \times \mathbf{D}(A, B) \rightarrow
-    \mathbf{D}(A, C)
-\]
-is a monotonic function.
-Order-enriched categories can be seen as
-\emph{thin} 2-categories,
-where for $f, g : A \rightarrow B \in \mathbf{D}$
-there is a 2-cell
-$\alpha : f \Rightarrow g : A \rightarrow B$
-if and only if $f \sqsubseteq g$.
-Hence,
-refinement proofs admit a
-\emph{string diagram} calculus.
-
-In a string diagram,
-the objects of $\mathbf{D}$ are represented by regions of the plane.
-A morphism $f : A \rightarrow B \in \mathbf{D}$
-is represented by a vertical line
-separating an $A$ region from a $B$ region,
-with horizontal juxtaposition denoting composition.
-A refinement property
-$h \circ g \circ f \sqsubseteq v \circ u$
-is represented as a point
-connecting the lines $f$, $g$, $h$ above the point
-to the lines $u$, $v$ below:
-\[
-  \begin{tile}{}
-    \drawst (LT) node[above] {$f$} -- (TLI) -- (C);
-    \drawst (T) node[above] {$g$} -- (TI) -- (C);
-    \drawst (RT) node[above] {$h$} -- (TRI) -- (C);
-    \drawst (C) -- (BLI) -- (LB) node[below] {$u$};
-    \drawst (C) -- (BRI) -- (RB) node[below] {$v$};
-    \node at (C) {$\bullet$};
-  \end{tile}
-\]
-For example,
-property (\ref{eqn:speccomp}) above
-combines the properties
-(a) $\sigma_1 \subseteq \llbracket p_1 \rrbracket$ and
-(b) $\sigma_2 \subseteq \llbracket p_2 \rrbracket$ with
-the compositionality property
-(c) $\llbracket p_1 \rrbracket \circ \llbracket p_2 \rrbracket
-     \sqsubseteq \llbracket p_1 + p_2 \rrbracket$
-in the following way:
-\[
-  \text{[figure here]}
-\]
-
-String diagrams
-provide a visual calculus for refinement proofs where
-the associativity and monotonicity of composition
-are made implicit.
-
-%}}}
-
-\subsection{Game Semantics} %{{{
-
-A particular kind of compositional semantics
-known as \emph{game semantics} uses
-categories of games and strategies
-as semantic domains.
-The games used in this context are
-two-player games
-which model the interaction between
-a program component (the proponent)
-and its environment (the opponent).
-The behavior of a component
-is described as a proponent \emph{strategy}
-in the game associated with the component's type.
-The games do not usually involve
-a winning condition. % or notion of payoff.
-
-For heterogeneous certified systems,
-this approach is interesting
-because games provide a fairly general way to describe
-the interfaces of certified components.
-In the present work,
-we use simple games
-derived from signatures of the following kind.
-
-\begin{definition}
-An \emph{effect signature} is a set $E^\que$ of operations
-together with a family of sets $\big( E^\ans_m \big)_{m \in E^\que}$
-specifying an \emph{arity} for each operation.
-We will write
-\[
-  E = \{ m : E^\ans_m \mid m \in E^\que \}
-\]
-\end{definition}
-
-The game associated with $E$ simply consists of
-a \emph{question} $m \in E^\que$ of the environment
-followed by an \emph{answer} $n \in E^\ans_m$ of the system.
-We will be more interested in the composite game $E \rightarrow F$,
-which allows the \emph{system} to ask questions in $E$
-before answering the environment's initial question in $F$.
-
-At a high level of abstraction,
-the interface provided by the program $\kw{rb.c}$ (\autoref{fig:rb})
-and used by $\kw{bq.c}$ (\autoref{fig:bq})
-can be described using the signature:
-\[
-  E_\kw{rb} := \{
-    \kw{inc1} {:} \mathbb{N},
-    \kw{inc2} {:} \mathbb{N},
-    \kw{set}[i, v] {:} \mathbbm{1},
-    \kw{get}[i] {:} V \mid
-    i \in \mathbb{N}, v \in V \}
-\]
-Note that there are individual operations
-$\kw{set}[i, v]$ and $\kw{get}[i]$
-for every possible value of the arguments
-$i \in \mathbb{N}$ and $v \in V$.
-In such circumstances,
-we will sometimes use the notation
-\[
-  E_\kw{rb} := \{
-    \kw{inc1} : \mathbb{N}, \:
-    \kw{inc2} : \mathbb{N}, \:
-    \kw{set} : \mathbb{N} \times V \rightarrow \mathbbm{1}, \:
-    \kw{get} : \mathbb{N} \rightarrow V \}
-  \,.
-\]
-The interface provided by $\kw{bq.c}$
-is described by the signature:
-\[
-  E_\kw{rb} := \{
-    \kw{enq} : V \rightarrow \mathbbm{1},
-    \kw{deq} : V \}
-\]
-
-\paragraph{Plays and Strategies}
-
-Since $\kw{bq.c}$
-uses the operations of $E_\kw{rb}$ to
-provide those of $E_\kw{bq}$,
-its behavior
-can be described as a proponent strategy for the game
-$E_\kw{rb} \rightarrow E_\kw{bq}$.
-Given a particular value $\diamond \in V$,
-a \emph{play} in this game may look like the sequence of moves:
-\[
-  \kw{enq}[\diamond] \cdot
-  \underline{\kw{inc2}} \cdot
-  7 \cdot
-  \underline{\kw{set}}[7, \diamond] \cdot
-  * \cdot
-  \underline*
-  \:,
-\]
-where we have underlined the moves of the proponent
-and where $* \in \mathbbm{1}$ is the unit value.
-Traditionally,
-\emph{strategies} are then defined as
-the set of plays a component can generate,
-depending on the environment's behavior.
-For example,
-the strategy
-$\sigma_\kw{bq} : E_\kw{rb} \rightarrow E_\kw{bq}$
-associated with $\kw{bq.c}$ is
-\begin{align*}
-  \sigma_\kw{bq} =
-  \{ 
-   &\kw{deq} \cdot
-    \underline{\kw{inc1}} \cdot
-    i \cdot
-    \underline{\kw{get}[i]} \cdot
-    v \cdot
-    \underline{v} \,, \\
-   &\kw{enq}[v] \cdot
-    \underline{\kw{inc2}} \cdot
-    i \cdot
-    \underline{\kw{set}[i, v]} \cdot
-    * \cdot
-    \underline*
-  \mid
-    v \in V, i \in I
-  \}
-  \,.
-\end{align*}
-Here again,
-set inclusion $\subseteq$
-can serve as refinement.
-
-\paragraph{Composition}
-
-Suppose the strategy
-$\sigma_\kw{rot} : E_\kw{bq} \rightarrow E_\kw{rot}$
-implements %the signature
-$E_\kw{rot} = \{ \kw{rot} : V \}$
-with the following behavior:
-\[
-  \sigma_\kw{rot} := \{
-    \kw{rot} \cdot
-    \underline{\kw{deq}} \cdot
-    v \cdot
-    \underline{\kw{enq}[v]} \cdot
-    * \cdot
-    \underline{v}
-    \mid v \in V
-  \}
-\]
-That is,
-an incoming call to $\kw{rot}$
-uses the interface $E_\kw{bq}$
-to first dequeue a value $v$,
-push it back at the end of the queue,
-then returns $v$.
-
-The composite strategy
-$\sigma_\kw{rot} \circ \sigma_\kw{bq} :
- E_\kw{rb} \rightarrow E_\kw{rot}$
-lets the two components interact,
-by replacing the calls
-$\underline{\kw{deq}} \cdot v$
-and
-$\underline{\kw{enq}[v]} \cdot *$
-in the plays of $\sigma_\kw{rot}$
-by corresponding plays of $\sigma_\kw{bq}$.
-The internal interactions between the two components
-are then hidden to obtain the strategy:
-\begin{align*}
-  \sigma_\kw{rot} &\circ \sigma_\kw{bq} = \\
-  \{
-   &\kw{rot} \cdot
-    \underline{\kw{inc1}} \cdot i \cdot
-    \underline{\kw{get}[i]} \cdot v \cdot
-    \underline{\kw{inc2}} \cdot j \cdot
-    \underline{\kw{set}[j,v]} \cdot * \cdot
-    \underline{v}
-  \mid {} \\
-   &i \in \mathbb{N}, \:
-    j \in \mathbb{N}, \:
-    v \in V
-  \}
-\end{align*}
-
-\paragraph{Strategies as Specifications}
-
-We have discussed in \S\ref{sec:specs}
-the relationship between
-properties, refinements and specifications.
-One way to look at the construction of strategies
-in game semantics
-is to read plays as elementary properties
-of the system being modeled.
-
-Within a strategy,
-a play essentially states:
-``if the environment behaves in this way,
-then the system should respond in that way''.
-Program components are then characterized by
-the set of such properties which they satisfy.
-Under-constrained strategies can be refined by
-more defined ones.
-Over-constrained strategies---%
-which contain plays
-making incompatible demands of the system---%
-cannot be implemented by concrete programs.
-
-The union of $\sigma_1$ and $\sigma_2$
-can only be refined by strategies which refine both:
-\[
-  \sigma_1 \cup \sigma_2 \subseteq \tau
-  \quad\Leftrightarrow\quad
-  \sigma_1 \subseteq \tau \:\wedge\:
-  \sigma_2 \subseteq \tau
-  \,.
-\]
-In other words,
-unions correspond to \emph{angelic nondeterminism},
-where the environment is free to rely on either behavior
-because the system must exhibit both.
-However,
-to establish a complete refinement calculus
-we also need a form of \emph{demonic} nondeterminism,
-allowing us to formulate specifications such as
-``the system may either return 0 or 1''.
-Note that the set $\{0, 1\}$ is not appropriate in this case,
-since it would simultaneously require the system
-to return both 0 and 1.
-
-%}}}
-
-\subsection{Completely Distributive Lattices} %{{{
-
-Semi-lattices provide the algebraic foundation
-of traditional angelic \emph{or} demonic nondeterminism.
-Completely distributive lattices
-provide a similar foundation for
-\emph{dual} nondeterminism,
-which combines arbitrary angelic and demonic choices.
-
-\begin{definition}
-A \emph{complete lattice}
-is a partially ordered set $\langle L, {\sqsubseteq} \rangle$
-with all joins and meets.
-This means in particular that $L$
-has a least element $\bot = \bigsqcup \varnothing = \bigsqcap L$
-and a greatest element $\top = \bigsqcap \varnothing = \bigsqcup L$.
-
-A \emph{completely distributive} lattice
-is a complete lattice which satisfies
-the (equivalent) distributivity properties:
-\begin{gather} \label{eqn:compdist}
-  \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} x_{ij} =
-  \bigsqcap_{f \in \prod_i J_i} \bigsqcup_{i \in I} x_{i,f_i}
-  \\
-  \bigsqcap_{i \in I} \bigsqcup_{j \in J_i} x_{ij} =
-  \bigsqcup_{f \in \prod_i J_i} \bigsqcap_{i \in I} x_{i,f_i}
-\end{gather}
-\end{definition}
-
-These properties admit an intuitive game-theoretic interpretation.
-Suppose the elements of $L$
-are \emph{payoffs} in a zero-sum, two-player games
-where the proponent and opponent
-take turns making moves.
-The proponent seeks to minimize the payoff.
-If they can choose among the payoffs $(x_i)_{i \in I}$,
-the outcome will be $\bigsqcap_i x_i$.
-Conversely,
-if the opponent can choose among $(y_j)_{j \in J}$,
-the outcome will be $\bigsqcup_j y_j$.
-Hence the expression
-$\bigsqcap_i \bigsqcup_j x_{ij}$
-denotes the result of a game where
-the proponent first makes a choice $i \in I$,
-the opponent then chooses $j \in J_i$,
-producing the outcome $x_{ij}$.
-
-We can reverse the order of these moves
-by having the opponent play first
-and pre-choose a strategy $f \in \prod_i J_i$.
-The proponent then selects $i \in I$,
-leading to the outcome is $x_{i,f_i}$.
-At first glance,
-this game is very different:
-the proponent has access to much more information
-and can make a decision based on the opponent's choice of strategy.
-However,
-the expressions $\bigsqcap_i \bigsqcup_j x_{ij}$
-and $\bigsqcup_f \bigsqcap_i x_{i,f_i}$
-are only concerned with the case where both players adopt
-an optimal strategy.
-In this particular scenario,
-the opponent choices were in effect already known,
-hence the proponent gains no advantage.
-
-\paragraph{Free Completely Distributive Lattices}
-
-Given a partially ordered set of elementary properties,
-a rich specification model can be constructed as
-the \emph{free completely distributive lattice}
-generated by those properties \cite{augtyp,dndf}.
-This construction can be characterized as follows.
-
-\begin{definition}[Free completely distributive lattice]
-The forgetful functor
-$U : \mathbf{CDLat} \rightarrow \mathbf{Pos}$
-from the category of completely distributive lattices
-and complete homomorphisms
-to the category of partially ordered sets
-and monotonic functions
-has a left adjoint
-$\kw{FCD} : \mathbf{Pos} \rightarrow \mathbf{CDLat}$.
-For a poset $A \in \mathbf{Pos}$,
-we call $\kw{FCD}(A)$ the \emph{free completely distributive lattice}
-generated by $A$.
-\end{definition}
-
-An explicit construction is given by \citet{augtyp}.
-For our purposes,
-the elements of $\kw{FCD}(A)$
-will be terms of the form
-\[
-  \bigsqcup_{i \in I} \bigsqcap_{j \in J_i} \phi(a_{ij})
-\]
-identified up to the properties of completely distributive lattices.
-The function $\phi : A \rightarrow \kw{FCD}(A)$
-embeds the underlying partially ordered set
-into $\kw{FCD}(A)$.
-
-%}}}
-
-\subsection{Interaction Specifications} %{{{
-
-Refinement-based game semantics \cite{rbgs-cal}
-combines these ideas to introduce a notion of
-\emph{strategy specification},
-which incorporates dual nondeterminism
-into the strategies of game semantics.
-
-In the \emph{interaction specification} model,
-strategies are constructed in terms of a monad $\mathcal{I}_E(X)$.
-This monad describes computations
-which may perform calls as described by the signature $E$,
-and eventually produce a result in the set $X$.
-To define $\mathcal{I}_E(X)$,
-we can start with a notion of plays of the form:
-\[
-  s \in P_E(X) ::=
-    \underline{m} \mid
-    \underline{m}ns \mid
-    \underline{x}
-  \qquad
-  (m \in E^\que, n \in E^\ans_m, x \in X)
-\]
-The plays are ordered by the prefix relation.
-Hence $\underline{m}$ describes a computation
-which starts with a call $m$,
-without placing any constraint on its subsequent behavior.
-Interaction specifications are then obtained
-using the free completely distributive lattice construction:
-\[
-  \mathcal{I}_E(X) := \kw{FCD}(P_E(X)) \,.
-\]
-
-In turn,
-the interaction specification monad can be used to define
-a category of effect signatures and strategy specifications.
-A morphism $\sigma : E \rightarrow F$
-gives for each possible question $m \in F^\que$
-an interaction specification of type $\mathcal{I}_E(F^\ans_m)$:
-\[
-  \sigma^m \in \mathcal{I}_E(F^\ans_m)
-  \qquad
-  (m \in F^\que)
-\]
-The strategy $\sigma : E \rightarrow F$
-can then be invoked by a computation $x \in \mathcal{I}_F(X)$,
-so that we obtain the computation:
-\[
-  x[\sigma] \in \mathcal{I}_E(X) \,,
-\]
-where external interaction have been
-replace by the behavior prescribed in
-the strategy $\sigma$.
-The composition of strategies can be defined
-in terms of this operator,
-so that for $\tau : F \rightarrow G$,
-we obtain:
-\[
-  (\tau \circ \sigma)^m := \tau^m[\sigma]
-  \qquad
-  (m \in G^\que)
-\]
-We will call $\ISpec$ the resulting category
-of effect signatures and strategy specifications.
-
-%}}}
-
-\subsection{XXX CompCert stuff to put in the right spot}
-
-The behavior of a transition system
-$L : \mathcal{X} \twoheadrightarrow \mathcal{Y}$
-can be characterized as a strategy specification
-$\llbracket L \rrbracket : \mathcal{X} \rightarrow \mathcal{Y}$.
-To this end,
-we first interpret the behavior of individual states
-using the following fixpoint construction:
-\begin{align*}
-  \llbracket - \rrbracket :=
-  \mu F \cdot s \mapsto
-  &\bigsqcup_{s \rightarrow s'} F(s') \: \sqcup \:
-   \bigsqcup_{s \mathrel{T} r} \eta(r) \\ \sqcup \:
-  &\bigsqcup_{s \mathrel{X} q}
-    r \mathbin\leftarrow \underline{q} \mathbin;
-    \bigsqcup_{r \mathrel{Y^s} s'} F(s')
-\end{align*}
-Then the strategy specification associated with $L$ is:
-\[
-  \llbracket L \rrbracket(q) :=
-    \bigsqcup_{q \mathrel{I} s} \llbracket s \rrbracket
-    \,.
-\]
-
-Note that this definition makes a few simplifying assumptions.
-First,
-we use a purely angelic interpretation of nondeterminism.
-In the general case,
-the intended meaning of nondeterminism in CompCert transition systems
-is more subtle \cite[\S8.1]{thesis}.
-However,
-the CompCert languages we use are all deterministic,
-so this simplification is benign.
-
-Second,
-both ``stuck states'' and silent divergence
-are interpreted as $\bot$,
-whereas in CompCertO they are distinguished.
-However,
-since our use of CompCert languages
-ultimately occurs on the implementation side of refinement,
-this under-approximation does not compromise
-the soundness of our approach:
-in effect,
-both stuck states and silent divergence
-are undesirable behaviors that can 
-only refine the trivial specification $\bot$.
-
-
-
 %}}}
 
 \section{Refinement Conventions} \label{sec:refconv} %{{{
@@ -4181,6 +3862,332 @@ between the resulting transition systems.
   \\
   \caption{Notations}
 \end{table}
+%}}}
+
+\section*{ORPHAN MATERIAL} %{{{
+
+In \autoref{sec:refconv},
+we extend $\ISpec$ to a double category
+using our generalized notion of \emph{refinement convention}.
+This double category can embed
+the transition systems,
+simulation conventions, and
+simulation properties of CompCertO.
+
+\subsection*{Certified Abstraction Layers}\label{sec:mainideas:cal} %{{{
+
+To an extent,
+the formal tools required for the formulation of refinement conventions
+are already present in the strategy specification model
+of certified abstraction layers \cite[\S 3.7]{rbgs-cal}.
+%
+In this model,
+the layer correctness property
+\begin{equation} \label{eqn:layer}
+  L_1 \vdash_R M : L_2
+\end{equation}
+asserts that the strategy specification
+$M : E_1 \rightarrow E_2$
+faithfully implements the \emph{overlay} interface
+$L_2 : \varnothing \rightarrow E_2@S_2$
+in terms of the \emph{underlay} interface
+$L_1 : \varnothing \rightarrow E_1@S_1$.
+[XXX need to explain $@$ here or before].
+The relation $R \subseteq S_2 \times S_1$
+specifies the correspondence between
+the set of high-level states $S_2$
+used to describe the interface $L_2$
+and the set of low-level states $S_1$
+used to describe the interface $L_1$.
+
+To express property (\ref{eqn:layer})
+in terms of refinement,
+we can use a \emph{formal adjunction}
+in the refinement-enriched category $\ISpec$.
+For an arbitrary signature $E$,
+we can define the two strategies
+$R^* : E@S_2 \rightarrow E@S_1$ and
+$R_* : E@S_1 \rightarrow E@S_2$,
+which use dual nondeterminism to interactively translate
+between high- and low-level states.
+Layer correctness can then be stated as:
+\[
+  L_1 \vdash M : L_2 \: \Leftrightarrow \:
+  L_2 \sqsubseteq R_* \circ M@S_1 \circ L_1
+\]
+The adjunction property $R^* \dashv R_*$
+can then help us prove the composition principle:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \vdash_R M : L_2}
+    \hypo{L_2 \vdash_S N : L_3}
+    \infer2{L_1 \vdash_{R \circ S} N \circ M : L_3}
+  \end{prooftree}
+\]
+[XXX not quite true,
+we only need $R_*$ and $M@S$ to commute]
+
+As an example,
+\citet{rbgs-cal} describes the certified abstraction layer
+$L_\kw{rb} \vdash_R M_\kw{bq} : L_\kw{bq}$
+depicted in \autoref{fig:cal},
+which provides a high-level view
+of the code shown in \autoref{fig:code}.
+By relating this high-level view
+to the CompCertO semantics of our code,
+in \S\ref{sec:cal} we are able to transfer
+the correctness of $M_\kw{bq}$
+to the level of the assembly code emitted by CompCert
+when $\kw{rb.c}$ and $\kw{bq.c}$ are compiled.
+
+%}}}
+
+\hrule
+
+We have described in \S\ref{sec:mainideas:compcerto}
+the high-level structure
+of CompCertO's semantic model
+and compositional correctness theorem.
+In this section,
+we describe in more detail
+the transition systems involved
+and their interpretation 
+as strategy specifications.
+
+\subsection*{Assembly Linking}
+
+CompCertO models linking using an operator $\oplus$
+such that:
+\[
+  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
+  \le_{\kw{id} \twoheadrightarrow \kw{id}}
+  \kw{Asm}(p_1 + p_2)
+\]
+The linking operator $\oplus$ allows
+two transition systems to interact with each other
+in a mutually recursive fashion.
+Because of this,
+the operator only works when transition systems
+have identical types of the form $\mathcal{X} \twoheadrightarrow \mathcal{X}$.
+By contrast,
+we wish to use the proper categorical structure
+provided by composition in the category $\ISpec$.
+
+Fortunately,
+the generality of CompCertO's linking operator is superfluous
+in the context of our application domain.
+When certified abstraction layers are composed,
+it is sufficient for the overlay to make calls into the underlay.
+Moreover,
+we can use the following result
+to show that composition soundly approximates
+the linking of assembly programs.
+
+\begin{lemma}[Assembly linking]
+Given two \kw{Asm} programs $p_1$ and $p_2$,
+the following refinement holds:
+\[
+  \llbracket \kw{Asm}(p_1) \rrbracket \circ
+  \llbracket \kw{Asm}(p_2) \rrbracket \:\sqsubseteq\:
+  \llbracket \kw{Asm}(p_1 + p_2) \rrbracket
+  \,.
+\]
+\end{lemma}
+
+\subsection{Semantics} %{{{
+
+In order to subject a given system to mathematical analysis,
+we must establish a mathematical model of its operation.
+A~programming language semantics
+does this in a systematic way
+by assigning to each program $p \in P$
+in a given language $P$
+a description $\llbracket p \rrbracket \in D$
+of its behavior within a domain $D$:
+\[
+    \llbracket {-} \rrbracket : P \rightarrow D
+\]
+
+There are many approaches
+for constructing appropriate domains
+and interpretation functions.
+What distinguishes \emph{compositional} semantics
+is that the interpretation function $\llbracket - \rrbracket$
+can be defined alongside the syntactic structure of programs.
+For example,
+if two program phrases $p_1, p_2 \in P$
+can be combined into $p_1 + p_2 \in P$,
+the semantic domain will be equipped with an operation
+$\oplus : D \times D \rightarrow D$
+such that
+\[
+  \llbracket p_1 + p_2 \rrbracket =
+  \llbracket p_1 \rrbracket \oplus
+  \llbracket p_2 \rrbracket
+  \,.
+\]
+
+When \emph{types} are involved,
+the syntax and semantics
+can be given in \emph{categorical} form.
+The syntax is given as a category $\mathbf{P}$
+where objects are types and typing contexts,
+and where the morphisms $p : \Gamma \rightarrow A$
+are program components which
+are assigned type $A$ within a context $\Gamma$,
+or more generally
+which use resources in $\Gamma$ to provide an interface $A$.
+The interpretation function
+then becomes a functor
+$\llbracket - \rrbracket : \mathbf{P} \rightarrow \mathbf{D}$
+into a semantic category $\mathbf{D}$,
+such that a program $p : \Gamma \rightarrow A \in \mathbf{P}$
+is interpreted as
+a morphism
+$\llbracket p \rrbracket :
+ \llbracket \Gamma \rrbracket \rightarrow
+ \llbracket A \rrbracket
+ \in \mathbf{D}$.
+
+%}}}
+
+\subsection{Specifications and Refinement} \label{sec:specs} %{{{
+
+From the perspective of certified software engineering,
+semantics allows us to formulate specifications and
+correctness proofs
+in the context of a well-behaved mathematical domain.
+To make specifications and proofs compositional,
+we can impose additional structure.
+
+A desirable property of program behaviors
+can be expressed as a predicate $\pi \in \mathcal{P}(D)$
+over the semantic domain.
+Moreover,
+a set $\Pi \subseteq \mathcal{P}(D)$
+of properties of interest
+induces a \emph{refinement} ordering
+${\sqsubseteq} \subseteq D \times D$.
+A behavior $\sigma \in D$ is refined by $\tau \in D$
+when %the following holds:
+\[
+  \sigma \sqsubseteq \tau \: :\Leftrightarrow \:
+  \forall \pi \in \Pi \bdot
+  \pi(\sigma) \Rightarrow \pi(\tau)
+  \,.
+\]
+In fact, we can further interpret programs
+into the domain $\mathcal{P}(\Pi)$,
+associating to each one the set of properties
+which it satisfies,
+and using set inclusion as refinement.
+%
+Conversely,
+if the domain is equipped \emph{a priori}
+with a partial order $\sqsubseteq$,
+its elements can themselves be regarded as properties:
+\[
+  \Pi \: := \:
+    \{ \{ \tau \mid \sigma \sqsubseteq \tau \} \mid
+       \sigma \in D \}
+  \,.
+\]
+
+\paragraph{Stepwise Refinement}
+
+When $D$ is rich enough,
+specifications
+can be given as elements of the domain;
+the correctness of $p \in P$
+with respect to a specification $\sigma \in D$
+can then be expressed as
+$
+  \sigma \sqsubseteq \llbracket p \rrbracket
+$.
+Under this refinement-based approach,
+specifications and correctness proofs
+benefit from the compositionality of $\llbracket - \rrbracket$,
+and correctness proofs can proceed by stepwise refinement.
+For example,
+when $\sigma_1 \sqsubseteq \llbracket p_1 \rrbracket$
+and $\sigma_2 \sqsubseteq \llbracket p_2 \rrbracket$,
+we can deduce:
+\begin{equation} \label{eqn:speccomp}
+  \sigma_1 \oplus \sigma_2 \:\sqsubseteq\:
+  \llbracket p_1 \rrbracket \oplus
+  \llbracket p_2 \rrbracket \:\sqsubseteq\:
+  \llbracket p_1 + p_2 \rrbracket
+  \,,
+\end{equation}
+as long as $\oplus$ is monotonic
+with respect to refinement.
+
+\paragraph{String Diagrams}
+
+In a categorical setting,
+these structure generalize to
+order-enriched categories.
+Every homset $\mathbf{D}(A, B)$
+is equipped with a refinement ordering,
+and the composition operation
+\[
+  {\circ}_{A,B,C} :
+    \mathbf{D}(B, C) \times \mathbf{D}(A, B) \rightarrow
+    \mathbf{D}(A, C)
+\]
+is a monotonic function.
+Order-enriched categories can be seen as
+\emph{thin} 2-categories,
+where for $f, g : A \rightarrow B \in \mathbf{D}$
+there is a 2-cell
+$\alpha : f \Rightarrow g : A \rightarrow B$
+if and only if $f \sqsubseteq g$.
+Hence,
+refinement proofs admit a
+\emph{string diagram} calculus.
+
+In a string diagram,
+the objects of $\mathbf{D}$ are represented by regions of the plane.
+A morphism $f : A \rightarrow B \in \mathbf{D}$
+is represented by a vertical line
+separating an $A$ region from a $B$ region,
+with horizontal juxtaposition denoting composition.
+A refinement property
+$h \circ g \circ f \sqsubseteq v \circ u$
+is represented as a point
+connecting the lines $f$, $g$, $h$ above the point
+to the lines $u$, $v$ below:
+\[
+  \begin{tile}{}
+    \drawst (LT) node[above] {$f$} -- (TLI) -- (C);
+    \drawst (T) node[above] {$g$} -- (TI) -- (C);
+    \drawst (RT) node[above] {$h$} -- (TRI) -- (C);
+    \drawst (C) -- (BLI) -- (LB) node[below] {$u$};
+    \drawst (C) -- (BRI) -- (RB) node[below] {$v$};
+    \node at (C) {$\bullet$};
+  \end{tile}
+\]
+For example,
+property (\ref{eqn:speccomp}) above
+combines the properties
+(a) $\sigma_1 \subseteq \llbracket p_1 \rrbracket$ and
+(b) $\sigma_2 \subseteq \llbracket p_2 \rrbracket$ with
+the compositionality property
+(c) $\llbracket p_1 \rrbracket \circ \llbracket p_2 \rrbracket
+     \sqsubseteq \llbracket p_1 + p_2 \rrbracket$
+in the following way:
+\[
+  \text{[figure here]}
+\]
+
+String diagrams
+provide a visual calculus for refinement proofs where
+the associativity and monotonicity of composition
+are made implicit.
+
+%}}}
+
+
 %}}}
 
 \section{Implementing CAL}
