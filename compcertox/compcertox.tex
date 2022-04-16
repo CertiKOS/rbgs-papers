@@ -3234,7 +3234,7 @@ and show how to overcome the first limitation
 by generalizing the model
 in \ref{sec:stcal:state}.
 Then we study the composition rules
-that amount to the rules
+that amount to those
 in CompCert-based layer framework
 in \ref{sec:stcal:tcomp}
 and \ref{sec:stcal:vcomp}.
@@ -3432,32 +3432,31 @@ The correctness property can again be formulated as:
     \Gamma_\kw{rb} \vdash^\kw{st}_{\tilde{\Theta}}
     \tilde{\Sigma}_\kw{bq} : \Gamma_\kw{bq}
   \]
-  Both the examples of array and counters
-  and the example of bounded queue
-  are special cases
-  where
-  the former introduces new states and
-  builds on top of empty underlay
-  while the latter does not introduce new states and
-  relies on an underlay.
-  They correspond to the \emph{getter-setter} pattern
-  and \emph{absfun} pattern respectively,
-  and are extensively used in the development
+  The examples of array and counters
+  represent the \emph{getter-setter} pattern
+  where the implementation
+  introduces new state and does not rely on any underlay.
+  The example of bounded queue
+  represents the \emph{absfun} pattern
+  which does not introduce new states
+  but uses operations from an underlay.
+  Both patterns are extensively used in the development
   of CertiKOS.
 \end{example}
 
 Note that
-it is our design choice
-that the strategy implementation
-do not pass the local state
+the local state of the strategy
+only appears in the incoming events,
+and it is our design choice
+the local state is not passed
 to its underlay.
-On one hand, strategy layers are less expressive
-than CompCert layers
+On one hand, this leads to less expressive power
+compared with CompCert layers
 because there are cases
 where the local states are expected be altered
 by external calls.
-On the other hand, by forcefully separate
-the local states belong to different module,
+On the other hand, by forcefully separating
+the local states belong to different modules,
 the model is easy to reason about
 and prevents potential unwanted leakage directly.
 
@@ -3465,7 +3464,9 @@ and prevents potential unwanted leakage directly.
 
 \subsection{Tensor Product} %{{{
 \label{sec:stcal:tcomp}
-We first define
+In order to compose two layers
+on the same level,
+we first define
 the tensor product
 on layer interfaces
 and implementation strategies.
@@ -3475,7 +3476,7 @@ and implementation strategies.
   and $\Gamma_2 : 1 \rightarrow E_2@D_2$
   is the strategy
   $\Gamma_1 \otimes \Gamma_2:
-  1 \rightarrow E_1\oplus E_2 @ D_1 \times D_2$
+  1 \rightarrow (E_1\oplus E_2) @ (D_1 \times D_2)$
   defined as
   \begin{align*}
     & (\Gamma_1 \otimes \Gamma_2)(\iota_1(q)@(d_1,d_2)) =
@@ -3484,9 +3485,7 @@ and implementation strategies.
       r@d'_2 \leftarrow \Gamma_2(q@d_2); \kw{ret}(\iota_2(r)@(d_1, d'_2))
   \end{align*}
   with $D_1 \times D_2$ as the abstract state.
-\end{definition}
 
-\begin{definition}
   The tensor product of layer implementations
   $\Sigma_1: E_1 \rightarrow F_1@U_1$
   and $\Sigma_2: E_2 \rightarrow F_2@U_2$
@@ -3501,12 +3500,12 @@ and implementation strategies.
       r@d'_2 \leftarrow \hat{\Sigma}_2(q@d_2); \kw{ret}(\iota_2(r)@(d_1, d'_2))
   \end{align*}
   with $U_1 \times U_2$ as the local state.
-  And the strategy $\Sigma$ is lifted to $\hat{\Sigma}$
+  The strategy $\Sigma$ is lifted to $\hat{\Sigma}$
   by composing it with one of the adapters
   \begin{align*}
-    & \epsilon_1 : E_1 \oplus E_2 \rightarrow E_1\\
+    & \epsilon_1 : E_1 \oplus E_2 \rightarrow E_1
     & \epsilon_1(q) := \iota_1(r) \leftarrow \iota_1(q); \kw{ret}(r)\\
-    & \epsilon_2 : E_1 \oplus E_2 \rightarrow E_2\\
+    & \epsilon_2 : E_1 \oplus E_2 \rightarrow E_2
     & \epsilon_2(q) := \iota_2(r) \leftarrow \iota_2(q); \kw{ret}(r)
   \end{align*}
 \end{definition}
@@ -3564,9 +3563,11 @@ is straightforward.
 Similar to the CompCert layers,
 strategy layers
 can be composed together vertically
-and
-the composition relies on
-the commutation property in the following form.
+The composition relies on
+the commutation property
+where the strategy $\Sigma$
+plays the role of a client whose behavior
+is compatible with the abstraction relation $\Theta$.
 \begin{lemma}[Commutation Property]
   Given a strategy
   $\Sigma: E^\flat \rightarrow E^\sharp$
@@ -3647,9 +3648,9 @@ First, we need refinement conventions
 $\lambda : E \leftrightarrows \mathcal{C}$
 to relate each possible query in $E$
 with a function identifier
-in CompCert environment,
+in the CompCert environment,
 and relate the arguments
-and return value correspondingly.
+and the return value correspondingly.
 However, the language interfaces in CompCert
 always come with a memory state
 while effect signatures
@@ -3667,8 +3668,10 @@ we combine $\lambda$ with the $\upsilon$ operator
   \lambda \otimes \upsilon_\kw{mem} : E \leftrightarrows \mathcal{C}\times\kw{mem}
 \]
 so that
-the memory with states of other modules
-are ``bounced back'' without being modified.
+when a Clight function call with memory state
+is translated to an event
+where the state is unwanted,
+the memory is ``bounced back'' without being modified.
 
 Second,
 we introduce the \emph{memory relation}
@@ -3678,8 +3681,7 @@ with concrete values in the CompCert memory.
 
 \begin{definition}
   A \emph{memory relation} is a relation
-  between an abstract state $U$
-  and the CompCert memory
+  between an state $U$ and the CompCert memory
   \[
     \mu \subseteq U \times \kw{mem}
   \]
@@ -3737,7 +3739,7 @@ as in the following definition.
   $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
   and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$,
   and a memory relation $\mu \subseteq U \times \kw{mem}$
-  satisfying the refinement
+  such that the refinement holds
   \[
     \Sigma \le^\mu_{\lambda^\sharp \rightarrow \lambda^\flat} M \Leftrightarrow
     \Sigma \sqsubseteq_{(\lambda^\flat \otimes \upsilon_\kw{mem})
@@ -3806,9 +3808,9 @@ on the incoming events.
                 f \leadsto \kw{deq}\}
   \end{align*}
   where $f \leadsto \kw{fun}$ means
-  the function pointer $f$ points to
   the function $\kw{fun}$
-  according to the CompCert environment.
+  is stored in the location
+  that the function pointer $f$ points to.
 
   The memory relation
   $\mu \subseteq D_\kw{rb} \times \kw{mem}$
@@ -3862,7 +3864,7 @@ on the incoming events.
 \label{sec:stcal:correspondence}
 
 With the correctness criteria, strategy layers
-can be transformed to CompCertO layers with
+can be transformed to CompCert layers with
 certification carried over
 to the concrete code as demonstrated
 by the following lemma
@@ -3875,7 +3877,7 @@ by the following lemma
   with refinement conventions
   $\lambda^\sharp: E^\sharp \leftrightarrows \mathcal{C}$
   and $\lambda^\flat: E^\flat \leftrightarrows \mathcal{C}$,
-  we define the following CompCertO layer specifications:
+  we define the following CompCert layer specifications:
   \begin{align*}
     L^\sharp: 1 \rightarrow \mathcal{C}@D^\sharp
     & := (\lambda^\sharp @D^\sharp)^* \circ \Gamma^\sharp\\
@@ -3887,7 +3889,7 @@ by the following lemma
   $\Theta \subseteq D^\sharp \times (D^\flat \times U)$
   and memory abstraction relation
   $\mu \subseteq U \times \kw{mem}$,
-  we define the following abstraction relation for CompCertO layers
+  we define the following abstraction relation for CompCert layers
   \begin{align*}
     R := \Theta \circ (=_{D^\sharp} \times \mu)
     = \{ (d_2, (d_1, m))
@@ -3909,7 +3911,7 @@ by the following lemma
 The above lemma shows
 how the correctness criteria
 connects the strategy layers
-with the CompCertO layers.
+with the CompCert layers.
 Moreover, it reveals the fact
 that the process of building certified layers
 at the CompCert program level
