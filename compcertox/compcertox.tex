@@ -702,7 +702,7 @@ in the Coq proof assistant.
 %}}}
 \newpage
 
-\section{Main Ideas} \label{sec:mainideas} %{{{
+\section{Background and Approach} \label{sec:mainideas} %{{{
 
 This section gives a high-level overview
 of our approach and of the relevant background.
@@ -785,7 +785,16 @@ V deq() { return get(inc1()); }
 
 \subsection{Semantics in CompCert} %{{{
 
-The certified compiler CompCert
+The certified C compiler CompCert \cite{compcert} is
+written and verified in the Coq proof assistant.
+CompCert comes with a semantics preservation theorem
+which asserts that
+the behavior of the compiled program
+refines that of the source program.
+This ensures that CompCert does not introduce any bugs
+during compilation.
+
+CompCert
 models the execution of C and assembly programs
 using labeled transition systems.
 For our purposes,
@@ -954,9 +963,11 @@ a list of values $\vec{q} \in V^*$,
 representing the current state of the queue.
 The behavior of $\kw{enq}$ can then be characterized as:
 \[
-  L_\kw{bq}.\kw{enq}(\vec{v})@(m, \vec{q})
+  L_\kw{bq}.\kw{enq}(v)@(m, \vec{q})
   \leadsto
   \kw{undef}@(m, \vec{q}v)
+  \qquad
+  \text{if }\: |\vec{q}| < N
 \]
 Note that $\kw{enq}$ return the undefined value $\kw{undef}$
 and that the concrete memory $m$ is unchanged.
@@ -971,9 +982,10 @@ we must introduce an \emph{abstraction relation},
 similar in spirit to a simulation relation.
 Layer correctness is then formulated as a property
 $L^\flat \vdash_R M : L^\sharp$,
-which asserts that the code $M$
-running on top of the underlay interface $L^\flat$
-refines the overlay interface $L^\sharp$,
+which asserts that
+the overlay interface $L^\sharp$ is refined by
+the code $M$,
+running on top of the underlay $L^\flat$,
 up to the abstraction relation $R$.
 Given two related activations
 \[
@@ -994,64 +1006,41 @@ Further details are presented in \S\ref{sec:compcert-cal}.
 
 \subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
 
-The certified C compiler CompCert \cite{compcert} is
-written and verified in the Coq proof assistant.
-CompCert comes with a semantics preservation theorem
-which asserts that
-the behavior of the compiled program
-refines that of the source program.
-This ensures that CompCert does not introduce any bugs
-during compilation.
-Moreover,
-when code is verified at the source level,
-the correctness proof of the code
-can be combined with what of the compiler
-to obtain formal guarantees
-about the behavior of the compiled assembly program.
-The CertiKOS operating system kernel
-is one large project
-which has made use of this capability \cite{popl15}.
+We have seen that CompCertX and certified abstraction layers
+adapt the whole-program semantics of CompCert
+to enable compositional verification techniques.
+However,
+while these changes allow us to plug in the underlay behavior
+as a parameter to CompCert's semantics,
+this parameter must be fixed before the semantics is evaluated.
+Ultimately,
+the semantic model used in CompCert and CompCertX
+still describes a closed system
+whose behavior is mostly self-contained
+between the initial invocation and its termination.
 
-\paragraph{Separate Compilation} %{{{
+CompCertO is a recent extension to CompCert
+which modifies the semantic model
+to first describe the behavior of individual components \emph{in isolation}.
+Instead of being provided with the behavior of external functions as a parameter,
+external calls are recorded as part of
+a component's externally observable behavior.
+We can then define composition operators
+which compute the semantics of a collection of components
+by letting them interact with each other.
 
-For applications of this kind,
-the Clight language---%
-a simplified dialect of C---%
-is often used as the source language of CompCert.
-The correctness theorem is then stated as
-a \emph{separate compilation} \cite{sepcompcert} property:
-\begin{equation} \label{eqn:scc}
-  \begin{prooftree}
-    \hypo{\forall i \cdot \kw{CompCert}(M_i) = M_i'}
-    \infer1{\kw{Clight}[M_1 + \cdots + M_n]
-      \le \kw{Asm}[M_1' + \cdots + M_n']}
-  \end{prooftree}
-\end{equation}
-Here,
-the translation units $M_1, \ldots, M_n$
-are compiled to the assembly programs $M_1', \ldots, M_n'$.
-The semantics of a source program $p$
-is given as a labeled transition system $\kw{Clight}[p]$,
-whereas the semantics of a target program $p'$
-is given as $\kw{Asm}[p']$.
-The linking operator $+$
-combines translation units into a whole program,
-and the relation $\le$ denotes a simulation property
-between the resulting transition systems.
-
-%}}}
+%and then model their interaction with each other.
+%In \S\ref{sec:compcert-cal},
+%we use this more flexible model
+%to develop a reformulation of certified abstraction layers.
+%In the remainder of this section,
+%we describe the semantic model used in CompCertO
+%and some of the challenges associated with it.
 
 \paragraph{Compositional Semantics} %{{{
 
-Property (\ref{eqn:scc})
-describes a situation where
-multiple source files are compiled independently.
-However,
-the semantics itself
-only describes the behavior of the linked whole program.
-CompCertO modifies the semantic model used in CompCert
-to describe the behavior of individual components
-and model their interaction with the environment.
+While CompCert assigns a close semantics to whole programs,
+CompCertO assigns an \emph{open} semantics to individual translation units.
 The compiler correctness property
 is formulated in terms of this compositional semantics.
 A first approximation of this property is:
@@ -1069,11 +1058,12 @@ which satisfies
   \kw{Asm}(M_1 + M_2)
   \,.
 \]
-Together,
-these properties make it possible to formulate
-a separate compilation theorem
-similar to (\ref{eqn:scc}).
-However,
+%Together,
+%these properties make it possible to formulate
+%a separate compilation theorem
+%similar to (\ref{eqn:scc}).
+%However,
+Compared with other approaches to compositional verification,
 \citet{compcerto} argues that
 the compositional semantics of CompCertO
 provides a more precise account 
@@ -1083,7 +1073,7 @@ for modeling heterogeneous systems.
 
 %}}}
 
-\paragraph{Key Challenge} %{{{
+\subsubsection{Key Challenge} %{{{
 
 In the original closed semantics of CompCert,
 the behavior of the source and target programs
@@ -1104,11 +1094,11 @@ in the source program
 (where they correspond to C function calls)
 and in the target program
 (where they correspond to assembly language jumps
-in a particular register state).
+carrying a particular register state).
 
 %}}}
 
-\paragraph{Language Interfaces} %{{{
+\subsubsection{Language Interfaces} %{{{
 
 To deal with the different forms
 interactions take
@@ -1151,17 +1141,23 @@ all interactions in CompCertO
 are annotated with a global memory state of type $\kw{mem}$,
 a situation which we can describe using the construction:
 \[
-  E@\kw{mem} := \{ m@\mathit{ms} : N \times \kw{mem} \mid
-                   (m : N) \in E, \mathit{ms} \in \kw{mem} \}
+  E@\kw{mem} := \{ q@m : E^\ans \times \kw{mem} \mid
+                   q \in E^\que, m \in \kw{mem} \}
 \]
 
-Transition systems
-are then assigned a type
+%}}}
+
+%}}}
+
+\subsection{Open Transition Systems} %{{{
+
+The transition systems of CompCertO
+are assigned a type
 $E \twoheadrightarrow F$,
 where $E$ and $F$ are
 language interfaces (usually the same one).
 The types of Clight and assembly semantics
-can be given as:
+are:
 \begin{align*}
   \kw{Clight}(-) :
     \mathcal{C}@\kw{mem}
@@ -1173,22 +1169,213 @@ can be given as:
    &\twoheadrightarrow
     \mathcal{A}@\kw{mem}
 \end{align*}
-A transition system of type $E \twoheadrightarrow F$
-accepts incoming calls in $F$
-and may perform outgoing calls in $E$.
-In other words,
-it describes a strategy of type $E \rightarrow F$
-(see \S\ref{sec:compcerto} for details).
+Transition systems of type $E \twoheadrightarrow F$
+accept incoming calls in $F$
+and perform outgoing calls in $E$.
+%They are defined as follows.
+%In other words,
+%it describes a strategy of type $E \rightarrow F$
+%(see \S\ref{sec:compcerto} for details).
+
+\begin{definition}[Transition System]
+Given an \emph{incoming} language interface $\mathcal{Y}$
+and an \emph{outgoing} language interface $\mathcal{X}$,
+a \emph{transition system} of type
+$\mathcal{X} \twoheadrightarrow \mathcal{Y}$
+is a tuple \[ L = \langle S, \rightarrow, I, X, Y, T \rangle \,. \]
+The relation
+${\rightarrow} \subseteq S \times S$ is
+a \emph{transition relation} on the set of states $S$.
+The relation
+$I \subseteq \mathcal{Y}^\que \times S$ 
+assigns to each possible operation of $\mathcal{Y}$
+a set of \emph{initial states}.
+The relation
+$T \subseteq S \times \mathcal{Y}^\ans$
+designates \emph{final states}
+which terminate the computation with a corresponding outcome.
+External calls are specified by
+$X \subseteq S \times \mathcal{X}^\que$,
+which designates \emph{external states} together with
+an operation of $E$, and
+$Y \subseteq S \times \mathcal{X}^\ans \times S$,
+which is used to select a \emph{resumption state}
+based on the operation's outcome.
+\end{definition}
+
+\noindent
+As an example,
+the transition system
+\[
+ \kw{Clight}(\kw{bq.c}) :
+ \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+\]
+admits transition sequences of the form:
+{ \small
+\begin{align*}
+  \kw{enq}(v)@m_0 \mathrel{I}
+  s_0 &\rightarrow^*
+  s_1 \mathrel{X}
+  \kw{inc1}(\epsilon)@m_1 \leadsto
+  i@m_2 \mathrel{Y^{s_1}}
+  s_2 \\&\rightarrow^*
+  s_3 \mathrel{X}
+  \kw{set}(i, v)@m_3 \leadsto
+  \kw{undef}@m_4 \mathrel{Y^{s_3}}
+  s_4 \\&\rightarrow^*
+  s_5 \mathrel{T}
+  \kw{undef}@m_5
+  \,.
+\end{align*}}
+
+\subsubsection{Composition} %{{{
+
+To model component linking,
+CompCertO introduces an operator $\oplus$
+which lets transition systems interact
+by having them handle each other's external calls.
+
+Because this operator permits mutual recursion,
+it is limited to transition systems which all perform
+both their incoming and outgoing calls
+according to the same language interface:
+\[
+  {\oplus_E} :
+    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \times
+    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \rightarrow
+    (\mathcal{X} \twoheadrightarrow \mathcal{X})
+\]
+When mutual recursion is not needed,
+we can instead use the following operator,
+which is simpler in its construction
+and handle more general types.
+
+%which reflects at the level of transition systems
+%the categorical structure of $\ISpec$.
+
+\begin{definition}[Composition of transition systems] %{{{
+Suppose we have the transition systems:
+\begin{align*}
+  L_1 &= \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
+    : \mathcal{Y} \twoheadrightarrow \mathcal{Z}
+  \\
+  L_2 &= \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
+    : \mathcal{X} \twoheadrightarrow \mathcal{Y}
+\end{align*}
+Their composition is defined as the transition system
+\[
+  L_1 \circ L_2 :=
+  \langle S, {\rightarrow}, I, X, Y, T \rangle
+  : \mathcal{X} \twoheadrightarrow \mathcal{Z}
+\]
+with the following components.
+States are of the form:
+\[
+    S := S_1 + (S_2 \times S_1)
+\]
+Initially, an incoming call in $\mathcal{Z}$ activates $L_1$:
+\[
+  \begin{prooftree}
+    \hypo{q_\mathcal{Z} \mathrel{I_1} s_1}
+    \infer1{q_\mathcal{Z} \mathrel{I} \iota_1(s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \rightarrow_1 s_1'}
+    \infer1{\iota_1(s_1) \rightarrow \iota_1(s_1')}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{T_1} r_\mathcal{Z}}
+    \infer1{\iota_1(s_1) \mathrel{T} r_\mathcal{Z}}
+  \end{prooftree}
+\]
+When $L_1$ performs an external call in $\mathcal{Y}$,
+the question is used to activate $L_2$:
+\[
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{X_1} q_\mathcal{Y}}
+    \hypo{q_\mathcal{Y} \mathrel{I_2} s_2}
+    \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
+  \end{prooftree}
+\]
+Execution proceeds according to $L_2$,
+\[
+  \begin{prooftree}
+    \hypo{s_2 \rightarrow_2 s_2'}
+    \infer1{\iota_2(s_2, s_1) \rightarrow \iota_2(s_2', s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{X_2} q_\mathcal{X}}
+    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_\mathcal{X}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{r_\mathcal{X} \mathrel{Y_2^{s_2}} s_2'}
+    \infer1{r_\mathcal{X} \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
+  \end{prooftree}
+\]
+until a final state of $L_2$ is reached,
+at which point $L_1$ is resumed:
+\[
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{T_2} r_\mathcal{Y}}
+    \hypo{r_\mathcal{Y} \mathrel{Y_1^{s_1}} s_1'}
+    \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
+  \end{prooftree}
+\]
+\end{definition}
+%}}}
+
+Importantly,
+the composition operator $\circ$ defined above
+is still an \emph{under-approximation}
+of the semantic linking operator $\oplus$ of CompCertO.
+
+\begin{theorem}
+For $L_1, L_2 : \mathcal{X} \twoheadrightarrow \mathcal{X}$,
+\[
+  L_1 \circ L_2
+  \le
+  L_1 \oplus L_2
+\]
+\end{theorem}
 
 %}}}
 
-\paragraph{Simulation Conventions} %{{{
+%}}}
 
-It remains to specify the correspondence
-between source- and target-level interactions.
-To this end,
-CompCertO introduces a notion of \emph{simulation convention}
-between language interfaces.
+\subsection{Open simulations} %{{{
+
+Compilers operate with respect to specific calling conventions.
+A calling convention expresses,
+for a particular source language and hardware architecture,
+how high-level interactions between components in the source language
+are realized at the assembly level.
+Hence, calling conventions are \emph{relational} in nature.
+When different compilers use the same calling conventions,
+the object files the produce will be interoperable,
+because they will use compatible translations
+of source-level abstractions.
+
+In the closed semantics of CompCert,
+interactions between components are hidden.
+The calling convention is involved in the formulation
+of simulation relations,
+but it does not appear in the statement
+of the compiler's correctness theorem.
+By contrast,
+because CompCertO reveals these previously hidden interactions
+to the outside world,
+its correctness statement
+must be formulated with respect to a precise calling convention.
+In order to formalizes this correspondence between
+the source- and target-level language interfaces,
+CompCertO makes use of the following notion.
+
+\subsubsection{Simulations Conventions} %{{{
+
 A simulation convention $\mathbb{R} : E \Leftrightarrow F$
 relates
 the high-level questions in $E^\que$ and
@@ -1201,6 +1388,27 @@ the simulation convention
 $\mathbb{C} : \mathcal{C} \Leftrightarrow \mathcal{A}$
 is used to formalize the compiler's
 overall calling convention.
+
+\begin{definition}
+A \emph{simulation convention} between
+the language interfaces
+$\mathcal{X}_1 = \langle \mathcal{X}_1^\que, \mathcal{X}_1^\ans \rangle $ and
+$\mathcal{X}_2 = \langle \mathcal{X}_2^\que, \mathcal{X}_2^\ans \rangle $
+is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$,
+where $W$ is a set of \emph{worlds},
+and where
+$\mathbb{R}^\que \subseteq W \times \mathcal{X}_1^\que \times \mathcal{X}_2^\que$ are
+$\mathbb{R}^\ans \subseteq W \times \mathcal{X}_1^\ans \times \mathcal{X}_2^\ans$
+relate the moves of $\mathcal{X}_1$ and $\mathcal{X}_2$.
+We will write $\mathbb{R} : \mathcal{X}_1 \Leftrightarrow \mathcal{X}_2$.
+\end{definition}
+
+Language interfaces and simulation conventions
+form a category \cite{compcerto}.
+
+%}}}
+
+\subsubsection{Simulations} %{{{
 
 Simulations then operate with respect to
 two different simulation conventions:
@@ -1217,6 +1425,29 @@ up to the outgoing convention
 $\mathbb{R}_E : E_1 \Leftrightarrow E_2$
 and the incoming convention
 $\mathbb{R}_F : F_1 \Leftrightarrow F_2$.
+Specifically,
+\begin{itemize}
+\item
+when the environment invokes the transition systems,
+it chooses world $w \in W_\mathbb{S}$
+such that its questions are related by $\mathbb{S}^\que$ at the world $w$.
+The simulation must then prove that
+the ultimate outcomes of $L_1$ and $L_2$
+are related by $\mathbb{S}^\ans$ at that same world.
+Conversely,
+\item
+when $L_1$ and $L_2$ perform external calls in $E_1$ and $E_2$,
+the simulation must exhibit a world $w' \in W_\mathbb{R}$
+such that the calls are related by $\mathbb{R}^\que$ at $w'$.
+It is then guaranteed that their outcome
+will be related by $\mathbb{R}^\ans$ at $w'$.
+\end{itemize}
+We refer the reader to \citet{compcerto}
+for a formal definition.
+
+%}}}
+
+\subsubsection{Compositionality} %{{{
 
 \begin{figure} % fig:simcomp {{{
   $\begin{array}{c}
@@ -1296,7 +1527,40 @@ simulation properties of CompCertO.
 
 %}}}
 
+\subsubsection{Compiler Correctness} %{{{
+
+Based on these notions,
+the correctness theorem of CompCertO
+can be described as follows.
+
+\begin{theorem}[Correctness of CompCertO]
+When a Clight program $p$
+is compiled by CompCertO
+to the program $p'$,
+\[
+  \kw{Clight}(p)
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+  \kw{Asm}(p')
+  \,.
+\]
+\end{theorem}
+
 %}}}
+
+%}}}
+
+\subsection{Game Semantics}
+
+XXX elaborate:
+CompCertO is great but it doesn't have a trace semantics.
+Compositional reasoning with transition systems is kind of a PITA.
+However, there is an approach which would work well:
+game semantics.
+Hence in the next section we figure it out.
+
+%}}}
+
+\section*{ORPHAN MATERIAL} %{{{
 
 \begin{figure*} % fig:cal {{{
   \begin{minipage}{.9\textwidth}
@@ -1365,7 +1629,7 @@ simulation properties of CompCertO.
 \end{figure*}
 %}}}
 
-\subsection{Certified Abstraction Layers}\label{sec:mainideas:cal} %{{{
+\subsection*{Certified Abstraction Layers}\label{sec:mainideas:cal} %{{{
 
 To an extent,
 the formal tools required for the formulation of refinement conventions
@@ -1432,6 +1696,58 @@ to the level of the assembly code emitted by CompCert
 when $\kw{rb.c}$ and $\kw{bq.c}$ are compiled.
 
 %}}}
+
+\hrule
+
+We have described in \S\ref{sec:mainideas:compcerto}
+the high-level structure
+of CompCertO's semantic model
+and compositional correctness theorem.
+In this section,
+we describe in more detail
+the transition systems involved
+and their interpretation 
+as strategy specifications.
+
+\subsection*{Assembly Linking}
+
+CompCertO models linking using an operator $\oplus$
+such that:
+\[
+  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
+  \le_{\kw{id} \twoheadrightarrow \kw{id}}
+  \kw{Asm}(p_1 + p_2)
+\]
+The linking operator $\oplus$ allows
+two transition systems to interact with each other
+in a mutually recursive fashion.
+Because of this,
+the operator only works when transition systems
+have identical types of the form $\mathcal{X} \twoheadrightarrow \mathcal{X}$.
+By contrast,
+we wish to use the proper categorical structure
+provided by composition in the category $\ISpec$.
+
+Fortunately,
+the generality of CompCertO's linking operator is superfluous
+in the context of our application domain.
+When certified abstraction layers are composed,
+it is sufficient for the overlay to make calls into the underlay.
+Moreover,
+we can use the following result
+to show that composition soundly approximates
+the linking of assembly programs.
+
+\begin{lemma}[Assembly linking]
+Given two \kw{Asm} programs $p_1$ and $p_2$,
+the following refinement holds:
+\[
+  \llbracket \kw{Asm}(p_1) \rrbracket \circ
+  \llbracket \kw{Asm}(p_2) \rrbracket \:\sqsubseteq\:
+  \llbracket \kw{Asm}(p_1 + p_2) \rrbracket
+  \,.
+\]
+\end{lemma}
 
 %}}}
 
@@ -2027,75 +2343,7 @@ of effect signatures and strategy specifications.
 
 %}}}
 
-%}}}
-
-\section{Semantics in CompCertO} \label{sec:compcerto} %{{{
-
-We have described in \S\ref{sec:mainideas:compcerto}
-the high-level structure
-of CompCertO's semantic model
-and compositional correctness theorem.
-In this section,
-we describe in more detail
-the transition systems involved
-and their interpretation 
-as strategy specifications.
-
-\subsection{Transition Systems} %{{{
-
-The language semantics of CompCert are described
-as transition systems of the following kind.
-
-\begin{definition}[Transition System]
-Given an \emph{incoming} language interface $\mathcal{Y}$
-and an \emph{outgoing} language interface $\mathcal{X}$,
-a \emph{transition system} of type
-$\mathcal{X} \twoheadrightarrow \mathcal{Y}$
-is a tuple \[ L = \langle S, \rightarrow, I, X, Y, T \rangle \,. \]
-The relation
-${\rightarrow} \subseteq S \times S$ is
-a \emph{transition relation} on the set of states $S$.
-The relation
-$I \subseteq \mathcal{Y}^\que \times S$ 
-assigns to each possible operation of $\mathcal{Y}$
-a set of \emph{initial states}.
-The relation
-$T \subseteq S \times \mathcal{Y}^\ans$
-designates \emph{final states}
-which terminate the computation with a corresponding outcome.
-External calls are specified by
-$X \subseteq S \times \mathcal{X}^\que$,
-which designates \emph{external states} together with
-an operation of $E$, and
-$Y \subseteq S \times \mathcal{X}^\ans \times S$,
-which is used to select a \emph{resumption state}
-based on the operation's outcome.
-\end{definition}
-
-\noindent
-As an example,
-the transition system
-\[
- \kw{Clight}(\kw{bq.c}) :
- \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
-\]
-admits transition sequences of the form:
-{ \small
-\begin{align*}
-  \kw{enq}(v)@m_0 \mathrel{I}
-  s_0 &\rightarrow^*
-  s_1 \mathrel{X}
-  \kw{inc1}(\epsilon)@m_1 \leadsto
-  i@m_2 \mathrel{Y^{s_1}}
-  s_2 \\&\rightarrow^*
-  s_3 \mathrel{X}
-  \kw{set}(i, v)@m_3 \leadsto
-  \kw{undef}@m_4 \mathrel{Y^{s_3}}
-  s_4 \\&\rightarrow^*
-  s_5 \mathrel{T}
-  \kw{undef}@m_5
-\end{align*}}
-for certain values of $(m_j)_{0 \le j \le 5}$.
+\subsection{XXX CompCert stuff to put in the right spot}
 
 The behavior of a transition system
 $L : \mathcal{X} \twoheadrightarrow \mathcal{Y}$
@@ -2144,256 +2392,7 @@ both stuck states and silent divergence
 are undesirable behaviors that can 
 only refine the trivial specification $\bot$.
 
-%}}}
 
-\subsection{Composition} %{{{
-
-To model component linking,
-CompCertO introduces an operator $\oplus$
-which lets transition systems interact
-by letting them satisfy each other's external calls.
-
-Because this operator permits mutual recursion,
-it is limited to transition systems which all perform
-both their incoming and outgoing calls
-according to the same language interface:
-\[
-  {\oplus_E} :
-    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \times
-    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \rightarrow
-    (\mathcal{X} \twoheadrightarrow \mathcal{X})
-\]
-When mutual recursion is not needed,
-we can instead use the following operator,
-which reflects at the level of transition systems
-the categorical structure of $\ISpec$.
-
-\begin{definition}[Composition of transition systems] %{{{
-Suppose we have the transition systems:
-\begin{align*}
-  L_1 &= \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
-    : \mathcal{Y} \twoheadrightarrow \mathcal{Z}
-  \\
-  L_2 &= \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
-    : \mathcal{X} \twoheadrightarrow \mathcal{Y}
-\end{align*}
-The composite transition system is defined as
-\[
-  L_1 \circ L_2 :=
-  \langle S, {\rightarrow}, I, X, Y, T \rangle
-\]
-with the following components.
-States are of the form:
-\[
-    S := S_1 + (S_2 \times S_1)
-\]
-Initially, the environment question activates $L_1$:
-\[
-  \begin{prooftree}
-    \hypo{q_\mathcal{Z} \mathrel{I_1} s_1}
-    \infer1{q_\mathcal{Z} \mathrel{I} \iota_1(s_1)}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{s_1 \rightarrow_1 s_1'}
-    \infer1{\iota_1(s_1) \rightarrow \iota_1(s_1')}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{s_1 \mathrel{T_1} r_\mathcal{Z}}
-    \infer1{\iota_1(s_1) \mathrel{T} r_\mathcal{Z}}
-  \end{prooftree}
-\]
-When an external call is encountered,
-the question is used to activate $L_2$:
-\[
-  \begin{prooftree}
-    \hypo{s_1 \mathrel{X_1} q_\mathcal{Y}}
-    \hypo{q_\mathcal{Y} \mathrel{I_2} s_2}
-    \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
-  \end{prooftree}
-\]
-Execution proceeds according to $L_2$,
-\[
-  \begin{prooftree}
-    \hypo{s_2 \rightarrow_2 s_2'}
-    \infer1{\iota_2(s_2, s_1) \rightarrow \iota_2(s_2', s_1)}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{s_2 \mathrel{X_2} q_\mathcal{X}}
-    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_\mathcal{X}}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{r_\mathcal{X} \mathrel{Y_2^{s_2}} s_2'}
-    \infer1{r_\mathcal{X} \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
-  \end{prooftree}
-\]
-until a final state of $L_2$ is reached,
-at which point $L_1$ is resumed:
-\[
-  \begin{prooftree}
-    \hypo{s_2 \mathrel{T_2} r_\mathcal{Y}}
-    \hypo{r_\mathcal{Y} \mathrel{Y_1^{s_1}} s_1'}
-    \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
-  \end{prooftree}
-\]
-\end{definition}
-%}}}
-
-Importantly,
-the operator defined in \autoref{def:ltscomp}
-is still an \emph{under-approximation}
-of CompCertO's semantic linking operator.
-
-\begin{theorem}
-For $L_1, L_2 : \mathcal{X} \twoheadrightarrow \mathcal{X}$,
-\[
-  L_1 \circ L_2
-  \le_{\kw{id} \twoheadrightarrow \kw{id}}
-  L_1 \oplus L_2
-\]
-\end{theorem}
-
-XXX: need to move this after we've introduced simulations
-
-%}}}
-
-\subsection{Simulations Conventions} %{{{
-
-Compilers operate with respect to specific calling conventions.
-A calling convention expresses,
-for a particular source language and hardware architecture,
-how high-level interactions between components in the source language
-are realized at the assembly level.
-Hence, calling conventions are \emph{relational} in nature.
-When different compilers use the same calling conventions,
-the object files the produce will be interoperable,
-because they will use compatible translations
-of source-level abstractions.
-
-In the closed semantics of CompCert,
-interactions between components are hidden.
-The calling convention is involved in the formulation
-of simulation relations,
-but it does not appear in the statement
-of the compiler's correctness theorem.
-By contrast,
-because CompCertO reveals these previously hidden interactions
-to the outside world,
-its correctness statement
-must be formulated with respect to a precise calling convention.
-In order to formalizes this correspondence between
-the source- and target-level language interfaces,
-CompCertO makes use of the following notion.
-
-\begin{definition}
-A \emph{simulation convention} between
-the language interfaces
-$\mathcal{X}_1 = \langle \mathcal{X}_1^\que, \mathcal{X}_1^\ans \rangle $ and
-$\mathcal{X}_2 = \langle \mathcal{X}_2^\que, \mathcal{X}_2^\ans \rangle $
-is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$,
-where $W$ is a set of \emph{worlds},
-and where
-$\mathbb{R}^\que \subseteq W \times \mathcal{X}_1^\que \times \mathcal{X}_2^\que$ are
-$\mathbb{R}^\ans \subseteq W \times \mathcal{X}_1^\ans \times \mathcal{X}_2^\ans$
-relate the moves of $\mathcal{X}_1$ and $\mathcal{X}_2$.
-We will write $\mathbb{R} : \mathcal{X}_1 \Leftrightarrow \mathcal{X}_2$.
-\end{definition}
-
-Language interfaces and simulation conventions
-form a category \cite{compcerto}.
-
-%}}}
-
-\subsection{Simulations} %{{{
-
-As explained in \S\ref{sec:mainideas:compcerto},
-a simulation
-$L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$
-between the transition systems
-$L_1 : \mathcal{X}_1 \twoheadrightarrow \mathcal{Y}_1$ and
-$L_2 : \mathcal{X}_2 \twoheadrightarrow \mathcal{Y}_2$
-operates in the context of two simulation conventions
-$\mathbb{R} : \mathcal{X}_1 \Leftrightarrow \mathcal{X}_2$ and
-$\mathbb{S} : \mathcal{Y}_1 \Leftrightarrow \mathcal{Y}_2$.
-Specifically,
-\begin{itemize}
-\item
-when the environment invokes the transition systems,
-it chooses world $w \in W_\mathbb{S}$
-such that its questions are related by $\mathbb{S}^\que$ at the world $w$.
-The simulation must then prove that
-the ultimate outcomes of $L_1$ and $L_2$
-are related by $\mathbb{S}^\ans$ at that same world.
-Conversely,
-\item
-when $L_1$ and $L_2$ perform external calls in $E_1$ and $E_2$,
-the simulation must exhibit a world $w' \in W_\mathbb{R}$
-such that the calls are related by $\mathbb{R}^\que$ at $w'$.
-It is then guaranteed that their outcome
-will be related by $\mathbb{R}^\ans$ at $w'$.
-\end{itemize}
-We refer the reader to \citet{compcerto}
-for a formal definition.
-Based on these notions,
-the correctness theorem of CompCertO
-can be described as follows.
-
-\begin{theorem}[Correctness of CompCertO]
-When a Clight program $p$
-is compiled by CompCertO
-to the program $p'$,
-\[
-  \kw{Clight}(p)
-  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-  \kw{Asm}(p')
-  \,.
-\]
-\end{theorem}
-
-%}}}
-
-\subsection{Assembly Linking}
-
-CompCertO models linking using an operator $\oplus$
-such that:
-\[
-  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2)
-  \le_{\kw{id} \twoheadrightarrow \kw{id}}
-  \kw{Asm}(p_1 + p_2)
-\]
-The linking operator $\oplus$ allows
-two transition systems to interact with each other
-in a mutually recursive fashion.
-Because of this,
-the operator only works when transition systems
-have identical types of the form $\mathcal{X} \twoheadrightarrow \mathcal{X}$.
-By contrast,
-we wish to use the proper categorical structure
-provided by composition in the category $\ISpec$.
-
-Fortunately,
-the generality of CompCertO's linking operator is superfluous
-in the context of our application domain.
-When certified abstraction layers are composed,
-it is sufficient for the overlay to make calls into the underlay.
-Moreover,
-we can use the following result
-to show that composition soundly approximates
-the linking of assembly programs.
-
-\begin{lemma}[Assembly linking]
-Given two \kw{Asm} programs $p_1$ and $p_2$,
-the following refinement holds:
-\[
-  \llbracket \kw{Asm}(p_1) \rrbracket \circ
-  \llbracket \kw{Asm}(p_2) \rrbracket \:\sqsubseteq\:
-  \llbracket \kw{Asm}(p_1 + p_2) \rrbracket
-  \,.
-\]
-\end{lemma}
 
 %}}}
 
@@ -4417,6 +4416,36 @@ The formalization mainly includes:
 Multi-languages,
 abstract interpretation,
 Spivak's Poly stuff.
+
+\paragraph{Separate Compilation} %{{{
+
+For applications of this kind,
+the Clight language---%
+a simplified dialect of C---%
+is often used as the source language of CompCert.
+The correctness theorem is then stated as
+a \emph{separate compilation} \cite{sepcompcert} property:
+\begin{equation} \label{eqn:scc}
+  \begin{prooftree}
+    \hypo{\forall i \cdot \kw{CompCert}(M_i) = M_i'}
+    \infer1{\kw{Clight}[M_1 + \cdots + M_n]
+      \le \kw{Asm}[M_1' + \cdots + M_n']}
+  \end{prooftree}
+\end{equation}
+Here,
+the translation units $M_1, \ldots, M_n$
+are compiled to the assembly programs $M_1', \ldots, M_n'$.
+The semantics of a source program $p$
+is given as a labeled transition system $\kw{Clight}[p]$,
+whereas the semantics of a target program $p'$
+is given as $\kw{Asm}[p']$.
+The linking operator $+$
+combines translation units into a whole program,
+and the relation $\le$ denotes a simulation property
+between the resulting transition systems.
+
+%}}}
+
 
 \section{Conclusion}
 
