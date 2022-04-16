@@ -2299,24 +2299,10 @@ layer interfaces are maps from identifiers to
 specifications,
 and the $\oplus$ operator combines the maps.
 
-The vertical composition rule states
-that building a middle layer $L^\natural$
-on top of the underlay $L^\flat$ and then
-build the overlay $L^\sharp$
-on top of the middle layer is the same as
-building the overlay on top of the underlay directly.
-However, with a middle layer
-the complexity has been reduced
-because the details of underlay implementation $M$
-are hidden by the layer interface $L^\natural$,
-and the overlay implementation $N$
-solely relies on the interface $L^\natural$
-without worrying about the underlying details.
-
-The horizontal composition rule combines
-individual layers on the same level,
-thus it allows methods in a module
-to be verified separately.
+The vertical composition rule
+combines an abstraction layer built on top of another,
+while the horizontal composition rule combines
+individual layers on the same level.
 However, note that the two layer interfaces
 $L_1^\sharp$ and $L_2^\sharp$
 share a common abstract state.
@@ -2343,11 +2329,11 @@ different abstract states $D_1$ and $D_2$,
 and the tensor product of layers uses
 $D_1 \times D_2$ as the abstract state.
 The tensor product rule
-requires the fact that
+requires the evidence that
 the execution of one component
-maintains the abstraction relation
+does not interfere the abstraction relation
 of the other component.
-This restriction can be encoded
+This condition can be encoded
 in the abstraction relation.
 However,
 in the original framework,
@@ -2365,9 +2351,9 @@ shortly in \ref{sec:ccal:tcomp}.
 
 In the rest of this section,
 we discuss layer interfaces
-in the new framework in \ref{sec:ccal:interface}
+in the new framework
 and how the client code
-interact with them in \ref{sec:ccal:client}.
+interact with them in \ref{sec:ccal:interface}.
 Details on abstraction relations
 and how it works with CompCert memory model
 are given in \ref{sec:ccal:abrel}.
@@ -2375,11 +2361,6 @@ With these ingredients,
 we present the layer correctness in \ref{sec:ccal:correctness}
 with the tensor product and vertical composition rule
 in \ref{sec:ccal:tcomp} and \ref{sec:ccal:vcomp} respectively.
-Finally,
-we discuss how the CompCertO compiler
-extends the layer implementations
-from Clight programs
-down to Assembly programs in \ref{sec:ccal:compile}.
 
 %}}}
 
@@ -2390,25 +2371,23 @@ down to Assembly programs in \ref{sec:ccal:compile}.
 
 % If we just define 1 -> C@D, can promote using υ
 
-\begin{definition}
-  A \emph{layer interface} is a tuple
-  $\langle D, L \rangle$, where $D$ is
-  a set of states,
-  and the specification $L$
-  is a strategy of the type
-  $1 \rightarrow \mathcal{C}@(D \times \kw{mem})$
-\end{definition}
-
-The layer specification uses
-the memory with abstract data as the state.
-However, to simplify the reasoning
-and avoid unintentional leakage of local state,
-we mainly consider layers specifications
-only transform the abstract state.
+A \emph{layer interface}
+consists of a set of abstract states $D$,
+and a specification
+$L: 1 \rightarrow \mathcal{C}@(D \times \kw{mem})$
+that specifies the behavior of
+the functions in this layer
+according to how the abstract state and the memory
+is transformed.
+However,
+we will mainly consider layer specifications
+that only transform the abstract states
+for simplicity,
+and the framework present in this section can be generalized to
+those that modify the memory in a straightforward way.
 In such cases,
 the layer specification
-is derived by
-promoting
+is derived by promoting
 $L: 1\rightarrow \mathcal{C}@D$
 to
 \[
@@ -2422,51 +2401,44 @@ is defined as a refinement convention
 \]
 The left adjoint
 gives a strategy that takes a state as input
-and return the state intact.
+and returns the state unchanged.
 
 Note that we have elided the structural transformations
-\begin{align*}
+\[
   (\mathcal{C}@D)@\kw{mem}
-  &\cong
+  \cong
   \mathcal{C}@(\kw{mem} \times D)
-  \\
+    \qquad
   \mathcal{C}@(\kw{mem} \times D)
-  &\cong
+  \cong
   \mathcal{C}@(D \times \kw{mem})
-\end{align*}
+\]
 and the promotion is left implicit
 when the context is clear.
 
-For example,
-a layer interface for the ring buffer
-has type
-$L_\kw{rb}: 1 \rightarrow \mathcal{C}@D_\kw{rb}$
-with $D_\kw{rb}$ as the abstract state,
-and it does not rely on the memory state.
-%}}}
-
-\subsection{Client Code} %{{{
-\label{sec:ccal:client}
-
 % Clight(M)@D ∘ L is a layer interface
-[XXX: merge this subsection into the previous one?]
 
 Given a layer interface
 $L: 1 \rightarrow \mathcal{C}@(D\times \kw{mem})$,
 in order to apply a client code $N$ on top of it,
 we need to lift the Clight semantics
 with the underlay state $D$.
-After the lifting, the memory is accompanied
-with abstract state as in the specifications
-and they can be directly composed together.
+Then the memory is accompanied
+with an abstract state as in the specifications
+and the semantics can be composed with interfaces.
 \[
   \llbracket \kw{Clight}(N) \rrbracket @ D \circ L :
   1 \rightarrow \mathcal{C}@(D \times \kw{mem} )
 \]
 
 For example,
-the program $\kw{bq.c}$ in \autoref{fig:code}
-can use $L_\kw{rb}$ as an underlay interface
+the layer interface for the ring buffer
+has type
+$L_\kw{rb}: 1 \rightarrow \mathcal{C}@D_\kw{rb}$
+with $D_\kw{rb}$ as the abstract state,
+and it does not rely on the memory state,
+and the program $\kw{bq.c}$ in \autoref{fig:code}
+can use it as an underlay interface
 in the following way
 \[
   \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
@@ -2527,7 +2499,8 @@ in the following way
 The process of building abstraction layers
 is to hide the implementation details in underlays
 by abstractions in overlays.
-Abstraction relations play an important role
+As we have shown in previous sections,
+abstraction relations play an important role
 in this process
 because they reveal
 the correspondence between
@@ -2535,28 +2508,23 @@ the more abstract states of the overlay
 and the more concrete states of the underlay.
 
 \begin{definition}[Abstraction relation]
-  An \emph{abstraction relation} is a relation
+  An \emph{abstraction relation} is a relation $R$
   between the overlay state $D^\sharp$
-  and the memory with overlay state $D^\flat$
+  and the memory with the overlay state $D^\flat$
   \[
     R \subseteq D^\sharp \times (D^\flat \times \kw{mem})
+    \qquad
+    \kw{glob}(R): \vec{\kw{loc}}
   \]
   with an operation $\kw{glob}$ that returns
   the memory locations
   where variables suspectible to the abstraction relation
   are stored
+  such that the following invariant property is satisfied
   \[
-    \kw{glob}(R): \vec{\kw{loc}}
-  \]
-  satisfying the invariant property that
-  variables outside $\kw{glob}(R)$
-  do not affect the abstraction relation
-  \[
-    \begin{prooftree}
-      \hypo{d^\sharp \mathrel{R} (d^\flat, m)}
-      \hypo{m \cong_{\kw{glob(R)}} m'}
-      \infer2{d^\sharp \mathrel{R} (d^\flat, m')}
-    \end{prooftree}
+    d^\sharp \mathrel{R} (d^\flat, m) \wedge
+    m \cong_{\kw{glob(R)}} m' \Rightarrow
+    d^\sharp \mathrel{R} (d^\flat, m')
   \]
 \end{definition}
 
@@ -2700,21 +2668,15 @@ layer correctness can then be defined as:
   \llbracket \kw{Clight}(M) \rrbracket
   @D^\flat \circ L^\flat
 \]
-The layer correctness implies
-the contextual refinement.
-\begin{lemma}[Contextual Refinement]
-  Given arbitrary client code $N$,
-  the following judgment holds
-  \[
-    \begin{prooftree}
-      \hypo{L^\flat \vdash_R^\mathcal{C} M : L^\sharp}
-      \infer1{\llbracket \kw{Clight}(N) \rrbracket @ D^\sharp
-        \sqsubseteq_{1 \rightarrow \hat{R}}
-        \llbracket \kw{Clight}(N) \oplus \kw{Clight}(M) \rrbracket
-        @D^\flat \circ L^\flat}
-    \end{prooftree}
-  \]
-\end{lemma}
+Moreover, the layer correctness implies
+the contextual refinement given an arbitrary client code $N$:
+\[
+  \llbracket \kw{Clight}(N) \rrbracket @ D^\sharp
+  \sqsubseteq_{1 \rightarrow \hat{R}}
+  \llbracket \kw{Clight}(N) \oplus \kw{Clight}(M) \rrbracket
+  @D^\flat \circ L^\flat
+\]
+
 %}}}
 
 \subsection{Tensor product} %{{{
@@ -2746,7 +2708,7 @@ It can be formally defined as follow
   \]
 \end{definition}
 
-Two abstraction relations with disjoint footprints
+Two abstraction relations with disjoint variable sets
 can be composed together
 by imposing both relations on the same memory.
 
@@ -2768,7 +2730,7 @@ by imposing both relations on the same memory.
         \mathrel{R_1\otimes R_2} (d_1^\flat,d_2^\flat,m)}
     \end{prooftree}
   \]
-  with the footprint defined as
+  with the $\kw{glob}$ set defined as
   \[
     \kw{glob}(R_1\otimes R_2) := \kw{glob}(R_1) \cup \kw{glob}(R_2)
   \]
@@ -2844,18 +2806,13 @@ in the original layer framework.
   \]
 \end{theorem}
 
-%}}}
+So far,
+we have shown a complete layer framework
+using the infrastructures
+provided by games semantics and the CompCertO compiler,
+and it additionally
+support the tensor product rule.
 
-\subsection{Compiling Certified Abstraction Layers} %{{{
-\label{sec:ccal:compile}
-
-XXX: Open question whether/how we want to do this.
-Low priority for now.
-\[
-  L^\flat \vdash^\mathcal{A}_{R}
-  \mathbb{C}_* \circ \kw{CompCertO}(M) \circ \mathbb{C}^* :
-  L^\sharp
-\]
 %}}}
 
 %}}}
@@ -3652,17 +3609,11 @@ the framework present in this section
 is more modular
 because code verification \emph{independent of underlay}.
 The original framework uses CompCertX
-as the implementation between layers.
-CompCertX is a variant of CompCert
-where the external calls are interpreted
-according to a set of primitives.
-In particular,
-the language $\kw{ClightX}$ is parametrized
-over a layer interface $L$,
-and the language is referred as $\kw{ClightX}_L$.
-For example,
+where semantics is parametrized
+over an underlay interface.
+As we have seen,
 the behavior of the Clight program $\kw{bq.c}$
-is given by $\kw{ClightX}_{L_\kw{rb}}(\kw{bq.c})$.
+is given by $\kw{ClightX}_{L_\kw{rb}}[\kw{bq.c}]$.
 As a result, to show the strategy specification $M_{bq}$
 is realized by the program $\kw{bq.c}$,
 it is required to prove the refinement
@@ -3670,8 +3621,7 @@ it is required to prove the refinement
   M_\kw{bq} \circ L_\kw{rb} \sqsubseteq
   \llbracket \kw{ClightX}_{L_\kw{rb}}(\kw{bq.c}) \rrbracket
 \]
-where the abstraction relation between states and
-the refinement conventions between signatures
+where the abstraction relations
 have been elided for simplicity.
 
 By contrast,
@@ -3680,17 +3630,16 @@ which opens up the possibility of
 verifying component independent of
 the behavior of external components.
 In particular,
-as demonstrated in the foregoing example of bounded queue,
+as demonstrated in the foregoing example of the bounded queue,
 the code verification
 of the program $\kw{bq.c}$
-against strategy specification $M_\kw{bq}$,
-\[
-  M_\kw{bq} \sqsubseteq \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
-\]
+against strategy specification $M_\kw{bq}$
 is independent of underlays.
 Then by monotonicity of composition,
 the refinement holds for an arbitrary underlay specification $L$
 \[
+  M_\kw{bq} \sqsubseteq \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
+  \Rightarrow
   M_\kw{bq} \circ L \sqsubseteq \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket \circ L
 \]
 where details about the abstraction relation have been elided again.
