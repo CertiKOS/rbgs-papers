@@ -783,7 +783,7 @@ V deq() { return get(inc1()); }
 \end{figure*}
 %}}}
 
-\subsection{Semantics in CompCert}
+\subsection{Semantics in CompCert} %{{{
 
 The certified compiler CompCert
 models the execution of C and assembly programs
@@ -844,17 +844,21 @@ Below we outline the use of certified abstraction layers
 in the verification of the operating system kernel CertiKOS,
 and the compositional extension of CompCert known as CompCertO.
 
-\subsection{Certified Abstraction Layers}
+%}}}
+
+\subsection{Certified Abstraction Layers} %{{{
 
 Although CompCert only models the execution of whole programs,
-it provides limited support for external function calls.
+it does provides limited support for external function calls.
 Semantics are defined in terms of a parameter $\chi$
 which specifies ahead of time the behavior of external functions.
 Certified abstraction layers \cite{popl15}
-take advantage of this capability to enable compositional verification
+take advantage of this to enable compositional verification
 with minimal changes to CompCert itself.
+The framework uses a modified version of CompCert named CompCertX,
+which introduces the following changes.
 
-\subsubsection{Contextual Refinement}
+\subsubsection{Partial Semantics}
 
 First,
 transition systems are generalized so that
@@ -868,29 +872,34 @@ we can construct a transition system
 $\kw{Clight}_\chi[M].f(\vec{v})@m$
 which models the corresponding invocation of $f$
 when external functions behave according to $\chi$.
+Final states are extended as well
+to capture the value $v'$ returned by $f$
+as well as an updated memory state $m'$.
 
 A partial program such as $\kw{rb.c}$
-can then be verified in isolation against a \emph{layer interface} $L$
+can then be verified in isolation against a \emph{layer interface} $L$,
 which specifies the behavior of the program's individual functions:
-\[
+\begin{equation} \label{eqn:rbverif}
   \forall f \vec{v} m \:\cdot\:
     L_\kw{rb}.f(\vec{v})@m \supseteq
     \llbracket \kw{Clight}_\bot[\kw{rb.c}].f(\vec{v})@m \rrbracket
-\]
-Since \kw{rb.c} does not rely on any external functions,
-we use the least defined behavior $\bot$ as the value for $\chi$.
-However,
-the property above can be used to derive a form of \emph{contextual refinement}.
+\end{equation}
+Since \kw{rb.c} does not rely on external functions,
+$\chi$ is instantiated as the least defined behavior $\bot$.
+
+\subsubsection{Contextual Refinement}
+
+Property (\ref{eqn:rbverif}) can be used to derive a form of \emph{contextual refinement}.
 Any client code $C$ combined with $\kw{rb.c}$
-can regard the functions of $\kw{rb.c}$ as \emph{primitive} external functions
+can regard the functions of $\kw{rb.c}$ as \emph{primitives}
 whose behavior is given by $L_\kw{rb}$:
 \[
-  \kw{Clight}_{L_\kw{rb}}[C] \:\supseteq\:
+  \kw{Clight}_{L_\kw{rb}}[C] \:\le\:
   \kw{Clight}_\bot[C + \kw{rb.c}]
   \,.
 \]
-In particular, this means that the code of $\kw{bq.c}$
-can in turn be verified in isolation,
+This means that the code of $\kw{bq.c}$
+can in turn be verified
 based on the layer interface defined by $L_\kw{bq}$:
 \[
   \forall f \vec{v} m \:\cdot\:
@@ -903,12 +912,85 @@ based on the layer interface defined by $L_\kw{bq}$:
 We say that $\kw{bq.c}$ implements the \emph{overlay} interface $L_\kw{bq}$
 in terms of the \emph{underlay} interface $L_\kw{rb}$.
 Together, these data constitute a \emph{certified abstraction layer}.
+By iterating the associated contextual refinement properties,
+certified abstraction layers can be \emph{vertically} composed.
+For example:
+\[
+  \kw{Clight}_{L_\kw{bq}}[C] \:\le\:
+  \kw{Clight}_{L_\kw{rb}}[C + \kw{bq.c}] \:\le\:
+  \kw{Clight}_\bot[C + \kw{bq.c} + \kw{rb.c}]
+  \,.
+\]
+Note that in the second step,
+the context is instantiated as $C' := C + \kw{bq.c}$.
+
+Verifying client code on top of the layer specification $L_\kw{bq}$
+is simpler than verifying the combined code as monolithic program.
+Instead of replaying the execution of
+$\kw{enq}$ and $\kw{deq}$
+with every invocation,
+the specification gives us a concise representation of their overall behavior,
+incorporated directly as a single step in the transition system
+$\kw{Clight}_{L_\kw{bq}}[C]$.
 
 \subsubsection{Data Abstraction}
 
-[Explain abstract data]
+So far, the specification $L_\kw{bq}$
+must still be expressed in terms
+of the variables $\kw{c1}$, $\kw{c2}$ and $\kw{buf}$,
+stored within the memory state $m$.
+This breaks encapsulation and forces the client code
+to be analyzed in terms of the bounded queue's implementation details.
+To address this,
+in addition to the concrete memory state $m \in \kw{mem}$,
+language semantics in CompCertX are extended to maintain
+an \emph{abstract} state $d \in D$.
+The type $D$ is provided by the underlay specification $L$,
+and the state $d$ can only be modified by invoking the primitives of $L$.
 
+For example,
+$L_\kw{bq}$ can define its abstract state to be
+a list of values $\vec{q} \in V^*$,
+representing the current state of the queue.
+The behavior of $\kw{enq}$ can then be characterized as:
+\[
+  L_\kw{bq}.\kw{enq}(\vec{v})@(m, \vec{q})
+  \leadsto
+  \kw{undef}@(m, \vec{q}v)
+\]
+Note that $\kw{enq}$ return the undefined value $\kw{undef}$
+and that the concrete memory $m$ is unchanged.
+This is because, at this level of abstraction,
+the concrete variable $\kw{c1}, \kw{c2}, \kw{buf}$
+have been removed from view
+and are instead represented by $\vec{q}$.
 
+To formalize the correspondence between $\vec{q}$
+and its concrete representation,
+we must introduce an \emph{abstraction relation},
+similar in spirit to a simulation relation.
+Layer correctness is then formulated as a property
+$L^\flat \vdash_R M : L^\sharp$,
+which asserts that the code $M$
+running on top of the underlay interface $L^\flat$
+refines the overlay interface $L^\sharp$,
+up to the abstraction relation $R$.
+Given two related activations
+\[
+  f(\vec{v}_\sharp)@(m_\sharp, d_\sharp)
+  \:\mathrel{R}\:
+  f(\vec{v}_\flat)@(m_\flat, d_\flat)
+  \,,
+\]
+the property asserts that the behavior
+$L^\sharp.f(\vec{v}_\sharp)@(m_\sharp, d_\sharp)$
+is refined by
+$\kw{Clight}_{L^\flat}[M].f(\vec{v}_\flat)@(m_\flat, d_\flat)$.
+The updated concrete and abstract memory states
+must be related consistently with $R$.
+Further details are presented in \S\ref{sec:compcert-cal}.
+
+%}}}
 
 \subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
 
