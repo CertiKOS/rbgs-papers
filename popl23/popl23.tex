@@ -1,0 +1,150 @@
+\documentclass[acmsmall,screen,review,anonymous]{acmart}
+\citestyle{acmauthoryear}
+
+\title{Encapsulating State for Compositional Verification}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+There are many verification frameworks based on CompCert,
+but none of them support encapsulated state.
+At most, permissions,
+but here the context still ``sees'' the memory,
+even though it must be shown to be insensitive to it.
+
+We do better.
+
+\section{Modeling Encapsulated State}
+
+Introduce a persistent state wrapper
+on top of the CompCertO semantics.
+
+\subsection{Stateful components}
+
+A component of type $A \rightarrow B$
+consists of:
+\begin{itemize}
+  \item a set of state $S$;
+  \item an initial state $s_0 \in S$;
+  \item a transition system $L : A \twoheadrightarrow B@S$,
+\end{itemize}
+where $B@S = \langle B^\circ \times S, B^\bullet \times S \rangle$
+is the language interface $B$ annotated with states from $S$.
+State encapsulation is managed using an operation
+\[
+  L : A \rightarrow B@S \vdash
+  \mathsf{store}_S(L, s_0) : A \rightarrow B
+  \,,
+\]
+which adds a field of type $S$ to the encapsulated state within $L$.
+
+\subsection{Simulations}
+
+We must lift the definition of simulations
+to the level of stateful components.
+A simulation $L \le_{\mathbb{R} \rightarrow \mathbb{S}} L'$
+must incorporate an (existentially quantified)
+simulation relation $R \subseteq S \times S'$
+between the encapsulated states within $L$ and $L'$.
+Simulation of stateful components is defined as:
+\[
+  L \le_{\mathbb{R} \rightarrow \mathbb{S}} L' \quad :\Leftrightarrow \quad
+  \exists R \mathbin{.}
+    s_0 \mathrel{R} s_0' \wedge
+    L \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}@R} L'
+\]
+
+\subsection{Composition}
+
+The composites $L_1 \circ L_2$ and $L_1 \oplus L_2$
+use states of type $S_1 \times S_2$,
+with each side of the pair updated when the corresponding component
+is activated.
+Show that the composition operators are
+still compatible with simulation.
+
+\section{Memory Separation in CompCert}
+
+\subsection{Status quo}
+
+Explain how injections are used in CompCert, CompCertO, CAL,
+and why it's too complex.
+The \emph{algebraic memory model} used in CCAL
+is closer to typical separation algebra
+but there are issues with nextblock.
+Fortunately Nominal CompCert allows us to
+do better.
+
+\subsection{A separation algebra for CompCert memory}
+
+The goal is to define a ternary relation:
+\[
+    m_1 \bullet m_2 \equiv m
+\]
+asserting that the memory states $m_1$ and $m_2$
+can be merged into $m$.
+
+We can proceed recursively by defining
+relations of this kind incrementally on:
+\begin{itemize}
+  \item runtime values $\mathsf{val}$,
+  \item memory permissions,
+  \item whole memory states.
+\end{itemize}
+
+As in CCAL,
+the challenge is to deal with nextblock.
+This is where Nominal CompCert can help
+by figuring out a way to partition the block space
+between a component and its context.
+Can the stack-aware version be helpful
+by discriminating between blocks allocated
+for each function?
+
+\subsection{Frame rule}
+
+We can use CKLRs to prove a frame rule,
+by lifting the relation
+\[
+    {-} \bullet m \equiv {-}
+\]
+to a CKLR or simulation convention
+and showing that the Clight semantics
+is compatible with it.
+
+\section{Clight with module-local state}
+
+Can we add a $\mathsf{private}$ keyword or storage class to Clight,
+formulate a semantics and show a correctness proof
+for erasure of the keyword?
+
+Main challenge: how to define the semantics of the new keyword
+in a way that's convenient.
+
+\section{Certified Abstraction Layers}
+
+A cleaner version of our OOPSLA story.
+Here we must go from:
+\begin{itemize}
+  \item A fully abstract version where the layer interface
+    has encapsulated abstract state,
+    but does not change the memory at all
+  \item A version where this is realized by an encapsulated
+    memory component,
+    which is added when the layer is invoked,
+    and re-separated when it returns control to the client
+    (refinement can act on that individual memory fragment).
+  \item The concrete implementation version
+    where the state is part of the global memory
+    (refinement shown via
+    simulation up to ${-} \bullet m \equiv {-}$).
+\end{itemize}
+
+\section{Related Work}
+
+\section{Conclusion}
+
+\end{document}
