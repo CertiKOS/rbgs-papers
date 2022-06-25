@@ -1,7 +1,27 @@
 \documentclass[acmsmall,screen,review,anonymous]{acmart}
+\usepackage{ebproof}
+\usepackage{minted}
+
+\bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
 
-\title{Encapsulating State for Compositional Verification}
+% Notations
+\newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
+\newcommand{\ifr}[1]{\mathrel{[{#1}]}}
+\newcommand{\que}{\circ}
+\newcommand{\ans}{\bullet}
+\newcommand{\vref}{\le_\kw{v}}
+\newcommand{\mext}{\le_\kw{m}}
+\newcommand{\refby}{\preceq}
+\newcommand{\scref}{\sqsupseteq}
+\newcommand{\screfd}{\sqsubseteq}
+\newcommand{\unitset}{\mathds{1}}
+
+% Names of things
+\newcommand{\ClightP}{\ensuremath{\mathsf{Clight+}}}
+
+
+\title{Compositional Compiler Correctness with Encapsulated State}
 
 \begin{document}
 
@@ -17,31 +37,218 @@ even though it must be shown to be insensitive to it.
 
 We do better.
 
-\section{Modeling Encapsulated State}
+\section{Encapsulated State}
 
-Introduce a persistent state wrapper
-on top of the CompCertO semantics.
+\subsection{Semantics and State in CompCertO}
 
-\subsection{Stateful components}
+The compositional semantics of CompCertO uses %revolves around
+a notion of open transition system $L : A \twoheadrightarrow B$.
+The type $A \twoheadrightarrow B$ involves
+two \emph{language interfaces} $A$ and $B$.
+A language interface $A = \langle A^\que, A^\ans \rangle$
+gives a set of questions $A^\que$ and a set of answers $A^\ans$,
+where questions correspond to function invocations
+and answers correspond to the function returning.
+An execution of the component $L : A \twoheadrightarrow B$
+is initiated with a question $q \in B^\que$
+and terminates with a corresponding answer $r \in B^\ans$.
+At any point during the execution,
+$L$ may ask a question $m \in A^\que$ (an external call),
+in which case it is suspended until an answer $n \in A^\ans$
+resumes the execution.
 
-A component of type $A \rightarrow B$
+As in the original CompCert semantics,
+a transition system
+executes by updating an internal state,
+which is not directly observable 
+in its interactions with the environment.
+When $L : A \twoheadrightarrow B$
+performs an external call in $A$,
+this internal state is preserved.
+When the external call returns,
+the state is updated according to the answer received
+and the execution resumes.
+However,
+no state is preserved across different executions of $L$;
+each new question in $B$ initializes a fresh state.
+%In fact,
+%multiple instances of $L$ may even be executing at the time
+%if a reentrant call happens.
+%Their internal states remain independent.
+
+This approach is sufficient to give semantics to CompCert languages.
+For the most part, the C language relies on a global memory state.
+Because all components can in principle access every part of the memory,
+cross-component interactions carry the current state of the memory
+back and forth with every question and answer.
+In addition,
+components maintain a limited amount of local state.
+However,
+because C does not offer objects, closures or similar abstractions,
+this local state has a lifetime limited to a particular function activation.
+In the semantics of CompCert languages,
+maintaining persistent state across successive activations of a given component
+would serve no purpose.
+
+Nevertheless, in many applications,
+the ability for a component to maintain local private state
+is important:
+\begin{itemize}
+  \item Beyond the world of C,
+    many language features behave in this way.
+    It is important to understand how CompCertO's approach
+    carries over to this context.
+  \item For verification,
+    we want make it a structural thing
+    rather than a rely/guarantee property we carry around everywhere.
+    Example: certified abstraction layers.
+\end{itemize}
+In the remainder of this section,
+we show how persistent, encapsulated state
+can be incorporated into
+the semantic model of CompCertO.
+
+\subsection{Preliminaries: Constructions on CompCertO LTS}
+
+Rather than altering CompCertO's existing transition system model,
+we use it as a building block.
+Before we present our model of persistent state,
+we lay the groundwork by introducing new operators
+for CompCertO LTS.
+
+\begin{definition}[Categorical composition]
+Lift from OOPSLA submission
+\end{definition}
+
+\begin{lemma}
+Refinement ${\circ} \le {\oplus}$.
+\end{lemma}
+
+\begin{definition}[Adjoining state]
+Given a language interface $A = \langle A^\que, A^\ans \rangle$
+and a set $K$,
+the language interface $A@K$ is defined as:
+\[
+  A@K := \langle A^\que \times K ,\: A^\ans \times K \rangle
+\]
+We write the questions and answers of this language interface as
+$q@k \in A^\que \times K$ and
+$r@k \in A^\ans \times K$.
+\end{definition}
+
+Note that using the definition above,
+the CompCertO language interfaces
+can be decomposed into $\mathcal{C}@\kw{mem}$, $\mathcal{A}@\kw{mem}$, etc.
+The memory state is dropped from the language interface $\mathcal{C}$,
+whose questions are now just $f[\mathit{sg}](\vec{v})$,
+and reintroduced with $@\kw{mem}$ to obtain
+the full question $f[\mathit{sg}](\vec{v})@m$.
+This will be used in the context of CAL
+where layer interfaces can be defined in a memory-free manner
+($\mathcal{C}$ without $@\kw{mem}$),
+their behavior being entirely determined by their internal state.
+
+\begin{definition}[Lifting]
+Given %the transition system
+$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$,
+we define $L@K : A@K \twoheadrightarrow B@K$ as:
+\begin{gather*}
+  L@K := \langle S \times K, {\rightarrow_K}, I_K, X_K, Y_K, F_K \rangle \\
+ {\begin{prooftree}
+    \hypo{q \mathrel{I} s}
+    \infer1{q@k \mathrel{I_K} s@k}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{s \rightarrow s'}
+    \infer1{s@k \rightarrow_K s'@k}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{s \mathrel{X} m}
+    \infer1{s@k \mathrel{X_K} m@k}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{n \mathrel{Y}^s s'}
+    \infer1{n@k' \mathrel{Y^{s@k}_K} s'@k'}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{s \mathrel{F} r}
+    \infer1{s@k \mathrel{F_K} r@k}
+  \end{prooftree}}
+\end{gather*}
+\end{definition}
+
+This will be used when components are linked
+to pass through the internal state of other components,
+or to lift memory-free layer interfaces to $\Sigma@\kw{mem}$
+in order to interface them with client code.
+
+\subsection{Encapsulating State}
+
+Our approach is inspired by \citet{feedback,caots}.
+
+Stateful components are defined using
+the original transition system model of CompCertO.
+Private state is added as a component
+in all of the component's interactions,
+with the understanding that
+it will be passed back to the transition system
+unchanged upon its next activation.
+
+A stateful component $\Sigma : A \rightarrow B$
+with private states in the set $S$
+can then be specified using a transition system
+$L : A@S \twoheadrightarrow B@S$.
+
+\begin{definition}
+A stateful component
+$\Sigma = (s_0 \in S \mid L) : A \rightarrow B$.
 consists of:
 \begin{itemize}
-  \item a set of state $S$;
-  \item an initial state $s_0 \in S$;
-  \item a transition system $L : A \twoheadrightarrow B@S$,
+  \item a set of states $K$;
+  \item an initial state $k_0 \in K$;
+  \item a transition system $L : A@K \twoheadrightarrow B@K$.
 \end{itemize}
-where $B@S = \langle B^\circ \times S, B^\bullet \times S \rangle$
-is the language interface $B$ annotated with states from $S$.
+\end{definition}
+
+The first time $\Sigma$ is activated by a question $q \in B^\que$,
+the state $k_0$ is adjoined to $q$
+and the transition system $L$ is initialized using the question $q@k_0$.
+When $L$ terminates with an answer $r@k' \in B^\ans$,
+the private state component $k'$
+is set aside until
+the next activation of $\Sigma$,
+at which point it is fed back to $L$ and so on.
+
+A CompCertO LTS $L : A \twoheadrightarrow B$
+can be lifted to the persistent version
+by using a unit state:
+\[
+  \begin{prooftree}
+    \hypo{L : A \twoheadrightarrow B}
+    \infer1{\&L := (\mathbf{1} \mid L) : A \rightarrow B}
+  \end{prooftree}
+\]
 State encapsulation is managed using an operation
 \[
-  L : A \rightarrow B@S \vdash
-  \mathsf{store}_S(L, s_0) : A \rightarrow B
-  \,,
+  \begin{prooftree}
+    \hypo{\Sigma = (Q \mid L) : A@K \rightarrow B@K}
+    \infer1{\mathsf{fbk}_K(\Sigma) := (Q \times K \mid L) : A \rightarrow B}
+  \end{prooftree}
 \]
-which adds a field of type $S$ to the encapsulated state within $L$.
+which adds a field of type $K$ to the encapsulated state within $\Sigma$.
 
 \subsection{Simulations}
+
+[This is actually a more challenging part,
+because we will need simulation conventions
+where the relationship between internal states
+and the public component are more closely coupled
+than what I write below.
+See also the section about \ClightP{}.]
 
 We must lift the definition of simulations
 to the level of stateful components.
@@ -65,6 +272,23 @@ with each side of the pair updated when the corresponding component
 is activated.
 Show that the composition operators are
 still compatible with simulation.
+
+\begin{definition}[Linking]
+The stateful components $\Sigma_1, \Sigma_2 : A \rightarrow A$
+can be linked as:
+\[
+  \Sigma_1 \oplus \Sigma_2 :=
+    ( S_1 \times S_2 \mid L_1@S_2 \oplus L_2@S_1 )
+\]
+\end{definition}
+
+\begin{lemma}
+  This is compatible with:
+  \begin{itemize}
+    \item simulations;
+    \item lifting.
+  \end{itemize}
+\end{lemma}
 
 \section{Memory Separation in CompCert}
 
@@ -117,12 +341,87 @@ is compatible with it.
 
 \section{Clight with module-local state}
 
+[Note: this could be swapped with Section 3
+because it showcases the use of persistent state,
+but probably does not have much to gain
+from the memory separation framework.]
+
 Can we add a $\mathsf{private}$ keyword or storage class to Clight,
 formulate a semantics and show a correctness proof
 for erasure of the keyword?
 
 Main challenge: how to define the semantics of the new keyword
 in a way that's convenient.
+
+We need a good name for this language.
+For now I will use \ClightP{}.
+
+\subsection{Syntax}
+
+\ClightP{} programs are identical to Clight programs,
+but allow the definition of module-local, private variables.
+For example:
+
+\begin{minted}{C}
+private int c = 0;
+int count(void) { return c++; }
+\end{minted}
+
+One question is whether such private variables
+should be declared as globals
+(perhaps associated with empty memory blocks)
+or if we should have a custom \mintinline{Coq}{program} type.
+
+\subsection{Semantics}
+
+Private variables in a \ClightP{} program
+are not stored in the memory,
+but rather in a separate environment.
+This environment is similar to
+the local environments used to store temporaries
+(it might be possible to reuse the same type),
+but instead of being used in the context of an activation,
+the private environment is used as persistent state.
+Hence for a program $p$, the \ClightP{} semantics is constructed
+first by defining a transition system of type
+\[
+  L : \mathcal{C}@(\mathsf{mem}\times\mathsf{penv}) \twoheadrightarrow
+      \mathcal{C}@(\mathsf{mem}\times\mathsf{penv})
+\]
+and then hiding the private environment as persistent state:
+\[
+  \ClightP{}(p) := \mathsf{fbk}_\mathsf{penv}(\&L) :
+    \mathcal{C}@\mathsf{mem} \rightarrow
+    \mathcal{C}@\mathsf{mem}
+\]
+
+One subtlety in the case where private variables are globals,
+is that the \texttt{initial\_state} predicate of $L$
+must enforce empty permissions for private variables
+in the incoming memory state.
+
+\subsection{Compiling to Clight}
+
+A \ClightP{} program can be compiled to Clight
+by erasing the \texttt{private} annotations
+and turning privates variable into regular
+static variables.
+
+Proving the correctness of this transformation
+should not be too difficult.
+We can just use a memory extension or injection.
+The only new part is that we must express
+the simulation convention for the underlying transition systems
+in a way that relates the source private environment
+to the target (public) memory state.
+The twist here is that
+the externally observable simulation convention
+should just enforce the empty permissions in the source memory.
+The relation between the private state and the target memory
+should be existentially quantified.
+But this means we need requirements on the initial target memory as well.
+We will have to set up our extended notion of simulation
+in a way that supports those things.
 
 \section{Certified Abstraction Layers}
 
@@ -143,8 +442,23 @@ Here we must go from:
     simulation up to ${-} \bullet m \equiv {-}$).
 \end{itemize}
 
+\subsection{Basic setup}
+
+A layer interface can be represented as:
+\[
+  \Sigma : \mathbf{1} \rightarrow \mathcal{C}
+\]
+Note the lack of a \texttt{mem} component.
+To interface with context code we can lift it to:
+\[
+\]
+
+\subsection{Horizontal composition of layers}
+
 \section{Related Work}
 
 \section{Conclusion}
+
+\bibliography{../references}
 
 \end{document}
