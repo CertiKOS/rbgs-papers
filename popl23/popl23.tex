@@ -280,6 +280,14 @@ can be linked as:
   \Sigma_1 \oplus \Sigma_2 :=
     ( S_1 \times S_2 \mid L_1@S_2 \oplus L_2@S_1 )
 \]
+Likewise, the components
+$\Sigma_1 : B \rightarrow C$ and
+$\Sigma_2 : A \rightarrow B$
+can be composed into:
+\[
+  \Sigma_1 \circ \Sigma_2 :=
+    ( S_1 \times S_2 \mid L_1@S_2 \circ L_2@S_1 )
+\]
 \end{definition}
 
 \begin{lemma}
@@ -288,56 +296,12 @@ can be linked as:
     \item simulations;
     \item lifting.
   \end{itemize}
+  In addition we have the property (almost by definition):
+  \[
+    \kw{fbk}_{S_1}(\Sigma_1) \circ \kw{fbk}_{S_2}(\Sigma_2) \equiv
+    \kw{fbk}_{S_1 \times S_2}(\Sigma_1@S_2 \circ \Sigma_2@S_1)
+  \]
 \end{lemma}
-
-\section{Memory Separation in CompCert}
-
-\subsection{Status quo}
-
-Explain how injections are used in CompCert, CompCertO, CAL,
-and why it's too complex.
-The \emph{algebraic memory model} used in CCAL
-is closer to typical separation algebra
-but there are issues with nextblock.
-Fortunately Nominal CompCert allows us to
-do better.
-
-\subsection{A separation algebra for CompCert memory}
-
-The goal is to define a ternary relation:
-\[
-    m_1 \bullet m_2 \equiv m
-\]
-asserting that the memory states $m_1$ and $m_2$
-can be merged into $m$.
-
-We can proceed recursively by defining
-relations of this kind incrementally on:
-\begin{itemize}
-  \item runtime values $\mathsf{val}$,
-  \item memory permissions,
-  \item whole memory states.
-\end{itemize}
-
-As in CCAL,
-the challenge is to deal with nextblock.
-This is where Nominal CompCert can help
-by figuring out a way to partition the block space
-between a component and its context.
-Can the stack-aware version be helpful
-by discriminating between blocks allocated
-for each function?
-
-\subsection{Frame rule}
-
-We can use CKLRs to prove a frame rule,
-by lifting the relation
-\[
-    {-} \bullet m \equiv {-}
-\]
-to a CKLR or simulation convention
-and showing that the Clight semantics
-is compatible with it.
 
 \section{Clight with module-local state}
 
@@ -423,6 +387,55 @@ But this means we need requirements on the initial target memory as well.
 We will have to set up our extended notion of simulation
 in a way that supports those things.
 
+\section{Memory Separation in CompCert}
+
+\subsection{Status quo}
+
+Explain how injections are used in CompCert, CompCertO, CAL,
+and why it's too complex.
+The \emph{algebraic memory model} used in CCAL
+is closer to typical separation algebra
+but there are issues with nextblock.
+Fortunately Nominal CompCert allows us to
+do better.
+
+\subsection{A separation algebra for CompCert memory}
+
+The goal is to define a ternary relation:
+\[
+    m_1 \bullet m_2 \equiv m
+\]
+asserting that the memory states $m_1$ and $m_2$
+can be merged into $m$.
+
+We can proceed recursively by defining
+relations of this kind incrementally on:
+\begin{itemize}
+  \item runtime values $\mathsf{val}$,
+  \item memory permissions,
+  \item whole memory states.
+\end{itemize}
+
+As in CCAL,
+the challenge is to deal with nextblock.
+This is where Nominal CompCert can help
+by figuring out a way to partition the block space
+between a component and its context.
+Can the stack-aware version be helpful
+by discriminating between blocks allocated
+for each function?
+
+\subsection{Frame rule}
+
+We can use CKLRs to prove a frame rule,
+by lifting the relation
+\[
+    {-} \bullet m \equiv {-}
+\]
+to a CKLR or simulation convention
+and showing that the Clight semantics
+is compatible with it.
+
 \section{Certified Abstraction Layers}
 
 A cleaner version of our OOPSLA story.
@@ -442,18 +455,95 @@ Here we must go from:
     simulation up to ${-} \bullet m \equiv {-}$).
 \end{itemize}
 
-\subsection{Basic setup}
+\subsection{Layer Interfaces}
 
-A layer interface can be represented as:
+A layer interface with abstract states in $D$
+can be defined using a transition system:
 \[
-  \Sigma : \mathbf{1} \rightarrow \mathcal{C}
+  L : \mathbf{1} \twoheadrightarrow \mathcal{C}@D
 \]
-Note the lack of a \texttt{mem} component.
-To interface with context code we can lift it to:
+To interface with context code,
+we can hide the abstract state and lift the component to:
 \[
+  \kw{fbk}_D(\&L)@\kw{mem} : \mathbf{1} \rightarrow \mathcal{C}@\kw{mem}
 \]
+Note that the component above never modifies the global memory state.
 
-\subsection{Horizontal composition of layers}
+\subsection{Layer Implementation}
+
+The correctness property $L^\flat \vdash M : L^\sharp$
+must be established as a simulation of the form:
+\[
+  \kw{fbk}(\&L^\sharp)@\kw{mem}
+  \le_\mathbb{R}
+  \&\kw{Clight}(M) \circ \kw{fbk}(\&L^\flat)@\kw{mem}
+  :
+  \mathbf{1} \rightarrow \mathcal{C}@\kw{mem}
+\]
+Here the simulation convention $\mathbb{R}$
+must exclude from the source memory
+the region used in the target memory
+to store the persistent state and stack frames used by $M$.
+It must also ensure that
+this region remains unchanged in the target memory
+between successive activations of $M$.
+However,
+the exact representation used
+to represent the hidden abstract state of $L^\sharp$
+is itself hidden within the simulation.
+
+\paragraph{Layer Correctness}
+
+To prove a particular layer implementation correct,
+we first focus on the way $M$ acts on its private fragment.
+We give an abstraction relation
+$R \subseteq D^\sharp \times (D^\flat \times \kw{mem})$
+such that:
+\begin{equation}
+  L^\sharp
+  \:\le_{\mathbf{1} \rightarrow \kw{id}@R}\:
+  \kw{Clight}(M)@D^\flat \circ L^\flat@\kw{mem}
+  \qquad \text{and} \qquad
+  d^\sharp_0 \mathrel{R} \big( d^{\,\flat}_0, m_0^M \big)
+  \,.
+  \label{eqn:lc}
+\end{equation}
+Here $m_0^M$ is the initial memory fragment for the module $M$,
+derived from the definitions within $M$ itself.
+Note that we can carry out this proof without regard for the context memory.
+There are no particular conditions on $R$ other than
+initial state being related.
+
+\paragraph{Adding Context Memory}
+
+By hiding internal state,
+\autoref{eqn:lc} can be used to establish:
+\begin{align*}
+  \kw{fbk}_{D^\sharp}(\&L^\sharp) \le {} &
+  \kw{fbk}_{D^\flat \times \kw{mem}} \big(
+    \&(\kw{Clight}(M)@D^\flat \circ L^\flat@\kw{mem})
+    \big) \\ \equiv {} &
+  \kw{fbk}_\kw{mem}(\&\kw{Clight}(M)) \circ \kw{fbk}_{D^\flat}(\&L^\flat)
+  : \mathbf{1} \rightarrow \mathcal{C}
+  \,,
+\end{align*}
+however this does not take into account the context memory,
+or the way in which the context memory and the memory used by $M$
+are merged into the global memory
+at the implementation level.
+To achieve this we must use our memory separation primitive
+and the frame rule for $\kw{Clight}$.
+
+%Let me think about that but two things that come to mind:
+%The first one is, for linking to work, you also need to do that for internal calls since the call from f to g will eventually become an internal call in [F + G] which will have to be matched with the cross-component interaction in [F] ⊕ [G].
+%The second one is, think about the layer implementation case. We know that L : C@K ↠ C@K is refined by [[M]] : C@mem ↠ C@mem which operates in terms of a memory fragment that only contains the globals that implement abstract state K, and whatever stack blocks [[M]] allocates.
+%Now the state for these transition systems is hidden so that we actually have a direct simulation between fbk(&L) : C → C and fbk(&L') : C → C. Both can then be lifted to fbk(&L)@mem, fbk(&L')@mem : C@mem → C@mem to be interfaced with context code. But note that in the execution of fbk(&L')@mem case there are now two different memory states involved: the context one which is left unchanged, and the 
+
+
+
+\subsection{Horizontal composition}
+
+\subsection{Upcalls}
 
 \section{Related Work}
 
