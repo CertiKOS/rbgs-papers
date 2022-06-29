@@ -1,6 +1,7 @@
 \documentclass[acmsmall,screen,review,anonymous]{acmart}
 \usepackage{ebproof}
 \usepackage{minted}
+\usepackage{tikz-cd}
 
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
@@ -247,30 +248,34 @@ State encapsulation is managed using an operation
 \]
 which adds a field of type $K$ to the encapsulated state within $\Sigma$.
 
-%}}}
+Once private state has been encapsulated,
+in principle it can only be observed by the environment
+through the way the transition system responds
+to successive queries.
+In particular,
+constructions on stateful components
+should preserve the following notion of equivalence.
 
-\subsection{Simulations} %{{{
-
-[This is actually a more challenging part,
-because we will need simulation conventions
-where the relationship between internal states
-and the public component are more closely coupled
-than what I write below.
-See also the section about \ClightP{}.]
-
-We must lift the definition of simulations
-to the level of stateful components.
-A simulation $L \le_{\mathbb{R} \rightarrow \mathbb{S}} L'$
-must incorporate an (existentially quantified)
-simulation relation $R \subseteq S \times S'$
-between the encapsulated states within $L$ and $L'$.
-Simulation of stateful components is defined as:
+\begin{definition}[Simple Simulation] \label{def:ssim}
+For a language interface $A$ and a relation $R \subseteq K_1 \times K_2$,
+we define the simulation convention $A@R : A@K_1 \Leftrightarrow A@K_2$ as
 \[
-  L \le_{\mathbb{R} \rightarrow \mathbb{S}} L' \quad :\Leftrightarrow \quad
-  \exists R \mathbin{.}
-    s_0 \mathrel{R} s_0' \wedge
-    L \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}@R} L'
+  A@R := \langle \mathbf{1}, {=}@R, {=}@R \rangle
 \]
+We will say that $\Sigma_1 : A \rightarrow B$
+is refined by $\Sigma_2 : A \rightarrow B$
+and write $\Sigma_1 \le \Sigma_2$
+when there exists a relation $R \subseteq K_1 \times K_2$
+such that:
+\begin{itemize}
+  \item the initial states are related by $R$;
+  \item the transition systems satisfy
+    $L_1 \le_{A@R \twoheadrightarrow B@R} L_2$.
+\end{itemize}
+We write $\Sigma_1 \equiv \Sigma_2$ when
+$\Sigma_1 \le \Sigma_2$ and
+$\Sigma_2 \le \Sigma_1$.
+\end{definition}
 
 %}}}
 
@@ -303,8 +308,8 @@ can be composed into:
 \begin{lemma}
   This is compatible with:
   \begin{itemize}
-    \item simulations;
-    \item lifting.
+    \item simple simulations;
+    \item lifting hence associativity is preserved.
   \end{itemize}
   In addition we have the property (almost by definition):
   \[
@@ -312,6 +317,92 @@ can be composed into:
     \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2@K_1)
   \]
 \end{lemma}
+
+%}}}
+
+\section{Simulations}
+
+Definition~\ref{def:ssim} introduced a simple notion of refinement
+between stateful components,
+but assumed that the interactions of both components
+with their environment were identical.
+By contrast, a key feature of CompCertO
+is the notion of \emph{simulation convention},
+which parameterize simulations by
+specify how the interactions of
+the source-level and target-level transition system
+are related.
+
+Transition systems in CompCertO are stateless,
+and as a consequence,
+successive activations of given
+source- and target-level
+transition systems can be related in the same way.
+By contrast,
+our components may maintain encapsulated states
+and behave differently upon successive activations.
+Likewise,
+the relationship between source- and target-level interactions
+may depend on the history of the computation.
+This means we must generalize simulation conventions
+so that they may maintain their own state as well.
+
+\begin{definition}
+A \emph{stateful simulation convention}
+$\mathbb{R} = \langle W, {\leadsto}, {\mapsto}, R^\que, R^\ans \rangle$
+between the language interfaces $A$ and $B$
+is specified by:
+\begin{itemize}
+  \item a pointed set of worlds $W$,
+    which store the current state of the simulation convention;
+  \item two accessibility relations
+    ${\leadsto}, {\mapsto} \subseteq W \times W$,
+    corresponding to \emph{internal} and \emph{external} transitions;
+  \item a Kripke relation $R^\que \in \mathcal{R}_W(A^\que, B^\que)$
+    between the language interfaces' questions, and
+  \item a Kripke relation $R^\ans \in \mathcal{R}_W(A^\ans, B^\ans)$
+    between their answers.
+\end{itemize}
+The identity simulation convention
+$\kw{id}_A : A \Leftrightarrow B$
+is given by
+$\kw{id}_A := \langle \mathbf{1}, \top, \top, {=}, {=} \rangle$
+\end{definition}
+
+The initial world $w_0$ gives the simulation convention's initial state.
+While the environment is in control,
+the world may transition according to the relation $\leadsto$.
+When the component is activated,
+incoming questions must be related by $w \Vdash R^\que$.
+The simulation guarantees that the corresponding answers
+will in turn be related by $w' \Vdash R^\ans$,
+where $w'$ is a successor world of $w$ such that $w \mapsto w'$.
+The world $w'$ then becomes the simulation convention's new state,
+and the questions for any subsequent activation
+must be related at a world $w''$ such that $w' \leadsto w''$.
+
+\begin{definition}[Simulation]
+Suppose the components $\Sigma_1, \Sigma_2$
+and the simulation conventions $\mathbb{R}_A, \mathbb{R}_B$
+have the following types:
+\[
+\begin{tikzcd}
+  A_1 \ar[r, "\Sigma_1"] \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+  B_1 \ar[d, Leftrightarrow, "\mathbb{R}_B"] \\
+  A_2 \ar[r, "\Sigma_2"] & B_2
+\end{tikzcd}
+\]
+There is a simulation
+$\Sigma_1 \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} \Sigma_2$
+when there exists a Kripke relation
+$R : \mathcal{R}_{W_A \times W_B}(K_1, K_2)$
+satisfying
+$(w_0^A, w_0^B) \Vdash k_0^1 \mathrel{R} k_0^2$
+and such that:
+\[
+  \text{[the simulation properties you'd expect]}
+\]
+\end{definition}
 
 %}}}
 
