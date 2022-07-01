@@ -1,4 +1,5 @@
 \documentclass[acmsmall,screen,review,anonymous]{acmart}
+\usepackage{bbm}
 \usepackage{ebproof}
 \usepackage{minted}
 \usepackage{tikz-cd}
@@ -121,13 +122,137 @@ Before we present our model of persistent state,
 we lay the groundwork by introducing new operators
 for CompCertO LTS.
 
-\begin{definition}[Categorical composition]
-Lift from OOPSLA submission
-\end{definition}
+\subsubsection{Composition} %{{{
 
-\begin{lemma}
-Refinement ${\circ} \le {\oplus}$.
-\end{lemma}
+To model component linking,
+CompCertO introduces an operator $\oplus$
+which lets transition systems interact
+by having them handle each other's external calls.
+
+Because this operator permits mutual recursion,
+it is limited to transition systems which all perform
+both their incoming and outgoing calls
+according to the same language interface:
+\[
+  {\oplus_\mathcal{X}} :
+    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \times
+    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \rightarrow
+    (\mathcal{X} \twoheadrightarrow \mathcal{X})
+\]
+When mutual recursion is not needed,
+we can instead use the operator
+\[
+  {\circ_{\mathcal{X,Y,Z}} } :
+    (\mathcal{Y} \twoheadrightarrow \mathcal{Z}) \times
+    (\mathcal{X} \twoheadrightarrow \mathcal{Y}) \rightarrow
+    (\mathcal{X} \twoheadrightarrow \mathcal{Z})
+  \,,
+\]
+which is simpler in its construction
+and handles more general types.
+
+%which reflects at the level of transition systems
+%the categorical structure of $\ISpec$.
+
+\begin{definition}[Composition of transition systems] %{{{
+Suppose we have the transition systems
+\[
+  L_1 = \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
+    : \mathcal{Y} \twoheadrightarrow \mathcal{Z}
+  \quad \text{and} \quad
+  L_2 = \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
+    : \mathcal{X} \twoheadrightarrow \mathcal{Y}
+  \,.
+\]
+Their composition is defined as the transition system
+$
+  L_1 \circ L_2 :=
+  \langle S, {\rightarrow}, I, X, Y, T \rangle
+  : \mathcal{X} \twoheadrightarrow \mathcal{Z}
+$
+with the following components.
+States are of the form
+$
+    S := S_1 + (S_2 \times S_1)
+$.
+Initially, a call in $\mathcal{Z}$ activates $L_1$:
+\[
+  \begin{prooftree}
+    \hypo{q_\mathcal{Z} \mathrel{I_1} s_1}
+    \infer1{q_\mathcal{Z} \mathrel{I} \iota_1(s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \rightarrow_1 s_1'}
+    \infer1{\iota_1(s_1) \rightarrow \iota_1(s_1')}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{T_1} r_\mathcal{Z}}
+    \infer1{\iota_1(s_1) \mathrel{T} r_\mathcal{Z}}
+  \end{prooftree}
+\]
+When $L_1$ performs an external call in $\mathcal{Y}$,
+the question is used to activate $L_2$;
+the execution proceeds:
+\[
+  \begin{prooftree}
+    \hypo{s_1 \mathrel{X_1} q_\mathcal{Y}}
+    \hypo{q_\mathcal{Y} \mathrel{I_2} s_2}
+    \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_2 \rightarrow_2 s_2'}
+    \infer1{\iota_2(s_2, s_1) \rightarrow \iota_2(s_2', s_1)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{X_2} q_\mathcal{X}}
+    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_\mathcal{X}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{r_\mathcal{X} \mathrel{Y_2^{s_2}} s_2'}
+    \infer1{r_\mathcal{X} \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
+  \end{prooftree}
+\]
+When a final state of $L_2$ is reached,
+$L_1$ is resumed:
+\[
+  \begin{prooftree}
+    \hypo{s_2 \mathrel{T_2} r_\mathcal{Y}}
+    \hypo{r_\mathcal{Y} \mathrel{Y_1^{s_1}} s_1'}
+    \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
+  \end{prooftree}
+  \,.
+\]
+\end{definition}
+%}}}
+
+Importantly,
+the composition operator $\circ$
+\emph{under-approximates}
+the semantic linking operator $\oplus$.
+
+\begin{theorem}[Linking implements composition]
+For $L_1, L_2 : \mathcal{X} \twoheadrightarrow \mathcal{X}$,
+$
+  L_1 \circ L_2
+  \le
+  L_1 \oplus L_2
+$.
+\end{theorem}
+
+%}}}
+
+\subsubsection{Adjoining State} %{{{
+
+In the following,
+we will often need to systematically
+annotate every question and answer
+in an existing language interface
+with a ``current state'' component.
 
 \begin{definition}[Adjoining state]
 Given a language interface $A = \langle A^\que, A^\ans \rangle$
@@ -193,6 +318,8 @@ in order to interface them with client code.
 
 %}}}
 
+%}}}
+
 \subsection{Encapsulating State} %{{{
 
 Our approach is inspired by \citet{feedback,caots}.
@@ -208,7 +335,7 @@ unchanged upon its next activation.
 A stateful component $\Sigma : A \rightarrow B$
 with private states in the set $K$
 can then be specified using a transition system
-$L : A@K \twoheadrightarrow B@K$.
+$L : A \twoheadrightarrow B@K$.
 
 \begin{definition}
 A stateful component
@@ -217,7 +344,7 @@ consists of:
 \begin{itemize}
   \item a set of states $K$;
   \item an initial state $k_0 \in K$;
-  \item a transition system $L : A@K \twoheadrightarrow B@K$.
+  \item a transition system $L : A \twoheadrightarrow B@K$.
 \end{itemize}
 \end{definition}
 
@@ -236,13 +363,13 @@ by using a unit state:
 \[
   \begin{prooftree}
     \hypo{L : A \twoheadrightarrow B}
-    \infer1{\&L := (\mathbf{1} \mid L) : A \rightarrow B}
+    \infer1{\&L := (\mathbbm{1} \mid L) : A \rightarrow B}
   \end{prooftree}
 \]
 State encapsulation is managed using an operation
 \[
   \begin{prooftree}
-    \hypo{\Sigma = (Q \mid L) : A@K \rightarrow B@K}
+    \hypo{\Sigma = (Q \mid L) : A \rightarrow B@K}
     \infer1{\mathsf{fbk}_K(\Sigma) := (Q \times K \mid L) : A \rightarrow B}
   \end{prooftree}
 \]
@@ -270,7 +397,7 @@ such that:
 \begin{itemize}
   \item the initial states $k_0^1, k_0^2$ are related by $R$;
   \item the transition systems satisfy
-    $L_1 \le_{A@R \twoheadrightarrow B@R} L_2$.
+    $L_1 \le_{A \twoheadrightarrow B@R} L_2$.
 \end{itemize}
 We write $\Sigma_1 \equiv \Sigma_2$ when
 $\Sigma_1 \le \Sigma_2$ and
@@ -281,27 +408,19 @@ $\Sigma_2 \le \Sigma_1$.
 
 \subsection{Composition} %{{{
 
-The composites $L_1 \circ L_2$ and $L_1 \oplus L_2$
-use states of type $S_1 \times S_2$,
-with each side of the pair updated when the corresponding component
-is activated.
-Show that the composition operators are
-still compatible with simulation.
+The composite $\Sigma_1 \circ \Sigma_2$
+uses states of type $K_1 \times K_2$.
+Each side of the pair is updated
+when the corresponding component is executed.
 
 \begin{definition}[Linking]
-The stateful components $\Sigma_1, \Sigma_2 : A \rightarrow A$
-can be linked as:
-\[
-  \Sigma_1 \oplus \Sigma_2 :=
-    ( K_1 \times K_2 \mid L_1@K_2 \oplus L_2@K_1 )
-\]
-Likewise, the components
+The components
 $\Sigma_1 : B \rightarrow C$ and
 $\Sigma_2 : A \rightarrow B$
 can be composed into:
 \[
   \Sigma_1 \circ \Sigma_2 :=
-    ( K_1 \times K_2 \mid L_1@K_2 \circ L_2@K_1 )
+    ( K_1 \times K_2 \mid L_1@K_2 \circ L_2 )
 \]
 \end{definition}
 
@@ -314,13 +433,13 @@ can be composed into:
   In addition we have the property (almost by definition):
   \[
     \kw{fbk}_{K_1}(\Sigma_1) \circ \kw{fbk}_{K_2}(\Sigma_2) \equiv
-    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2@K_1)
+    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2)
   \]
 \end{lemma}
 
 %}}}
 
-\subsection{Simulations} %{{{
+\subsection{Stateful Simulations} %{{{
 
 Definition~\ref{def:ssim} introduced a simple notion of refinement
 between stateful components,
@@ -328,7 +447,7 @@ but assumed that the interactions of both components
 with their environment were identical.
 By contrast, a key feature of CompCertO
 is the notion of \emph{simulation convention},
-which parameterize simulations by
+which parameterizes simulations by
 specify how the interactions of
 the source-level and target-level transition system
 are related.
@@ -357,7 +476,7 @@ is specified by:
     which store the current state of the simulation convention;
   \item two accessibility relations
     ${\leadsto}, {\mapsto} \subseteq W \times W$,
-    corresponding to \emph{external} and \emph{internal} transitions;
+    corresponding to \emph{internal} and \emph{external} transitions;
   \item a Kripke relation $R^\que \in \mathcal{R}_W(A^\que, B^\que)$
     between the language interfaces' questions, and
   \item a Kripke relation $R^\ans \in \mathcal{R}_W(A^\ans, B^\ans)$
@@ -376,62 +495,212 @@ When the component is activated,
 incoming questions must be related by $w \Vdash R^\que$.
 The simulation guarantees that the corresponding answers
 will in turn be related by $w' \Vdash R^\ans$,
-where $w'$ is a successor world of $w$ such that $w \mapsto w'$.
+where $w'$ is a successor world of $w$ such that $w \leadsto w'$.
 The world $w'$ then becomes the simulation convention's new state,
 and the questions for any subsequent activation
-must be related at a world $w''$ such that $w' \leadsto w''$.
+must be related at a world $w''$ such that $w' \mapsto w''$.
 
-\begin{definition}[Simulation]
-Suppose the components $\Sigma_1, \Sigma_2$
-and the simulation conventions $\mathbb{R}_A, \mathbb{R}_B$
+Moreover,
+when a transition system $L : A \twoheadrightarrow B$ performs external calls,
+it plays the role of the environment
+with respect to the language interface $A$.
+Therefore,
+in the context of stateful simulations,
+\ldots
+
+\begin{definition}[Stateful simulation]
+Suppose the CompCertO transition systems $L_1, L_2$
+and the stateful simulation conventions $\mathbb{R}_A, \mathbb{R}_B$
 have the following types:
 \[
 \begin{tikzcd}
-  A_1 \ar[r, "\Sigma_1"] \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+  A_1 \ar[r, twoheadrightarrow, "L_1"] \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
   B_1 \ar[d, Leftrightarrow, "\mathbb{R}_B"] \\
-  A_2 \ar[r, "\Sigma_2"] & B_2
+  A_2 \ar[r, twoheadrightarrow, "L_2"] & B_2
 \end{tikzcd}
 \]
 There is a simulation
-$\Sigma_1 \le_{\mathbb{R}_A \rightarrow \mathbb{R}_B} \Sigma_2$
-when there exists a Kripke relation
-$R_K : \mathcal{R}_{W_A \times W_B}(K_1, K_2)$
-satisfying the following properties:
-\[
-  (w_0^A, w_0^B) \Vdash k_0^1 \mathrel{R_K} k_0^2
-  \qquad
-  \begin{prooftree}
-    \hypo{(w_A, w_B) \Vdash k_1 \mathrel{R_K} k_2}
-    \hypo{w_A \mapsto w_A'}
-    \infer2{(w_A', w_B) \Vdash k_1 \mathrel{R_K} k_2}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{(w_A, w_B) \Vdash k_1 \mathrel{R_K} k_2}
-    \hypo{w_B \leadsto w_B'}
-    \infer2{(w_A, w_B') \Vdash k_1 \mathrel{R_K} k_2}
-  \end{prooftree}
-\]
-and such that:
-\[
-  \text{[the simulation properties you'd expect]}
-\]
+$L_1 \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$
+when there exists a relation $R \in \mathcal{R}_{W_A \times W_B}(S_1, S_2)$
+such that the following properties hold:
+\begin{figure}[h] % fig:fsim {{{
+  %\figsize
+  \[
+    \begin{array}{c@{\quad}c@{\quad}c}
+      \begin{tikzcd}[sep=large]
+        q_1 \ar[d, "w_B \Vdash \mathbb{R}_B^\que"', dash] \ar[r, dash, "I_1"] &
+        s_1 \ar[d, "{(w_A,w_B) \Vdash R}", dash, dashed] \\
+        q_2 \ar[r, "I_2"', dash, dashed] &
+        s_2
+      \end{tikzcd}
+      &
+      \begin{tikzcd}[sep=large]
+        s_1 \ar[r, "t"] \ar[d, "{(w_A, w_B) \Vdash R}"', dash] &
+        \!\!{}_1 \:\, s_1' \ar[d, "{(w_A, w_B) \Vdash R}", dash, dashed] \\
+        s_2 \ar[r, "t", dashed] &
+        \!\!{}_2^* \:\, s_2'
+      \end{tikzcd}
+%      \begin{tikzcd}[sep=large]
+%        s_1 \ar[r] \ar[d, "{(w_A, w_B) \Vdash R}"', dash] &
+%        s_1' \ar[d, "{(w_A,w_B) \Vdash R}", dash, dashed] \\
+%        s_2 \ar[r, dashed] &
+%        \!\!\!{}^* \: s_2'
+%      \end{tikzcd}
+      &
+      \begin{tikzcd}[sep=large]
+        s_1 \ar[r, "F_1", dash] \ar[d, "{(w_A, w_B) \Vdash R}"', dash] &
+        r_1 \ar[d, "\leadsto"', "w_B' \Vdash \mathbb{R}_B^\ans", dash, dashed] \\
+        s_2 \ar[r, "F_2"', dash, dashed] &
+        r_2
+      \end{tikzcd}
+      \vspace{0.5ex} \\
+      I_1 \ifr{\Vdash \mathbb{R}_B^\que \rightarrow \mathcal{P}^\le(R)} I_2
+      &
+      {\rightarrow_1}
+      \ifr{\Vdash R \rightarrow {=} \rightarrow \mathcal{P}^\le(R)}
+      {\rightarrow_2^*}
+      &
+      F_1
+      \ifr{\Vdash R \rightarrow \mathcal{P}^\le(\Diamond \mathbb{R}_B^\ans)}
+      F_2
+      \vspace{1.2ex} \\
+      \text{(a) Initial states} &
+      \text{(b) Internal states} &
+      \text{(c) Final states}
+    \end{array}
+  \]
+  \[
+    \begin{array}{c}
+      \begin{tikzcd}[sep=large,baseline=-3pt]
+        s_1 \ar[r, "X_1", dash] \ar[d, "{(w_A,w_B) \Vdash R}"', dash] &
+        m_1 \ar[r, dotted, dash] \ar[d, "\mapsto"', "w_A' \Vdash \mathbb{R}_A^\que", dash, dashed] &
+        n_1 \ar[r, "Y_1^{s_1}", dash] \ar[d, "\leadsto"', "w_A'' \Vdash \mathbb{R}_A^\ans", dash] &
+        s_1' \ar[d, "{(w_A'', w_B) \Vdash R}", dash, dashed]
+        \\
+        s_2 \ar[r, "X_2"', dash, dashed] &
+        m_2 \ar[r, dotted, dash] &
+        n_2 \ar[r, "Y_2^{s_2}"', dash, dashed] &
+        s_2'
+      \end{tikzcd}
+      \vspace{0.5ex} \\
+      \begin{array}{
+          r @{\,.\,} r @{{} \Vdash {}} c@{}c@{}c @{\:\:\wedge\:\:}
+                                    c@{}c@{}c @{\:\:} l}
+        \forall \, w_A \, w_B \, s_1 \, s_2 \, m_1 & (w_A, w_B) & s_1 & {}\mathrel{R}{} & s_2 &
+                        s_1 & {}\mathrel{X_1}{} & m_1 & \Rightarrow \\
+        \exists \, w_A' \, m_2 & w_A \mapsto w_A' \:\wedge\: w_A' & m_1 & {}\mathrel{\mathbb{R}_A^\que}{} & m_2 &
+                        s_2 & {}\mathrel{X_2}{} & m_2 & \:\wedge\: \\
+        \forall \, w_A'' \, n_1 \, n_2 \, s_1' & w_A' \leadsto w_A'' \Rightarrow
+            w_A'' & n_1 & {}\mathrel{\mathbb{R}_A^\ans}{} & n_2 &
+                        n_1 & {}\mathrel{Y_1^{s_1}}{} & s_1' & \Rightarrow \\
+        \exists \, s_2' & (w_A'',w_B) & s_1' & {}\mathrel{R}{} & s_2' &
+                        n_2 & {}\mathrel{Y_2^{s_2}}{} & s_2' &
+      \end{array}
+      \vspace{1.2ex} \\
+      \text{(d) External states}
+    \end{array}
+  \]
+  \caption{Forward simulation properties}
+%    The relation $R \in \mathcal{R}_{W_B}(S_1, S_2)$
+%    is indexed by $w_B$ to ensure that the final answers
+%    are related consistently with the initial questions.}
+%    When $L_1$ assigns a question $m_1$ to an external state $s_1$,
+%    $L_2$ assigns a corresponding question $m_2$ to any related state $s_2$.
+%    The questions are related according to
+%    the simulation convention $\mathbb{R}_A$,
+%    at a world $w_A$ chosen by the simulation.
+%    When $L_1$ is resumed by an answer $n_1$,
+%    then a related answer $n_2$ also resumes $L_2$,
+%    and reestablishes the simulation relation
+%    between resulting states.}
+%  \caption{Forward simulation properties for initial, internal and final states.}
+%    (a)~When the execution is initiated by two related questions,
+%    any initial state of $L_1$ is matched by
+%    a related initial state of $L_2$.
+%    (b)~Every internal transition of $L_1$ is then matched by
+%    a sequence of transitions of $L_2$,
+%    preserving the simulation relation.
+%    (c)~When a final state is eventually reached by $L_1$,
+%    any related state in $L_2$ is final as well and
+%    produces a related answer.
+%    The indexing of the relations
+%    $\mathbb{R}_B^\que$, $R$, $\mathbb{R}_B^\ans$
+%    by the Kripke world $w_B$
+%    guarantees that the original questions and their eventual answers
+%    are related in a consistent way.}
+  \label{fig:fsim}
+\end{figure}
+%}}}
 \end{definition}
+
+\noindent
+Compared with CompCertO:
+\begin{itemize}
+  \item $w_A$ as well as $w_B$ part of the simulation state;
+  \item enforce $\mapsto$ between successive external calls.
+\end{itemize}
+Additional things that may be needed:
+\begin{itemize}
+  \item A relation $W \subseteq W_A \times W_B$ that
+    specifies which pairs of worlds make sense together;
+    it must hold for $w_A^0$ and $w_B^0$
+    and be maintained by simulations.
+\end{itemize}
+
+%when there exists a Kripke relation
+%$R_K : \mathcal{R}_{W_A \times W_B}(K_1, K_2)$
+%satisfying the following properties:
+%\[
+%  (w_0^A, w_0^B) \Vdash k_0^1 \mathrel{R_K} k_0^2
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{(w_A, w_B) \Vdash k_1 \mathrel{R_K} k_2}
+%    \hypo{w_A \mapsto w_A'}
+%    \infer2{(w_A', w_B) \Vdash k_1 \mathrel{R_K} k_2}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{(w_A, w_B) \Vdash k_1 \mathrel{R_K} k_2}
+%    \hypo{w_B \leadsto w_B'}
+%    \infer2{(w_A, w_B') \Vdash k_1 \mathrel{R_K} k_2}
+%  \end{prooftree}
+%\]
+%and such that:
+%\[
+%  \text{[the simulation properties you'd expect]}
+%\]
 
 Note that the stateless simulation conventions of CompCertO
 can be promoted as follows.
 
 \begin{definition}[Promoted simulation convention]
+The CompCertO simulation convention
+$\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$
+can be promoted to the stateful simulation convention
+$\hat{\mathbb{R}} :=
+ \langle W^?, {=}, \top, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$.
 \end{definition}
 
-Then
-
-\begin{lemma}
-Correspondence between CompCertO
-and stateful simulations.
+Then we have the relationship:
+\begin{lemma}[CompCertO \emph{vs\@.} stateful simulations]
+\[
+  L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2
+  \quad \Leftrightarrow \quad
+  L_1 \preceq_{\hat{\mathbb{R}}_A \twoheadrightarrow \hat{\mathbb{R}}_B} L_2
+\]
 \end{lemma}
 
 %}}}
+
+\subsection{Simulation of Stateful Components}
+
+\begin{definition}
+We do the thing where we add an existentially quantified
+relation on encapsulated states,
+which we use to extend the simulation convention.
+\end{definition}
+
+Show that compatible with composition, etc.
 
 %}}}
 
