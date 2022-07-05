@@ -485,36 +485,38 @@ is specified by:
   \item a Kripke relation $R^\ans \in \mathcal{R}_W(A^\ans, B^\ans)$
     between their answers.
 \end{itemize}
+The accessibility relations are required to be reflexive and transitive.
 The identity simulation convention
 $\kw{id}_A : A \Leftrightarrow A$
 is given by
-$\kw{id}_A := \langle \mathbf{1}, \top, \top, {=}, {=} \rangle$
+$\kw{id}_A := \langle
+    \mathbbm{1}, {=}_\mathbbm{1}, {=}_\mathbbm{1}, {=}_{A^\que}, {=}_{A^\ans}
+ \rangle$.
 \end{definition}
 
 The initial world $w_0$ gives the simulation convention's initial state.
 While the environment is in control,
-the world may transition according to the relation $\leadsto$.
-When the component is activated,
-incoming questions must be related by $w \Vdash R^\que$.
-The simulation guarantees that the corresponding answers
-will in turn be related by $w' \Vdash R^\ans$,
+the world may transition according to the relation $\mapsto$.
+When control is transferred to the system,
+the corresponding questions must be related by $w \Vdash R^\que$.
+World transitions may then occur according to $\leadsto$.
+Hence, when the system returns control to the environment,
+the corresponding answers
+will be related by $w' \Vdash R^\ans$,
 where $w'$ is a successor world of $w$ such that $w \leadsto w'$.
-The world $w'$ then becomes the simulation convention's new state,
-and the questions for any subsequent activation
-must be related at a world $w''$ such that $w' \mapsto w''$.
+The questions for any subsequent activation
+must in turn be related at a world $w''$ such that $w' \mapsto w''$,
+and so on and so forth indefinitely:
+\begin{align*}
+  w_0 \mapsto w_1 \Vdash q^\sharp_1 \mathrel{R^\que} q^\flat_1 \:&\longrightarrow\:
+  w_1 \leadsto w_1' \Vdash r^\sharp_1 \mathrel{R^\ans} r^\flat_1 \\
+  w_1' \mapsto w_2 \Vdash q^\sharp_2 \mathrel{R^\que} q^\flat_2 \:&\longrightarrow\:
+  w_2 \leadsto w_2' \Vdash r^\sharp_2 \mathrel{R^\ans} r^\flat_2 \\[-1ex]
+  &\quad\!\vdots
+\end{align*}
 
-Moreover,
-when a transition system $L : A \twoheadrightarrow B$ performs external calls,
-it plays the role of the environment
-with respect to the language interface $A$.
-Therefore,
-in the context of stateful simulations,
-\ldots
-
-\begin{definition}[Stateful simulation]
-Suppose the CompCertO transition systems $L_1, L_2$
-and the stateful simulation conventions $\mathbb{R}_A, \mathbb{R}_B$
-have the following types:
+With this protocol in mind,
+consider a simulation of type:
 \[
 \begin{tikzcd}
   A_1 \ar[r, twoheadrightarrow, "L_1"] \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
@@ -522,25 +524,63 @@ have the following types:
   A_2 \ar[r, twoheadrightarrow, "L_2"] & B_2
 \end{tikzcd}
 \]
-There is a simulation
-$L_1 \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$
-when there exists a relation $R \in \mathcal{R}_{W_A \times W_B}(S_1, S_2)$
-such that the following properties hold:
-\begin{figure}[h] % fig:fsim {{{
-  %\figsize
+Since the simulation simultaneously
+plays the role of the system with respect to
+the simulation convention $\mathbb{R}_B$ and
+the role of the environment with respect to $\mathbb{R}_A$,
+it will operate in the context of a Kripke frame
+constructed from both $W_A$ and $W_B$.
+Specifically,
+the possible states of a simulation will be a subset
+$W \subseteq W_A \times W_B$.
+This subset must contain
+the initial state $w_0 := (w^A_0, w^B_0) \in W$.
+Between successive activations,
+the environment may update the $W_B$ component.
+Hence we require:
+\[
+  (w_A, w_B) \in W \:\wedge\:
+  w_B \mapsto_B w_B' \:\Rightarrow\:
+  (w_A, w_B') \in W
+\]
+When the components execute,
+the worlds will evolve according to
+the accessibility relation:
+\[
+  (w_A, w_B) \leadsto_{\bar{A}B} (w_A', w_B') \::\Leftrightarrow\:
+  w_A \mapsto_A w_A' \:\wedge\: w_B \leadsto_B w_B'
+\]
+Reading the constituent transition relations
+within $L_1, L_2$ as functions of type:
+\begin{align*}
+  I_1 &: B_1^\que \rightarrow \mathcal{P}(S_1) &
+  {\rightarrow_1} &: S_1 \rightarrow \mathcal{P}(\mathbb{E} \times S_1) &
+  F_1 &: S_1 \rightarrow \mathcal{P}(B_1^\ans)
+  \\
+  I_2 &: B_2^\que \rightarrow \mathcal{P}(S_2) &
+  {\rightarrow_2} &: S_2 \rightarrow \mathcal{P}(\mathbb{E} \times S_2) &
+  F_2 &: S_2 \rightarrow \mathcal{P}(B_2^\ans)
+  \,,
+\end{align*}
+we can formulate the simulation properties for internal steps
+concisely as shown in Fig.~\ref{fig:simint}.
+\begin{figure}[h]
+  \small
   \[
-    \begin{array}{c@{\quad}c@{\quad}c}
-      \begin{tikzcd}[sep=large]
-        q_1 \ar[d, "w_B \Vdash \mathbb{R}_B^\que"', dash] \ar[r, dash, "I_1"] &
-        s_1 \ar[d, "{(w_A,w_B) \Vdash R}", dash, dashed] \\
-        q_2 \ar[r, "I_2"', dash, dashed] &
+    \begin{array}{c@{\qquad}c@{\qquad}c}
+      \begin{tikzcd}[sep=tiny,column sep=0]
+        q_1 \ar[dd, "w \Vdash \mathbb{R}_B^\que"', dash] \ar[rr, dash, "I_1"] &&
+        s_1 \ar[dd, "w' \Vdash R", dash, dashed] \\
+        & \leadsto_{\bar{A}B} & \\
+        q_2 \ar[rr, "I_2"', dash, dashed] &&
         s_2
       \end{tikzcd}
       &
-      \begin{tikzcd}[sep=large]
-        s_1 \ar[r, "t"] \ar[d, "{(w_A, w_B) \Vdash R}"', dash] &
-        \!\!{}_1 \:\, s_1' \ar[d, "{(w_A, w_B) \Vdash R}", dash, dashed] \\
-        s_2 \ar[r, "t", dashed] &
+      \begin{tikzcd}[sep=tiny,column sep=0]
+        s_1 \ar[rr, "t"] \ar[dd, "w \Vdash R"', dash] &&
+        \!\!{}_1 \:\, s_1' \ar[dd, "w' \Vdash R", dash, dashed] \\
+        & \leadsto_{\bar{A}B} & \\
+        s_2 \ar[rr, "t", dashed] &&
         \!\!{}_2^* \:\, s_2'
       \end{tikzcd}
 %      \begin{tikzcd}[sep=large]
@@ -550,21 +590,23 @@ such that the following properties hold:
 %        \!\!\!{}^* \: s_2'
 %      \end{tikzcd}
       &
-      \begin{tikzcd}[sep=large]
-        s_1 \ar[r, "F_1", dash] \ar[d, "{(w_A, w_B) \Vdash R}"', dash] &
-        r_1 \ar[d, "\leadsto"', "w_B' \Vdash \mathbb{R}_B^\ans", dash, dashed] \\
-        s_2 \ar[r, "F_2"', dash, dashed] &
+      \begin{tikzcd}[sep=tiny, column sep=0]
+        s_1 \ar[rr, "F_1", dash] \ar[dd, "w \Vdash R"', dash] &&
+        r_1 \ar[dd, "w' \Vdash \mathbb{R}_B^\ans", dash, dashed] \\
+        & \leadsto_{\bar{A}B} & \\
+        s_2 \ar[rr, "F_2"', dash, dashed] &&
         r_2
       \end{tikzcd}
-      \vspace{0.5ex} \\
-      I_1 \ifr{\Vdash \mathbb{R}_B^\que \rightarrow \mathcal{P}^\le(R)} I_2
+      \vspace{1ex} \\
+      I_1 \ifr{\Vdash \mathbb{R}_B^\que \rightarrow
+        \mathcal{P}^\le(\Diamond_{\bar{A}B} R)} I_2
       &
       {\rightarrow_1}
-      \ifr{\Vdash R \rightarrow {=} \rightarrow \mathcal{P}^\le(R)}
+      \ifr{\Vdash R \rightarrow {=} \rightarrow \mathcal{P}^\le(\Diamond_{\bar{A}B} R)}
       {\rightarrow_2^*}
       &
       F_1
-      \ifr{\Vdash R \rightarrow \mathcal{P}^\le(\Diamond \mathbb{R}_B^\ans)}
+      \ifr{\Vdash R \rightarrow \mathcal{P}^\le(\Diamond_{\bar{A}B} \mathbb{R}_B^\ans)}
       F_2
       \vspace{1.2ex} \\
       \text{(a) Initial states} &
@@ -572,111 +614,93 @@ such that the following properties hold:
       \text{(c) Final states}
     \end{array}
   \]
+  \caption{Stateful simulation properties for internal steps}
+  \label{fig:simint}
+\end{figure}
+
+Conversely, for external calls,
+the simulation plays the role of the environment.
+We expect that:
+\[
+  (w_A, w_B) \in W \:\wedge\:
+  w_A \leadsto_A w_A' \:\Rightarrow\:
+  (w_A', w_B) \in W
+\]
+Moreover,
+from the point of view of the simulation,
+the external call will make a transition according to
+the following accessibility relation.
+[NB we may want to restrict $\leadsto_B$ to $=$
+if this causes problems, but]
+Note that by allowing a transition $w_B \leadsto_B w_B'$,
+we are able to capture the effect that
+any reentrant call may have on the simulation state:
+\[
+  (w_A, w_B) \leadsto_{AB} (w_A', w_B') \::\Leftrightarrow\:
+  w_A \leadsto_A w_A' \:\wedge\:
+  w_B \leadsto_B w_B'
+\]
+By reading the action of transition systems at external calls
+in terms of the functions:
+\begin{align*}
+  Z_1 &: S_1 \rightarrow
+    \mathcal{P}(A_1^\que \times (A_1^\ans \rightarrow \mathcal{P}(S_1))) &
+  Z_1(s_1) &:= \{ (q_1, Y_1^{s_1}) \mid s_1 \mathrel{X_1} q_1 \}
+ \\
+  Z_2 &: S_2 \rightarrow
+    \mathcal{P}(A_2^\que \times (A_2^\ans \rightarrow \mathcal{P}(S_2))) &
+  Z_2(s_2) &:= \{ (q_2, Y_2^{s_2}) \mid s_2 \mathrel{X_2} q_2 \}
+  \,,
+\end{align*}
+we can then formulate the simulation condition for external calls
+as presented in Fig.~\ref{fig:simext} below.
+
+\begin{figure}[h]
   \[
     \begin{array}{c}
-      \begin{tikzcd}[sep=large,baseline=-3pt]
-        s_1 \ar[r, "X_1", dash] \ar[d, "{(w_A,w_B) \Vdash R}"', dash] &
-        m_1 \ar[r, dotted, dash] \ar[d, "\mapsto"', "w_A' \Vdash \mathbb{R}_A^\que", dash, dashed] &
-        n_1 \ar[r, "Y_1^{s_1}", dash] \ar[d, "\leadsto"', "w_A'' \Vdash \mathbb{R}_A^\ans", dash] &
-        s_1' \ar[d, "{(w_A'', w_B) \Vdash R}", dash, dashed]
+      \begin{tikzcd}[sep=tiny, column sep=normal]
+        s_1 \ar[rr, "X_1", dash] \ar[dd, "w \Vdash R"', dash] &&
+        m_1 \ar[rr, dotted, dash] \ar[dd, "w'"', "{} \Vdash \mathbb{R}_A^\que", dash, dashed] &&
+        n_1 \ar[rr, "Y_1^{s_1}", dash] \ar[dd, "w''"', "{} \Vdash \mathbb{R}_A^\ans", dash] &&
+        s_1' \ar[dd, "w''' \Vdash R", dash, dashed]
         \\
-        s_2 \ar[r, "X_2"', dash, dashed] &
-        m_2 \ar[r, dotted, dash] &
-        n_2 \ar[r, "Y_2^{s_2}"', dash, dashed] &
+        & \leadsto_{\bar{A}B} && \leadsto_{AB} && \leadsto_{\bar{A}B} &
+        \\
+        s_2 \ar[rr, "X_2"', dash, dashed] &&
+        m_2 \ar[rr, dotted, dash] &&
+        n_2 \ar[rr, "Y_2^{s_2}"', dash, dashed] &&
         s_2'
       \end{tikzcd}
-      \vspace{0.5ex} \\
-      \begin{array}{
-          r @{\,.\,} r @{{} \Vdash {}} c@{}c@{}c @{\:\:\wedge\:\:}
-                                    c@{}c@{}c @{\:\:} l}
-        \forall \, w_A \, w_B \, s_1 \, s_2 \, m_1 & (w_A, w_B) & s_1 & {}\mathrel{R}{} & s_2 &
-                        s_1 & {}\mathrel{X_1}{} & m_1 & \Rightarrow \\
-        \exists \, w_A' \, m_2 & w_A \mapsto w_A' \:\wedge\: w_A' & m_1 & {}\mathrel{\mathbb{R}_A^\que}{} & m_2 &
-                        s_2 & {}\mathrel{X_2}{} & m_2 & \:\wedge\: \\
-        \forall \, w_A'' \, n_1 \, n_2 \, s_1' & w_A' \leadsto w_A'' \Rightarrow
-            w_A'' & n_1 & {}\mathrel{\mathbb{R}_A^\ans}{} & n_2 &
-                        n_1 & {}\mathrel{Y_1^{s_1}}{} & s_1' & \Rightarrow \\
-        \exists \, s_2' & (w_A'',w_B) & s_1' & {}\mathrel{R}{} & s_2' &
-                        n_2 & {}\mathrel{Y_2^{s_2}}{} & s_2' &
-      \end{array}
+      \vspace{1ex} \\
+      Z_1
+      \mathrel{[
+        \Vdash R \rightarrow \mathcal{P}^\le(
+          \Diamond_{\bar{A}B} \:\:
+          \mathbb{R}_A^\que \times (
+            \Box_{AB} \:\:
+            \mathbb{R}_A^\ans \rightarrow
+            \mathcal{P}^\le(\Diamond_{\bar{A}B} R)))
+      ]}
+      Z_2
       \vspace{1.2ex} \\
       \text{(d) External states}
     \end{array}
   \]
-  \caption{Forward simulation properties}
-%    The relation $R \in \mathcal{R}_{W_B}(S_1, S_2)$
-%    is indexed by $w_B$ to ensure that the final answers
-%    are related consistently with the initial questions.}
-%    When $L_1$ assigns a question $m_1$ to an external state $s_1$,
-%    $L_2$ assigns a corresponding question $m_2$ to any related state $s_2$.
-%    The questions are related according to
-%    the simulation convention $\mathbb{R}_A$,
-%    at a world $w_A$ chosen by the simulation.
-%    When $L_1$ is resumed by an answer $n_1$,
-%    then a related answer $n_2$ also resumes $L_2$,
-%    and reestablishes the simulation relation
-%    between resulting states.}
-%  \caption{Forward simulation properties for initial, internal and final states.}
-%    (a)~When the execution is initiated by two related questions,
-%    any initial state of $L_1$ is matched by
-%    a related initial state of $L_2$.
-%    (b)~Every internal transition of $L_1$ is then matched by
-%    a sequence of transitions of $L_2$,
-%    preserving the simulation relation.
-%    (c)~When a final state is eventually reached by $L_1$,
-%    any related state in $L_2$ is final as well and
-%    produces a related answer.
-%    The indexing of the relations
-%    $\mathbb{R}_B^\que$, $R$, $\mathbb{R}_B^\ans$
-%    by the Kripke world $w_B$
-%    guarantees that the original questions and their eventual answers
-%    are related in a consistent way.}
-  \label{fig:fsim}
+  \caption{Simulation property for external calls}
+  \label{fig:simext}
 \end{figure}
-%}}}
+
+\begin{definition}[Stateful simulation]
+A stateful simulation of CompCertO transition systems,
+written as
+$L_1 \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_1$,
+is given by a set of worlds $W$ such that
+\[ (w_0^A, w_0^B) \in W \subseteq W_A \times W_B \,, \]
+closed under ${\leadsto_A} \times {\mapsto_B}$,
+satisfying the properties given in
+\autoref{fig:simint} and
+\autoref{fig:simext}.
 \end{definition}
-
-\noindent
-Compared with CompCertO:
-\begin{itemize}
-  \item $w_A$ as well as $w_B$ part of the simulation state;
-  \item enforce $\mapsto$ between successive external calls.
-\end{itemize}
-Additional things that may be needed:
-\begin{itemize}
-  \item A relation $W \subseteq W_A \times W_B$ that
-    specifies which pairs of worlds make sense together;
-    it must hold for $w_A^0$ and $w_B^0$
-    and be maintained by simulations.
-\end{itemize}
-[Also,
-we may want to use
-a Kripke frame
-$\langle W_A \times W_B, {\mapsto_A} \times {\leadsto_B} \rangle$
-to define the simulation properties]
-
-%when there exists a Kripke relation
-%$R_K : \mathcal{R}_{W_A \times W_B}(K_1, K_2)$
-%satisfying the following properties:
-%\[
-%  (w_0^A, w_0^B) \Vdash k_0^1 \mathrel{R_K} k_0^2
-%  \qquad
-%  \begin{prooftree}
-%    \hypo{(w_A, w_B) \Vdash k_1 \mathrel{R_K} k_2}
-%    \hypo{w_A \mapsto w_A'}
-%    \infer2{(w_A', w_B) \Vdash k_1 \mathrel{R_K} k_2}
-%  \end{prooftree}
-%  \qquad
-%  \begin{prooftree}
-%    \hypo{(w_A, w_B) \Vdash k_1 \mathrel{R_K} k_2}
-%    \hypo{w_B \leadsto w_B'}
-%    \infer2{(w_A, w_B') \Vdash k_1 \mathrel{R_K} k_2}
-%  \end{prooftree}
-%\]
-%and such that:
-%\[
-%  \text{[the simulation properties you'd expect]}
-%\]
 
 Note that the stateless simulation conventions of CompCertO
 can be promoted as follows.
@@ -726,34 +750,52 @@ is compatible with stateful simulations.
 
 \subsection{Simulation of Stateful Components} %{{{
 
-We now extend the notion of stateful simulation
-to stateful components with encapsulated state.
-Our approach is similar to the one we use in Definition~\ref{def:ssim}:
-the simulation will provide an existentially quantified
-relation between the encapsulated states of the source and target
-components.
-However,
-we now allow this relation to be sensitive to the state of the simulation,
-captured by the world $w_B$.
+\begin{definition}[Lifting simulation conventions]
+For a simulation convention
+$\mathbb{R} : A^\sharp \Leftrightarrow A^\flat$
+and two pointed sets $K^\sharp, K^\flat$, 
+we define the simulation convention
+$\mathbb{R}@\langle K^\sharp,K^\flat \rangle :
+   A^\sharp@K^\sharp \Leftrightarrow A^\flat@K^\flat$
+as follows:
+\begin{gather*}
+  W := W_\mathbb{R} \times K^\sharp \times K^\flat
+  \qquad w_0 := (w_0^\mathbb{R}, k_0^\sharp, k_0^\flat)
+  \\[1ex]
+ {\begin{prooftree}
+    \hypo{w \leadsto_\mathbb{R} w'}
+    \infer1{(w, k_\sharp, k_\flat) \leadsto (w', k_\sharp', k_\flat')}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{w \mapsto_\mathbb{R} w'}
+    \infer1{(w, k^\sharp, k^\flat) \mapsto (w', k^\sharp, k^\flat)}
+  \end{prooftree}}
+  \\[1ex]
+ {\begin{prooftree}
+    \hypo{w \Vdash q^\sharp@k^\sharp \mathrel{\mathbb{R}^\que}
+                   q^\flat@k^\flat}
+    \infer1{
+      (w, k^\sharp, k^\flat) \Vdash
+      q^\sharp
+      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbb{R})]^\que}
+      q^\flat}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{w \Vdash r^\sharp@k^\sharp \mathrel{\mathbb{R}^\ans}
+                   r^\flat@k^\flat}
+    \infer1{
+      (w, k^\sharp, k^\flat) \Vdash
+      r^\sharp
+      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbb{R})]^\ans}
+      r^\flat}
+  \end{prooftree}}
+\end{gather*}
+\end{definition}
 
 \begin{definition}[Simulation] \label{def:sim}
-For a stateful simulation convention
-$\mathbb{R} = \langle W, {\leadsto}, {\mapsto}, R^\circ, R^\bullet \rangle :
- A \Leftrightarrow B$
-and a relation
-$R_K \in \mathcal{R}_W(K_1, K_2)$,
-we define the simulation convention:
-\[
-  \mathbb{R}@R_K :=
-  \langle
-    W, \: {\leadsto}, \: {\mapsto}, \:
-    R^\que \times R_K, \:
-    R^\ans \times R_K
-  \rangle :
-  A@K \Leftrightarrow B@K
-  \,.
-\]
-Then there is a \emph{simulation} of type
+There is a \emph{simulation} of type
 \[
 \begin{tikzcd}
   A_1 \ar[r, "\Sigma_1"]
@@ -767,30 +809,16 @@ between
 the stateful components
 $\Sigma_1 = (K_1 \mid L_1) : A_1 \rightarrow B_1$ and
 $\Sigma_2 = (K_2 \mid L_2) : A_2 \rightarrow B_2$
-if there exists a relation
-$R_K \in \mathcal{R}_{W_B}(K_1, K_2)$
-such that:
+when the following property holds:
 \[
-  w^B_0 \Vdash k^1_0 \mathrel{R_K} k^2_0
-  \qquad
-  \begin{prooftree}
-    \hypo{w_B \Vdash k_1 \mathrel{R_K} k_2}
-    \hypo{w_B \mapsto w_B'}
-    \infer2{w_B' \Vdash k_1 \mathrel{R_K} k_2}
-  \end{prooftree}
-  \qquad
-  L_1 \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B@R_K} L_2
+  L_1
+  \preceq_{\mathbb{R}_A \twoheadrightarrow
+           \mathbb{R}_B@\langle K_1, K_2 \rangle}
+  L_2
 \]
 We will write
 $\Sigma_1 \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B} \Sigma_2$.
 \end{definition}
-
-The preservation of $R_K$ under $\mapsto$,
-combined with the role of $\mapsto$
-for successive external calls
-in the context of stateful simulations,
-ensures that composition is compatible with
-the simulations of Definition~\ref{def:sim}.
 
 \begin{lemma}[Composition of simulations]
 \[
@@ -1110,6 +1138,13 @@ This yields the following property.
 
 %}}}
 
+\subsection{Hiding Memory State} %{{{
+
+In \S\ref{sec:clightp:erasure}
+
+
+%}}}
+
 \subsection{Initial memory} %{{{
 
 The way we define $\kw{init\_mem}$ can work with the
@@ -1118,6 +1153,10 @@ separation relation such that:
   \kw{init\_mem}(p_1) \bullet \kw{init\_mem}(p_2) \equiv
   \kw{init\_mem}(p_1 + p_2)
 \]
+
+%}}}
+
+\subsection{Implementing Memory Separation with Nominal CompCert} %{{{
 
 %}}}
 
