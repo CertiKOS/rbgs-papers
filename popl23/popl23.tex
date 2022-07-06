@@ -41,8 +41,6 @@ We do better.
 
 %}}}
 
-\section{Encapsulated State} %{{{
-
 \begin{figure} \label{fig:overview} %{{{
   \textbf{Notations}
   \\[1em]
@@ -264,6 +262,18 @@ We do better.
 \end{figure}
 %}}}
 
+\section{Basic framework} %{{{
+
+Rather than altering CompCertO's existing transition system model,
+we use it as a building block.
+In this section,
+we summarize the semantic model used in CompCertO
+and describe new constructions within that model
+which will be useful for our application.
+
+The high-level structure of these constructions
+is shown on the left-hand side of \autoref{fig:overview}.
+
 \subsection{Semantics and State in CompCertO} %{{{
 
 The compositional semantics of CompCertO uses %revolves around
@@ -335,15 +345,7 @@ the semantic model of CompCertO.
 
 %}}}
 
-\subsection{Preliminaries: Constructions on CompCertO LTS} %{{{
-
-Rather than altering CompCertO's existing transition system model,
-we use it as a building block.
-Before we present our model of persistent state,
-we lay the groundwork by introducing new operators
-for CompCertO LTS.
-
-\subsubsection{Composition} %{{{
+\subsection{Composition} %{{{
 
 To model component linking,
 CompCertO introduces an operator $\oplus$
@@ -355,18 +357,18 @@ it is limited to transition systems which all perform
 both their incoming and outgoing calls
 according to the same language interface:
 \[
-  {\oplus_\mathcal{X}} :
-    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \times
-    (\mathcal{X} \twoheadrightarrow \mathcal{X}) \rightarrow
-    (\mathcal{X} \twoheadrightarrow \mathcal{X})
+  {\oplus_A} :
+    (A \twoheadrightarrow A) \times
+    (A \twoheadrightarrow A) \rightarrow
+    (A \twoheadrightarrow A)
 \]
 When mutual recursion is not needed,
 we can instead use the operator
 \[
-  {\odot_{\mathcal{X,Y,Z}} } :
-    (\mathcal{Y} \twoheadrightarrow \mathcal{Z}) \times
-    (\mathcal{X} \twoheadrightarrow \mathcal{Y}) \rightarrow
-    (\mathcal{X} \twoheadrightarrow \mathcal{Z})
+  {\odot_{A,B,C}} :
+    (B \twoheadrightarrow C) \times
+    (A \twoheadrightarrow B) \rightarrow
+    (A \twoheadrightarrow C)
   \,,
 \]
 which is simpler in its construction
@@ -375,32 +377,32 @@ and handles more general types.
 %which reflects at the level of transition systems
 %the categorical structure of $\ISpec$.
 
-\begin{definition}[Composition of transition systems] %{{{
+\begin{definition}[Composition of transition systems] \label{def:lcomp} %{{{
 Suppose we have the transition systems
 \[
   L_1 = \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
-    : \mathcal{Y} \twoheadrightarrow \mathcal{Z}
+    : B \twoheadrightarrow C
   \quad \text{and} \quad
   L_2 = \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
-    : \mathcal{X} \twoheadrightarrow \mathcal{Y}
+    : A \twoheadrightarrow B
   \,.
 \]
 Their composition is defined as the transition system
 $
   L_1 \odot L_2 :=
   \langle S, {\rightarrow}, I, X, Y, T \rangle
-  : \mathcal{X} \twoheadrightarrow \mathcal{Z}
+  : A \twoheadrightarrow C
 $
 with the following components.
 States are of the form
 $
     S := S_1 + (S_2 \times S_1)
 $.
-Initially, a call in $\mathcal{Z}$ activates $L_1$:
+Initially, a call in $C$ activates $L_1$:
 \[
   \begin{prooftree}
-    \hypo{q_\mathcal{Z} \mathrel{I_1} s_1}
-    \infer1{q_\mathcal{Z} \mathrel{I} \iota_1(s_1)}
+    \hypo{q_C \mathrel{I_1} s_1}
+    \infer1{q_C \mathrel{I} \iota_1(s_1)}
   \end{prooftree}
   \qquad
   \begin{prooftree}
@@ -409,17 +411,17 @@ Initially, a call in $\mathcal{Z}$ activates $L_1$:
   \end{prooftree}
   \qquad
   \begin{prooftree}
-    \hypo{s_1 \mathrel{T_1} r_\mathcal{Z}}
-    \infer1{\iota_1(s_1) \mathrel{T} r_\mathcal{Z}}
+    \hypo{s_1 \mathrel{T_1} r_C}
+    \infer1{\iota_1(s_1) \mathrel{T} r_C}
   \end{prooftree}
 \]
-When $L_1$ performs an external call in $\mathcal{Y}$,
+When $L_1$ performs an external call in $B$,
 the question is used to activate $L_2$;
 the execution proceeds:
 \[
   \begin{prooftree}
-    \hypo{s_1 \mathrel{X_1} q_\mathcal{Y}}
-    \hypo{q_\mathcal{Y} \mathrel{I_2} s_2}
+    \hypo{s_1 \mathrel{X_1} q_B}
+    \hypo{q_B \mathrel{I_2} s_2}
     \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
   \end{prooftree}
   \qquad
@@ -429,21 +431,21 @@ the execution proceeds:
   \end{prooftree}
   \qquad
   \begin{prooftree}
-    \hypo{s_2 \mathrel{X_2} q_\mathcal{X}}
-    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_\mathcal{X}}
+    \hypo{s_2 \mathrel{X_2} q_A}
+    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_A}
   \end{prooftree}
   \qquad
   \begin{prooftree}
-    \hypo{r_\mathcal{X} \mathrel{Y_2^{s_2}} s_2'}
-    \infer1{r_\mathcal{X} \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
+    \hypo{r_A \mathrel{Y_2^{s_2}} s_2'}
+    \infer1{r_A \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
   \end{prooftree}
 \]
 When a final state of $L_2$ is reached,
 $L_1$ is resumed:
 \[
   \begin{prooftree}
-    \hypo{s_2 \mathrel{T_2} r_\mathcal{Y}}
-    \hypo{r_\mathcal{Y} \mathrel{Y_1^{s_1}} s_1'}
+    \hypo{s_2 \mathrel{T_2} r_B}
+    \hypo{r_B \mathrel{Y_1^{s_1}} s_1'}
     \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
   \end{prooftree}
   \,.
@@ -451,23 +453,61 @@ $L_1$ is resumed:
 \end{definition}
 %}}}
 
+Like the symmetric composition operator $\oplus$ used in CompCertO,
+the layered composition operator defined above
+is compatible with simulations.
+
+\begin{theorem}[Layered composition of simulations] \label{thm:lcompsim}
+Simulations compose as follows:
+\[
+  \begin{prooftree}
+    \hypo{L_1^\sharp
+          \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
+          L_1^\flat}
+    \hypo{L_2^\sharp
+          \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+          L_2^\flat}
+    \infer2{L_1^\sharp \odot L_2^\sharp
+          \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
+          L_1^\flat \odot L_1^\sharp}
+  \end{prooftree}
+  \qquad \qquad
+  \begin{tikzcd}
+    A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+             \ar[d, Leftrightarrow, "\mathbb{R}_A"] &
+    B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+             \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
+    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
+    \\
+    A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"'] &
+    B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"'] &
+    C^\flat
+  \end{tikzcd}
+\]
+\end{theorem}
+
 Importantly,
 the composition operator $\odot$
 \emph{under-approximates}
 the semantic linking operator $\oplus$.
+Since CompCert's syntactic linking of assembly programs
+is known to implement $\oplus$,
+this shows that linking is also a correct implementation of
+the layered composition $\odot$.
 
-\begin{theorem}[Linking implements composition]
-For $L_1, L_2 : \mathcal{X} \twoheadrightarrow \mathcal{X}$,
-$
-  L_1 \odot L_2
+\begin{theorem}[Linking implements layered composition]
+For $L_1, L_2 : A \twoheadrightarrow A$,
+\[
+  L_1 \odot_{A,A,A} L_2
   \le
-  L_1 \oplus L_2
-$.
+  L_1 \oplus_A L_2
+ \,.
+\]
 \end{theorem}
 
 %}}}
 
-\subsubsection{Adjoining State} %{{{
+\subsection{Adjoining State} %{{{
 
 In the following,
 we will often need to systematically
@@ -497,9 +537,19 @@ the full question $f[\mathit{sg}](\vec{v})@m$.
 This will be used in the context of CAL
 where layer interfaces can be defined in a memory-free manner
 ($\mathcal{C}$ without $@\kw{mem}$),
-their behavior being entirely determined by their internal state.
+their behavior being entirely determined by their encapsulated state.
 
-\begin{definition}[Lifting]
+In this situation and more,
+we will often want to be able to add a state annotation
+to the interface of an existing component.
+When lifting $L : A \twoheadrightarrow B$
+to operate as $L@K : A@K \twoheadrightarrow B@K$,
+the resulting transition system
+will remain insensitive to the state annotation $K$,
+but will pass its unchanged value
+alongside all of its interactions.
+
+\begin{definition}[Lifting] \label{def:lift} %{{{
 Given %the transition system
 $L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$,
 we define $L@K : A@K \twoheadrightarrow B@K$ as:
@@ -531,6 +581,7 @@ we define $L@K : A@K \twoheadrightarrow B@K$ as:
   \end{prooftree}}
 \end{gather*}
 \end{definition}
+%}}}
 
 This will be used when components are linked
 to pass through the internal state of other components,
@@ -540,6 +591,8 @@ in order to interface them with client code.
 %}}}
 
 %}}}
+
+\section{Encapsulated State} %{{{
 
 \subsection{Encapsulating State} %{{{
 
