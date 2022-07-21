@@ -46,7 +46,7 @@ We do better.
 
 %}}}
 
-\begin{figure} \label{fig:overview} %{{{
+\begin{figure} %{{{
   \textbf{Notations}
   \\[1em]
   \begin{tabular}{llcllc}
@@ -261,30 +261,46 @@ We do better.
     %shown on the right.
     %Construction which enable the manipulation of
     %encapsulated state are shown at the bottom.}
+  \label{fig:overview}
 \end{figure}
 %}}}
 
 \section{Basic framework} %{{{
 
-Rather than altering CompCertO's existing transition system model,
-we use it as a building block.
-In this section,
-we summarize the semantic model used in CompCertO
-and describe new constructions within that model
-which will be useful for our application.
+We start our exposition by
+describing the semantic model
+used in CompCertO,
+which will we use as a starting point
+in our treatment of encapsulated state.
+In \S\ref{sec:basic:compcertO}
+we summarize the model as described by
+\citet{compcerto}.
+We then introduce new constructions
+which will be used in our development,
+namely layered composition (\S\ref{sec:basic:lcomp}) and
+state annotations (\S\ref{sec:basic:state}).
 
 The high-level structure of these constructions
 is shown on the left-hand side of \autoref{fig:overview}.
 
-\subsection{Overview} %{{{
+\subsection{Semantics in CompCertO} \label{sec:basic:compcerto} %{{{
 
 The compositional semantics of CompCertO uses %revolves around
 a notion of open transition system $L : A \twoheadrightarrow B$.
 The type $A \twoheadrightarrow B$ involves
-two \emph{language interfaces} $A$ and $B$.
+two \emph{language interfaces} $A$ and $B$,
+which decribe how components interact at various levels of abstraction
+from C to assembly language.
+
+\begin{definition} \label{def:li}
 A language interface $A = \langle A^\que, A^\ans \rangle$
-gives a set of questions $A^\que$ and a set of answers $A^\ans$,
-where questions correspond to function invocations
+consists of a set of questions $A^\que$ and a set of answers $A^\ans$.
+\end{definition}
+
+Language interfaces specify the information exchanged between
+a component and its environment
+when control switches between the two.
+Questions correspond to function invocations
 and answers correspond to the function returning.
 An execution of the component $L : A \twoheadrightarrow B$
 is initiated with a question $q \in B^\que$
@@ -297,67 +313,75 @@ resumes the execution.
 As in the original CompCert semantics,
 a transition system
 executes by updating an internal state,
-which is not directly observable 
+which is not directly observable
 in its interactions with the environment.
+
+\begin{definition}[Basic Component] \label{def:lts}
+A basic component $L : A \twoheadrightarrow B$
+is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
+consisting of:
+\begin{itemize}
+  \item a set $S$ of states;
+  \item a transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $I \subseteq B^\que \times S$
+    which assigns possible \emph{initial states}
+    to each question of $B$;
+  \item a relation $F \subseteq S \times B^\ans$
+    which specifies \emph{final states} together with
+    corresponding answers in $B$;
+  \item a relation $X \subseteq S \times A^\que$
+    which identifies \emph{external states} and
+    corresponding questions of $A$;
+  \item a relation $Y \subseteq S \times A^\ans \times S$,
+    which identifies \emph{resumption states}.
+\end{itemize}
+We write $n \mathrel{Y^s} s'$ when $(s, n, s') \in Y$.
+This means that
+after an external state $s$ triggers a question $m \in A^\que$ ($s \mathrel{X} m$),
+and the environment replies with an answer $n \in A^\ans$,
+the execution can resume with state $s'$.
+\end{definition}
+
 When $L : A \twoheadrightarrow B$
 performs an external call in $A$,
-this internal state is preserved.
-When the external call returns,
-the state is updated according to the answer received
-and the execution resumes.
-However,
-no state is preserved across different executions of $L$;
-each new question in $B$ initializes a fresh state.
+the internal state $s$ is preserved
+until an answer resumes the execution.
+Note however that
+no state is preserved across different executions of $L$.
+Each new question $q \in B^\que$ initializes a fresh state $s$
+such that $q \mathrel{I} s$,
+independently of any previous calls made into $L$.
 %In fact,
 %multiple instances of $L$ may even be executing at the time
 %if a reentrant call happens.
 %Their internal states remain independent.
-
-This approach is sufficient to give semantics to CompCert languages.
 For the most part, the C language relies on a global memory state.
-Because all components can in principle access every part of the memory,
+Because all components can in principle access every part of this global memory,
 cross-component interactions carry the current state of the memory
 back and forth with every question and answer.
-In addition,
-components maintain a limited amount of local state.
-However,
-because C does not offer objects, closures or similar abstractions,
-this local state has a lifetime limited to a particular function activation.
+Since C does not offer objects, closures or similar abstractions,
+component-local state has a lifetime limited to a particular function activation.
 In the semantics of CompCert languages,
 maintaining persistent state across successive activations of a given component
 would serve no purpose.
 
-Nevertheless, in many applications,
-the ability for a component to maintain local private state
-is important:
-\begin{itemize}
-  \item Beyond the world of C,
-    many language features behave in this way.
-    It is important to understand how CompCertO's approach
-    carries over to this context.
-  \item For verification,
-    we want make it a structural thing
-    rather than a rely/guarantee property we carry around everywhere.
-    Example: certified abstraction layers.
-\end{itemize}
-In the remainder of this section,
-we show how persistent, encapsulated state
-can be incorporated into
-the semantic model of CompCertO.
-
-%}}}
-
-\subsection{Semantics in CompCertO} %{{{
-
-\subsubsection{Transition Systems} %{{{
-
-\begin{definition}[Language Interface] \label{def:li}
-\end{definition}
-
-\begin{definition}[Basic Component] \label{def:lts}
-\end{definition}
-
-%}}}
+%Nevertheless, in many applications,
+%the ability for a component to maintain local private state
+%is important:
+%\begin{itemize}
+%  \item Beyond the world of C,
+%    many language features behave in this way.
+%    It is important to understand how CompCertO's approach
+%    carries over to this context.
+%  \item For verification,
+%    we want make it a structural thing
+%    rather than a rely/guarantee property we carry around everywhere.
+%    Example: certified abstraction layers.
+%\end{itemize}
+%In the remainder of this section,
+%we show how persistent, encapsulated state
+%can be incorporated into
+%the semantic model of CompCertO.
 
 \subsubsection{Kripke Relators}
 
@@ -379,16 +403,15 @@ the semantic model of CompCertO.
 
 %}}}
 
-\subsection{Layered Composition} %{{{
+\subsection{Layered Composition} \label{sec:basic:lcomp} %{{{
 
-To model component linking,
+To model linking,
 CompCertO introduces an operator $\oplus$
 which lets transition systems interact
 by having them handle each other's external calls.
-
 Because this operator permits mutual recursion,
-it is limited to transition systems which all perform
-both their incoming and outgoing calls
+it is limited to transition systems which perform
+their incoming and outgoing calls
 according to the same language interface:
 \[
   {\oplus_A} :
@@ -424,14 +447,16 @@ Suppose we have the transition systems
 Their composition is defined as the transition system
 $
   L_1 \odot L_2 :=
-  \langle S, {\rightarrow}, I, X, Y, T \rangle
+  \langle S, {\rightarrow}, I, X, Y, F \rangle
   : A \twoheadrightarrow C
 $
 with the following components.
-States are of the form
+States are taken in the set
 $
     S := S_1 + (S_2 \times S_1)
 $.
+The left summand is used when $L_1$ executes
+and the right summand is used when $L_2$ does.
 Initially, a call in $C$ activates $L_1$:
 \[
   \begin{prooftree}
@@ -445,13 +470,16 @@ Initially, a call in $C$ activates $L_1$:
   \end{prooftree}
   \qquad
   \begin{prooftree}
-    \hypo{s_1 \mathrel{T_1} r_C}
-    \infer1{\iota_1(s_1) \mathrel{T} r_C}
+    \hypo{s_1 \mathrel{F_1} r_C}
+    \infer1{\iota_1(s_1) \mathrel{F} r_C}
   \end{prooftree}
 \]
 When $L_1$ performs an external call in $B$,
-the question is used to activate $L_2$;
-the execution proceeds:
+its current state is stored away and
+the question is used to activate $L_2$.
+The execution then proceeds
+by updating the current state of $L_2$
+and leaving the suspended state of $L_1$ untouched:
 \[
   \begin{prooftree}
     \hypo{s_1 \mathrel{X_1} q_B}
@@ -478,7 +506,7 @@ When a final state of $L_2$ is reached,
 $L_1$ is resumed:
 \[
   \begin{prooftree}
-    \hypo{s_2 \mathrel{T_2} r_B}
+    \hypo{s_2 \mathrel{F_2} r_B}
     \hypo{r_B \mathrel{Y_1^{s_1}} s_1'}
     \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
   \end{prooftree}
@@ -503,7 +531,7 @@ Simulations compose as follows:
           L_2^\flat}
     \infer2{L_1^\sharp \odot L_2^\sharp
           \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
-          L_1^\flat \odot L_1^\sharp}
+          L_1^\flat \odot L_2^\flat}
   \end{prooftree}
   \qquad \qquad
   \begin{tikzcd}
@@ -541,12 +569,13 @@ For $L_1, L_2 : A \twoheadrightarrow A$,
 
 %}}}
 
-\subsection{Adjoining Explicit State} %{{{
+\subsection{Adjoining Explicit State} \label{sec:basic:state} %{{{
 
-We will often need to systematically
+In our approach to encapsulated state,
+we need to systematically
 annotate every question and answer
 in an existing language interface
-with a ``current state'' field.
+with a ``latest state'' field.
 The following constructions help us manage
 this kind of explicit state.
 
@@ -586,7 +615,7 @@ alongside all of its interactions.
 
 \begin{definition}[Lifting] \label{def:lift} %{{{
 Given %the transition system
-$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$,
+$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$
 we define $L@K : A@K \twoheadrightarrow B@K$ as:
 \begin{gather*}
   L@K := \langle S \times K, {\rightarrow_K}, I_K, X_K, Y_K, F_K \rangle \\
@@ -619,9 +648,12 @@ we define $L@K : A@K \twoheadrightarrow B@K$ as:
 %}}}
 
 This will be used when components are linked
-to pass through the internal state of other components,
-or to lift memory-free layer interfaces to $\Sigma@\kw{mem}$
-in order to interface them with client code.
+to pass through the internal state of other components.
+In our treatment of certified abstraction layers (\S\ref{sec:cal}),
+we will use this construction as well
+to lift a memory-free layer interface $\Sigma : \mathbf{1} \rightarrow \mathcal{C}$
+to $\Sigma@\kw{mem} : 1 \rightarrow \mathcal{C}@\kw{mem}$,
+making it possible to interface it with client code.
 
 %}}}
 
@@ -1546,7 +1578,7 @@ separation relation such that:
 
 %}}}
 
-\section{Certified Abstraction Layers} %{{{
+\section{Certified Abstraction Layers} \label{sec:cal} %{{{
 
 A cleaner version of our OOPSLA story.
 Here we must go from:
