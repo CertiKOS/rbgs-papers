@@ -796,17 +796,17 @@ we define the simulation convention $A@R : A@K_1 \Leftrightarrow A@K_2$ as
 \]
 We will say that $\Sigma_1 : A \rightarrow B$
 is refined by $\Sigma_2 : A \rightarrow B$
-and write $\Sigma_1 \le \Sigma_2$
+and write $\Sigma_1 \preceq \Sigma_2$
 when there exists a relation $R \subseteq K_1 \times K_2$
 such that:
 \begin{itemize}
   \item the initial states $\intl{k}_1, \intl{k}_2$ are related by $R$;
   \item the transition systems satisfy
-    $L_1 \le_{A \twoheadrightarrow B@R} L_2$.
+    $L_1 \le_{\kw{id}_A \twoheadrightarrow B@R} L_2$.
 \end{itemize}
 We write $\Sigma_1 \equiv \Sigma_2$ when
-$\Sigma_1 \le \Sigma_2$ and
-$\Sigma_2 \le \Sigma_1$.
+$\Sigma_1 \preceq \Sigma_2$ and
+$\Sigma_2 \preceq \Sigma_1$.
 \end{definition}
 
 %}}}
@@ -816,20 +816,46 @@ $\Sigma_2 \le \Sigma_1$.
 The composite $\Sigma_1 \circ \Sigma_2$
 uses states of type $K_1 \times K_2$.
 Each side of the pair is updated
-when the corresponding component is executed.
+when the corresponding component is active.
+Incoming questions in $C$ are routed to $L_1 : B \twoheadrightarrow C@K_1$,
+which we lift to pass through an additional state component of type $K_2$.
+Outgoing questions of $L_1$ in $B$ can then be routed to $L_2$,
+as depicted in the following diagram:
+\[
+  \begin{tikzpicture}[yscale=0.5]
+    \draw (0,2) node[left] {$K_2$} -- (2,2) .. controls +(0.5,0) and +(-0.5,0) .. (3,1);
+    \draw (0,1) node[left] {$K_1$} -- (1,1);
+    \draw (0,0) node[left] {$C$} -- (1,0);
+    \draw (2,0) -- node[below] {$B$} (3,0);
+    \draw (4,0) -- (5,0) node[right] {$A$};
+    \draw (1,1.5) rectangle node {$L_1$} (2,-0.5);
+    \draw (3,1.5) rectangle node {$L_2$} (4,-0.5);
+  \end{tikzpicture}
+\]
+Formally,
+composition is defined as follows.
 
 \begin{definition}[Composition] \label{def:slcomp}
-The components
-$\Sigma_1 : B \rightarrow C$ and
-$\Sigma_2 : A \rightarrow B$
-can be composed into:
+Given two stateful components
+$\Sigma_1 = (K_1 \mid L_1) : B \rightarrow C$ and
+$\Sigma_2 = (K_2 \mid L_2) : A \rightarrow B$,
+we define their composition
+$\Sigma_1 \circ \Sigma_2 : A \rightarrow C$
+in the following way:
 \[
   \Sigma_1 \circ \Sigma_2 :=
     ( K_1 \times K_2 \mid L_1@K_2 \odot L_2 )
 \]
+Note that this formulation
+implicitly uses the isomorphism
+\[
+  L_1@K_2 : B@K_2 \twoheadrightarrow (C@K_1)@K_2 \cong C@(K_1 \times K_2)
+  \,.
+\]
 \end{definition}
 
-[Add figure here]
+
+
 
 \begin{lemma} \label{thm:slcompsim}
   This is compatible with:
@@ -837,12 +863,7 @@ can be composed into:
     \item simple simulations;
     \item lifting hence associativity is preserved.
   \end{itemize}
-  In addition we have the properties (almost by definition):
-  \begin{gather*}
-    \&L_1 \circ \&L_2 \equiv \&(L_1 \odot L_2) \\
-    \kw{fbk}_{K_1}(\Sigma_1) \circ \kw{fbk}_{K_2}(\Sigma_2) \equiv
-    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2)
-  \end{gather*}
+
   \[
     \begin{tikzcd}
       A^\sharp \ar[r, rightarrow, "\Sigma_2^\sharp"]
@@ -855,6 +876,66 @@ can be composed into:
       B^\flat \ar[r, rightarrow, "\Sigma_1^\flat"'] &
       C^\flat
     \end{tikzcd}
+  \]
+
+\end{lemma}
+
+%}}}
+
+\subsection{Combining Hidden and Explicit State} %{{{
+
+It is possible for a stateful component
+to hide only part of the explicit state
+used by the underlying transition system.
+For example,
+in a transition system
+$L : A \rightarrow B@(K \times U) \cong B@U@K$,
+we may choose to hide only $K$,
+to obtain a stateful component
+$\Sigma = (K \mid L) : A \rightarrow B@U$
+which still exchanges explicit state of type $U$
+with the environment.
+This makes it possible to construct
+complex stateful components incrementally
+from simpler, stateless parts,
+by first promoting them using $\&$,
+then hiding state in a step-by-step fashion
+using $\kw{fbk}$.
+
+In addition,
+stateful components can be lifted
+to pass through explicit state.
+
+\begin{definition} \label{def:slift}
+The stateful component $\Sigma = (K \mid L) : A \rightarrow B$
+can be lifted to \[ \Sigma@U := (K \mid L@U) : A@U \rightarrow B@U \,. \]
+Note that this relies on the isomorphism
+\[
+  L@U : A@U \twoheadrightarrow (B@K)@U \cong (B@U)@K
+  \,.
+\]
+\end{definition}
+
+The following properties
+relate the promotion operator $\&$,
+the composition operators $\odot$ and $\circ$,
+and the hiding operator $\kw{fbk}$.
+
+\begin{lemma}
+  For $L_1 : B \twoheadrightarrow C@K_1$ and
+  $L_2 : A \twoheadrightarrow B@K_2$,
+  the following property holds:
+  \[
+    \&L_1 \circ \&L_2 \equiv \&(L_1 \odot L_2)
+    \,.
+  \]
+  In addition, for $\Sigma_1 : B \rightarrow C@U_1$
+  and $\Sigma_2 : A \rightarrow B@U_2$,
+  the following property holds:
+  \[
+    \kw{fbk}_{U_1}(\Sigma_1) \circ \kw{fbk}_{U_2}(\Sigma_2) \equiv
+    \kw{fbk}_{U_1 \times U_2}(\Sigma_1@U_2 \circ \Sigma_2)
+    \,.
   \]
 \end{lemma}
 
@@ -869,9 +950,11 @@ with their environment were identical.
 By contrast, a key feature of CompCertO
 is the notion of \emph{simulation convention},
 which parameterizes simulations by
-specify how the interactions of
+specifying how the interactions of
 the source-level and target-level transition system
 are related.
+
+\subsubsection{Stateful Simulation Conventions} %{{{
 
 Transition systems in CompCertO are stateless,
 and as a consequence,
@@ -881,7 +964,7 @@ transition systems can be related in the same way.
 By contrast,
 our components may maintain encapsulated states
 and behave differently upon successive activations.
-Likewise,
+As a consequence,
 the relationship between source- and target-level interactions
 may depend on the history of the computation.
 This means we must generalize simulation conventions
@@ -889,8 +972,8 @@ so that they may maintain their own state as well.
 
 \begin{definition} \label{def:sconv} %{{{
 A \emph{stateful simulation convention}
-$\mathbb{R} = \langle W, {\leadsto}, {\mapsto}, R^\que, R^\ans \rangle$
-between the language interfaces $A$ and $B$
+$\mathbf{R} = \langle W, {\leadsto}, {\mapsto}, R^\que, R^\ans \rangle$
+between the language interfaces $A^\sharp$ and $A^\flat$
 is specified by:
 \begin{itemize}
   \item a pointed set of worlds $W$,
@@ -898,14 +981,15 @@ is specified by:
   \item two accessibility relations
     ${\leadsto}, {\mapsto} \subseteq W \times W$,
     corresponding to \emph{internal} and \emph{external} transitions;
-  \item a Kripke relation $R^\que \in \mathcal{R}_W(A^\que, B^\que)$
+  \item a Kripke relation $R^\que \in \mathcal{R}_W(A_\sharp^\que, A_\flat^\que)$
     between the language interfaces' questions, and
-  \item a Kripke relation $R^\ans \in \mathcal{R}_W(A^\ans, B^\ans)$
+  \item a Kripke relation $R^\ans \in \mathcal{R}_W(A_\sharp^\ans, B_\flat^\ans)$
     between their answers.
 \end{itemize}
 The accessibility relations are required to be reflexive and transitive.
+We write $\mathbf{R} : A^\sharp \leftrightarrow A^\flat$.
 The identity simulation convention
-$\kw{id}_A : A \Leftrightarrow A$
+$\kw{id}_A : A \leftrightarrow A$
 is given by
 $\kw{id}_A := \langle
     \mathbbm{1}, {=}_\mathbbm{1}, {=}_\mathbbm{1}, {=}_{A^\que}, {=}_{A^\ans}
@@ -927,32 +1011,43 @@ The questions for any subsequent activation
 must in turn be related at a world $w''$ such that $w' \mapsto w''$,
 and so on and so forth indefinitely:
 \begin{align*}
-  \intl{w} \mapsto w_1 \Vdash q^\sharp_1 \mathrel{R^\que} q^\flat_1 \:&\longrightarrow\:
-  w_1 \leadsto w_1' \Vdash r^\sharp_1 \mathrel{R^\ans} r^\flat_1 \\
-  w_1' \mapsto w_2 \Vdash q^\sharp_2 \mathrel{R^\que} q^\flat_2 \:&\longrightarrow\:
-  w_2 \leadsto w_2' \Vdash r^\sharp_2 \mathrel{R^\ans} r^\flat_2 \\[-1ex]
-  &\quad\!\vdots
+  \intl{w} \mapsto w_1 &\Vdash q^\sharp_1 \mathrel{R^\que} q^\flat_1 \\
+  w_1 \leadsto w_1' &\Vdash r^\sharp_1 \mathrel{R^\ans} r^\flat_1 \\
+  w_1' \mapsto w_2 &\Vdash q^\sharp_2 \mathrel{R^\que} q^\flat_2 \\
+  w_2 \leadsto w_2' &\Vdash r^\sharp_2 \mathrel{R^\ans} r^\flat_2 \\[-1ex]
+  &\:\:\vdots
 \end{align*}
 
-With this protocol in mind,
-consider a simulation of type:
+%}}}
+
+\subsubsection{Stateful Simulations of Transition Systems} %{{{
+
+Before we define simulations between stateful components,
+we first update CompCertO's notion of simulation of transition systems
+to take into account stateful conventions.
+%In particular,
+%using stateful simulation conventions,
+%the sequence of external calls performed by a transition system
+%will become important.
+
+Consider a simulation of type:
 \[
 \begin{tikzcd}
-  A_1 \ar[r, twoheadrightarrow, "L_1"] \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
-  B_1 \ar[d, Leftrightarrow, "\mathbb{R}_B"] \\
+  A_1 \ar[r, twoheadrightarrow, "L_1"] \ar[d, leftrightarrow, "\mathbf{R}_A"'] &
+  B_1 \ar[d, leftrightarrow, "\mathbf{R}_B"] \\
   A_2 \ar[r, twoheadrightarrow, "L_2"] & B_2
 \end{tikzcd}
 \]
-Since the simulation simultaneously
+The simulation simultaneously
 plays the role of the system with respect to
-the simulation convention $\mathbb{R}_B$ and
-the role of the environment with respect to $\mathbb{R}_A$,
+the simulation convention $\mathbf{R}_B$ and
+the role of the environment with respect to $\mathbf{R}_A$.
+Hence,
 it will operate in the context of a Kripke frame
 constructed from both $W_A$ and $W_B$.
-Specifically,
-the possible states of a simulation will be a subset
-$W \subseteq W_A \times W_B$.
-This subset must contain
+The possible states of a simulation will be a subset
+$W \subseteq W_A \times W_B$,
+which must contain
 the initial state $\intl{w} := (\intl{w}_A, \intl{w}_B) \in W$.
 Between successive activations,
 the environment may update the $W_B$ component.
@@ -1047,8 +1142,8 @@ We expect that:
 \]
 Moreover,
 from the point of view of the simulation,
-the external call will make a transition according to
-the following accessibility relation.
+an external call will make a transition according to
+the following accessibility relation:
 %[NB we may want to restrict $\leadsto_B$ to $=$
 %if this causes problems, but]
 %Note that by allowing a transition $w_B \leadsto_B w_B'$,
@@ -1077,7 +1172,7 @@ as presented in Fig.~\ref{fig:simext} below.
 \begin{figure}[h]
   \[
     \begin{array}{c}
-      \begin{tikzcd}[sep=tiny, column sep=normal]
+      \begin{tikzcd}[sep=tiny, column sep=small]
         s_1 \ar[rr, "X_1", dash] \ar[dd, "w \Vdash R"', dash] &&
         m_1 \ar[rr, dotted, dash] \ar[dd, "w'"', "{} \Vdash \mathbb{R}_A^\que", dash, dashed] &&
         n_1 \ar[rr, "Y_1^{s_1}", dash] \ar[dd, "w''"', "{} \Vdash \mathbb{R}_A^\ans", dash] &&
@@ -1101,18 +1196,16 @@ as presented in Fig.~\ref{fig:simext} below.
             \mathcal{P}^\le(\Diamond_{\bar{A}B} R))))
       ]}
       Z_2
-      \vspace{1.2ex} \\
-      \text{(d) External states}
     \end{array}
   \]
-  \caption{Simulation property for external calls}
+  \caption{Simulation property for external states}
   \label{fig:simext}
 \end{figure}
 
 \begin{definition}[Stateful simulation]
 A stateful simulation of CompCertO transition systems,
 written as
-$L_1 \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_1$,
+$L_1 \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$,
 is given by a set of worlds $W$ such that
 \[ (\intl{w}_A, \intl{w}_B) \in W \subseteq W_A \times W_B \,, \]
 closed under ${\leadsto_A} \times {\mapsto_B}$,
@@ -1128,8 +1221,15 @@ can be promoted as follows.
 The CompCertO simulation convention
 $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$
 can be promoted to the stateful simulation convention
-$\hat{\mathbb{R}} :=
- \langle W^?, {=}, \top, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$.
+$\&\mathbb{R} :=
+ \langle W_*, {=}, \top, \mathbb{R}^\que_*, \mathbb{R}^\ans_* \rangle$.
+The pointed set $W_* = W \cup \{ \intl{*} \}$
+introduces a new initial world $*$.
+The relations $\mathbb{R}^\que_*$ and $\mathbb{R}^\ans_*$
+are empty at this initial world,
+but the environment can transition
+to any world $w \in W$ (${\mapsto} := \top$).
+The system must leave the world unchanged (${\leadsto} := {=}$).
 \end{definition}
 
 Then we have the relationship:
@@ -1137,51 +1237,133 @@ Then we have the relationship:
 \[
   L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2
   \quad \Leftrightarrow \quad
-  L_1 \preceq_{\hat{\mathbb{R}}_A \twoheadrightarrow \hat{\mathbb{R}}_B} L_2
+  L_1 \preceq_{\&\mathbb{R}_A \twoheadrightarrow \&\mathbb{R}_B} L_2
 \]
 \end{lemma}
 
-Finally,
-the composition of transition systems
-is compatible with stateful simulations.
+As with simulations in CompCertO,
+stateful simulations compose both horizontally and vertically.
+The horizontal (layered) composition of simulations
+is as follows.
 
-\begin{lemma}[Composition of stateful simulations]
+\begin{lemma}[Layered composition of stateful simulations]
 \[
   \begin{prooftree}
     \hypo{
       L_1^\sharp
-      \preceq_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
+      \preceq_{\mathbf{R}_B \twoheadrightarrow \mathbf{R}_C}
       L_1^\flat}
     \hypo{
       L_2^\sharp
-      \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+      \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
       L_2^\flat}
     \infer2{
       L_1^\sharp \odot L_2^\sharp
-      \preceq_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
+      \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_C}
       L_1^\flat \odot L_2^\flat}
   \end{prooftree}
+  \qquad \qquad
+  \begin{tikzcd}
+    A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+	     \ar[d, leftrightarrow, "\mathbf{R}_A"] &
+    B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+	     \ar[d, leftrightarrow, "\mathbf{R}_B"] &
+    C^\sharp \ar[d, leftrightarrow, "\mathbf{R}_C"]
+    \\
+    A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"'] &
+    B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"'] &
+    C^\flat
+  \end{tikzcd}
 \]
 \end{lemma}
 
+To formulate vertical composition, we must first explain how
+the stateful simulation conventions themselves compose.
+
 \begin{definition}[Composition of Stateful Conventions] \label{def:sccomp}
+Given the stateful simulation conventions
+$\mathbf{R}_1 : A^\sharp \leftrightarrow A^\natural$ and
+$\mathbf{R}_2 : A^\natural \leftrightarrow A^\flat$,
+the composite simulation convention
+$\mathbf{R}_1 \mathbin; \mathbf{R}_2 : A^\sharp \leftrightarrow A^\flat$
+has the following components:
+\begin{gather*}
+  W := W_1 \times W_2 \\
+  (w_1, w_2) \mapsto (w_1', w_2') \: :\Leftrightarrow \:
+    w_1 \mapsto_1 w_1' \: \wedge \:
+    w_2 \mapsto_2 w_2' \\
+  (w_1, w_2) \leadsto (w_1', w_2') \: :\Leftrightarrow \:
+    w_1 \leadsto_1 w_1' \: \wedge \:
+    w_2 \leadsto_2 w_2' \\
+  R^\que := R_1^\que \cdot R_2^\que \\
+  R^\ans := R_1^\ans \cdot R_2^\ans
+\end{gather*}
 \end{definition}
 
-\begin{theorem}[Vertical composition of stateful simulations] \label{thm:svcomp}
+\begin{lemma}
+$ \&(\mathbb{R}_1 \cdot \mathbb{R}_2) \equiv
+   \&\mathbb{R}_1 \mathop; \&\mathbb{R}_2 $
+\quad
+[But we need to define simulation convention refinement]
+\end{lemma}
+
+\begin{theorem}[Vertical composition of stateful simulations] %\label{thm:svcomp}
+\[
+  \begin{prooftree}
+    \hypo{L^\sharp
+      \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
+      L^\natural}
+    \hypo{L^\natural
+      \preceq_{\mathbf{S}_A \twoheadrightarrow \mathbf{S}_B}
+      L^\flat}
+    \infer2{L^\sharp
+      \preceq_{\mathbf{R}_A \mathbin; \mathbf{S}_A \twoheadrightarrow
+	   \mathbf{R}_B \mathbin; \mathbf{S}_B}
+      L^\flat}
+  \end{prooftree}
+\]
 \end{theorem}
 
 %}}}
 
 \subsection{Simulation of Stateful Components} %{{{
 
-\begin{definition}[Lifting simulation conventions]
+We have defined stateful simulations of transition systems.
+We now seek to extend them to cover stateful components.
+Such simulations will essentially be
+stateful simulations between the underlying transition systems.
+However,
+because encapsulated states are not observed by the environment,
+we expect a simulation between the stateful components
+$\Sigma^\sharp : A^\sharp \rightarrow B^\sharp$ and
+$\Sigma^\flat : A^\flat \rightarrow B^\flat$
+to by typed as
+$
+  \Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+  \Sigma^\flat
+$
+with $\mathbf{R}_B : B^\sharp \leftrightarrow B^\flat$.
+The challenge is then to make it possible for
+the internal states of the underlying transition systems
+$L^\sharp : A^\sharp \rightarrow B^\sharp@K^\sharp$
+and
+$L^\flat : A^\flat \rightarrow B^\flat@K^\flat$
+to be taken into account by the simulation.
+
+Our solution will be to construct a simulation convention
+$\mathbf{R}_B@\langle K^\sharp, K^\flat \rangle :
+ B^\sharp@K^\sharp \leftrightarrow B^\flat@K^\flat$,
+which will incorporate states into the worlds
+but otherwise behave identically to $\mathbf{R}_B$.
+
+\begin{definition}[Lifting simulation conventions] \label{def:liftsconv}
 For a simulation convention
-$\mathbb{R} : A^\sharp \Leftrightarrow A^\flat$
+$\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
 and two pointed sets $K^\sharp, K^\flat$, 
-we define the simulation convention
-$\mathbb{R}@\langle K^\sharp,K^\flat \rangle :
-   A^\sharp@K^\sharp \Leftrightarrow A^\flat@K^\flat$
-as follows:
+we define the stateful convention
+$\mathbf{R}@\langle K^\sharp,K^\flat \rangle :
+   A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat$
+as:
 \begin{gather*}
   W := W_\mathbb{R} \times K^\sharp \times K^\flat
   \qquad \intl{w} := (\intl{w}_\mathbb{R}, \intl{k}^\sharp, \intl{k}^\flat)
@@ -1218,46 +1400,55 @@ as follows:
 \end{gather*}
 \end{definition}
 
+The underlying simulation of transition systems
+will then operate in terms
+of this instrumented simulation convention.
+The (existentially quantified) world invariant
+$W \subseteq W_A \times W_B \times K^\sharp \times K^\flat$
+used by the simulation
+can then impose constraints on the encapsulated states.
+
 \begin{definition}[Simulation] \label{def:ssim}
 There is a \emph{simulation} of type
 \[
+  \Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat
+  \qquad \qquad
 \begin{tikzcd}
-  A_1 \ar[r, "\Sigma_1"]
-      \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
-  B_1 \ar[d, Leftrightarrow, "\mathbb{R}_B"] \\
-  A_2 \ar[r, "\Sigma_2"] &
-  B_2
+  A^\sharp \ar[r, "\Sigma^\sharp"]
+      \ar[d, leftrightarrow, "\mathbf{R}_A"'] &
+  B^\sharp \ar[d, leftrightarrow, "\mathbf{R}_B"] \\
+  A^\flat \ar[r, "\Sigma^\flat"] &
+  B^\flat
 \end{tikzcd}
 \]
 between
 the stateful components
-$\Sigma_1 = (K_1 \mid L_1) : A_1 \rightarrow B_1$ and
-$\Sigma_2 = (K_2 \mid L_2) : A_2 \rightarrow B_2$
-when the following property holds:
+$\Sigma^\sharp = (K^\sharp \mid L^\sharp) : A^\sharp \rightarrow B^\sharp$ and
+$\Sigma^\flat = (K^\flat \mid L^\flat) : A^\flat \rightarrow B^\flat$
+when
 \[
-  L_1
-  \preceq_{\mathbb{R}_A \twoheadrightarrow
-           \mathbb{R}_B@\langle K_1, K_2 \rangle}
-  L_2
+  L^\sharp
+  \preceq_{\mathbf{R}_A \rightarrow
+           \mathbf{R}_B@\langle K^\sharp, K^\flat \rangle}
+  L^\flat
+  \,.
 \]
-We will write
-$\Sigma_1 \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B} \Sigma_2$.
 \end{definition}
 
-\begin{lemma}[Composition of simulations]
+\begin{lemma}[Layered composition of simulations] \label{thm:svcomp}
 \[
   \begin{prooftree}
     \hypo{
       \Sigma_1^\sharp
-      \preceq_{\mathbb{R}_B \rightarrow \mathbb{R}_C}
+      \preceq_{\mathbf{R}_B \rightarrow \mathbf{R}_C}
       \Sigma_1^\flat}
     \hypo{
       \Sigma_2^\sharp
-      \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B}
+      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
       \Sigma_2^\flat}
     \infer2{
       \Sigma_1^\sharp \circ \Sigma_2^\sharp
-      \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_C}
+      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_C}
       \Sigma_1^\flat \circ \Sigma_2^\flat}
   \end{prooftree}
 \]
@@ -1266,6 +1457,8 @@ $\Sigma_1 \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B} \Sigma_2$.
 %}}}
 
 \subsection{Relating Hidden and Explicit State} %{{{
+
+[NOT CLEANED UP YET]
 
 To conclude this section we discuss how
 state encapsulation primitives and simulations interact.
