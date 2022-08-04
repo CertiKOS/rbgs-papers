@@ -1312,6 +1312,8 @@ $ \&(\mathbb{R}_1 \cdot \mathbb{R}_2) \equiv
 
 %}}}
 
+%}}}
+
 \subsection{Simulation of Stateful Components} %{{{
 
 We have defined stateful simulations of transition systems.
@@ -1342,7 +1344,7 @@ $\mathbf{R}_B@\langle K^\sharp, K^\flat \rangle :
 which will incorporate states into the worlds
 but otherwise behave identically to $\mathbf{R}_B$.
 
-\begin{definition}[Lifting simulation conventions] \label{def:liftsconv}
+\begin{definition}[Lifting simulation conventions] \label{def:liftsconv} %{{{
 For a stateful convention
 $\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
 and two pointed sets $K^\sharp, K^\flat$, 
@@ -1386,6 +1388,7 @@ with the following components:
   \end{prooftree}}
 \end{gather*}
 \end{definition}
+%}}}
 
 For simulations of stateful components,
 the underlying simulation of transition systems
@@ -1397,7 +1400,7 @@ $W \subseteq W_A \times W_B \times K^\sharp \times K^\flat$
 used by the simulation
 to impose constraints on the encapsulated states.
 
-\begin{definition}[Simulation] \label{def:ssim}
+\begin{definition}[Simulation] \label{def:ssim} %{{{
 There is a \emph{simulation} of type
 \[
   \Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat
@@ -1423,8 +1426,47 @@ when
   \,.
 \]
 \end{definition}
+%}}}
 
-\begin{lemma}[Layered composition of simulations] \label{thm:slcompsim}
+Defined in this way,
+simulations of stateful components generalize
+the original simulations used in CompCertO.
+First,
+basic simulations between transition systems
+can be promoted to stateful simulations.
+Then,
+these stateful simulations induce
+simulations between the corresponding
+embedded stateful components.
+
+\begin{lemma}[Promoting simulations] %{{{
+\[
+  \begin{prooftree}
+    \hypo{L^\sharp
+      \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+      L^\flat}
+    \infer1{L^\sharp
+      \preceq_{\&\mathbb{R}_A \twoheadrightarrow \&\mathbb{R}_B}
+      L^\flat}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{L^\sharp
+      \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
+      L^\flat}
+    \infer1{\&L^\sharp
+      \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B}
+      \&L^\flat}
+  \end{prooftree}
+\]
+\end{lemma}
+%}}}
+
+Moreover,
+simulations of stateful components satisfy the expected
+composition properties.
+
+\begin{lemma}[Layered composition of simulations] \label{thm:slcompsim} %{{{
 \[
   \begin{prooftree}
     \hypo{
@@ -1454,8 +1496,9 @@ when
   \end{tikzcd}
 \]
 \end{lemma}
+%}}}
 
-\begin{lemma}[Vertical composition of simulations] \label{thm:svcomp}
+\begin{lemma}[Vertical composition of simulations] \label{thm:svcomp} %{{{
 \[
   \begin{prooftree}
     \hypo{\Sigma^\sharp
@@ -1471,6 +1514,11 @@ when
   \end{prooftree}
 \]
 \end{lemma}
+%}}}
+
+[This means in particular that language interfaces and stateful components
+also constitute a double category,
+and our embedding constitutes a double functor.]
 
 %}}}
 
@@ -1479,70 +1527,124 @@ when
 To conclude this section we discuss how
 state encapsulation primitives and simulations interact.
 
-\begin{lemma}
+Recall that in Definition~\ref{def:liftsconv}, we defined a simulation convention
+$\mathbf{R}@\langle K^\sharp, K^\flat \rangle$,
+which was then used in Definition~\ref{def:ssim}
+to relate the underlying transition systems
+of stateful components.
+Expressed in the context of the state encapsulation primitive $\kw{fbk}$,
+this gives rise to the following principle.
+
+\begin{lemma}[Proving simulations for encapsulated components] \label{thm:fbksim}
 \[
   \begin{prooftree}
-    \hypo{L^\sharp
-      \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-      L^\flat}
-    \infer1{L^\sharp
-      \preceq_{\&\mathbb{R}_A \twoheadrightarrow \&\mathbb{R}_B}
-      L^\flat}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{L^\sharp
-      \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
-      L^\flat}
-    \infer1{\&L^\sharp
-      \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B}
-      \&L^\flat}
+    \hypo{\Sigma^\sharp
+      \preceq_{\mathbf{R}_A \rightarrow
+	       \mathbf{R}_B@\langle K^\sharp,K^\flat \rangle}
+      \Sigma^\flat}
+    \infer1{\kw{fbk}_{K^\sharp}(\Sigma^\sharp)
+      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+      \kw{fbk}_{K^\flat}(\Sigma^\flat)}
   \end{prooftree}
 \]
 \end{lemma}
 
+Because of the properties of $\kw{fbk}$,
+and because state can be hidden incrementally,
+the source and target transition systems in a simulation
+may differ in how much of their state is encapsulated.
+For example,
+we will often want to show that
+a given high-level component with encapsulated state
+is realized by a low-level implementation
+where all state remains explicit.
+In this case,
+the stateful convention used by the simulation
+will enforce the expectation that
+the context may not modify the concrete explicit state
+between successive invocations of the component.
+
+In the simplest case,
+suppose we want to show a simulation between the stateful component
+$\kw{fbk}_K(\Sigma) : A \rightarrow B$ which encapsulates $K$
+and the ``naked'' underlying component $\Sigma : A \rightarrow B@K$.
+We must choose a simulation convention
+$\kw{reveal}_{B,K} : B \leftrightarrow B@K$ such that
+$
+  \Sigma
+  \preceq_{\kw{id}_A \rightarrow \kw{reveal}_{B,K}@\langle K, \mathbbm{1} \rangle}
+  \Sigma
+$.
+Since $\Sigma \equiv \kw{fbk}_\mathbbm{1}(\Sigma)$,
+we can then apply Theorem~\ref{thm:fbksim} to obtain
+the desired simulation property
+\[
+  \kw{fbk}_K(\Sigma)
+  \preceq_{\kw{id}_A \rightarrow \kw{reveal}_{B,K}}
+  \Sigma
+  \,.
+\]
+Such a simulation convention can in fact be defined in the general case.
+
 \begin{definition}
 For a simulation convention
-$\mathbb{R} : A^\sharp@K^\sharp \Leftrightarrow A^\flat@K^\flat$,
+$\mathbf{R} : A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat$,
 we define the simulation convention
-$\kw{fbk}_{K^\sharp,K^\flat}(\mathbb{R}) :
- A^\sharp \Leftrightarrow A^\flat$
+$\kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R}) :
+ A^\sharp \leftrightarrow A^\flat$
 as follows:
 \begin{gather*}
-  W := W_\mathbb{R} \times K^\sharp \times K^\flat
-  \qquad \intl{w} := (\intl{w}_\mathbb{R}, \intl{k}^\sharp, \intl{k}^\flat)
+  W := W_\mathbf{R} \times K^\sharp \times K^\flat
+  \qquad \intl{w} := (\intl{w}_\mathbf{R}, \intl{k}^\sharp, \intl{k}^\flat)
   \\[1ex]
  {\begin{prooftree}
-    \hypo{w \leadsto_\mathbb{R} w'}
+    \hypo{w \leadsto_\mathbf{R} w'}
     \infer1{(w, k_\sharp, k_\flat) \leadsto (w', k_\sharp', k_\flat')}
   \end{prooftree}}
   \qquad
  {\begin{prooftree}
-    \hypo{w \mapsto_\mathbb{R} w'}
+    \hypo{w \mapsto_\mathbf{R} w'}
     \infer1{(w, k^\sharp, k^\flat) \mapsto (w', k^\sharp, k^\flat)}
   \end{prooftree}}
   \\[1ex]
  {\begin{prooftree}
-    \hypo{w \Vdash q^\sharp@k^\sharp \mathrel{\mathbb{R}^\que}
+    \hypo{w \Vdash q^\sharp@k^\sharp \mathrel{\mathbf{R}^\que}
                    q^\flat@k^\flat}
     \infer1{
       (w, k^\sharp, k^\flat) \Vdash
       q^\sharp
-      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbb{R})]^\que}
+      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R})]^\que}
       q^\flat}
   \end{prooftree}}
   \qquad
  {\begin{prooftree}
-    \hypo{w \Vdash r^\sharp@k^\sharp \mathrel{\mathbb{R}^\ans}
+    \hypo{w \Vdash r^\sharp@k^\sharp \mathrel{\mathbf{R}^\ans}
                    r^\flat@k^\flat}
     \infer1{
       (w, k^\sharp, k^\flat) \Vdash
       r^\sharp
-      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbb{R})]^\ans}
+      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R})]^\ans}
       r^\flat}
   \end{prooftree}}
 \end{gather*}
 \end{definition}
+
+\begin{lemma}[XXX: Somewhat speculative]
+\[
+  \mathbf{R}
+  \:\sqsubseteq\:
+  \kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R})@\langle K^\sharp, K^\flat \rangle
+\]
+\end{lemma}
+
+%$\kw{fbk}_{K_1,K_2}(\mathbb{R}@R_K) \sqsubseteq \mathbb{R}$
+%\begin{proof}
+%We would have to define refinement for stateful simulation conventions
+%for this question to even make sense to begin with.
+%\end{proof}
+
+Combined with Theorem~\ref{thm:fbksim},
+this entails the following property.
 
 \begin{lemma}
 \[
@@ -1556,31 +1658,18 @@ as follows:
 \]
 \end{lemma}
 
-In particular,
-we will often want to implement encapsulated private state
-using explicit public state.
-In that case we can instantiate
-$\mathbb{R} := \kw{id}$ and
-$K_2 := \mathbbm{1}$
-to obtain a simulation convention:
+We can the define the simulation convention $\kw{reveal}_{B,K}$ as:
 \[
-  \kw{reveal}_K(B) :=
-    \kw{fbk}_{K,\mathbbm{1}}(\kw{id}_{B@K}) :
-    B \Leftrightarrow B@K
+  \kw{reveal}_{B,K} := \kw{fbk}_{K,\mathbbm{1}}(\kw{id}_{B@K}) : B \leftrightarrow B@K
+  \,,
 \]
 such that in particular:
 \[
-  \kw{fbk}_K(\Sigma) \preceq_{A \rightarrow \kw{reveal}_K(B)}
+  \kw{fbk}_K(\Sigma)
+  \preceq_{A \rightarrow \kw{reveal}_K(B)}
   \Sigma
+  \,.
 \]
-
-\begin{lemma}[Is this true?]
-$\kw{fbk}_{K_1,K_2}(\mathbb{R}@R_K) \sqsubseteq \mathbb{R}$
-\begin{proof}
-We would have to define refinement for stateful simulation conventions
-for this question to even make sense to begin with.
-\end{proof}
-\end{lemma}
 
 %}}}
 
