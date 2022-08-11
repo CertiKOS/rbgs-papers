@@ -3,6 +3,7 @@
 \usepackage{ebproof}
 \usepackage{minted}
 \usepackage{tikz-cd}
+\usepackage{subcaption}
 
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
@@ -263,6 +264,56 @@ We do better.
     %Construction which enable the manipulation of
     %encapsulated state are shown at the bottom.}
   \label{fig:overview}
+\end{figure}
+%}}}
+
+\begin{figure} % fig:code {{{
+  \centering\footnotesize
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+/* Encapsulated state */
+static int c1, c2;
+static V buf[N];
+
+/* Accessors */
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.38\textwidth}
+\begin{minted}{C}
+/* Underlay signature */
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+/* Layer implementation */
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Running example, consisting of two C components.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
 \end{figure}
 %}}}
 
@@ -604,15 +655,110 @@ where layer interfaces can be defined in a memory-free manner
 ($\mathcal{C}$ without $@\kw{mem}$),
 their behavior being entirely determined by their encapsulated state.
 
-In this situation and more,
-we will often want to be able to add a state annotation
+\begin{example}[A layer specification for $\kw{rb.c}$] \label{ex:rbspec} %{{{
+We can formulate a specification for
+the program component $\kw{rb.c}$ as follows.
+The state of the ring buffer
+is expressed as a tuple
+$(f, c_1, c_2) \in S_\kw{rb} := \kw{val}^N \times \mathbb{N} \times \mathbb{N}$.
+Operations do not otherwise access the memory,
+so the specification will be of type
+\[
+  L_\kw{rb} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{rb}
+  \,.
+\]
+To define it, we construct a simple transition system such that
+all activations take the shape
+\[
+  m@(f, c_1, c_2) \:\mathrel{I}\: (v', f', c_1', c_2')
+                  \:\mathrel{F}\: v'@(f', c_1', c_2')
+  \,.
+\]
+The predicates $X$, $Y$ and $\rightarrow$ are empty.
+As suggested above, $F$ is in essence the identity relation.
+This leaves us to define $I$ which specifies the component's
+actual behavior:
+\[ \begin{array}{c@{\qquad}c}
+ {\begin{prooftree}
+    \hypo{i < N}
+    \infer1{
+      \kw{set}(i, v)@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (\kw{undef}, f[i := v], c_1, c_2)}
+  \end{prooftree}}
+  &
+ {\begin{prooftree}
+    \hypo{c_1' = (c_1 + 1) \mathbin{\mathrm{mod}} N}
+    \infer1{
+      \kw{inc1}@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (c_1, f, c_1', c_2)}
+  \end{prooftree}}
+  \vspace{1em}
+  \\
+ {\begin{prooftree}
+    \hypo{i < N}
+    \infer1{
+      \kw{get}(i)@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (f_i, f, c_1, c_2)
+    }
+  \end{prooftree}}
+  &
+ {\begin{prooftree}
+    \hypo{c_2' = (c_2 + 1) \mathbin{\mathrm{mod}} N}
+    \infer1{
+      \kw{inc1}@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (c_2, f, c_1, c_2')}
+  \end{prooftree}}
+\end{array} \]
+We can then define
+$L_\kw{rb} := \langle
+  S_\kw{rb},\:
+  \varnothing,\:
+  I_\kw{rb},\:
+  \varnothing,\:
+  \varnothing,\:
+  {=}
+ \rangle$.
+
+A similar approach can be use to define
+$L_\kw{bq} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{bq}$,
+where the states in $S_\kw{bq} := \kw{val}*$
+are simply lists enumerating the contents of the queue.
+Here the operations will be specified as follows:
+\[
+  \begin{prooftree}
+    \hypo{|\vec{q}| < N}
+    \infer1{\kw{enq}(v)@\vec{q} \:\mathrel{I_\kw{bq}}\: (\kw{undef}, \vec{q}v)}
+  \end{prooftree}
+  \qquad\qquad
+  \begin{prooftree}
+    \hypo{\vec{q} = v\vec{p}}
+    \infer1{\kw{deq}(\epsilon)@\vec{q} \:\mathrel{I_\kw{bq}}\: (v, \vec{p})}
+  \end{prooftree}
+\]
+Again we can define $L_\kw{bq} := \langle
+  S_\kw{bq},\:
+  \varnothing,\:
+  I_\kw{bq},\:
+  \varnothing,\:
+  \varnothing,\:
+  {=}
+\rangle$.
+\end{example}
+%}}}
+
+Often,
+we will want to add a state annotation
 to the interface of an existing component.
 When lifting $L : A \twoheadrightarrow B$
 to operate as $L@K : A@K \twoheadrightarrow B@K$,
 the resulting transition system
-will remain insensitive to the state annotation $K$,
-but will pass its unchanged value
-alongside all of its interactions.
+remains insensitive to the state annotation $K$,
+but keeps track of its value
+across all of its interactions.
 
 \begin{definition}[Lifting] \label{def:lift} %{{{
 Given %the transition system
@@ -648,13 +794,110 @@ we define $L@K : A@K \twoheadrightarrow B@K$ as:
 \end{definition}
 %}}}
 
-This will be used when components are linked
+This construction is used in particular when components are linked,
 to pass through the internal state of other components.
-In our treatment of certified abstraction layers (\S\ref{sec:cal}),
-we will use this construction as well
-to lift a memory-free layer interface $\Sigma : \mathbf{1} \rightarrow \mathcal{C}$
-to $\Sigma@\kw{mem} : 1 \rightarrow \mathcal{C}@\kw{mem}$,
-making it possible to interface it with client code.
+
+\begin{example}[Interfacing $L_\kw{rb}$ with client code]
+Building on Example~\ref{ex:rbspec},
+consider the problem of interfacing
+the client code in $\kw{bq.c}$ with the underlay interface $L_\kw{rb}$.
+The types
+\[
+  L_\kw{rb} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{rb}
+  \qquad
+  \text{and}
+  \qquad
+  \kw{Clight}(\kw{bq.c}) : \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+\]
+are not directly compatible,
+given that $L_\kw{rb}$ manipulates a state of type $S_\kw{rb}$
+and $\kw{rb.c}$ expects a memory state of type $\kw{mem}$.
+The solution is to lift each one to ``pass through''
+the state of the other:
+\[
+  \begin{tikzcd}[column sep=huge]
+    \mathbf{1}@\kw{mem}
+    \ar[r, "L_\kw{rb}@\kw{mem}"] &
+    \mathcal{C}@S_\kw{rb}@\kw{mem} \cong
+    \mathcal{C}@\kw{mem}@S_\kw{rb}
+    \ar[r, "\kw{Clight}(\kw{bq.c})@S_\kw{rb}"] &
+    \mathcal{C}@\kw{mem}@S_\kw{rb}
+  \end{tikzcd}
+\]
+Implicitly taking into account the isomorphisms
+\[
+  \mathbf{1} \cong \mathbf{1}@\kw{mem}
+  \qquad
+  \text{and}
+  \qquad
+  \mathcal{C}@S_\kw{rb}@\kw{mem} \cong
+  \mathcal{C}@\kw{mem}@S_\kw{rb} \cong
+  \mathcal{C}@(S_\kw{rb} \times \kw{mem})
+  \,,
+\]
+they can then be composed into
+\begin{gather*}
+  \kw{Clight}(\kw{bq.c})@S_\kw{rb} \circ
+  L_\kw{rb}@\kw{mem} :
+  \mathbf{1} \twoheadrightarrow \mathcal{C}@(S_\kw{rb} \times \kw{mem})
+  \,.
+\end{gather*}
+
+To establish that this combination implements the overlay interface $L_\kw{bq}$,
+we can lift the latter to:
+\[
+  L_\kw{bq}@\kw{mem} : \mathbf{1} \twoheadrightarrow
+    \mathcal{C}@(S_\kw{bq} \times \kw{mem})
+  \,.
+\]
+However,
+because of the difference between
+the abstract state components $S_\kw{rb}$ and $S_\kw{bq}$,
+they cannot be compared directly.
+We must first explain the correspondence between
+the two types of abstract states
+by formulating a proper simulation convention.
+This can be done as follows.
+\end{example}
+
+\begin{definition}
+For a language interface $A$ and a relation $R \subseteq K_1 \times K_2$,
+we define the simulation convention $A@R : A@K_1 \Leftrightarrow A@K_2$ as
+$
+  A@R := \langle \mathbf{1}, {=}@R, {=}@R \rangle
+$.
+\end{definition}
+
+The simulation convention $A@R$
+can be used to relate transition systems which use
+different types of explicit state.
+The \emph{abstraction relation} $R$
+specifies the correspondence between the two.
+
+\begin{example}[Correctness of \kw{bq.c}] \label{ex:bqcorrect}
+Carrying on with our running example,
+using the abstraction relation $R \subseteq S_\kw{bq} \times S_\kw{rb}$
+given in \citet{rbgs-cal}:
+\begin{align*}
+  \vec{q} \mathrel{R} (f, c_1, c_2) \:\Leftrightarrow\: {}
+    & (c_1 \le c_2 < N \:\wedge\: \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {} \\
+    & (c_2 \le c_1 < N \:\wedge\: \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
+\end{align*}
+we can formulate the correctness criterion:
+\[
+  L_\kw{bq}@\kw{mem}
+  \:\le_{\kw{id} \twoheadrightarrow \mathcal{C}@({=}_\kw{mem} \times R)}\:
+  \kw{Clight}(\kw{bq.c})@S_\kw{rb} \circ
+  L_\kw{rb}@\kw{mem}
+  \,.
+\]
+\end{example}
+
+%In our treatment of certified abstraction layers (\S\ref{sec:cal}),
+%we will use this construction as well
+%to lift a memory-free layer interface $\Sigma : \mathbf{1} \rightarrow \mathcal{C}$
+%to $\Sigma@\kw{mem} : 1 \rightarrow \mathcal{C}@\kw{mem}$,
+%making it possible to interface it with client code.
 
 %}}}
 
@@ -789,11 +1032,6 @@ constructions on stateful components
 should preserve the following notion of equivalence.
 
 \begin{definition}[Simple Simulation] \label{def:ssim}
-For a language interface $A$ and a relation $R \subseteq K_1 \times K_2$,
-we define the simulation convention $A@R : A@K_1 \Leftrightarrow A@K_2$ as
-\[
-  A@R := \langle \mathbf{1}, {=}@R, {=}@R \rangle
-\]
 We will say that $\Sigma_1 : A \rightarrow B$
 is refined by $\Sigma_2 : A \rightarrow B$
 and write $\Sigma_1 \preceq \Sigma_2$
