@@ -5,6 +5,20 @@
 \usepackage{tikz-cd}
 \usepackage{subcaption}
 
+\makeatletter
+\providecommand*{\cupdot}{%
+  \mathbin{%
+    \mathpalette\@cupdot{}%
+  }%
+}
+\newcommand*{\@cupdot}[2]{%
+  \ooalign{%
+    $\m@th#1\cup$\cr
+    \hidewidth$\m@th#1\cdot$\hidewidth
+  }%
+}
+\makeatother
+
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
 
@@ -852,6 +866,14 @@ we can lift the latter to:
     \mathcal{C}@(S_\kw{bq} \times \kw{mem})
   \,.
 \]
+
+%}}}
+
+%}}}
+
+\subsection{Abstraction Relation}
+\label{sec:basic:abrel}
+
 However,
 because of the difference between
 the abstract state components $S_\kw{rb}$ and $S_\kw{bq}$,
@@ -927,9 +949,20 @@ to make this possible.
 %to $\Sigma@\kw{mem} : 1 \rightarrow \mathcal{C}@\kw{mem}$,
 %making it possible to interface it with client code.
 
-%}}}
-
-%}}}
+In general, the abstraction relations have the form
+$R \subseteq K^\sharp \times (\kw{mem} \times K^\flat)$
+so that the abstraction layers gradually refine
+the concrete memory values and low-level abstract states
+into high-level abstract states.
+The abstraction relations are then promoted to simulation conventions
+$\hat{R}: \mathcal{C}@(\kw{mem}\times K^\sharp)
+\Leftrightarrow \mathcal{C}@(\kw{mem}\times K^\flat)$.
+However, abstraction relations are not compatible with
+vertical composition.
+In other words, the following property does not hold
+\[
+   \hat{R \circ S} \sqsubseteq \hat{R}; \hat{S}
+\]
 
 \section{Encapsulating State} %{{{
 
@@ -2027,6 +2060,10 @@ in a way that supports those things.
 
 %}}}
 
+\subsection{Linking and Composition}
+
+Compose $\kw{penv} \times \kw{penv}$ into $\kw{penv}$.
+
 \section{Memory Separation in CompCert} %{{{
 
 The constructions we have introduced so far
@@ -2442,6 +2479,8 @@ separation relation such that:
 
 \section{Certified Abstraction Layers} \label{sec:cal} %{{{
 
+{
+\color{gray}
 A cleaner version of our OOPSLA story.
 Here we must go from:
 \begin{itemize}
@@ -2458,6 +2497,24 @@ Here we must go from:
     (refinement shown via
     simulation up to ${-} \bullet m \equiv {-}$).
 \end{itemize}
+}
+
+We have shown in \cite{sec:basic:abrel} that
+abstraction relations are unwieldy,
+especially when they are promoted to simulation conventions.
+The reason is that the abstraction relations
+are playing two roles at the same time.
+One is to refine the memory values to the abstract representations,
+and the other is to embed the memory fragment
+into the entire unified memory model.
+Therefore, we seek to decouple the two tasks.
+The $\ClightP$ language tackles the second task
+and provides a more tractable $\kw{penv}$ interface
+than the monolithic memory.
+This leaves us the first task to solve.
+With the help of state encapsulation,
+the first task can be solved in a clean and elegant manner
+as we will present.
 
 \subsection{Layer Interfaces} %{{{
 
@@ -2469,12 +2526,68 @@ can be defined using a transition system:
 To interface with context code,
 we can hide the abstract state and lift the component to:
 \[
-  \kw{fbk}_D(\&L)@\kw{mem} : \mathbf{1} \rightarrow \mathcal{C}@\kw{mem}
+  \Sigma := \kw{fbk}_D(\&L)@\kw{mem} : \mathbf{1} \rightarrow \mathcal{C}@\kw{mem}
 \]
 Note that the component above never modifies the global memory state.
 
 %}}}
 
+\subsection{Layer Implementation}
+\label{sec:cal:impl}
+
+Given two transition systems manipulating states
+at different abstraction levels
+$L^\sharp: \mathbf{1} \twoheadrightarrow A@K^\sharp$
+and
+$L^\flat: \mathbf{1} \twoheadrightarrow A@K^\flat$,
+the simulation between them is witnessed
+by an abstraction relation $R \subseteq K^\sharp \times K^\flat$
+such that
+\[
+  L^\sharp \le_{\kw{id} \twoheadrightarrow A@R} L^\flat
+\]
+
+Once the states are encapsulated,
+the signatures of the two transition systems are identified.
+As a consequence, the abstraction relation is concealed accordingly.
+\[
+  \kw{fbk}_{K^\sharp}(\& L^\sharp) \preceq \kw{fbk}_{K^\flat}(\& L^\flat)
+\]
+The secret is the simulation invariant.
+
+The benefits of doing so:
+\begin{itemize}
+\item The self-simulation property for the client is no longer necessary.
+  The client is ignorant of the representations.
+  Decoupled the process of transforming the abstract state
+  and assembling them into the memory.
+  Again the secret is the simulation invariant.
+\item The issues with composition of abstraction relations are solved
+\end{itemize}
+
+For the layer correctness $\Sigma^\flat \vdash M : \Sigma^\sharp$,
+we exploit the $\kw{\ClightP}$ semantics as the implementation.
+Then the correctness can be formulated as
+\[
+  \Sigma^\sharp \preceq \ClightP(M) \circ \Sigma^\flat
+\]
+The abstraction relation
+$R \subseteq K^\sharp \times (\kw{penv} \times K^\flat)$
+has once again been concealed.
+Consequently, the vertical composition of abstraction layers
+can be proved
+by the monotonicity and associativity of layered composition
+in a straightforward manner.
+\[
+  \begin{prooftree}
+    \hypo{\Sigma^\flat \vdash M : \Sigma^\natural}
+    \hypo{\Sigma^\natural \vdash N : \Sigma^\sharp}
+    \infer2{\Sigma^\flat \vdash M, N : \Sigma^\sharp}
+  \end{prooftree}
+\]
+
+{
+\color{gray}
 \subsection{Layer Implementation} %{{{
 
 The correctness property $L^\flat \vdash M : L^\sharp$
@@ -2539,6 +2652,7 @@ are merged into the global memory
 at the implementation level.
 To achieve this we must use our memory separation primitive
 and the frame rule for $\kw{Clight}$.
+}
 
 %Let me think about that but two things that come to mind:
 %The first one is, for linking to work, you also need to do that for internal calls since the call from f to g will eventually become an internal call in [F + G] which will have to be matched with the cross-component interaction in [F] ⊕ [G].
@@ -2548,6 +2662,78 @@ and the frame rule for $\kw{Clight}$.
 %}}}
 
 \subsection{Horizontal composition} %{{{
+
+We first define the product.
+\begin{definition}[Product] \label{def:prod}
+  Given transition systems
+\[
+  L_1 = \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
+    : A \twoheadrightarrow B@K_1
+  \quad \text{and} \quad
+  L_2 = \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
+    : A \twoheadrightarrow B@K_2
+\]
+  we define
+  $L_1 \cupdot L_2: A \twoheadrightarrow B@(K_1\times K_2)$
+  as follows.
+  \[
+    S := (S_1 \times K_2) + (S_2 \times K_1)
+  \]
+  \[
+    \begin{prooftree}
+      \hypo{q@k_1 \mathrel{I_1} s_1}
+      \infer1{q@(k_1, k_2) \mathrel{I} \iota_1(s_1@k_2)}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{s_1 \rightarrow_1 s'_1}
+      \infer1{\iota_1(s_1@k_2) \rightarrow \iota_1(s'_1@k_2)}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{s_1 \mathrel{X_1} m}
+      \infer1{\iota_1(s_1@k_2) \mathrel{X} m}
+    \end{prooftree}
+  \]
+  \[
+    \begin{prooftree}
+      \hypo{n \mathrel{Y_1}^{s_1} s'_1}
+      \infer1{n \mathrel{Y}^{s_1@k_2} \iota_1(s'_1@k_2)}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{s_1 \mathrel{F_1} r@k_1}
+      \infer1{\iota_1(s_1@k_2) \mathrel{F} r@(k_1,k_2)}
+    \end{prooftree}
+  \]
+  the symmetric cases are elided
+\end{definition}
+
+Then apply it to the components with encapsulated states.
+\begin{definition}[Product] \label{def:sprod}
+  Given two stateful components
+$\Sigma_1 = (K_1 \mid L_1) : A \rightarrow B$ and
+$\Sigma_2 = (K_2 \mid L_2) : A \rightarrow B$,
+we define their composition
+$\Sigma_1 \cup \Sigma_2 : A \rightarrow B$
+in the following way:
+\[
+  \Sigma_1 \cup \Sigma_2 :=
+    ( K_1 \times K_2 \mid L_1 \cupdot L_2 )
+\]
+\end{definition}
+
+The horizontal composition can be proved
+by the monotonicity and interchangeability.
+\[
+  \begin{prooftree}
+    \hypo{\Sigma_1^\flat \vdash M : \Sigma_1^\sharp}
+    \hypo{\Sigma_2^\flat \vdash N : \Sigma_2^\sharp}
+    \infer2{\Sigma_1^\flat \cup \Sigma_2^\flat
+      \vdash M, N : \Sigma_1^\sharp \cup \Sigma_2^\sharp}
+  \end{prooftree}
+\]
+
 
 %}}}
 
