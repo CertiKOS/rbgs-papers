@@ -22,7 +22,7 @@
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
 
-% Notations
+% Notations {{{
 \newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
 \newcommand{\ifr}[1]{\mathrel{[{#1}]}}
 \newcommand{\que}{\circ}
@@ -35,9 +35,10 @@
 \newcommand{\unitset}{\mathds{1}}
 \renewcommand{\preceq}{\preccurlyeq}
 \newcommand{\intl}[1]{\underline{#1}}
+%}}}
 
 % Names of things
-\newcommand{\ClightP}{\ensuremath{\mathsf{Clight+}}}
+\newcommand{\ClightP}{\ensuremath{\mathsf{ClightP}}}
 
 
 \title{Compositional Compiler Correctness with Encapsulated State}
@@ -50,15 +51,185 @@
 \tableofcontents
 \newpage
 
-\section{Introduction} %{{{
+\section{Introduction} \label{sec:intro} %{{{
 
-There are many verification frameworks based on CompCert,
-but none of them support encapsulated state.
+% Preamble {{{
+
+Compilers are a critical component
+of any modern computing environment.
+Therefore, ensuring their reliability
+is an important goal.
+To this end,
+certified compilers such as CompCert \cite{compcert}
+come with a formal semantics for source and target programs,
+and a proof of correctness which relates
+the behavior of compiled programs to that of their corresponding source.
+
+In this context,
+the quality of a compiler's correctness theorem
+may be judged in terms of its faithfulness
+to real-world use:
+are the source and target language semantics realistic?
+Does the correctness property relating them
+indeed correspond to the way the compiler is used,
+and the target code executed?
+A high quality correctness theorem will provide stronger reliability guaranteed,
+and reduce the chance of bugs being introduced
+during program compilation.
+Empirical evaluation seems to confirm that this works,
+at least in the case of CompCert \cite{csmith}.
+
+Moreover,
+certified compilers can also be important tools
+for \emph{building} other certified systems.
+Here,
+the correctness proof of the compiler
+will become one important component within
+the correctness proof of a potentially larger
+and more heterogeneous system.
+
+This creates additional demands on
+the compiler's correctness theorem:
+is it convenient to interface with the rest of the proof,
+when the target code itself is only part of a larger system?
+Can the compositional structures of the source language
+be accounted for, and put in correspondence
+with the compositional structures of the target language?
+Finally,
+can these structures be subsumed within
+a larger framework for compositional reasoning,
+whose horizon goes beyond the boundary of
+the target program?
+
+In this paper,
+we evaluate the capabilities of CompCertO \citep{compcerto}
+within this paradigm.
+CompCertO is
+a version of the certified compiler CompCert
+featuring compositional language semantics
+and a compositional correctness theorem.
+We show that with modest extensions,
+the semantic model used in CompCertO
+can support various forms of
+high-level, algebraically oriented compositional reasoning.
+
+%}}}
+
+\subsection{The CompCert Verified Compiler} %{{{
+
+The extensive body of research
+on the verified C compiler CompCert
+illustrates the different facets and roles
+certified compilers can take on.
+
+In its original form \citep{compcert},
+the correctness theorem of CompCert
+characterizes the compiler's use on complete, sequential C programs.
+Since then,
+efforts have been made to prove more realistic versions
+of the correctness theorem,
+covering use cases such as separate compilation \citep{sepcompcert},
+the compilation of
+code intended to run in a concurrent setting \citep{compcerttso},
+or stronger versions of correctness
+establishing for example
+guarantees on stack consumption of the target program \citep{qompcert}.
+
+Another line of work
+has established ways to make the correctness theorem of CompCert
+easier to use as an ingredient in
+large-scale verification projects.
+Here,
+the ability to decompose programs and specifications
+is essential,
+so that components of manageable size can be verified in isolation.
+Compositional CompCert \cite{compcompcert} achieved this 
+by giving compositional semantics to the languages of CompCert,
+then expressing the correctness theorem at the level of individual components,
+but only at the expense of a significant increase in proof complexity.
+
+[\ldots]
+
+%}}}
+
+\subsection{Large-scale verification} %{{{
+
+[While there are many verification frameworks
+which use CompCert in some capacity,
+none of them support encapsulated state.
 At most, permissions,
 but here the context still ``sees'' the memory,
-even though it must be shown to be insensitive to it.
+even though it must be shown to be insensitive to it.]
 
-We do better.
+%}}}
+
+\subsection{Contributions} %{{{
+
+We extend the semantic model of CompCertO in several directions:
+\begin{itemize}
+\item
+  In \S\ref{sec:base},
+  we lay out the formal structure of
+  our approach to refinement, abstraction and state.
+  We extend the semantic model of CompCertO
+  with a categorical composition operator
+  ${\odot}_{A,B,C} : (B \twoheadrightarrow C) \times (A \twoheadrightarrow B)
+    \rightarrow (A \twoheadrightarrow C)$.
+  In conjunction with simulation relations and their own compositional structure,
+  this equips the model with the structure of a \emph{double category}.
+  In addition,
+  we make explicit CompCertO's approach to \emph{state}
+  and introduce formal constructions
+  for more flexible ``state plumbing''.
+\item 
+  In \S\ref{sec:encap},
+  we derive a new model
+  which permits \emph{state encapsulation}.
+  Instead of managing state as an explicit part of component interfaces,
+  we make it possible to \emph{hide}
+  all or part of a component's persistent state.
+  In this model,
+  we identify components which differ in
+  the details of their encapsulated state,
+  but whose behavior upon successive activations
+  appears identical to the environment.
+  Abstracting the details of internal state in this way
+  facilitates high-level reasoning.
+\item
+  To illustrate these capabilities,
+  we introduce $\ClightP$ (\S\ref{sec:clightp}),
+  a version of the $\kw{Clight}$ language
+  featuring module-local private variables.
+  In the semantics of a $\ClightP$ component,
+  private variables are encapsulated.
+  $\ClightP$ programs can be compiled to $\kw{Clight}$
+  by transforming private variables into
+  regular global variables.
+  We show how the behavior of the $\ClightP$ program
+  can be related to that of the corresponding $\kw{Clight}$ program,
+  even though private variables become explicit state in the latter.
+\item
+  In \S\ref{sec:sep},
+  we show how \emph{separation algebras} fit within our model.
+  Specifically,
+  a separation algebra on a set of states $K$
+  allows a single global state of type $K$
+  to be seen at a higher level of abstraction
+  as two different fields ($K \times K$).
+  This can be applied to the CompCert memory model
+  to selectively encapsulate part of the memory
+  as module-local state.
+\item
+  Finally,
+  we use \emph{certified abstraction layers} \cite{popl15}
+  as a case study to assess the capabilities of our model.
+  In contrast with their original formulation,
+  the flexibility of our model allows us
+  to decouple to a large extent
+  the formulation of layer interfaces
+  from the details of CompCert programs
+  used to implement them.
+\end{itemize}
 
 %}}}
 
@@ -331,7 +502,7 @@ V deq() { return get(inc1()); }
 \end{figure}
 %}}}
 
-\section{Basic framework} %{{{
+\section{Basic framework} \label{sec:base} %{{{
 
 We start our exposition by
 describing the semantic model
@@ -964,7 +1135,7 @@ In other words, the following property does not hold
    \hat{R \circ S} \sqsubseteq \hat{R}; \hat{S}
 \]
 
-\section{Encapsulating State} %{{{
+\section{Encapsulating State} \label{sec:encap} %{{{
 
 % Preamble {{{
 
@@ -2049,7 +2220,7 @@ such that in particular:
 
 %}}}
 
-\section{Clight with module-local state} %{{{
+\section{Clight with module-local state} \label{sec:clightp} %{{{
 
 [Note: this could be swapped with Section 3
 because it showcases the use of persistent state,
@@ -2139,7 +2310,7 @@ in a way that supports those things.
 
 Compose $\kw{penv} \times \kw{penv}$ into $\kw{penv}$.
 
-\section{Memory Separation in CompCert} %{{{
+\section{Memory Separation in CompCert} \label{sec:sep} %{{{
 
 The constructions we have introduced so far
 make it possible to manage and encapsulate persistent state
@@ -2847,6 +3018,10 @@ for a detailed comparison between CompCertM and CompCertO.
 
 
 \section{Conclusion}
+
+Finally,
+the problem of certified compilation itself
+is [emblematic ...]
 
 \bibliography{../references}
 
