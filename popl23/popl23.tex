@@ -2222,6 +2222,8 @@ such that in particular:
 
 \section{Clight with module-local state} \label{sec:clightp} %{{{
 
+{
+\color{gray}
 [Note: this could be swapped with Section 3
 because it showcases the use of persistent state,
 but probably does not have much to gain
@@ -2236,6 +2238,23 @@ in a way that's convenient.
 
 We need a good name for this language.
 For now I will use \ClightP{}.
+}
+
+To exploit the state encapsulation in actual programs,
+we present the \ClightP{} language,
+which introduces module-local state to the $\kw{Clight}$ language.
+The state is kept private via state encapsulation
+so that it will not be passed around like the usual memory state.
+By doing so, it is guaranteed that
+one module's private state will not be modified by other modules,
+and we can avoid complicated rely-guarantee conditions
+encoded as simulation conventions
+when reason about the behaviors.
+Additionally,
+the module local variables are usually translated
+to abstract state in the CAL framework.
+Thus, separating them from the other part of memory
+paves the way for data refinement with abstraction state.
 
 \subsection{Syntax}
 
@@ -2248,10 +2267,10 @@ private int c = 0;
 int count(void) { return c++; }
 \end{minted}
 
-One question is whether such private variables
-should be declared as globals
-(perhaps associated with empty memory blocks)
-or if we should have a custom \mintinline{Coq}{program} type.
+% One question is whether such private variables
+% should be declared as globals
+% (perhaps associated with empty memory blocks)
+% or if we should have a custom \mintinline{Coq}{program} type.
 
 \subsection{Semantics}
 
@@ -2259,8 +2278,7 @@ Private variables in a \ClightP{} program
 are not stored in the memory,
 but rather in a separate environment.
 This environment is similar to
-the local environments used to store temporaries
-(it might be possible to reuse the same type),
+the local environments used to store temporaries,
 but instead of being used in the context of an activation,
 the private environment is used as persistent state.
 Hence for a program $p$, the \ClightP{} semantics is constructed
@@ -2276,10 +2294,77 @@ and then hiding the private environment as persistent state:
     \mathcal{C}@\mathsf{mem}
 \]
 
-One subtlety in the case where private variables are globals,
-is that the \texttt{initial\_state} predicate of $L$
-must enforce empty permissions for private variables
-in the incoming memory state.
+% One subtlety in the case where private variables are globals,
+% is that the \texttt{initial\_state} predicate of $L$
+% must enforce empty permissions for private variables
+% in the incoming memory state.
+
+Unlike the temporaries,
+the module-local variables can also have type array or struct.
+Therefore, we extend the type $\kw{val}$ with composite types to $\kw{cval}$
+and define the $\kw{penv}$ as a map from identifiers to $\kw{cval}$.
+Lifting the variables from memory to a separate environment
+means that their address cannot be taken.
+So we introduce accessors $\kw{lcval}$ to simulate left values,
+which represent memory locations in $\kw{Clight}$,
+so that the module-static variables can be evaluated to left values similarly
+and updated accordingly.
+Under this approach, struct assignment is not supported
+because it is only possible to assign by value.
+However, this enforces the program not to pass the address
+of the private variables to other modules
+so that undesired behaviors can be avoided.
+
+\begin{gather*}
+  cv \in \kw{cval} \mathrel{::=} \kw{Val}(v:\kw{val})
+                     \mathrel{|} \kw{Arr}(sz:\mathbb{N},a:\mathbb{Z} \rightarrow \kw{cval})
+                     \mathrel{|} \kw{Str}(fs:[\kw{ident}],t:\kw{ident} \rightarrow \kw{cval})
+  \\
+  \kw{penv} \mathrel{::=} \kw{ident} \rightarrow \kw{cval}
+  \\
+  l \in \kw{lcval} \mathrel{::=} \kw{Lval}(i: \kw{ident})
+                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\kw{ident}+\mathbb{Z})
+\end{gather*}
+
+We reuse the $\kw{Clight}$ expressions,
+and add the following expressions to access the private variables.
+Similarly, we reuse the statements and small-step transitions
+and add extra cases for updating the private states.
+\begin{gather*}
+  e \mathrel{::=} \cdots \mathrel{|} \kw{Epvar}(i:\kw{ident})
+  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, l:\kw{ident}+\mathbb{Z})
+  \\[2ex]
+  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}(\kw{val})\\
+  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{penv})
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{pe}!i = \kw{Some}(\kw{Val}(v))}
+    \infer1{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \downarrow v}
+  \end{prooftree}}
+  \qquad
+  {\begin{prooftree}
+    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
+  \end{prooftree}}
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
+    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, x)) = \kw{Some}(\kw{Val}(v))}
+    \infer2{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
+  \end{prooftree}}
+  \qquad
+  {\begin{prooftree}
+    \hypo{\kw{m},\kw{pe} \vdash e \Downarrow loc}
+    \infer1{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, x)}
+  \end{prooftree}}
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{m}, \kw{pe} \vdash a_1 \downarrow v}
+    \hypo{\kw{m}, \kw{pe} \vdash a_2 \Downarrow loc}
+    \hypo{\kw{pwrite}(pe, loc, v) = \kw{Some}(pe')}
+    \infer3{(\kw{m}, \kw{pe}, \kw{Sassign}(a_1, a_2)) \rightarrow
+      (\kw{m}, \kw{pe'}, \kw{Sskip})}
+  \end{prooftree}}
+\end{gather*}
 
 \subsection{Compiling to Clight}
 
@@ -2306,9 +2391,6 @@ in a way that supports those things.
 
 %}}}
 
-\subsection{Linking and Composition}
-
-Compose $\kw{penv} \times \kw{penv}$ into $\kw{penv}$.
 
 \section{Memory Separation in CompCert} \label{sec:sep} %{{{
 
@@ -2748,6 +2830,22 @@ Here we must go from:
 We have shown in \ref{sec:basic:abrel} that
 abstraction relations are unwieldy,
 especially when they are promoted to simulation conventions.
+
+In general, the abstraction relations have the form
+$R \subseteq K^\sharp \times (\kw{mem} \times K^\flat)$
+so that the abstraction layers gradually refine
+the concrete memory values and low-level abstract states
+into high-level abstract states.
+The abstraction relations are then promoted to simulation conventions
+$\hat{R}: \mathcal{C}@(\kw{mem}\times K^\sharp)
+\Leftrightarrow \mathcal{C}@(\kw{mem}\times K^\flat)$.
+However, abstraction relations are not compatible with
+vertical composition.
+In other words, the following property does not hold
+\[
+   \hat{R \circ S} \sqsubseteq \hat{R}; \hat{S}
+\]
+
 The reason is that the abstraction relations
 are playing two roles at the same time.
 One is to refine the memory values to the abstract representations,
@@ -2769,12 +2867,19 @@ can be defined using a transition system:
 \[
   L : \mathbf{1} \twoheadrightarrow \mathcal{C}@D
 \]
-To interface with context code,
+To interface with the client code,
 we can hide the abstract state and lift the component to:
 \[
   \Sigma := \kw{fbk}_D(\&L)@\kw{mem} : \mathbf{1} \rightarrow \mathcal{C}@\kw{mem}
 \]
-Note that the component above never modifies the global memory state.
+Note that the client may not modify the state $D$,
+and may even not be aware of the existence of such a state.
+Thus, we can hide the abstract state
+from bounded queue and ring buffer interface in the example \ref{ex:rbspec}.
+\[
+  \Sigma_\kw{bq} := \kw{fbk}(\&L_\kw{bq}): \mathbf{1} \rightarrow \mathcal{C}@\kw{mem} \qquad
+  \Sigma_\kw{rb} := \kw{fbk}(\&L_\kw{rb}): \mathbf{1} \rightarrow \mathcal{C}@\kw{mem}
+\]
 
 %}}}
 
