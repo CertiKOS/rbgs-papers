@@ -47,121 +47,287 @@
 
 \maketitle
 
-\newpage
-\tableofcontents
-\newpage
-
 \section{Introduction} \label{sec:intro} %{{{
 
-% Preamble {{{
+Software verification is a key ingredient
+for building reliable computer systems,
+but verifying large-scale, heterogeneous systems
+remains out of reach of current verification techniques.
+Addressing this challenge
+will require the use of compositional methods,
+making it easier to construct certified system
+out of readily available certified components
+\cite{deepspec}.
+In principle,
+this can be achieved through the use of
+compositional semantics,
+but in practice
+simpler operational models
+have proven much more tractable
+for carrying out actual verification projects.
 
-Compilers are a critical component
-of any modern computing environment.
-Therefore, ensuring their reliability
-is an important goal.
-To this end,
-certified compilers such as CompCert \cite{compcert}
-come with a formal semantics for source and target programs,
-and a proof of correctness which relates
-the behavior of compiled programs to that of their corresponding source.
+This paper is concerned with bridging this gap.
+In particular,
+we examine the role of \emph{state encapsulation}
+in connecting low-level, operational models
+of software components on on hand,
+and more abstract and compositional models
+on the other hand.
+
+\subsection{Verification Frameworks}
+
+Building large-scale certified systems
+requires the ability
+to model and specify those systems compositionally,
+so that verification can be carried out
+on components of a manageable size.
+In addition,
+the verification of large heterogeneous systems---%
+for example,
+computer systems involving combinations of
+hardware, software and network components---%
+will require models versatile enough
+to account for the large variety of
+operational paradigms and interfaces involved.
+
+Building models that are up to the task is challenging,
+but decades of research have laid much of the necessary groundwork.
+Denotational semantics and category theory
+excel at describing and manipulating compositional structures.
+They tend to focus on the externally observable behavior of components,
+abstracting away internal details which are irrelevant
+at the scale at which composition occurs.
+In principle,
+deploying them in the context of software verification
+could enable large-scale compositionality
+for certified components.
+
+However,
+category theory and denotational semantics
+have not seen widespread adoption
+for certified software engineering.
+By necessity,
+many certified software projects use
+specialized semantic models,
+chosen in the context of a particular
+programming language or system component
+to make verification tractable.
+When these models include compositional structures,
+they are likewise fine-tuned to a particular problem.
 
 In this context,
-the quality of a compiler's correctness theorem
-may be judged in terms of its faithfulness
-to real-world use:
-are the source and target language semantics realistic?
-Does the correctness property relating them
-indeed correspond to the way the compiler is used,
-and the target code executed?
-A high quality correctness theorem will provide stronger reliability guaranteed,
-and reduce the chance of bugs being introduced
-during program compilation.
-Empirical evaluation seems to confirm that this works,
-at least in the case of CompCert \cite{csmith}.
+it is unrealistic to achieve interoperability between
+certified system components
+by mandating the use of any one particular model.
+Instead,
+researchers should attempt to establish
+a hierarchy of semantic models
+with varying degrees of specialization or generality.
+Individual verification projects could then
+use models convenient for the task at hand,
+but the resulting specifications and proofs
+could be embedded in more general ones,
+where they would be made interoperable
+with other components.
 
+Unfortunately,
+one consequence of the gap between
+compositional semantics and verification research
+is that the former has not traditionally focused on
+specifications, refinement and data abstraction.
 Moreover,
-certified compilers can also be important tools
-for \emph{building} other certified systems.
-Here,
-the correctness proof of the compiler
-will become one important component within
-the correctness proof of a potentially larger
-and more heterogeneous system.
+building connections between these two extremes
+will require a more systematic account of state encapsulation,
+or the way in which state which is explicit at one level of abstraction
+becomes hidden at higher levels,
+observable only by the different behaviors exhibited by a system
+in the context of different interaction histories.
 
-This creates additional demands on
-the compiler's correctness theorem:
-is it convenient to interface with the rest of the proof,
-when the target code itself is only part of a larger system?
-Can the compositional structures of the source language
-be accounted for, and put in correspondence
-with the compositional structures of the target language?
-Finally,
-can these structures be subsumed within
-a larger framework for compositional reasoning,
-whose horizon goes beyond the boundary of
-the target program?
+% xx where do interaction trees fit in the picture
 
-In this paper,
-we evaluate the capabilities of CompCertO \citep{compcerto}
-within this paradigm.
-CompCertO is
-a version of the certified compiler CompCert
-featuring compositional language semantics
-and a compositional correctness theorem.
-We show that with modest extensions,
-the semantic model used in CompCertO
-can support various forms of
-high-level, algebraically oriented compositional reasoning.
+\subsection{CompCert}
 
-%}}}
+Work on
+the certified C compiler CompCert \cite{compcert}
+illustrates many aspects of this dynamic.
+CompCert is written in the Coq proof assistant
+and comes with a formal proof of correctness:
+the semantics of the compiler's source and target languages
+are described as labeled transition systems,
+and a simulation proof
+relates the behavior of the compiled program
+to that of the source code.
 
-\subsection{The CompCert Verified Compiler} %{{{
+The original correctness theorem of CompCert
+only modeled the compilation of whole programs.
+To overcome this limitation,
+researchers first attempted to make
+the transition system model used by CompCert
+more compositional,
+and to update the compiler's semantic preservation property
+to operate at the level of individual translation units
+\cite{compcompcert}.
+However,
+this came at a high cost in terms of proof effort,
+and subsequent work on verified separate compilation
+turned to the development of compositional proof techniques
+within the context of a closed, whole-program semantics
+\cite{sepcompcert}.
 
-The extensive body of research
-on the verified C compiler CompCert
-illustrates the different facets and roles
-certified compilers can take on.
+The hybrid approach of CompCertM
+\cite{compcertm}
+consolidated those techniques
+into a verification framework
+where the final correctness theorem
+remains stated in terms of the closed semantics,
+but where a compositional semantics
+can be used to verify individual components.
+This approach delivers much of the flexibility
+of compositional semantics
+with a fraction of the proof effort.
+Yet because the correctness theorem
+ultimately characterizes the behavior
+of the target assembly code as a whole,
+it is difficult to reuse
+in a broader context where
+different parts of the code
+are intertwined and interact with
+external components.
 
-In its original form \citep{compcert},
-the correctness theorem of CompCert
-characterizes the compiler's use on complete, sequential C programs.
-Since then,
-efforts have been made to prove more realistic versions
-of the correctness theorem,
-covering use cases such as separate compilation \citep{sepcompcert},
-the compilation of
-code intended to run in a concurrent setting \citep{compcerttso},
-or stronger versions of correctness
-establishing for example
-guarantees on stack consumption of the target program \citep{qompcert}.
+Another successful approach
+was explored by the work on CompCertO \cite{compcerto}.
+CompCertO revisits compositional semantic preservation
+but incorporates data refinement
+as a first-class citizen.
+The added expressivity and flexibility
+granted by CompCertO's model
+makes it possible---as in CompCertM---%
+to update the correctness proofs for CompCert's passes
+with minimal effort.
+But because data abstraction can be reasoned about explicitly,
+the proofs can be composed directly and independently
+of their relationship to the whole program semantics.
 
-Another line of work
-has established ways to make the correctness theorem of CompCert
-easier to use as an ingredient in
-large-scale verification projects.
-Here,
-the ability to decompose programs and specifications
-is essential,
-so that components of manageable size can be verified in isolation.
-Compositional CompCert \cite{compcompcert} achieved this 
-by giving compositional semantics to the languages of CompCert,
-then expressing the correctness theorem at the level of individual components,
-but only at the expense of a significant increase in proof complexity.
+At the same time,
+the semantic model of CompCertO
+remains extremely specialized:
+the goal here is to minimized any changes needed to CompCert,
+eliminate any source of unnecessary complexity,
+and to enable compositionality
+to the exact extent required
+for compositional semantic preservation
+to work.
+In particular,
+[list some of the limitations].
 
-[\ldots]
+Nevertheless,
+we will show that CompCertO's model
+can be equipped with the structure of
+a \emph{double category}.
+By taking such an abstract view
+of CompCertO's open semantics,
+we can further extend the framework
+to support state encapsulation.
+Moreover,
+once they are brought to light,
+we can give an account of
+these compositional structures
+in terms of simpler and more abstract models,
+such as Reddy's
+coherence space model of objects
+\cite{objsem}.
 
-%}}}
+%The main difficulty encountered in this work
+%is the difference in data representation
+%in the semantics of source and target programs.
+%In CompCert's closed semantics,
+%these differences play no role in
+%the externally observable behavior of programs.
+%Consequently,
+%simulation proofs can capture these differences
+%in the simulation relations they use.
+%Simulation relations are existentially quantified
+%within proofs,
+%and can remain hidden in correctness statements.
+%By contrast,
+%in the context of compositional semantics,
+%cross-component interactions which occur
+%within a linked program become observable,
+%and these internal details can no longer be ignored.
 
-\subsection{Large-scale verification} %{{{
+\subsection{Certified abstraction layers}
 
-[While there are many verification frameworks
-which use CompCert in some capacity,
-none of them support encapsulated state.
-At most, permissions,
-but here the context still ``sees'' the memory,
-even though it must be shown to be insensitive to it.]
+The divide between abstract semantic models
+and concrete verification projects
+also exists in the context of \emph{certified abstraction layers}.
 
-%}}}
+Certified abstraction layers
+allow a complex program to be verified in steps,
+and were used to construct correctness proofs
+for the certified operating system kernel CertiKOS
+\cite{popl15,ccal}.
+Under this approach,
+the verification begins first with the lowest-level code,
+which other parts of the program rely on.
+Once verified,
+they can be given a high-level specification,
+which hides the implementation details
+and allows the proofs for client code
+to reason in terms of an abstract view
+of the lower layer's state.
+This abstract state
+can only be modified by calling into
+the layer's interface,
+realizing a form of state encapsulation
+and data abstraction.
+
+While methodologically sound,
+there are limitations to the way this approach
+was implemented for the verification of CertiKOS.
+This effort reused the CompCert semantics,
+by augmenting its memory model
+with a layer-dependent \emph{abstract state} component,
+and while certified abstraction layers
+offer a high-level view of the system,
+their formulation in this context
+is intimately tied to CompCert-specific constructs.
+While compositional to an extent,
+the method also relies on \emph{closed} semantics,
+in the sense that
+the behavior of a given abstraction layer
+can only be characterized
+once a specification for lower layer has been given,
+reducing the flexibility of the framework.
+This also forces verification to proceed
+in a linear way,
+so that when two parts of the code
+are independent,
+one must nonetheless be verified
+as a client to a layer which includes the other.
+
+To address these limitations,
+more abstract models have been proposed
+for certified abstraction layers
+\cite{rbgs-cal,popl21},
+inspired by game semantics and
+coherence space models of objects \cite{objsem}.
+However,
+at present no practical verification tasks
+has demonstrated how to connect these abstract models
+to low-level, mechanized programming language semantics
+such as the ones used in CompCert.
+
+%CompCertO pretends to do better.
+%It deals with abstraction levels and compositionality,
+%but it can't hide state
+%which is a central feature/need for CAL.
+
+By contrast,
+our high-level account of state encapsulation
+in the context of CompCertO's semantics
+allows us to provide a high-level model
+of certified abstraction layers,
+and to demonstrate its use on a simple example.
 
 \subsection{Contributions} %{{{
 
@@ -175,7 +341,7 @@ We extend the semantic model of CompCertO in several directions:
   with a categorical composition operator
   ${\odot}_{A,B,C} : (B \twoheadrightarrow C) \times (A \twoheadrightarrow B)
     \rightarrow (A \twoheadrightarrow C)$.
-  In conjunction with simulation relations and their own compositional structure,
+  In conjunction with simulation conventions and their own compositional structure,
   this equips the model with the structure of a \emph{double category}.
   In addition,
   we make explicit CompCertO's approach to \emph{state}
@@ -233,223 +399,124 @@ We extend the semantic model of CompCertO in several directions:
 
 %}}}
 
-\begin{figure} %{{{
-  \textbf{Notations}
-  \\[1em]
-  \begin{tabular}{llcllc}
-    Basic component & Def.~\ref{def:lts} &
-    $L : A \twoheadrightarrow B$ &
-    Stateful component & Def.~\ref{def:slts} &
-    $\Sigma : A \rightarrow B$
-    \\
-    Basic convention & Def.~\ref{def:simconv} &
-    $\mathbb{R} : A^\sharp \Leftrightarrow A^\flat$ &
-    Stateful convention & Def.~\ref{def:sconv} &
-    $\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
-    \\
-    Basic simulation & Def.~\ref{def:sim} &
-    $L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat$ &
-    Stateful simulation & Def.~\ref{def:ssim} &
-    $\Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat$
-  \end{tabular}
-  \\[1em]
-  \textbf{Layered composition}
-  \\[1em]
-  \begin{tabular}{cc@{\qquad}cc}
-    Def.~\ref{def:lcomp} &
-  {$\begin{prooftree}
-      \hypo{L_1 : B \twoheadrightarrow C}
-      \hypo{L_2 : A \twoheadrightarrow B}
-      \infer2{L_1 \odot L_2 : A \twoheadrightarrow C}
-    \end{prooftree}$}
-    &
-    Def.~\ref{def:slcomp} &
-  {$\begin{prooftree}
-      \hypo{\Sigma_1 : B \rightarrow C}
-      \hypo{\Sigma_2 : A \rightarrow B}
-      \infer2{\Sigma_1 \circ \Sigma_2 : A \rightarrow C}
-    \end{prooftree}$}
-    \vspace{1em} \\
-    Thm.~\ref{thm:lcompsim} &
-  {$\begin{prooftree}
-      \hypo{L_1^\sharp
-            \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
-            L_1^\flat}
-      \hypo{L_2^\sharp
-            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-            L_2^\flat}
-      \infer2{L_1^\sharp \odot L_2^\sharp
-            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
-            L_1^\flat \odot L_1^\flat}
-    \end{prooftree}$} &
-    Thm.~\ref{thm:slcompsim} &
-  {$\begin{prooftree}
-      \hypo{\Sigma_1^\sharp
-            \preceq_{\mathbf{R}_B \rightarrow \mathbf{R}_C}
-            \Sigma_1^\flat}
-      \hypo{\Sigma_2^\sharp
-            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-            \Sigma_2^\flat}
-      \infer2{\Sigma_1^\sharp \circ \Sigma_2^\sharp
-            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_C}
-            \Sigma_1^\flat \circ \Sigma_1^\flat}
-    \end{prooftree}$}
-  \end{tabular}
-  \\[1em]
-  \textbf{Vertical composition}
-  \\[1em]
-  \begin{tabular}{cc@{\qquad}cc}
-    Def.~\ref{def:ccomp} & {$
-    \begin{prooftree}
-      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\natural}
-      \hypo{\mathbb{S} : A^\natural \Leftrightarrow A^\flat}
-      \infer2{\mathbb{R} \cdot \mathbb{S} : A^\sharp \Leftrightarrow A^\flat}
-    \end{prooftree}
-    $} &
-    Def.~\ref{def:sccomp} & {$
-    \begin{prooftree}
-      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\natural}
-      \hypo{\mathbf{S} : A^\natural \leftrightarrow A^\flat}
-      \infer2{\mathbf{R} \mathbin; \mathbf{S} : A^\sharp \leftrightarrow A^\flat}
-    \end{prooftree}
-    $}
-    \vspace{1em} \\
-    Thm.~\ref{thm:vcomp} & {$
-    \begin{prooftree}
-      \hypo{L^\sharp
-        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-        L^\natural}
-      \hypo{L^\natural
-        \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B}
-        L^\flat}
-      \infer2{L^\sharp
-        \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
-             \mathbb{R}_B \cdot \mathbb{S}_B}
-        L^\flat}
-    \end{prooftree}
-    $} &
-    Thm.~\ref{thm:svcomp} & {$
-    \begin{prooftree}
-      \hypo{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
-        \Sigma^\natural}
-      \hypo{\Sigma^\natural
-        \preceq_{\mathbf{S}_A \twoheadrightarrow \mathbf{S}_B}
-        \Sigma^\flat}
-      \infer2{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \mathbin; \mathbf{S}_A \twoheadrightarrow
-             \mathbf{R}_B \mathbin; \mathbf{S}_B}
-        \Sigma^\flat}
-    \end{prooftree}
-    $}
-  \end{tabular}
-  \\[1em]
-  \textbf{Adjoining explicit state}
-  \\[1em]
-  \begin{tabular}{cc@{\qquad}cc}
-    Def.~\ref{def:lift} &
-    {$
-    \begin{prooftree}
-      \hypo{L : A \twoheadrightarrow B}
-      \infer1{L@K : A@K \twoheadrightarrow B@K}
-    \end{prooftree}
-    $} &
-    Def.~\ref{def:slift} &
-    {$
-    \begin{prooftree}
-      \hypo{\Sigma : A \rightarrow B}
-      \infer1{\Sigma@K : A@K \rightarrow B@K}
-    \end{prooftree}
-    $}
-    \vspace{1em} \\
-    & &
-    Def.~\ref{def:liftsconv} &
-    {$
-    \begin{prooftree}
-      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\flat}
-      \infer1{\mathbf{R}@\langle K^\sharp, K^\flat \rangle :
-        A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat}
-    \end{prooftree}
-    $}
-    \vspace{1em} \\
-    & &
-    Thm.~\ref{thm:liftssim} &
-    {$
-    \begin{prooftree}
-      \hypo{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-        \Sigma^\flat}
-      \infer1{\Sigma^\sharp@K^\sharp
-        \preceq_{\mathbf{R}_A@\langle K^\sharp, K^\flat \rangle \rightarrow
-                 \mathbf{R}_B@\langle K^\sharp, K^\flat \rangle}
-        \Sigma^\flat@K^\flat}
-    \end{prooftree}
-    $}
-  \end{tabular}
-  \\[1em]
-  \textbf{Embedding simple components}
-  \[
-    \begin{prooftree}
-      \hypo{L : A \twoheadrightarrow B}
-      \infer1{\&L : A \rightarrow B}
-    \end{prooftree}
-    \qquad
-    \begin{prooftree}
-      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\flat}
-      \infer1{\&\mathbb{R} : A^\sharp \leftrightarrow A^\flat}
-    \end{prooftree}
-    \qquad
-    \begin{array}{c}
-      \&(L_1 \odot L_2) \equiv \&L_1 \circ \&L_2
-      \\[1ex]
-      \&(\mathbb{R} \cdot \mathbb{S}) \equiv
-        \&\mathbb{R} \mathbin; \&\mathbb{S}
-    \end{array}
-    \qquad
-    \begin{prooftree}
-      \hypo{L^\sharp
-        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-        L^\flat}
-      \infer1{\&L^\sharp
-        \preceq_{\&\mathbb{R}_A \rightarrow \&\mathbb{R}_B}
-        \&L^\flat}
-    \end{prooftree}
-  \]
-  \\[1em]
-  \textbf{Encapsulating state}
-  \[
-    \begin{prooftree}
-      \hypo{\Sigma : A \rightarrow B@K}
-      \infer1{\kw{fbk}_K(\Sigma) : A \rightarrow B}
-    \end{prooftree}
-    \qquad
-    \begin{prooftree}
-      \hypo{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \rightarrow
-                 \mathbf{R}_B@\langle K^\sharp,K^\flat \rangle}
-        \Sigma^\flat}
-      \infer1{\kw{fbk}_{K^\sharp}(\Sigma^\sharp)
-        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-        \kw{fbk}_{K^\flat}(\Sigma^\flat)}
-    \end{prooftree}
-    \qquad
-    \kw{fbk}_\mathbbm{1}(\Sigma) \equiv \Sigma
-  \]
-  \vspace{1ex}
-  \[
-    \kw{fbk}_{K_1}(\Sigma_1) \circ \kw{fbk}_{K_2}(\Sigma_2) \equiv
-    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2)
-  \]
-  \caption{Summary of key notations, definitions and properties}
-    %Constructions on the left-hand side operate in terms of
-    %the original semantic framework of CompCertO.
-    %We extend that framework
-    %to account for persistent encapsulated state,
-    %shown on the right.
-    %Construction which enable the manipulation of
-    %encapsulated state are shown at the bottom.}
-  \label{fig:overview}
-\end{figure}
+% Old intro stuff
+%
+%% Preamble {{{
+%
+%Compilers are a critical component
+%of modern computing environments.
+%Therefore, ensuring their reliability
+%is an important goal.
+%To this end,
+%certified compilers such as CompCert \cite{compcert}
+%come with a formal semantics for source and target programs,
+%and a proof of correctness which relates
+%the behavior of compiled programs to that of their corresponding source.
+%
+%In this context,
+%the quality of a compiler's correctness theorem
+%may be judged in terms of its faithfulness
+%to real-world use:
+%are the source and target language semantics accurate?
+%Does the correctness property relating them
+%realistically model the way the compiler is used,
+%and the target code executed?
+%A high quality correctness theorem will provide stronger reliability guaranteed,
+%and reduce the chance of bugs being introduced
+%during program compilation.
+%Empirical evaluation seems to confirm the benefits of this approach,
+%at least in the case of CompCert \cite{csmith}.
+%
+%Moreover,
+%certified compilers can also be important tools
+%for \emph{building} other certified systems.
+%Here,
+%the compiler correctness proof itself
+%will become a component within
+%the correctness proof of a potentially larger
+%and more heterogeneous system.
+%This creates additional demands on
+%the compiler's correctness theorem:
+%is it convenient to interface with the rest of the proof,
+%when the target code becomes part of a larger system?
+%Can the compiler proof integrate into
+%a compositional reasoning framework
+%with a larger horizon than the program being compiled?
+%
+%%Can the compositional structures of the source language
+%%be accounted for, and put in correspondence
+%%with the compositional structures of the target language?
+%%Finally,
+%%can these compositional structures be subsumed within
+%%a larger framework for compositional reasoning,
+%%whose horizon goes beyond the boundary of
+%%the target program?
+%
+%In this paper,
+%we evaluate the capabilities of CompCertO \citep{compcerto}
+%within this paradigm.
+%CompCertO is
+%a version of the certified compiler CompCert
+%featuring compositional language semantics
+%and a compositional correctness theorem.
+%We show that with modest extensions,
+%the semantic model used in CompCertO
+%can support various forms of
+%high-level, algebraically oriented compositional reasoning.
+%The language semantics and correctness theorem of CompCertO
+%can be reused as-is within this framework.
+%
+%%}}}
+%
+%\subsection{The CompCert Verified Compiler} %{{{
+%
+%The extensive body of research
+%on the verified C compiler CompCert
+%illustrates the different facets and roles
+%certified compilers can take on.
+%
+%In its original form \citep{compcert},
+%the correctness theorem of CompCert
+%characterizes the compiler's use on complete, sequential C programs.
+%Since then,
+%efforts have been made to prove more realistic versions
+%of the correctness theorem,
+%covering use cases such as separate compilation \citep{sepcompcert},
+%the compilation of
+%code intended to run in a concurrent setting \citep{compcerttso},
+%or stronger versions of correctness
+%establishing for example
+%guarantees on stack consumption of the target program \citep{qompcert}.
+%
+%Another line of work
+%seeks to enable the use of CompCert's correctness theorem
+%as an ingredient in
+%other verification projects.
+%Here,
+%the ability to decompose programs and specifications
+%is essential,
+%so that components of manageable size can be verified in isolation.
+%Compositional CompCert \cite{compcompcert} achieved this 
+%by giving compositional semantics to the languages of CompCert,
+%then expressing the correctness theorem at the level of individual components,
+%but only at the expense of a significant increase in proof complexity.
+%CompCertX \cite{popl15}, CompCertM \cite{compcertm} and CompCertO \cite{compcerto}
+%
+%[\ldots]
+%
+%%}}}
+%
+%\subsection{Large-scale verification} %{{{
+%
+%[While there are many verification frameworks
+%which use CompCert in some capacity,
+%none of them support encapsulated state.
+%At most, permissions,
+%but here the context still ``sees'' the memory,
+%even though it must be shown to be insensitive to it.]
+%
+%%}}}
+
 %}}}
 
 \begin{figure} % fig:code {{{
@@ -509,7 +576,7 @@ describing the semantic model
 used in CompCertO,
 which will we use as a starting point
 in our treatment of encapsulated state.
-In \S\ref{sec:basic:compcertO}
+In \S\ref{sec:basic:compcerto}
 we summarize the model as described by
 \citet{compcerto}.
 We then introduce new constructions
@@ -517,8 +584,8 @@ which will be used in our development,
 namely layered composition (\S\ref{sec:basic:lcomp}) and
 state annotations (\S\ref{sec:basic:state}).
 
-The high-level structure of these constructions
-is shown on the left-hand side of \autoref{fig:overview}.
+%The high-level structure of these constructions
+%is shown on the left-hand side of \autoref{fig:overview}.
 
 \subsection{Semantics in CompCertO} \label{sec:basic:compcerto} %{{{
 
@@ -529,10 +596,49 @@ two \emph{language interfaces} $A$ and $B$,
 which decribe how components interact at various levels of abstraction
 from C to assembly language.
 
-\begin{definition} \label{def:li}
+\begin{definition} \label{def:li} %{{{
 A language interface $A = \langle A^\que, A^\ans \rangle$
 consists of a set of questions $A^\que$ and a set of answers $A^\ans$.
 \end{definition}
+%}}}
+
+Two important language interfaces
+are involved in formulating the CompCertO correctness theorem.
+The language interface $\mathcal{C}$
+models interactions between C translation units.
+The language interface $\mathcal{A}$
+is used to describe the behavior of assembly-level components.
+
+\begin{example}[The $\mathcal{C}$ language interface] %{{{
+When a C component is invoked,
+the environment specifies a function to be called
+and argument values.
+When the function is done executing,
+control switches back to the environment
+and the component specifies a return value.
+This can be described by the language interface $\mathcal{C}$,
+defined as follows:
+\begin{align*}
+  \mathcal{C}^\que &:= \{ f(\vec{v}) \mid f \in \kw{ident}, \vec{v} \in \kw{val}^* \}
+  &
+  \mathcal{C}^\ans &:= \kw{val}
+\end{align*}
+In addition,
+C programs may access and alter the global memory state.
+This means that the current memory state must be attached
+to every function call,
+and an updated state must be communicated back
+alongside the return value.
+To this end, CompCertO uses the language interface:
+\begin{align*}
+  (\mathcal{C}@\kw{mem})^\que &:=
+    \{ f(\vec{v})@m \mid f \in \kw{ident}, \vec{v} \in \kw{val}^*, m \in \kw{mem} \}
+  \\
+  (\mathcal{C}@\kw{mem})^\ans &:=
+    \{ v@m' \mid v \in \kw{val}, m \in \kw{mem} \}
+\end{align*}
+\end{example}
+%}}}
 
 Language interfaces specify the information exchanged between
 a component and its environment
@@ -553,7 +659,7 @@ executes by updating an internal state,
 which is not directly observable
 in its interactions with the environment.
 
-\begin{definition}[Basic Component] \label{def:lts}
+\begin{definition}[Basic Component] \label{def:lts} %{{{
 A basic component $L : A \twoheadrightarrow B$
 is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
 consisting of:
@@ -574,10 +680,11 @@ consisting of:
 \end{itemize}
 We write $n \mathrel{Y^s} s'$ when $(s, n, s') \in Y$.
 This means that
-after an external state $s$ triggers a question $m \in A^\que$ ($s \mathrel{X} m$),
+after an external state $s$ triggers a question $m \in A^\que$ % ($s \mathrel{X} m$),
 and the environment replies with an answer $n \in A^\ans$,
 the execution can resume with state $s'$.
 \end{definition}
+%}}}
 
 When $L : A \twoheadrightarrow B$
 performs an external call in $A$,
@@ -588,6 +695,51 @@ no state is preserved across different executions of $L$.
 Each new question $q \in B^\que$ initializes a fresh state $s$
 such that $q \mathrel{I} s$,
 independently of any previous calls made into $L$.
+
+\begin{example}[Clight semantics] \label{ex:clightsem} %{{{
+In CompCertO,
+the semantics of C translation unit $M$
+is given as a transition system of type:
+\[
+  \kw{Clight}(M) : \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+\]
+Note that both incoming and outgoing call
+use the same language interface $\mathcal{C}@\kw{mem}$.
+
+As an example,
+consider $\kw{rb.c}$ from Fig.~\ref{fig:code}.
+If $\kw{inc1}()$ is invoked in a state where the variable $\kw{c1}$ has value $5$,
+the following execution will occur:
+\[
+  \kw{inc1}()@m[\kw{c1} \mapsto 5]
+  \mathrel{I}
+  s_0 \rightarrow \cdots \rightarrow s_k
+  \mathrel{F}
+  5@m[\kw{c1} \mapsto 6]
+\]
+Note that the memory is updated to store the new value of the counter $\kw{c1}$.
+By contrast, the function $\kw{deq}$ in $\kw{bq.c}$
+does not modify the memory itself,
+but it makes call into $\kw{rb.c}$ which may have this effect.
+Executions will have the shape:
+\begin{align*}
+  \kw{deq}()@m
+  \mathrel{I}
+  u_0 \rightarrow \cdots &\rightarrow u_1
+  \mathrel{X}
+  \kw{inc1}()@m \leadsto i@m'
+  \mathrel{Y^{u_1}}
+  u_2 \rightarrow \cdots \\ &\rightarrow u_3
+  \mathrel{X}
+  \kw{get}(i)@m' \leadsto v@m''
+  \mathrel{Y^{u_3}}
+  u_4 \rightarrow \cdots \rightarrow u_5
+  \mathrel{F}
+  v@m''
+\end{align*}
+\end{example}
+%}}}
+
 %In fact,
 %multiple instances of $L$ may even be executing at the time
 %if a reentrant call happens.
@@ -754,6 +906,31 @@ $L_1$ is resumed:
 \end{definition}
 %}}}
 
+\begin{example}
+Referring back to Example~\ref{ex:clightsem},
+consider the transition system:
+\[
+  \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c}) :
+  \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+  \,.
+\]
+There,
+the calls of $\kw{bq.c}$ into $\kw{rb.c}$
+are turned into internal steps,
+triggering a switch between executions of the two components.
+For example,
+the call to $\kw{inc1}$ from $\kw{deq}$
+may proceed as follows:
+\begin{align*}
+  \kw{deq}()@m[\kw{c_1} \mapsto 5] \mathrel{I} \iota_1(u_0)
+  \rightarrow \cdots &\rightarrow \iota_1(u_1)
+  \rightarrow \iota_2(s_0, u_1)
+  \rightarrow \cdots \\ &\rightarrow \iota_2(s_k, u_1)
+  \rightarrow \iota_1(u_2) \rightarrow \cdots
+  \rightarrow \iota_1(u_5) \mathrel{F} v@m[\kw{c1} \mapsto 6]
+\end{align*}
+\end{example}
+
 Like the symmetric composition operator $\oplus$ used in CompCertO,
 the layered composition operator defined above
 is compatible with simulations.
@@ -830,9 +1007,9 @@ $q@k \in A^\que \times K$ and
 $r@k \in A^\ans \times K$.
 \end{definition}
 
-Note that using the definition above,
-the CompCertO language interfaces
-can be decomposed into $\mathcal{C}@\kw{mem}$, $\mathcal{A}@\kw{mem}$, etc.
+Note that in our examples,
+we have decomposed the CompCertO language interfaces
+into $\mathcal{C}@\kw{mem}$, $\mathcal{A}@\kw{mem}$, etc.
 The memory state is dropped from the language interface $\mathcal{C}$,
 whose questions are now just $f[\mathit{sg}](\vec{v})$,
 and reintroduced with $@\kw{mem}$ to obtain
@@ -857,7 +1034,7 @@ so the specification will be of type
 To define it, we construct a simple transition system such that
 all executions take the shape
 \[
-  m@(f, c_1, c_2) \:\mathrel{I}\: (v', f', c_1', c_2')
+  q@(f, c_1, c_2) \:\mathrel{I}\: (v', f', c_1', c_2')
                   \:\mathrel{F}\: v'@(f', c_1', c_2')
   \,.
 \]
@@ -984,7 +1161,7 @@ we define $L@K : A@K \twoheadrightarrow B@K$ as:
 This construction is used in particular when components are linked,
 to pass through the internal state of other components.
 
-\begin{example}[Interfacing $L_\kw{rb}$ with client code]
+\begin{example}[Interfacing $L_\kw{rb}$ with client code] \label{ex:context}
 Building on Example~\ref{ex:rbspec},
 consider the problem of interfacing
 the client code in $\kw{bq.c}$ with the underlay interface $L_\kw{rb}$.
@@ -1037,15 +1214,16 @@ we can lift the latter to:
     \mathcal{C}@(S_\kw{bq} \times \kw{mem})
   \,.
 \]
+We will then need to define a simulation convention
+explaining the relationship between
+the states of type $S_\kw{bq}$ used by the specification and
+the states of type $S_\kw{rb}$ used by the implementation.
 
 %}}}
 
-%}}}
+\subsection{Abstraction Relation} \label{sec:basic:abrel} %{{{
 
-\subsection{Abstraction Relation}
-\label{sec:basic:abrel}
-
-However,
+In Example~\ref{ex:context},
 because of the difference between
 the abstract state components $S_\kw{rb}$ and $S_\kw{bq}$,
 they cannot be compared directly.
@@ -1134,6 +1312,10 @@ In other words, the following property does not hold
 \[
    \hat{R \circ S} \sqsubseteq \hat{R}; \hat{S}
 \]
+
+%}}}
+
+%}}}
 
 \section{Encapsulating State} \label{sec:encap} %{{{
 
@@ -2391,6 +2573,11 @@ in a way that supports those things.
 
 %}}}
 
+\subsection{Linking and Composition} %{{{
+
+Compose $\kw{penv} \times \kw{penv}$ into $\kw{penv}$.
+
+%}}}
 
 \section{Memory Separation in CompCert} \label{sec:sep} %{{{
 
@@ -3094,7 +3281,7 @@ by the monotonicity and interchangeability.
 
 %}}}
 
-\section{Related Work}
+\section{Related Work} %{{{
 
 Our approach is inspired by \citet{feedback,caots}.
 
@@ -3121,14 +3308,242 @@ so we keep things simple.
 We refer interested readers to \citet{compcerto}
 for a detailed comparison between CompCertM and CompCertO.
 
+%}}}
 
-\section{Conclusion}
+\section{Conclusion} %{{{
 
 Finally,
 the problem of certified compilation itself
 is [emblematic ...]
 
+%}}}
+
 \bibliography{../references}
+
+\appendix
+
+\newpage
+
+\begin{figure}[h] %{{{
+  \textbf{Notations}
+  \\[1em]
+  \begin{tabular}{llcllc}
+    Basic component & Def.~\ref{def:lts} &
+    $L : A \twoheadrightarrow B$ &
+    Stateful component & Def.~\ref{def:slts} &
+    $\Sigma : A \rightarrow B$
+    \\
+    Basic convention & Def.~\ref{def:simconv} &
+    $\mathbb{R} : A^\sharp \Leftrightarrow A^\flat$ &
+    Stateful convention & Def.~\ref{def:sconv} &
+    $\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
+    \\
+    Basic simulation & Def.~\ref{def:sim} &
+    $L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat$ &
+    Stateful simulation & Def.~\ref{def:ssim} &
+    $\Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat$
+  \end{tabular}
+  \\[1em]
+  \textbf{Layered composition}
+  \\[1em]
+  \begin{tabular}{cc@{\qquad}cc}
+    Def.~\ref{def:lcomp} &
+  {$\begin{prooftree}
+      \hypo{L_1 : B \twoheadrightarrow C}
+      \hypo{L_2 : A \twoheadrightarrow B}
+      \infer2{L_1 \odot L_2 : A \twoheadrightarrow C}
+    \end{prooftree}$}
+    &
+    Def.~\ref{def:slcomp} &
+  {$\begin{prooftree}
+      \hypo{\Sigma_1 : B \rightarrow C}
+      \hypo{\Sigma_2 : A \rightarrow B}
+      \infer2{\Sigma_1 \circ \Sigma_2 : A \rightarrow C}
+    \end{prooftree}$}
+    \vspace{1em} \\
+    Thm.~\ref{thm:lcompsim} &
+  {$\begin{prooftree}
+      \hypo{L_1^\sharp
+            \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
+            L_1^\flat}
+      \hypo{L_2^\sharp
+            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+            L_2^\flat}
+      \infer2{L_1^\sharp \odot L_2^\sharp
+            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
+            L_1^\flat \odot L_1^\flat}
+    \end{prooftree}$} &
+    Thm.~\ref{thm:slcompsim} &
+  {$\begin{prooftree}
+      \hypo{\Sigma_1^\sharp
+            \preceq_{\mathbf{R}_B \rightarrow \mathbf{R}_C}
+            \Sigma_1^\flat}
+      \hypo{\Sigma_2^\sharp
+            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+            \Sigma_2^\flat}
+      \infer2{\Sigma_1^\sharp \circ \Sigma_2^\sharp
+            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_C}
+            \Sigma_1^\flat \circ \Sigma_1^\flat}
+    \end{prooftree}$}
+  \end{tabular}
+  \\[1em]
+  \textbf{Vertical composition}
+  \\[1em]
+  \begin{tabular}{cc@{\qquad}cc}
+    Def.~\ref{def:ccomp} & {$
+    \begin{prooftree}
+      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\natural}
+      \hypo{\mathbb{S} : A^\natural \Leftrightarrow A^\flat}
+      \infer2{\mathbb{R} \cdot \mathbb{S} : A^\sharp \Leftrightarrow A^\flat}
+    \end{prooftree}
+    $} &
+    Def.~\ref{def:sccomp} & {$
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\natural}
+      \hypo{\mathbf{S} : A^\natural \leftrightarrow A^\flat}
+      \infer2{\mathbf{R} \mathbin; \mathbf{S} : A^\sharp \leftrightarrow A^\flat}
+    \end{prooftree}
+    $}
+    \vspace{1em} \\
+    Thm.~\ref{thm:vcomp} & {$
+    \begin{prooftree}
+      \hypo{L^\sharp
+        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+        L^\natural}
+      \hypo{L^\natural
+        \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B}
+        L^\flat}
+      \infer2{L^\sharp
+        \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
+             \mathbb{R}_B \cdot \mathbb{S}_B}
+        L^\flat}
+    \end{prooftree}
+    $} &
+    Thm.~\ref{thm:svcomp} & {$
+    \begin{prooftree}
+      \hypo{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
+        \Sigma^\natural}
+      \hypo{\Sigma^\natural
+        \preceq_{\mathbf{S}_A \twoheadrightarrow \mathbf{S}_B}
+        \Sigma^\flat}
+      \infer2{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \mathbin; \mathbf{S}_A \twoheadrightarrow
+             \mathbf{R}_B \mathbin; \mathbf{S}_B}
+        \Sigma^\flat}
+    \end{prooftree}
+    $}
+  \end{tabular}
+  \\[1em]
+  \textbf{Adjoining explicit state}
+  \\[1em]
+  \begin{tabular}{cc@{\qquad}cc}
+    Def.~\ref{def:lift} &
+    {$
+    \begin{prooftree}
+      \hypo{L : A \twoheadrightarrow B}
+      \infer1{L@K : A@K \twoheadrightarrow B@K}
+    \end{prooftree}
+    $} &
+    Def.~\ref{def:slift} &
+    {$
+    \begin{prooftree}
+      \hypo{\Sigma : A \rightarrow B}
+      \infer1{\Sigma@K : A@K \rightarrow B@K}
+    \end{prooftree}
+    $}
+    \vspace{1em} \\
+    & &
+    Def.~\ref{def:liftsconv} &
+    {$
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\flat}
+      \infer1{\mathbf{R}@\langle K^\sharp, K^\flat \rangle :
+        A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat}
+    \end{prooftree}
+    $}
+    \vspace{1em} \\
+    & &
+    Thm.~\ref{thm:liftssim} &
+    {$
+    \begin{prooftree}
+      \hypo{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+        \Sigma^\flat}
+      \infer1{\Sigma^\sharp@K^\sharp
+        \preceq_{\mathbf{R}_A@\langle K^\sharp, K^\flat \rangle \rightarrow
+                 \mathbf{R}_B@\langle K^\sharp, K^\flat \rangle}
+        \Sigma^\flat@K^\flat}
+    \end{prooftree}
+    $}
+  \end{tabular}
+  \\[1em]
+  \textbf{Embedding simple components}
+  \[
+    \begin{prooftree}
+      \hypo{L : A \twoheadrightarrow B}
+      \infer1{\&L : A \rightarrow B}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\flat}
+      \infer1{\&\mathbb{R} : A^\sharp \leftrightarrow A^\flat}
+    \end{prooftree}
+    \qquad
+    \begin{array}{c}
+      \&(L_1 \odot L_2) \equiv \&L_1 \circ \&L_2
+      \\[1ex]
+      \&(\mathbb{R} \cdot \mathbb{S}) \equiv
+        \&\mathbb{R} \mathbin; \&\mathbb{S}
+    \end{array}
+    \qquad
+    \begin{prooftree}
+      \hypo{L^\sharp
+        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+        L^\flat}
+      \infer1{\&L^\sharp
+        \preceq_{\&\mathbb{R}_A \rightarrow \&\mathbb{R}_B}
+        \&L^\flat}
+    \end{prooftree}
+  \]
+  \\[1em]
+  \textbf{Encapsulating state}
+  \[
+    \begin{prooftree}
+      \hypo{\Sigma : A \rightarrow B@K}
+      \infer1{\kw{fbk}_K(\Sigma) : A \rightarrow B}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \rightarrow
+                 \mathbf{R}_B@\langle K^\sharp,K^\flat \rangle}
+        \Sigma^\flat}
+      \infer1{\kw{fbk}_{K^\sharp}(\Sigma^\sharp)
+        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+        \kw{fbk}_{K^\flat}(\Sigma^\flat)}
+    \end{prooftree}
+    \qquad
+    \kw{fbk}_\mathbbm{1}(\Sigma) \equiv \Sigma
+  \]
+  \vspace{1ex}
+  \[
+    \kw{fbk}_{K_1}(\Sigma_1) \circ \kw{fbk}_{K_2}(\Sigma_2) \equiv
+    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2)
+  \]
+  \caption{Summary of key notations, definitions and properties}
+    %Constructions on the left-hand side operate in terms of
+    %the original semantic framework of CompCertO.
+    %We extend that framework
+    %to account for persistent encapsulated state,
+    %shown on the right.
+    %Construction which enable the manipulation of
+    %encapsulated state are shown at the bottom.}
+  \label{fig:overview}
+\end{figure}
+%}}}
+
+\tableofcontents
 
 \end{document}
 %%% Local Variables: 
