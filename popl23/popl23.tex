@@ -612,23 +612,47 @@ V deq() { return get(inc1()); }
 \end{figure}
 %}}}
 
-\section{Basic framework} \label{sec:base} %{{{
+\section{A Double Category of Transition Systems} \label{sec:base} %{{{
 
-We start our exposition by
-describing the semantic model
-used in CompCertO,
-which will we use as a starting point
-in our treatment of encapsulated state.
-In \S\ref{sec:basic:compcerto}
-we summarize the model as described by
-\citet{compcerto}.
-We then introduce new constructions
-which will be used in our development,
-namely layered composition (\S\ref{sec:basic:lcomp}) and
-state annotations (\S\ref{sec:basic:state}).
+% Preamble {{{
 
-%The high-level structure of these constructions
-%is shown on the left-hand side of \autoref{fig:overview}.
+We begin our exposition by revisiting
+the semantic model used in CompCertO.
+As it stands (\S\ref{sec:basic:compcerto}),
+this model offers only a very specific notion
+of transition system composition,
+meant to model program linking
+in a context where
+mutually recursive calls are possible.
+
+By introducing a more general notion of composition (\S\ref{sec:basic:lcomp}),
+we equip the model with the structure of a category.
+This compositional structure
+is preserved by an interpretation of CompCertO transition systems
+into \emph{coherence spaces},
+modeled after Reddy's object-based semantics (\S\ref{sec:basic:coh}).
+
+In addition to transition systems,
+CompCertO introduces a notion of \emph{simulation convention},
+which formalizes the correspondance between the external interactions
+of source- and target-level transition systems.
+Simulation conventions carry their own categorical structure,
+and together with transition systems and simulations
+they constitute
+a \emph{double category} $\mathbf{LTS}$ (\S\ref{sec:basic:double}).
+
+This structure gives a formal underpinning to the usual notions of
+horizontal and vertical composition
+found in existing work on compositional certified compilers.
+This richer structure
+does not find a straightforward analogue
+at the level of coherence spaces.
+This illustrates an under-appreciated but important challenge
+for denotational semantics in the context certified compilation,
+namely the important role of abstraction
+in that application domain.
+
+%}}}
 
 \subsection{Semantics in CompCertO} \label{sec:basic:compcerto} %{{{
 
@@ -702,8 +726,8 @@ executes by updating an internal state,
 which is not directly observable
 in its interactions with the environment.
 
-\begin{definition}[Basic Component] \label{def:lts} %{{{
-A basic component $L : A \twoheadrightarrow B$
+\begin{definition} \label{def:lts} %{{{
+A \emph{transition system} $L : A \twoheadrightarrow B$
 is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
 consisting of:
 \begin{itemize}
@@ -721,19 +745,21 @@ consisting of:
   \item a relation $Y \subseteq S \times A^\ans \times S$,
     which identifies \emph{resumption states}.
 \end{itemize}
+\end{definition}
+%}}}
+
 We write $n \mathrel{Y^s} s'$ when $(s, n, s') \in Y$.
 This means that
 after an external state $s$ triggers a question $m \in A^\que$ % ($s \mathrel{X} m$),
 and the environment replies with an answer $n \in A^\ans$,
-the execution can resume with state $s'$.
-\end{definition}
-%}}}
-
-When $L : A \twoheadrightarrow B$
+the execution resumes with state $s'$.
+Hence,
+when $L : A \twoheadrightarrow B$
 performs an external call in $A$,
 the internal state $s$ is preserved
 until an answer resumes the execution.
-Note however that
+However,
+at the level of transition systems,
 no state is preserved across different executions of $L$.
 Each new question $q \in B^\que$ initializes a fresh state $s$
 such that $q \mathrel{I} s$,
@@ -815,12 +841,215 @@ would serve no purpose.
 %can be incorporated into
 %the semantic model of CompCertO.
 
-\subsubsection{Kripke Relators}
+\subsubsection{Kripke Relators} %{{{
+
+Logical relations
+and relational parametricity
+play an important role
+in the construction of CompCertO's correctness theorem.
+To state relational properties,
+\citet{compcerto}
+introduces a Kripke relator framework,
+which we summarize below.
+%We will use it
+%to formulate various notions of simulation,
+%and summarize it below.
+
+Given two relations
+$R \subseteq A \times B$ and
+$S \subseteq U \times V$,
+the relation
+$(R \rightarrow S) \subseteq
+ (A \rightarrow U) \times
+ (B \rightarrow V)$
+is defined in the usual way:
+\[
+  f \ifr{R \rightarrow S} g
+  \quad:\Leftrightarrow\quad
+  \forall (a, b) \in A \times B \mathbin.
+    a \mathrel{R} b \Rightarrow
+    f(a) \mathrel{S} g(b)
+  \,.
+\]
+The more unusual powerset relator $\mathcal{P}^\le$
+is used to express simulation diagrams.
+Given $R \subseteq A \times B$,
+the relation
+$\mathcal{P}^\le(R) \subseteq \mathcal{P}(A) \times \mathcal{P}(B)$
+is defined as:
+\[
+  x \ifr{\mathcal{P}(R)^\le} y
+  \quad:\Leftrightarrow\quad
+  \forall a \in x \mathbin.
+  \exists b \in y \mathbin.
+  a \mathrel{R} b
+\]
+To see how this works,
+consider the simple transition systems
+$\alpha : A \rightarrow \mathcal{P}(A)$
+and
+$\beta : B \rightarrow \mathcal{P}(B)$.
+The relation $R$ is a simulation relation between them
+when the following property holds:
+\[
+  \alpha \:\ifr{R \rightarrow \mathcal{P}^\le(R)}\: \beta
+  \qquad\qquad\qquad
+  \begin{tikzcd}
+    a \ar[r, "\alpha"] \ar[d, dash, "R"'] &
+    a' \ar[d, dash, dashed, "R"] \\
+    b \ar[r, dashed, "\beta"'] &
+    b'
+  \end{tikzcd}
+\]
+
+Components of complex data structures
+must often be related in ways which vary
+depending on the context in which they appear,
+or the history of the computation.
+In such cases,
+component relations can be indexed over a set of \emph{worlds},
+which capture the relevant contextual information.
+Formally, a \emph{Kripke relation} over a set of worlds $W$
+is a ternary relation $R \subseteq W \times A \times B$.
+We will write $R \in \mathcal{R}_W(A, B)$,
+and use the notation
+$
+  w \Vdash a \mathrel{R} b
+$
+to mean that $(w, a, b) \in R$.
+In addition,
+\[
+  {} \Vdash a \mathrel{R} b
+  \quad :\Leftrightarrow \quad
+  \forall w\in W \mathbin. w \Vdash a \mathrel{R} b
+\]
+
+It is often useful to let the world evolve
+by endowing $W$ with an \emph{accessibility} relation
+${\leadsto} \subseteq W \times W$.
+World transitions are captured by the modal relator $\Diamond$,
+which associates to a Kripke relation $R \in \mathcal{R}_W(A, B)$
+the Kripke relation $\Diamond R$ of the same type, defined by:
+\[
+  w \Vdash a \ifr{\Diamond R} b
+  \quad:\Leftrightarrow\quad
+  \exists w' \mathbin. w \leadsto w' \wedge w' \Vdash a \mathrel{R} b
+\]
+For example,
+a Kripke simulation between $\alpha : A \rightarrow \mathcal{P}(A)$
+and $\beta : B \rightarrow \mathcal{P}(B)$
+operating in the context of a Kripke frame $\langle W, {\leadsto} \rangle$
+and a Kripke simulation relation $R \in \mathcal{R}_W(A, B)$
+can be formulated in the following way.
+The relators $\rightarrow$ and $\mathcal{P}^\le$
+can be promoted to Kripke relators
+by pointwise extension over the set of worlds.
+The complex Kripke simulation property:
+{\small
+\[
+  \forall w \in W \mathbin.
+  \forall a \in A \mathbin.
+  \forall b \in B \mathbin.
+  w \Vdash a \mathrel{R} b \Rightarrow
+  \forall a' \in \alpha(a) \mathbin.
+  \exists b' \in \beta(b) \mathbin.
+  \exists w' \in W \mathbin.
+  w \leadsto w' \wedge w' \Vdash a' \mathrel{R} b'
+\]
+}
+can be stated simply as:
+\[
+  \Vdash \alpha \ifr{R \rightarrow \mathcal{P}^\le(\Diamond R)} \beta
+  \,.
+\]
+
+%}}}
 
 \subsubsection{Simulations} %{{{
 
+Prior approaches
+to compositional semantics in CompCert
+use a fixed notion of cross-component interactions,
+corresponding roughly
+to transition systems of type
+$\mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}$.
+By contrast,
+CompCertO's flexibility allows
+cross-component interactions
+for a particular language
+to be expressed at a suitable level of abstraction.
+For example,
+semantics for the compiler's source and target language
+are given as:
+\[
+  \kw{Clight}(-) : \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+  \qquad \qquad
+  \kw{Asm}(-) : \mathcal{A}@\kw{mem} \twoheadrightarrow \mathcal{A}@\kw{mem}
+  \,,
+\]
+so that in particular the behavior of assembly programs
+to be modeled more precisely.
+
+This approach also underscores the importance,
+for establishing the compiler's correctness property,
+of the correspondence between
+C-level function calls
+and the corresponding assembly-level interfaces.
+In other words,
+compiler correctness only makes sense
+with respect to a particular \emph{calling convention}.
+Rather than modeling the calling convention implicitly
+as part of the assembly semantics,
+CompCertO makes it explicit:
+simulations operate in the context of specified
+\emph{simulation conventions}
+which express the relationships between
+the source and target component's
+interactions with the environment.
+
+This introduces a form of two-dimensional typing for simulations.
+To establish a simulation
+of a transition system $L^\sharp: A^\sharp \twoheadrightarrow B^\sharp$
+by a transition system $L^\flat: A^\flat \twoheadrightarrow B^\flat$,
+we must first specify a simulation convention
+$\mathbb{R}_B : B^\sharp \Leftrightarrow B^\flat$
+for their incoming calls,
+and a simulation convention
+$\mathbb{R}_A : A^\sharp \Leftrightarrow A^\flat$
+for their external calls.
+We can depict this situation as follows:
+\[
+  \begin{tikzcd}
+    A^\sharp
+      \ar[r, twoheadrightarrow, "L^\sharp"]
+      \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+    B^\sharp
+      \ar[d, Leftrightarrow, "\mathbb{R}_B"] \\
+    A^\flat
+      \ar[r, twoheadrightarrow, "L^\flat"'] &
+    B^\flat
+  \end{tikzcd}
+\]
+The conventions $\mathbb{R}_A$ and $\mathbb{R}_B$
+specify Kripke relations between source- and target-level interactions;
+the Kripke worlds can be used to ensure that
+question and their corresponding answers
+are related in a consistent way.
+
 \begin{definition}[Simulation Convention] \label{def:simconv}
+Given two language interfaces $A$ and $B$,
+a \emph{simulation convention} $\mathbb{R} : A \Leftrightarrow B$
+is a set of worlds $W$ together with two relations:
+\[
+  \mathbb{R}^\que \in \mathcal{R}_W(A^\que, B^\que)
+  \qquad
+  \mathbb{R}^\ans \in \mathcal{R}_W(A^\ans, B^\ans)
+\]
 \end{definition}
+
+Note that while simulation conventions
+carry a set of worlds,
+they do not specify an accessibility relation.
 
 \begin{definition}[Basic Simulation] \label{def:sim}
 \end{definition}
@@ -1027,6 +1256,18 @@ For $L_1, L_2 : A \twoheadrightarrow A$,
 \end{theorem}
 
 %}}}
+
+\subsection{Trace Semantics} \label{sec:basic:coh} %{{{
+
+%}}}
+
+\subsection{Double Category} \label{sec:basic:double} %{{{
+
+%}}}
+
+%}}}
+
+\section{Explicit State} %{{{
 
 \subsection{Adjoining Explicit State} \label{sec:basic:state} %{{{
 
@@ -1345,7 +1586,7 @@ to make this possible.
 
 %}}}
 
-\section{Encapsulating State} \label{sec:encap} %{{{
+\section{Encapsulated State} \label{sec:encap} %{{{
 
 % Preamble {{{
 
