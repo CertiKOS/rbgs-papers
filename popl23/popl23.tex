@@ -5,23 +5,11 @@
 \usepackage{tikz-cd}
 \usepackage{subcaption}
 
-\makeatletter
-\providecommand*{\cupdot}{%
-  \mathbin{%
-    \mathpalette\@cupdot{}%
-  }%
-}
-\newcommand*{\@cupdot}[2]{%
-  \ooalign{%
-    $\m@th#1\cup$\cr
-    \hidewidth$\m@th#1\cdot$\hidewidth
-  }%
-}
-\makeatother
-
+% Parameters {{{
 \setcopyright{none}
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
+%}}}
 
 % Notations {{{
 \newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
@@ -42,10 +30,26 @@
 \newcommand{\callee}[1]{[ #1 \rangle}
 %}}}
 
-% Names of things
-\newcommand{\ClightP}{\ensuremath{\mathsf{ClightP}}}
-\newcommand{\Clight}{\ensuremath{\mathsf{Clight}}}
+% Names of things {{{
+\newcommand{\ClightP}{\ensuremath{ \mathsf{ClightP} }}
+\newcommand{\Clight}{\ensuremath{ \mathsf{Clight} }}
+%}}}
 
+% Custom symbols {{{
+\makeatletter
+\providecommand*{\cupdot}{%
+  \mathbin{%
+    \mathpalette\@cupdot{}%
+  }%
+}
+\newcommand*{\@cupdot}[2]{%
+  \ooalign{%
+    $\m@th#1\cup$\cr
+    \hidewidth$\m@th#1\cdot$\hidewidth
+  }%
+}
+\makeatother
+%}}}
 
 \title{Compositional Compiler Correctness with Encapsulated State}
 
@@ -1531,11 +1535,10 @@ when describing complex simulation conventions.
 As implied by the properties above,
 a composite morphism in a symmetric monoidal category
 can often be written in a variety of equivalent ways.
-String diagrams provide a more canonical and economical
+String diagrams provide a more economical
 representation of such morphisms,
 where these equivalences are captured
 by simple geometric intuition.
-
 For example, consider the following situation:
 \[
   \begin{prooftree}
@@ -1567,20 +1570,111 @@ For example, consider the following situation:
     \\
     \vdots \:\, &
   \end{array}
-  \qquad
+  \qquad\qquad
   \mathbb{R} := \:\vcenter{\hbox{\includegraphics[scale=0.15]{draftfig/sdexample}}}
 \]
+Here,
+we define a simulation convention $\mathbb{R}$ from various components
+using categorical operations.
+On the left,
+we show the type of every variable,
+and give several equivalent definitions for $\mathbb{R}$.
+The string diagram on the right
+captures the same information
+in a more compact and readable way.
+Note that string diagrams
+are \emph{formal} diagrams,
+which denote a particular morphism
+with the same degree of rigor
+as traditional mathematical notation.
 
-String diagrams provide an intuitive representation
-of composite morphisms
-
-String diagrams are 
-
-This means in particular that composite simulation conventions
-can be represented as canonical \emph{string diagrams}
+The string diagrams we use to represent simulation conventions
+can be read from top to bottom.
+Vertical lines denote language interfaces,
+and horizontal juxtaposition represent tensor products.
+Since it is the unit for $\otimes$,
+the language interface $\mathbf{I}$ is not explicitly represented.
+Nodes connect a group of lines above to a group of lines below
+and denote elementary simulation conventions,
+and are connected vertically to denote sequential composition.
+Like the language interface $\mathbf{I}$,
+the identity simulation convention $\epsilon$ is omitted,
+and may appear as a vertical line without an intervening node.
+Based on these conventions,
+the string diagram above can be read as:
+\newcommand{\chunk}[1]{%
+  \vcenter{\hbox{%
+    \includegraphics[scale=0.1]{draftfig/sd/#1}%
+  }}%
+}
+\begin{align*}
+  \mathbb{R}
+     = \chunk{l1} \cdot \chunk{l2} \cdot \chunk{l3}
+    &= \lambda_A^{-1} \cdot
+       \left( \chunk{c1} \otimes \chunk{c2} \right) \cdot
+       \left( \chunk{c3} \otimes \chunk{c4} \right) \cdot
+       \chunk{c5} \\
+    &= \lambda_A^{-1} \cdot (\epsilon_A \otimes x) \cdot (w \otimes y) \cdot z
+    \,.
+\end{align*}
+There are other ways to decompose the diagram,
+which yield some of the alternate formulas for $\mathbb{R}$
+shown above.
+But conversely,
+the string diagrams representations of these formulas
+are all identical,
+up to topological deformations
+which correspond to the axioms of monoidal categories.
 
 \begin{example}[Abstraction Relations]
+In \S\ref{sec:overview:slift},
+we noted that a layer specification
+$L^\sharp : \top \twoheadrightarrow \mathcal{C}_\kw{m}@D^\sharp$
+and its implementation
+$\llbracket M \rrbracket_{L^\flat} :
+ \top \twoheadrightarrow \mathcal{C}_\kw{m}@D^\flat$
+%in terms of an underlay $L^\flat$
+are not directly comparable owing to their
+use of distinct abstract states.
+We now show how to construct,
+using the techniques that we have introduced,
+a simulation convention suitable for
+stating the desired correctness property.
 
+Note the decomposition
+$\mathcal{C}_\kw{m}@D \cong \mathcal{C} \otimes [\kw{mem}] \otimes [D]$.
+When a layer specification $L^\sharp$ is implemented,
+part of its abstract state $D^\sharp$ is realized as concrete values
+stored in the global memory,
+and part of it reflects the abstract state of the underlay in $D^\flat$.
+The details of this can be expressed using a relation
+$R \subseteq (\kw{mem} \times D^\sharp) \times (\kw{mem} \times D^\flat)$,
+allowing us to state the layer correctness property as
+\[
+  L^\flat \vdash_R M : L^\sharp \quad :\Leftrightarrow \quad
+    L^\sharp \le_{\top \twoheadrightarrow \mathcal{C} \otimes [R]}
+    \llbracket M \rrbracket_{L^\flat}
+  \,.
+\]
+To ensure that this relation is compatible with client code,
+we must require that
+\[
+  \forall C \mathbin.
+    \kw{Clight}(C)@D^\sharp
+    \le_{\mathcal{C} \otimes [R] \twoheadrightarrow \mathcal{C} \otimes [R]}
+    \kw{Clight}(C)@D^\flat
+  \,.
+\]
+Now consider an assembly version
+$L^\sharp_\mathcal{A} :
+ \top \twoheadrightarrow \mathcal{A} \otimes [\kw{mem}] \otimes [D^\sharp]$
+of the specification, such that
+\[
+  L^\sharp
+  \le_{\top \twoheadrightarrow \mathbb{C} \otimes D^\sharp}
+  L^\sharp_\mathcal{A}
+  \,.
+\]
 \end{example}
 
 \paragraph{Transition Systems}
