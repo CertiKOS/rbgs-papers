@@ -794,6 +794,8 @@ V deq() { return get(inc1()); }
 
 \subsection{Semantics in CompCertO} %{{{
 
+% Language Interfaces {{{
+
 The compositional semantics of CompCertO uses %revolves around
 a notion of open transition system $L : A \twoheadrightarrow B$.
 The type $A \twoheadrightarrow B$ involves
@@ -824,7 +826,7 @@ This can be described by the language interface $\mathcal{C}$,
 defined as follows:
 \begin{align*}
   \mathcal{C}^\que &:= \{ f(\vec{v}) \mid f \in \kw{ident}, \vec{v} \in \kw{val}^* \}
-  &
+  \\
   \mathcal{C}^\ans &:= \kw{val}
 \end{align*}
 In addition,
@@ -833,12 +835,12 @@ This means that the current memory state must be attached
 to every function call,
 and an updated state must be communicated back
 alongside the return value.
-To this end, CompCertO uses the language interface:
+To this end, CompCertO uses the following language interface:
 \begin{align*}
-  \mathcal{C}_\kw{m}^\que &:=
+  (\mathcal{C} \mathbin@ \kw{mem})^\que &:=
     \{ f(\vec{v})@m \mid f \in \kw{ident}, \vec{v} \in \kw{val}^*, m \in \kw{mem} \}
-  &
-  \mathcal{C}_\kw{m}^\ans &:=
+  \\
+  (\mathcal{C} \mathbin@ \kw{mem})^\ans &:=
     \{ v@m' \mid v \in \kw{val}, m \in \kw{mem} \}
   \,.
 \end{align*}
@@ -858,7 +860,9 @@ To this end, CompCertO uses the language interface:
 %in which case it is suspended until an answer $n \in A^\ans$
 %resumes the execution.
 
-\begin{figure}
+%}}}
+
+\begin{figure} % fig:overview:ts {{{
   \[
     \includegraphics[scale=0.1]{draftfig/interaction}
     \qquad
@@ -870,6 +874,7 @@ To this end, CompCertO uses the language interface:
     and their composition}  
   \label{fig:overview:ts}
 \end{figure}
+%}}}
 
 \paragraph{Transition Systems} %{{{
 
@@ -902,7 +907,9 @@ CompCertO defines
 the semantics of a C translation unit $M$
 as:
 \[
-  \kw{Clight}(M) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
+  \kw{Clight}(M) :
+    \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem}
 \]
 %Note that both incoming and outgoing call
 %use the same language interface $\mathcal{C}_\kw{m}$.
@@ -987,96 +994,108 @@ and propagates the answer back to the caller.
 
 %}}}
 
-\subsection{Certified Abstraction Layers} %{{{
+\subsection{Adjoining State} \label{sec:overview:slift} %{{{
+
+\subsubsection{Language Interfaces} %{{{
+
+We have seen that CompCertO
+requires the current memory state to be attached
+to every question and answer,
+and used the notation $\mathcal{C} \mathbin@ \kw{mem}$
+to describe the resulting language interface.
+This can be generalized to arbitrary
+language interfaces and sets of states:
+\[
+  A \mathbin@ U \: := \:
+    \langle A^\que \times U, \: A^\ans \times U \rangle
+\]
+Taking a cue from \citep{rbgs-cal},
+this allows \emph{certified abstraction layers} to be modeled
+within the CompCertO framework.
+
+%}}}
+
+\begin{example}[Certified Abstraction Layers] \label{ex:overview:lint} %{{{
 
 Software systems are often constructed in layers:
 basic data structures and functionality
 are implemented by low-level code.
-Higher-level code can then rely on their services
-without concern for the low-level data representation
-and implementation details used by lower-level code.
-As more and more layers of code are added,
-it becomes possible to reason in terms of
-high-level abstractions rather than
-the low-level facilities provided by the machine
-and the execution environment.
+We can then rely on these services
+without concern for the data representation
+and implementation details used by lower-level code;
+instead,
+a programmer writing client code
+will understand and reason about
+this \emph{underlay} interface
+in terms of a more abstract mental picture
+of its operation.
 
 Certified abstraction layers
-seek to take advantage of this structure
-for the construction of certified software.
-[...]
-
-Explain based on the closed semantics:
+are a formalization of this methodology
+which was used to verify the operating system kernel
+CertiKOS \cite{popl15}.
+Modeling layers required a modification of CompCert's
+closed semantics
+to augment them with abstract state and
+to achieve a limited form of compositionality.
+The closed semantics of CompCert can be described as:
 \[
-    L : \top \twoheadrightarrow \mathcal{C}_D \vdash
-    \kw{Clight}_L[M] : \top \twoheadrightarrow \mathcal{C}_D
+  \chi : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}
+  \quad \vdash \quad
+  \kw{Clight}_\chi[M] : \top \twoheadrightarrow \mathbf{I}
 \]
+The transition system $\kw{Clight}_\chi[M]$
+is invoked with a trivial question ${*} \in \mathbf{I}^\que$,
+which initiates the execution of the $\kw{main}()$ function in $M$.
+When $M$ invokes an external function,
+the behavior of that function is directly obtained from the parameter $\chi$.
+In the CertiKOS proof,
+abstraction layers are formalized by using
+a modified version of CompCert,
+whose semantic model can be described as:
+\[
+  \forall D \in \mathbf{Set}
+  \: \mathbin. \:
+  L^\flat :
+    \top \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
+  \: \vdash \:
+  \kw{Clight}_{L^\flat}[M] :
+    \top \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
+  \,.
+\]
+This allows the semantics of $M$ to be evaluated
+in the context of the underlay interface $L^\flat$,
+whose primitives are described in terms of
+an \emph{abstract state} memory component of type $D$.
 
 We will use certified abstraction layers
 to illustrate the flexibility of CompCertO's approach
 and as an example application for the techniques we introduce.
 
+\end{example}
 %}}}
 
-\subsection{Adjoining State} \label{sec:overview:slift} %{{{
+\subsubsection{Transition Systems} %{{{
 
-Although the implementation of certified abstraction layers
-used to verify CertiKOS
-is closely tied with CompCertX and CompCert semantics,
-the approach used in CompCertO
-makes it possible to model certified abstraction layers
-in a more flexible way.
-
-Taking a cue from \citep{rbgs-cal},
-the abstract data component use in CompCertX
-can be incorporated \emph{externally} in CompCertO.
-First,
-we define the language interface $A@U$,
-which annotates every question and answer of $A$
-with a state in the set $U$:
+In the example above,
+the code $M$ itself does not directly access
+the abstract memory component in $D$,
+and can only affect it by invoking
+the primitives of the underlay~$L^\flat$.
+In the compositional framework of CompCertO,
+a transition system
+$L : A \twoheadrightarrow B$,
+can be extended to
 \[
-  A@U \: := \:
-    \langle A^\que \times U, \, A^\ans \times U \rangle
-\]
-Using this construction,
-a C layer interface $L^\flat$ which uses abstract states in $D$
-can be modeled as a transition system of type
-$
-  L^\flat : \top \twoheadrightarrow \mathcal{C}_\kw{m}@D
-$,
-using questions and answers of the form:
-\begin{align*}
-  (\mathcal{C}_\kw{m}@D)^\que &:=
-    \{ f(\vec{v})@(m, d) \mid
-       f \in \kw{ident},
-       \vec{v} \in \kw{val}^*,
-       m \in \kw{mem},
-       d \in D \}
-  \\
-  (\mathcal{C}_\kw{m}@D)^\ans &:=
-    \{ v'@(m', d') \mid
-       v' \in \kw{val},
-       m' \in \kw{mem},
-       d' \in D \}
-\end{align*}
-This leaves the question of evaluating client code
-running on top of the underlay $L$.
-
-Although Clight code will never directly modify
-the memory's abstract data component,
-we must keep track of the current abstract state
-between successive calls into the underlay.
-This can be achieved systematically
-for a transition system
-$L : A \twoheadrightarrow B$
-using a construction
-\[
-  L@U : A@U \twoheadrightarrow B@U
+  L \mathbin@ U : A \mathbin@ U \twoheadrightarrow B \mathbin@ U
   \,.
 \]
-Here, $L@U$ simply ``threads through'' a value of type $U$
+which simply ``threads through'' a value of type $U$
 as the underlying transition system $L$ executes.
-The value is initially received from the incoming question in $B@U$.
+The value is initially received
+from the incoming question in $B \mathbin@ U$.
 When an outgoing call occurs,
 the current value is attached to the question of $A$,
 and the $U$ component of the corresponding answer
@@ -1084,23 +1103,49 @@ is used to update the state.
 Finally, when $L$ returns for the top-level call,
 the additional state component is attached to its answer in $B$.
 
-Using this approach,
-we can evaluate a Clight program $M$ running on top of an underlay
-$L^\flat : \top \twoheadrightarrow \mathcal{C}_\kw{m}@D$
-without modifying CompCertO's Clight semantics:
+\begin{example}[Layer Semantics]
+As noted in Example~\ref{ex:overview:lint},
+the CertiKOS verification effort
+required the entire correctness proof of CompCert
+to be modified to operate in terms of an underlay interface.
+We can achieve a similar effect in CompCertO
+without any modification to the compiler,
+by defining
 \[
-  \llbracket M \rrbracket_{L^\flat} \: := \:
-    \kw{Clight}(M)@D \odot L^\flat \: : \:
-    \top \twoheadrightarrow \mathcal{C}_\kw{m}@D
+  \kw{Clight}_{L^\flat}[M] :=
+    (\kw{Clight}(M) \mathbin@ D^\flat) \odot L^\flat
+  \,.
 \]
-What remains is to express data refinement
-to compare the implementation,
-whose semantics is expressed in terms of $D^\flat$,
-with an overlay interface
-$L^\sharp : \top \twoheadrightarrow \mathcal{C}_\kw{m}@D^\sharp$.
-Fortunately,
-the flexible notion of simulation used by CompCertO
-makes this reasonably straightforward.
+We will see that CompCertO's open simulations
+make it possible to formulate layer correctness
+in a reasonably straightforward way as well.
+\end{example}
+
+%Using this construction,
+%a C layer interface $L^\flat$ which uses abstract states in $D$
+%can be modeled as a transition system of type
+%$
+%  L^\flat : \top \twoheadrightarrow \mathcal{C}_\kw{m}@D
+%$,
+%using questions and answers of the form:
+%\begin{align*}
+%  (\mathcal{C}_\kw{m}@D)^\que &:=
+%    \{ f(\vec{v})@(m, d) \mid
+%       f \in \kw{ident},
+%       \vec{v} \in \kw{val}^*,
+%       m \in \kw{mem},
+%       d \in D \}
+%  \\
+%  (\mathcal{C}_\kw{m}@D)^\ans &:=
+%    \{ v'@(m', d') \mid
+%       v' \in \kw{val},
+%       m' \in \kw{mem},
+%       d' \in D \}
+%\end{align*}
+%This leaves the question of evaluating client code
+%running on top of the underlay $L$.
+
+%}}}
 
 %}}}
 
