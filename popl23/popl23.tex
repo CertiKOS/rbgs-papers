@@ -51,7 +51,9 @@
 \makeatother
 %}}}
 
-\title{Compositional Compiler Correctness with Encapsulated State}
+%\title{Compositional Compiler Correctness with Encapsulated State}
+\title{A Framework for Compositional Verification with
+  Data Abstraction, Encapsulated State and Certified Compilation}
 
 \begin{document}
 
@@ -788,7 +790,7 @@ V deq() { return get(inc1()); }
 \end{figure}
 %}}}
 
-\section{Main Ideas}
+\section{Main Ideas} %{{{
 
 \subsection{Semantics in CompCertO} %{{{
 
@@ -796,31 +798,13 @@ The compositional semantics of CompCertO uses %revolves around
 a notion of open transition system $L : A \twoheadrightarrow B$.
 The type $A \twoheadrightarrow B$ involves
 two \emph{language interfaces} $A$ and $B$,
-which decribe how components interact at various levels of abstraction
-from C to assembly language.
+which decribe how components interact.
 
 \begin{definition} \label{def:li} %{{{
-A language interface $A = \langle A^\que, A^\ans \rangle$
-consists of a set of questions $A^\que$ and a set of answers $A^\ans$.
+A \emph{language interface} $A = \langle A^\que, A^\ans \rangle$
+is a set of questions $A^\que$ and a set of answers $A^\ans$.
 \end{definition}
 %}}}
-
-Then a transition system of type $A \twoheadrightarrow B$
-describes a behavior with the following shape:
-\[
-  \includegraphics[scale=0.15]{draftfig/interaction}
-\]
-The component is activated by an incoming call,
-in the form of a question $q \in B^\que$
-which is used to determine the transition system's initial state.
-During its execution,
-the transition system may perform outgoing calls,
-asking questions
-$q_1, \ldots, q_n \in A^\que$
-and receiving the corresponding answers
-$r_1, \ldots, r_n \in A^\ans$.
-Eventually a final state is reached,
-triggering the top-level answer $r \in B^\ans$.
 
 Two important language interfaces
 are involved in formulating the CompCertO correctness theorem.
@@ -856,6 +840,7 @@ To this end, CompCertO uses the language interface:
   &
   \mathcal{C}_\kw{m}^\ans &:=
     \{ v@m' \mid v \in \kw{val}, m \in \kw{mem} \}
+  \,.
 \end{align*}
 \end{example}
 %}}}
@@ -873,55 +858,49 @@ To this end, CompCertO uses the language interface:
 %in which case it is suspended until an answer $n \in A^\ans$
 %resumes the execution.
 
-As in the original CompCert semantics,
-a transition system
-executes by updating an internal state,
-which is not directly observable
-in its interactions with the environment.
+\begin{figure}
+  \[
+    \includegraphics[scale=0.1]{draftfig/interaction}
+    \qquad
+    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/composition}} }
+    \qquad
+    \includegraphics[scale=0.06]{draftfig/identity}
+  \]
+  \caption{Informal description of CompCertO's transition systems
+    and their composition}  
+  \label{fig:overview:ts}
+\end{figure}
 
-\begin{definition} \label{def:lts} %{{{
-A \emph{transition system} $L : A \twoheadrightarrow B$
-is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
-consisting of:
-\begin{itemize}
-  \item a set $S$ of states;
-  \item a transition relation ${\rightarrow} \subseteq S \times S$;
-  \item a relation $I \subseteq B^\que \times S$
-    which assigns possible \emph{initial states}
-    to each question of $B$;
-  \item a relation $F \subseteq S \times B^\ans$
-    which specifies \emph{final states} together with
-    corresponding answers in $B$;
-  \item a relation $X \subseteq S \times A^\que$
-    which identifies \emph{external states} and
-    corresponding questions of $A$;
-  \item a relation $Y \subseteq S \times A^\ans \times S$,
-    which identifies \emph{resumption states}.
-\end{itemize}
-\end{definition}
-%}}}
+\paragraph{Transition Systems} %{{{
 
-We use infix notation for the binary relations $I$, $F$, $X$.
-We also write $r \mathrel{Y^s} s'$ when $(s, r, s') \in Y$;
-this means that
-after an external state $s$ triggers a question in $A^\que$ % ($s \mathrel{X} m$),
-and the environment replies with an answer $r \in A^\ans$,
-the execution resumes with state $s'$.
-Hence,
-when $L : A \twoheadrightarrow B$
-performs an external call in $A$,
-the internal state $s$ is preserved
-until an answer resumes the execution.
-Note that by contrast, in $B$
-no state is preserved across invocations of $L$.
-Each new question $q \in B^\que$ initializes a fresh state $s$
-such that $q \mathrel{I} s$,
-independently of any previous calls. % made into $L$.
+We describe CompCertO's transition systems in detail in \S\ref{sec:base}.
+For now, it suffices to note that
+a transition system of type $A \twoheadrightarrow B$
+describes a behavior of the shape depicted in Fig.~\ref{fig:overview:ts}a,
+generating interaction traces of the following form:
+\[
+  q \rightarrowtail q_1 \leadsto r_1
+    \rightarrowtail \cdots \rightarrowtail q_n \leadsto r_n
+    \rightarrowtail r
+\]
+Here, $\rightarrowtail$ denotes internal execution
+and $\leadsto$ denotes a step where the environment is in control:
+The component is activated by an incoming call,
+described by a question $q \in B^\que$.
+%which is used to determine the transition system's initial state.
+As it executes,
+the transition system may perform outgoing calls,
+asking questions
+$q_1, \ldots, q_n \in A^\que$
+and receiving corresponding answers
+$r_1, \ldots, r_n \in A^\ans$.
+Execution terminates with
+the top-level answer $r \in B^\ans$.
 
 \begin{example}[Clight semantics] \label{ex:clightsem} %{{{
-In CompCertO,
+CompCertO defines
 the semantics of a C translation unit $M$
-is given as a transition system of type:
+as:
 \[
   \kw{Clight}(M) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
 \]
@@ -934,9 +913,7 @@ with a memory state where the variable $\kw{c1}$ has value $5$,
 the transition system $\kw{Clight}(\kw{rb.c})$ will behave as follows:
 \[
   \kw{inc1}()@m[\kw{c1} \mapsto 5]
-  \mathrel{I}
-  s_0 \rightarrow \cdots \rightarrow s_k
-  \mathrel{F}
+  \: \rightarrowtail \:
   5@m[\kw{c1} \mapsto 6]
 \]
 Note that the memory is updated to store the new value of the counter $\kw{c1}$.
@@ -945,23 +922,19 @@ does not modify the memory itself,
 but it makes calls into $\kw{rb.c}$ which may have this effect.
 The corresponding executions of $\kw{Clight}(\kw{bq.c})$
 will have the shape
-\begin{align*}
+\[
   \kw{deq}()@m
-  \mathrel{I}
-  u_0 \rightarrow \cdots \rightarrow u_1
-  \mathrel{X}
-  \kw{inc1}()@m &\leadsto i@m'
-  \mathrel{Y^{u_1}}
-  u_2 \rightarrow \cdots \\ \cdots \rightarrow u_3
-  \mathrel{X}
-  \kw{get}(i)@m' &\leadsto v@m''
-  \mathrel{Y^{u_3}}
-  u_4 \rightarrow \cdots \rightarrow u_5
-  \mathrel{F}
+  \rightarrowtail
+  \kw{inc1}()@m \leadsto i@m'
+  \rightarrowtail
+  \kw{get}(i)@m' \leadsto v@m''
+  \rightarrowtail
   v@m''
   \,.
-\end{align*}
+\]
 \end{example}
+%}}}
+
 %}}}
 
 \paragraph{Composition} %{{{
@@ -996,9 +969,7 @@ incoming calls activate $L_1$ in $C$,
 the outgoing calls of $L_1$ in $B$ are handled by $L_2$, and
 the outgoing calls of $L_2$
 are directed back to the environment in $C$.
-\[
-  \includegraphics[scale=0.1]{draftfig/composition}
-\]
+This is depicted in Fig.~\ref{fig:overview:ts}b.
 
 This mode of composition was hinted at in \citet{compcerto}.
 We provide a formal definition in \S\ref{sec:basic:lcomp}
@@ -1007,18 +978,16 @@ language interfaces and transition systems
 with the structure of a category.
 In particular,
 the unit for $\odot$ is
-the identity transition system $\kw{id}_A : A \twoheadrightarrow A$,
-which echoes any incoming question as an outgoing one
-and propagates the answer back to the caller:
-\[
-  \includegraphics[scale=0.08]{draftfig/identity}
-\]
+the transition system $\kw{id}_A : A \twoheadrightarrow A$
+depicted in Fig.~\ref{fig:overview:ts}c,
+which echoes the incoming question as an outgoing one
+and propagates the answer back to the caller.
 
 %}}}
 
 %}}}
 
-\subsection{Certified Abstraction Layers}
+\subsection{Certified Abstraction Layers} %{{{
 
 Software systems are often constructed in layers:
 basic data structures and functionality
@@ -1046,6 +1015,8 @@ Explain based on the closed semantics:
 We will use certified abstraction layers
 to illustrate the flexibility of CompCertO's approach
 and as an example application for the techniques we introduce.
+
+%}}}
 
 \subsection{Adjoining State} \label{sec:overview:slift} %{{{
 
@@ -1726,14 +1697,7 @@ and $\mu_U : \top \cong \top \mathbin@ U \in \mathbf{TS}$.
 
 %}}}
 
-%\subsection{Coherence Spaces}
-%
-%Contrast low-level transition systems with
-%coherence spaces and object-based semantics.
-%
-%Explain the CompCertO model in terms of high-level constructions.
-
-\subsection{Persistent State}
+\subsection{Persistent State} %{{{
 
 %In fact,
 %multiple instances of $L$ may even be executing at the time
@@ -1767,10 +1731,13 @@ would serve no purpose.
 %can be incorporated into
 %the semantic model of CompCertO.
 
-\subsection{Certified Abstraction Layers}
+%}}}
+
 \subsection{ClightP}
+
 \subsection{Separation Algebra}
 
+%}}}
 
 \section{A Double Category of Transition Systems} \label{sec:base} %{{{
 
@@ -1816,6 +1783,96 @@ in that application domain.
 
 \subsection{Semantics in CompCertO} \label{sec:basic:compcerto} %{{{
 
+As in the original CompCert semantics,
+a transition system
+executes by updating an internal state,
+which is not directly observable
+in its interactions with the environment.
+
+\begin{definition} \label{def:lts} %{{{
+A \emph{transition system} $L : A \twoheadrightarrow B$
+is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
+consisting of:
+\begin{itemize}
+  \item a set $S$ of states;
+  \item a transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $I \subseteq B^\que \times S$
+    which assigns possible \emph{initial states}
+    to each question of $B$;
+  \item a relation $F \subseteq S \times B^\ans$
+    which specifies \emph{final states} together with
+    corresponding answers in $B$;
+  \item a relation $X \subseteq S \times A^\que$
+    which identifies \emph{external states} and
+    corresponding questions of $A$;
+  \item a relation $Y \subseteq S \times A^\ans \times S$,
+    which identifies \emph{resumption states}.
+\end{itemize}
+\end{definition}
+%}}}
+
+We use infix notation for the binary relations $I$, $F$, $X$.
+We also write $r \mathrel{Y^s} s'$ when $(s, r, s') \in Y$;
+this means that
+after an external state $s$ triggers a question in $A^\que$ % ($s \mathrel{X} m$),
+and the environment replies with an answer $r \in A^\ans$,
+the execution resumes with state $s'$.
+Hence,
+when $L : A \twoheadrightarrow B$
+performs an external call in $A$,
+the internal state $s$ is preserved
+until an answer resumes the execution.
+Note that by contrast, in $B$
+no state is preserved across invocations of $L$.
+Each new question $q \in B^\que$ initializes a fresh state $s$
+such that $q \mathrel{I} s$,
+independently of any previous calls. % made into $L$.
+
+\begin{example}[Clight semantics] \label{ex:clightsem} %{{{
+In CompCertO,
+the semantics of a C translation unit $M$
+is given as a transition system of type:
+\[
+  \kw{Clight}(M) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
+\]
+%Note that both incoming and outgoing call
+%use the same language interface $\mathcal{C}_\kw{m}$.
+%
+Consider the translation unit $\kw{rb.c}$ shown in Fig.~\ref{fig:code}.
+If $\kw{inc1}()$ is invoked
+with a memory state where the variable $\kw{c1}$ has value $5$,
+the transition system $\kw{Clight}(\kw{rb.c})$ will behave as follows:
+\[
+  \kw{inc1}()@m[\kw{c1} \mapsto 5]
+  \mathrel{I}
+  s_0 \rightarrow \cdots \rightarrow s_k
+  \mathrel{F}
+  5@m[\kw{c1} \mapsto 6]
+\]
+Note that the memory is updated to store the new value of the counter $\kw{c1}$.
+By contrast, the function $\kw{deq}$ in $\kw{bq.c}$
+does not modify the memory itself,
+but it makes calls into $\kw{rb.c}$ which may have this effect.
+The corresponding executions of $\kw{Clight}(\kw{bq.c})$
+will have the shape
+\begin{align*}
+  \kw{deq}()@m
+  \mathrel{I}
+  u_0 \rightarrow \cdots \rightarrow u_1
+  \mathrel{X}
+  \kw{inc1}()@m &\leadsto i@m'
+  \mathrel{Y^{u_1}}
+  u_2 \rightarrow \cdots \\ \cdots \rightarrow u_3
+  \mathrel{X}
+  \kw{get}(i)@m' &\leadsto v@m''
+  \mathrel{Y^{u_3}}
+  u_4 \rightarrow \cdots \rightarrow u_5
+  \mathrel{F}
+  v@m''
+  \,.
+\end{align*}
+\end{example}
+%}}}
 
 \subsubsection{Kripke Relators} %{{{
 
