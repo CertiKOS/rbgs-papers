@@ -9,6 +9,7 @@
 \setcopyright{none}
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
+\newtheorem{remark}{Remark}
 %}}}
 
 % Notations {{{
@@ -790,7 +791,7 @@ V deq() { return get(inc1()); }
 \end{figure}
 %}}}
 
-\section{Main Ideas} %{{{
+\section{Overview of the Framework} %{{{
 
 \subsection{Semantics in CompCertO} %{{{
 
@@ -1153,102 +1154,58 @@ in a reasonably straightforward way as well.
 
 % Simulation basics {{{
 
-CompCert uses simulations
-to establish refinement properties,
-up to and including its final correctness theorem.
-In particular,
-in the absence of demonic nondeterminism,
-CompCert's notion of \emph{forward simulation} is appropriate:
-given two transition systems $L_1$ and $L_2$,
-it suffices to exhibit a relation between their possible states
-such that:
-\begin{itemize}
-  \item initial state of $L_1$ have related initial states in $L_2$;
-  \item state transitions in $L_1$ have corresponding sequences of transitions
-    from related states in $L_2$;
-  \item related state which produce a final outcome in $L_1$
-    have a corresponding final outcome in $L_2$.
-\end{itemize}
-To take into account event traces,
-the simulation works under the assumption that
-$L_1$ and $L_2$ are fed the same inputs by the environement,
-and requires that they produce identical outputs.
-The existence of a simulation relation satisfying these properties
-shows that the behavior of $L_1$ is refined by that of $L_2$;
-we say that $L_1$ is simulated by $L_2$ and write $L_1 \le L_2$.
-
-%}}}
-
-\paragraph{Open Simulations} %{{{
-
-Extending CompCert's notion of transition system
-to account for cross-component interactons
-opens the question of
-how these interactions should factor into simulations.
-In the whole-program semantics of CompCert,
-the interaction of a process with its execution environment
-is limited to a predefined set of system calls.
-The corresponding event traces
-are expected to be identical in the source and target programs.
-
-By contrast,
-the relationship between
-cross-component interactions
-within the source and target programs
-are often more complex.
-In a whole-program semantics,
-these interactions remain hidden,
-and their differences across languages
-can be dealt with by an appropriate choice of the
-(existentially quantified) simulation relation.
-However,
-in the context of open semantics
-these interactions are revealed
-and become part of the component's externally observable behavior.
-In fact,
-the types of the source and target language semantics of CompCertO
-are altogether different:
+CompCert establishes compiler correctness
+as a simulation property:
 \[
-  \kw{Clight}(-) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
-  \,,
-  \qquad \qquad
-  \kw{Asm}(-) : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m}
+  \kw{CompCert}(M) = M'
+  \quad\Rightarrow\quad
+  \kw{Clight}_\chi[M] \le \kw{Asm}_\chi[M']
   \,.
 \]
-%
-%Prior approaches
-%to compositional semantics in CompCert
-%use a fixed notion of cross-component interactions,
-%corresponding roughly
-%to transition systems of type
-%$\mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}$.
-%By contrast,
-%CompCertO's flexibility allows
-%cross-component interactions
-%for a particular language
-%to be expressed at a suitable level of abstraction.
-%For example,
-%semantics for the compiler's source and target language
-%are given as:
-%
-This underscores the importance,
-for establishing the compiler's correctness property,
-of the correspondence between
-C-level function calls
-and the corresponding assembly-level interfaces.
-That is, compiler correctness only makes sense
+This means that when $M$ compiles to $M'$,
+the behavior of the compiled program $M'$
+is simulated by the behavior of $M$.
+The transitivity of simulations allows
+\emph{vertical compositionality}:
+the overall correctness of the compiler
+can be derived from that of
+individual compilation passes.
+
+In CompCertO,
+correctness is formulated at the level of
+individual components.
+When $M$ is compiled to $M'$,
+we must establish a relationship between
+the open transition systems
+\[
+  \kw{Clight}(M) :
+    \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem}
+  \qquad \text{and} \qquad
+  \kw{Asm}(M') :
+    \mathcal{A} \mathbin@ \kw{mem} \twoheadrightarrow
+    \mathcal{A} \mathbin@ \kw{mem}
+  \,.
+\]
+This raises the question of the correspondence
+between the source-level interactions in $\mathcal{C} \mathbin@ \kw{mem}$
+and their matching target-level interactions in $\mathcal{A} \mathbin@ \kw{mem}$.
+In other words,
+compositional compiler correctness only makes sense
 with respect to a particular calling convention.
+
+\paragraph{Simulation Conventions}
 
 %Rather than modeling the calling convention implicitly
 %as part of the assembly semantics,
-CompCertO makes this explicit.
-Simulations operate in the context of specified
+CompCertO makes this explicit:
+simulations operate in the context of specified
 \emph{simulation conventions},
 which express the relationships between
-the source and target component's
+the source and target components'
 interactions with the environment.
 %
-This introduces a form of two-dimensional typing. % for simulations.
+This introduces a form of two-dimensional typing.
 To establish a simulation
 of a transition system $L^\sharp: A^\sharp \twoheadrightarrow B^\sharp$
 by a transition system $L^\flat: A^\flat \twoheadrightarrow B^\flat$,
@@ -1258,8 +1215,11 @@ for their incoming calls,
 and a simulation convention
 $\mathbb{R}_A : A^\sharp \Leftrightarrow A^\flat$
 for their outgoing calls.
-We can depict this situation as follows:
+We can depict this situation
+in the following ways:
 \[
+  L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat
+  \qquad \qquad
   \begin{tikzcd}
     A^\sharp
       \ar[r, twoheadrightarrow, "L^\sharp"]
@@ -1271,72 +1231,169 @@ We can depict this situation as follows:
     B^\flat
   \end{tikzcd}
   \qquad \qquad
-  L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat
+  \vcenter{ \hbox{\includegraphics[scale=0.095]{draftfig/simsd}} }
 \]
+Simulation conventions are relational in nature.
+Given $\mathbb{R} : A \Leftrightarrow B$ and
+$\mathbb{R}' : B \Leftrightarrow C$,
+we can derive their sequential composition
+$\mathbb{R} \cdot \mathbb{R}' : A \Leftrightarrow C$.
+We will write $\epsilon_A : A \Leftrightarrow A$
+for the identity simulation convention,
+and call $\mathbf{SC}$ the category of
+language interfaces and simulation conventions.
 
+%}}}
+
+\begin{figure} % fig:overview:simcomp %{{{
+  \[
+    \begin{prooftree}
+      \hypo{\pi_1 :
+        L_1^\sharp
+        \le_{\mathbb{R}_B \cdot \mathbb{R}_B' \twoheadrightarrow
+             \mathbb{R}_C}
+        L_1^\flat}
+      \hypo{\pi_2 :
+        L_2^\sharp
+        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+        L_2^\natural}
+      \hypo{\pi_2' :
+        L_2^\natural
+        \le_{\mathbb{R}_A' \twoheadrightarrow \mathbb{R}_B'}
+        L_2^\flat}
+      \infer2{
+        L_2^\sharp
+        \le_{\mathbb{R}_A \cdot \mathbb{R}_A' \twoheadrightarrow
+             \mathbb{R}_B \cdot \mathbb{R}_B'}
+        L_2^\flat}
+      \infer2{
+        L_1^\sharp \odot L_2^\sharp
+        \le_{\mathbb{R}_A \cdot \mathbb{R}_A' \twoheadrightarrow
+             \mathbb{R}_C}
+        L_1^\flat \odot L_2^\flat}
+    \end{prooftree}
+%    \qquad
+%    \begin{tikzcd}[row sep=1.5em]
+%      A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+%	       \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+%      B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+%               \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
+%      C^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_C"]
+%      \\
+%      A^\natural \ar[r, twoheadrightarrow, "L_2^\natural"]
+%	       \ar[d, Leftrightarrow, "\mathbb{R}'_A"'] &
+%      B^\natural \ar[d, Leftrightarrow, "\mathbb{R}'_B"]
+%      \\
+%      A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"] &
+%      B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"] &
+%      C^\flat
+%    \end{tikzcd}
+    \qquad
+    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/simsdcomp}} }
+  \]
+  \caption{A composite simulation proof
+     and its graphical representation}
+  \label{fig:overview:simcomp}
+\end{figure}
 %}}}
 
 \paragraph{Composition Properties} %{{{
 
-Simulations are compatible with our composition operator $\odot$.
-In other words, the following \emph{horizontal} composition property holds
-(\autoref{thm:lcompsim}):
-\[
-  \begin{tikzcd}
-    A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
-             \ar[d, Leftrightarrow, "\mathbb{R}_A"] &
-    B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
-             \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
-    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
-    \\
-    A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"'] &
-    B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"'] &
-    C^\flat
-  \end{tikzcd}
-  \qquad \Longrightarrow \qquad
-  \begin{tikzcd}
-    A^\sharp \ar[rr, twoheadrightarrow, "L_1^\sharp \odot L_2^\sharp"]
-             \ar[d, Leftrightarrow, "\mathbb{R}_A"'] & &
-    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
-    \\
-    A^\flat \ar[rr, twoheadrightarrow, "L_2^\flat \odot L_1^\flat"'] & &
-    C^\flat
-  \end{tikzcd}
-\]
-Simulations also admit a \emph{vertical} composition property,
-which for example allows CompCertO's correctness theorem
-to be derived from the correctness proofs of
-individual compilation passes:
-\[
-  \begin{tikzcd}[row sep=1.5em]
-    A^\sharp \ar[r, twoheadrightarrow, "L^\sharp"]
-	     \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
-    B^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_B"]
-    \\
-    A^\natural \ar[r, twoheadrightarrow, "L^\natural"]
-	     \ar[d, Leftrightarrow, "\mathbb{S}_A"'] &
-    B^\natural \ar[d, Leftrightarrow, "\mathbb{S}_B"]
-    \\
-    A^\flat \ar[r, twoheadrightarrow, "L^\flat"] &
-    B^\flat
-  \end{tikzcd}
-  \qquad \Longrightarrow \qquad
-  \begin{tikzcd}
-    A^\sharp \ar[r, twoheadrightarrow, "L^\sharp"]
-             \ar[dd, Leftrightarrow, "\mathbb{R}_A \cdot \mathbb{S}_A"'] &
-    B^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_B \cdot \mathbb{S}_B"] \\ \\
-    A^\flat \ar[r, twoheadrightarrow, "L^\flat"'] &
-    B^\flat
-  \end{tikzcd}
-\]
-Here,
-the simulation convention composition operator $\mathbb{R} \cdot \mathbb{S}$
-roughly corresponds to relational composition.
-Together,
-these structures and properties
-extend language interfaces and transition systems
-with the structure of a \emph{double category}.
-This is made precise in \S\ref{sec:base}.
+As depicted in Fig.~\ref{fig:overview:simcomp},
+when their boundaries are compatible,
+simulation squares of the kind depicted above compose both
+vertically and horizontally.
+Vertical composition produces a simulation
+which uses the sequential composition
+of its components' simulation conventions.
+Horizontal composition produces a simulation
+between the composite source and target components.
+
+Our work builds on this framework in various directions.
+First,
+we formulate horizontal composition in terms of
+the layered composition $\odot$.
+As suggested in \citet{compcerto},
+this formally equips language interfaces,
+transition systems and
+simulation conventions
+with the structure of a double category.
+Secondly,
+we make simulation conventions more expressive
+by allowing them to retain a form of \emph{state},
+allowing them to relate successive interactions
+in different ways.
+Finally,
+we carry through the approach initiated in \S\ref{sec:overview:slift}
+to its conclusion
+by making explicit the compositional structure of
+language interfaces themselves,
+allowing transition systems and simulation conventions
+to operate independently on their different components.
+
+%}}}
+
+%\begin{color}{gray}
+%Simulations are compatible with our composition operator $\odot$.
+%In other words, the following \emph{horizontal} composition property holds
+%(\autoref{thm:lcompsim}):
+%\[
+%  \begin{tikzcd}
+%    A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+%             \ar[d, Leftrightarrow, "\mathbb{R}_A"] &
+%    B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+%             \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
+%    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
+%    \\
+%    A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"'] &
+%    B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"'] &
+%    C^\flat
+%  \end{tikzcd}
+%  \qquad \Longrightarrow \qquad
+%  \begin{tikzcd}
+%    A^\sharp \ar[rr, twoheadrightarrow, "L_1^\sharp \odot L_2^\sharp"]
+%             \ar[d, Leftrightarrow, "\mathbb{R}_A"'] & &
+%    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
+%    \\
+%    A^\flat \ar[rr, twoheadrightarrow, "L_2^\flat \odot L_1^\flat"'] & &
+%    C^\flat
+%  \end{tikzcd}
+%\]
+%Simulations also admit a \emph{vertical} composition property,
+%which for example allows CompCertO's correctness theorem
+%to be derived from the correctness proofs of
+%individual compilation passes:
+%\[
+%  \begin{tikzcd}[row sep=1.5em]
+%    A^\sharp \ar[r, twoheadrightarrow, "L^\sharp"]
+%	     \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+%    B^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_B"]
+%    \\
+%    A^\natural \ar[r, twoheadrightarrow, "L^\natural"]
+%	     \ar[d, Leftrightarrow, "\mathbb{S}_A"'] &
+%    B^\natural \ar[d, Leftrightarrow, "\mathbb{S}_B"]
+%    \\
+%    A^\flat \ar[r, twoheadrightarrow, "L^\flat"] &
+%    B^\flat
+%  \end{tikzcd}
+%  \qquad \Longrightarrow \qquad
+%  \begin{tikzcd}
+%    A^\sharp \ar[r, twoheadrightarrow, "L^\sharp"]
+%             \ar[dd, Leftrightarrow, "\mathbb{R}_A \cdot \mathbb{S}_A"'] &
+%    B^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_B \cdot \mathbb{S}_B"] \\ \\
+%    A^\flat \ar[r, twoheadrightarrow, "L^\flat"'] &
+%    B^\flat
+%  \end{tikzcd}
+%\]
+%Here,
+%the simulation convention composition operator $\mathbb{R} \cdot \mathbb{S}$
+%roughly corresponds to relational composition.
+%Together,
+%these structures and properties
+%extend language interfaces and transition systems
+%with the structure of a \emph{double category}.
+%This is made precise in \S\ref{sec:base}.
+%\end{color}
 
 %}}}
 
@@ -2044,6 +2101,29 @@ can be stated simply as:
 %}}}
 
 \subsubsection{Simulations} %{{{
+
+\begin{remark}[to incorporate]
+In particular,
+in the absence of demonic nondeterminism,
+CompCert's notion of \emph{forward simulation} is appropriate:
+given two transition systems $L_1$ and $L_2$,
+it suffices to exhibit a relation between their possible states
+such that:
+\begin{itemize}
+  \item initial state of $L_1$ have related initial states in $L_2$;
+  \item state transitions in $L_1$ have corresponding sequences of transitions
+    from related states in $L_2$;
+  \item related state which produce a final outcome in $L_1$
+    have a corresponding final outcome in $L_2$.
+\end{itemize}
+To take into account event traces,
+the simulation works under the assumption that
+$L_1$ and $L_2$ are fed the same inputs by the environement,
+and requires that they produce identical outputs.
+The existence of a simulation relation satisfying these properties
+shows that the behavior of $L_1$ is refined by that of $L_2$;
+we say that $L_1$ is simulated by $L_2$ and write $L_1 \le L_2$.
+\end{remark}
 
 The conventions $\mathbb{R}_A$ and $\mathbb{R}_B$
 specify Kripke relations between source- and target-level interactions;
