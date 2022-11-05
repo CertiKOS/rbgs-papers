@@ -1030,6 +1030,12 @@ will understand and reason about
 this \emph{underlay} interface
 in terms of a more abstract mental picture
 of its operation.
+For example,
+when using the code in Fig.~\ref{fig:code},
+we can think of the state of the queue
+as a simple sequence of elements
+and ignore the mechanics
+of the ring buffer used to implement it.
 
 Certified abstraction layers
 are a formalization of this methodology
@@ -1070,22 +1076,56 @@ This allows the semantics of $M$ to be evaluated
 in the context of the underlay interface $L^\flat$,
 whose primitives are described in terms of
 an \emph{abstract state} memory component of type $D$.
+A specification for the code in \autoref{fig:code}
+may use an abstract state in $S_\kw{bq} := \kw{val}^*$.
+The corresponding layer interface
+$L_\kw{bq} : \top \twoheadrightarrow
+ \mathcal{C} \mathbin@ \kw{mem} \mathbin@ S_\kw{bq}$
+will then generate traces such as:
+\[
+  L_\kw{bq} \:\vDash\:
+  \kw{enq}(v) \mathbin@ m \mathbin@ \vec{q}
+  \:\rightarrowtail\:
+  {*} \mathbin@ m \mathbin@ \vec{q}v
+  \qquad%\qquad
+  L_\kw{bq} \:\vDash\:
+  \kw{deq}() \mathbin@ m \mathbin@ v\vec{q}
+  \:\rightarrowtail\:
+  v \mathbin@ m \mathbin@ \vec{q}
+\]
+We can then evaluate and reason about any client code
+in terms of this abstract representation:
+\[
+  \kw{Clight}_{L_\kw{bq}} \big[\,
+  \begin{minipage}{13em}
+\begin{minted}{C}
+void rot() { enq(deq()); }
+\end{minted}
+  \end{minipage} \,\big]
+\:\vDash\:
+%  \qquad
+%  \Rightarrow
+%  \qquad
+  \kw{rot}() \mathbin@ m \mathbin@ v\vec{q}
+  \:\rightarrowtail\:
+  {*} \mathbin@ m \mathbin@ \vec{q}v
+  \,.
+\]
 
 We will use certified abstraction layers
 to illustrate the flexibility of CompCertO's approach
 and as an example application for the techniques we introduce.
-
 \end{example}
 %}}}
 
-\subsubsection{Transition Systems} %{{{
+\subsubsection{Transition Systems} \label{sec:overview:slift:ts} %{{{
 
 In the example above,
-the code $M$ itself does not directly access
-the abstract memory component in $D$,
+the client code does not directly access
+the abstract memory component, % in $D$,
 and can only affect it by invoking
-the primitives of the underlay~$L^\flat$.
-In the compositional framework of CompCertO,
+the primitives of the underlay. %~$L^\flat$.
+In our compositional framework,
 a transition system
 $L : A \twoheadrightarrow B$,
 can be extended to
@@ -1093,18 +1133,36 @@ can be extended to
   L \mathbin@ U : A \mathbin@ U \twoheadrightarrow B \mathbin@ U
   \,.
 \]
-which simply ``threads through'' a value of type $U$
-as the underlying transition system $L$ executes.
-The value is initially received
-from the incoming question in $B \mathbin@ U$.
-When an outgoing call occurs,
-the current value is attached to the question of $A$,
-and the $U$ component of the corresponding answer
-is used to update the state.
-Finally, when $L$ returns for the top-level call,
-the additional state component is attached to its answer in $B$.
+The transition system $L \mathbin@ U$ obliviously passes along
+a state component of type $U$ as follows:
+\begin{equation} \label{eqn:slift}
+  \begin{prooftree}
+  \hypo{
+  L \:\vDash\: q \rightarrowtail
+    q_1 \leadsto r_1 \rightarrowtail
+    \cdots \rightarrowtail
+    q_n \leadsto r_n \rightarrowtail
+    r
+  }
+  \infer1{
+  L \mathbin@ U \:\vDash\: q@u_0 \rightarrowtail
+    q_1@u_0 \leadsto r_1@u_1 \rightarrowtail
+    \cdots \rightarrowtail
+    q_n@u_{n-1} \leadsto r_n@u_n \rightarrowtail
+    r@u_n
+  }
+  \end{prooftree}
+\end{equation}
+Here, the value $u_0 \in U$
+is initially received from the environment as part of the incoming question.
+$L \mathbin@ U$ then mirrors the execution of $L$
+but keeps track of this additional state component.
+The state is attached to any outgoing question in $A$
+and updated with the corresponding answer.
+When $L$ terminates,
+the final value of the state is returned with the answer in $B$.
 
-\begin{example}[Layer Semantics]
+\begin{example}[Layer Semantics] %{{{
 As noted in Example~\ref{ex:overview:lint},
 the CertiKOS verification effort
 required the entire correctness proof of CompCert
@@ -1145,6 +1203,7 @@ in a reasonably straightforward way as well.
 %\end{align*}
 %This leaves the question of evaluating client code
 %running on top of the underlay $L$.
+%}}}
 
 %}}}
 
@@ -1159,7 +1218,7 @@ as a simulation property:
 \[
   \kw{CompCert}(M) = M'
   \quad\Rightarrow\quad
-  \kw{Clight}_\chi[M] \le \kw{Asm}_\chi[M']
+  \kw{Clight}_\chi[M] \:\le\: \kw{Asm}_\chi[M']
   \,.
 \]
 This means that when $M$ compiles to $M'$,
@@ -1187,9 +1246,11 @@ the open transition systems
     \mathcal{A} \mathbin@ \kw{mem}
   \,.
 \]
-This raises the question of the correspondence
-between the source-level interactions in $\mathcal{C} \mathbin@ \kw{mem}$
-and their matching target-level interactions in $\mathcal{A} \mathbin@ \kw{mem}$.
+This raises the question of the relationship
+between the source-level interactions
+in $\mathcal{C} \mathbin@ \kw{mem}$
+and their corresponding target-level interactions
+in $\mathcal{A} \mathbin@ \kw{mem}$.
 In other words,
 compositional compiler correctness only makes sense
 with respect to a particular calling convention.
@@ -1240,66 +1301,75 @@ we can derive their sequential composition
 $\mathbb{R} \cdot \mathbb{R}' : A \Leftrightarrow C$.
 We will write $\epsilon_A : A \Leftrightarrow A$
 for the identity simulation convention,
-and call $\mathbf{SC}$ the category of
+and call $\mathbf{SC}$ the associated category of
 language interfaces and simulation conventions.
 
 %}}}
 
 \begin{figure} % fig:overview:simcomp %{{{
   \[
-    \begin{prooftree}
-      \hypo{\pi_1 :
+      \pi_1 :
         L_1^\sharp
         \le_{\mathbb{R}_B \cdot \mathbb{R}_B' \twoheadrightarrow
              \mathbb{R}_C}
-        L_1^\flat}
-      \hypo{\pi_2 :
+        L_1^\flat
+      \qquad
+      \pi_2 :
         L_2^\sharp
         \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-        L_2^\natural}
-      \hypo{\pi_2' :
+        L_2^\natural
+      \qquad
+      \pi_2' :
         L_2^\natural
         \le_{\mathbb{R}_A' \twoheadrightarrow \mathbb{R}_B'}
-        L_2^\flat}
+        L_2^\flat
+  \]
+  \[
+    \begin{prooftree}
+      \hypo{\pi_1 \quad}
+      \hypo{\pi_2 \quad}
+      \hypo{\quad \pi_2'}
       \infer2{
-        L_2^\sharp
-        \le_{\mathbb{R}_A \cdot \mathbb{R}_A' \twoheadrightarrow
-             \mathbb{R}_B \cdot \mathbb{R}_B'}
-        L_2^\flat}
+	%\pi_2 \odot \pi_2' :
+	L_2^\sharp
+	\le_{\mathbb{R}_A \cdot \mathbb{R}_A' \twoheadrightarrow
+	     \mathbb{R}_B \cdot \mathbb{R}_B'}
+	L_2^\flat}
       \infer2{
-        L_1^\sharp \odot L_2^\sharp
-        \le_{\mathbb{R}_A \cdot \mathbb{R}_A' \twoheadrightarrow
-             \mathbb{R}_C}
-        L_1^\flat \odot L_2^\flat}
+	%\pi_1 \otimes (\pi_2 \odot \pi_2') :
+	L_1^\sharp \odot L_2^\sharp
+	\le_{\mathbb{R}_A \cdot \mathbb{R}_A' \twoheadrightarrow
+	     \mathbb{R}_C}
+	L_1^\flat \odot L_2^\flat}
     \end{prooftree}
-%    \qquad
-%    \begin{tikzcd}[row sep=1.5em]
-%      A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
-%	       \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
-%      B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
-%               \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
-%      C^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_C"]
-%      \\
-%      A^\natural \ar[r, twoheadrightarrow, "L_2^\natural"]
-%	       \ar[d, Leftrightarrow, "\mathbb{R}'_A"'] &
-%      B^\natural \ar[d, Leftrightarrow, "\mathbb{R}'_B"]
-%      \\
-%      A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"] &
-%      B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"] &
-%      C^\flat
-%    \end{tikzcd}
+    \qquad
+    \begin{tikzcd}[row sep=1.5em]
+      A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+	       \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+      B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+               \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
+      C^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_C"]
+      \\
+      A^\natural \ar[r, twoheadrightarrow, "L_2^\natural"]
+	       \ar[d, Leftrightarrow, "\mathbb{R}'_A"'] &
+      B^\natural \ar[d, Leftrightarrow, "\mathbb{R}'_B"]
+      \\
+      A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"] &
+      B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"] &
+      C^\flat
+    \end{tikzcd}
     \qquad
     \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/simsdcomp}} }
   \]
   \caption{A composite simulation proof
-     and its graphical representation}
+     and associated graphical representations}
   \label{fig:overview:simcomp}
 \end{figure}
 %}}}
 
 \paragraph{Composition Properties} %{{{
 
-As depicted in Fig.~\ref{fig:overview:simcomp},
+As illustrated in Fig.~\ref{fig:overview:simcomp},
 when their boundaries are compatible,
 simulation squares of the kind depicted above compose both
 vertically and horizontally.
@@ -1397,8 +1467,6 @@ to operate independently on their different components.
 
 %}}}
 
-%}}}
-
 \subsection{Monoidal Structures} %{{{
 
 We introduced in \S\ref{sec:overview:slift}
@@ -1408,16 +1476,7 @@ with an additional state component taken in the set $U$.
 This construction can be decomposed further
 and extended to simulation conventions.
 
-\paragraph{Language Interfaces} %{{{
-
-The language interface $A@U$
-annotates the questions and answers of $A$
-with an additional component taken the set $U$.
-This can be generalized to the following construction,
-which combines the questions and answers
-of two different language interfaces.
-
-\begin{definition}[Composite language interfaces]
+\begin{definition}[Composite language interfaces] %{{{
 Given two language interfaces $A$ and $B$,
 the language interface $A \otimes B$ is defined as:
 $
@@ -1432,27 +1491,23 @@ In addition, for a set $U$
 we define the language interface
 $[U] := \langle U, U \rangle$.
 \end{definition}
+%}}}
 
-This allows us to recover
-$A@U := A \otimes [U]$
-but offers a more fine-grained view
-of its construction.
-In particular,
-note that $\otimes$ is (in essence)
+We can recover
+$A \mathbin@ U := A \otimes [U]$.
+Note also that $\otimes$ is %(in essence)
 associative and commutative,
 and that:
 \[
-  [U \times V] \cong [U] \otimes [V]
+  [U \times V] = [U] \otimes [V]
   \qquad \qquad
-  [\mathbbm{1}] \cong \mathbf{I}
+  [\mathbbm{1}] = \mathbf{I}
   \qquad
-  [\varnothing] \cong \top
+  [\varnothing] = \top
 \]
 Moreover,
-these structures
+the underlying structures
 are mirrored at the level of simulation conventions.
-
-%}}}
 
 \paragraph{Simulation Conventions} %{{{
 
@@ -1492,7 +1547,7 @@ For example, the properties
   (\mathbb{R}_2 \cdot \mathbb{S}_2)
   \,,
 \]
-and various properties of the reversible simulation conventions:
+and various properties of the invertible simulation conventions:
 \[
   \lambda_A : A \otimes \mathbf{I} \cong A \,,
   \qquad
@@ -1513,16 +1568,17 @@ Likewise, the properties
   [R \times S] = [R] \otimes [S]
 \]
 can be captured by describing
-$[-]$ as a \emph{monoidal functor}
+$[-] : \mathbf{Rel} \rightarrow \mathbf{SC}$
+as a \emph{monoidal functor}
 from the symmetric monoidal category $\mathbf{Rel}$
 of sets and relations
 to the symmetric monoidal category $\mathbf{SC}$.
 
-This categorical description %of the compositional structure
+%This categorical description %of the compositional structure
 %of simulation conventions
-brings with it useful tools.
-In essence,
-symmetric monoidal categories capture
+%brings with it useful tools.
+%In essence,
+Symmetric monoidal categories capture
 the algebra of systems or processes which
 compose both in series and parallel
 \cite{rosetta}.
@@ -1537,8 +1593,7 @@ while parallel composition ($\otimes$)
 allows us to operate independently on various components
 of questions and answers.
 Category theory backs this intuition
-with a number of formal tools.
-In particular,
+with a number of formal tools;
 we will make extensive use of \emph{string diagrams}
 when describing complex simulation conventions.
 
@@ -1639,12 +1694,13 @@ are all identical,
 up to topological deformations
 which correspond to the axioms of monoidal categories.
 
-\begin{example}[Abstraction Relations]
+\begin{example}[Abstraction Relations] \label{ex:overview:absrel} %{{{
 In \S\ref{sec:overview:slift},
 we noted that a layer specification
-$L^\sharp : \top \twoheadrightarrow \mathcal{C}_\kw{m}@D^\sharp$
+$L^\sharp :
+ \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D^\sharp$
 and its implementation
-$\llbracket M \rrbracket_{L^\flat} :
+$\kw{Clight}_{L^\flat}[M] :
  \top \twoheadrightarrow \mathcal{C}_\kw{m}@D^\flat$
 %in terms of an underlay $L^\flat$
 are not directly comparable, owing to their
@@ -1689,10 +1745,11 @@ we must require that
 %  \,.
 %\]
 \end{example}
+%}}}
 
 %}}}
 
-\paragraph{Transition Systems}
+\paragraph{Transition Systems} %{{{
 
 Unfortunately,
 it is not possible in general
@@ -1738,7 +1795,7 @@ between incoming and outgoing questions.
 
 Since the right-hand side argument of $\mathbin@$
 is limited to sets and bijections,
-it cannot be used to define a proper monoidal structure.
+it cannot be used to define a proper monoidal structure on $\mathbf{TS}$.
 Nevertheless, there are transition systems
 \[
   \lambda^\kw{L}_A : \mathbf{I} \mathbin@ U \cong [U]
@@ -1748,7 +1805,7 @@ Nevertheless, there are transition systems
   \alpha_{AUV} : A \mathbin@ (U \times V) \cong
     (A \mathbin@ U) \mathbin@ V
 \]
-which satisfies a version of many of the expected properties.
+which satisfy a version of the expected properties.
 This makes it possible to construct for transition systems
 a string diagram language
 similar to that of simulation conventions.
@@ -1756,14 +1813,14 @@ For example,
 the layer semantics given in \S\ref{sec:overview:slift}
 can be written as:
 \[
-  \llbracket M \rrbracket_{L^\flat} \quad:=\quad
+  \kw{Clight}_{L^\flat}[M] \quad:=\quad
     \vcenter{\hbox{ \includegraphics[scale=0.1]{draftfig/layersem} }}
     \quad:\quad
     \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D^\flat
 \]
 Here,
 categorical composition runs from left to right
-and product components in
+and the product
 $A \mathbin@ U_1 \mathbin@ \cdots \mathbin@ U_n$
 run from bottom to top.
 Lines and nodes connecting the bottom shaded area
@@ -1772,7 +1829,7 @@ can be arbitrary language interfaces and transition systems,
 but those appearing in the upper part
 are restricted to sets and bijections.
 
-\begin{example}[Pure Layer Interfaces]
+\begin{example}[Pure Layer Interfaces] %{{{
 In many layer specifications,
 the primitives only access and modify the abstract state,
 and do not use the concrete memory component at all.
@@ -1781,7 +1838,7 @@ it suffices to define them using the type
 $L : \top \twoheadrightarrow \mathcal{C} \mathbin@ D$.
 Evaluating client code can then be done as:
 \begin{align*}
-  \llbracket M \rrbracket_L \quad&:=\quad {}
+  \kw{Clight}_{L}[M] \quad&:=\quad
     \vcenter{\hbox{ \includegraphics[scale=0.1]{draftfig/layersem-pure} }}
   \\[1ex]
   \quad&\,=\:\: {}
@@ -1794,8 +1851,104 @@ We have used the isomorphisms
 $\gamma_{UV} : U \times V \cong V \times U \in \mathbf{Iso}(\mathbf{Set})$,
 represented by a twist in the diagram above,
 and $\mu_U : \top \cong \top \mathbin@ U \in \mathbf{TS}$.
-
 \end{example}
+%}}}
+
+%}}}
+
+%}}}
+
+\subsection{Separation Algebra} %{{{
+
+The constructions we have outlined so far
+make it possible to describe
+the state of complex systems compositionally.
+State can separated into different fields;
+we can then describe and reason about individual components
+independently of the fields that they do not access,
+and use the $\mathbin@$ operator
+to connect these components with the rest of the system.
+
+This compositional description
+facilitates local reasoning,
+but it must eventually be refined into
+a concrete implementation:
+a program acting on a global memory state.
+To establish correctness,
+we must formulate a simulation convention
+describing the ways in which
+the global memory state encodes
+the various abstract state components.
+To achieve this in a way which preserves compositionality,
+we use a \emph{separation algebra}
+for the CompCert memory model.
+
+%This process was touched on in Example~\ref{ex:overview:absrel},
+%where an abstraction relation
+%$R \subseteq (\kw{mem} \times D^\sharp) \times (\kw{mem} \times D^\flat)$
+%was used to describe how
+%the combination of the concrete memory and overlay abstract state
+%used in an overlay interface
+%are realized by the concrete memory and underlay abstract state---%
+%presumably with the expectation that 
+
+A separation algebra \citep{sepalg} provides an operation $\bullet$
+which can be used to decompose a memory state $m$ into
+a number of \emph{shares}
+$
+  m_1 \bullet \cdots \bullet m_n
+$.
+The properties of $\bullet$
+and its interaction with memory operations
+ensure that CompCert semantics satisfy
+a \emph{frame} property,
+meaning that they
+obliviously pass through
+any additional memory share
+provided by the environment:
+\begin{equation} \label{eqn:overview:sepalg:frame}
+  \begin{prooftree}
+  \hypo{
+  L \:\vDash\: q@m_0 \rightarrowtail
+    q_1@m_1 \leadsto r_1@m_1' \rightarrowtail
+    \cdots \rightarrowtail
+    q_n@m_n \leadsto r_n@m_n' \rightarrowtail
+    r@m'}
+  \infer1{
+   {\begin{array}{r@{\:}l}
+    L \:\vDash\: q@(m_0 \bullet \hat{m}_0) \rightarrowtail
+      q_1@(m_1 \bullet \hat{m}_0) &\leadsto r_1@(m_1' \bullet \hat{m}_1) \rightarrowtail
+      \cdots \\ \cdots \rightarrowtail
+      q_n@(m_n \bullet \hat{m}_{n-1}) &\leadsto r_n@(m_n' \bullet \hat{m}_n) \rightarrowtail
+      r@(m' \bullet \hat{m}_n)
+   \end{array}}}
+  \end{prooftree}
+\end{equation}
+The similarity of (\ref{eqn:overview:sepalg:frame})
+with the behavior (\ref{eqn:slift})
+of the transition system $L \mathbin@ U$ (\S\ref{sec:overview:slift:ts})
+is no coincidence.
+In fact,
+using the separation algebra as a relation
+${\bullet} \subseteq (\kw{mem} \times \kw{mem}) \times \kw{mem}$,
+the frame property for a transition system
+$L : A \mathbin@ \kw{mem} \twoheadrightarrow B \mathbin@ \kw{mem}$
+can be described as:
+\[
+  L \mathbin@ \kw{mem}
+  \:\:
+  \le_{A \otimes [\bullet] \twoheadrightarrow B \otimes [\bullet]}
+  \:\:
+  L
+\]
+
+\begin{example}
+abstraction relation as
+\[
+  (\kw{mem} \times R) \mathbin; [\bullet]
+\]
+\end{example}
+
 
 %}}}
 
@@ -1836,8 +1989,6 @@ would serve no purpose.
 %}}}
 
 \subsection{ClightP}
-
-\subsection{Separation Algebra}
 
 %}}}
 
