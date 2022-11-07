@@ -1996,6 +1996,7 @@ The techniques outlined in \S\ref{sec:overview:sepalg}
 can then be used to formulate the correctness property
 \[
   \vcenter{ \hbox{\includegraphics[scale=0.12]{draftfig/unclight}} }
+  \,,
   \qquad
   \text{where}
   \qquad
@@ -2011,7 +2012,7 @@ In the Clight program,
 formerly private variables are stored in the memory.
 For incoming calls ($\mathbf{R}_B$),
 we proceed as before and refine the private environment
-into a memory share which is then merge with the main memory.
+into a memory share which is then merged with the main memory.
 However, unlike layer interfaces,
 ClightP program can also perform outgoing calls.
 The use of
@@ -2034,23 +2035,93 @@ Maybe the implementation of $L_\kw{rb}$?
 
 \subsection{Encapsulated State} %{{{
 
-%In fact,
-%multiple instances of $L$ may even be executing at the time
-%if a reentrant call happens.
-%Their internal states remain independent.
-For the most part, the C language relies on a global memory state.
-Because all components can in principle access every part of this global memory,
-cross-component interactions carry the current state of the memory
-back and forth with every question and answer.
+In the semantic model of CompCertO, state exists in two forms:
+\begin{itemize}
+  \item The memory state is global and persistent.
+    It is shared across all components
+    and must be carried along
+    every time a question or answer transfers control
+    between components.
+  \item The states used to define transition systems
+    are local to each component.
+    They can only be observed indirectly,
+    through the component's interaction with the environment.
+\end{itemize}
 Since C does not offer objects, closures or similar abstractions,
 component-local state has a lifetime limited to a particular function activation.
 In the semantics of CompCert languages,
-maintaining persistent state across successive activations of a given component
+maintaining persistent local state
+across successive activations of a given component
 would serve no purpose.
+Nevertheless,
+persistent local state is important in many applications.
 
-%Nevertheless, in many applications,
-%the ability for a component to maintain local private state
-%is important:
+The construction we have introduced so far
+make it possible to manage global state
+and control interference between components,
+but do not support true encapsulation.
+In \S\ref{sec:encap},
+we extend the semantic model of CompCertO
+to support to introduce \emph{persistent}
+local state.
+
+\paragraph{Approach}
+
+Rather than modifying the definition of transition systems,
+we use a construction
+inspired by \citet{feedback,caots}.
+Concretely,
+a component $\Sigma : A \rightarrow B$
+consists of a set $U$ of \emph{private states},
+an underlying transition system of type
+$L : A \twoheadrightarrow B \mathbin@ U$,
+and an initial state $u \in U$.
+When $\Sigma$ is activated for the first time,
+the initial state is adjoined to incoming question
+to activate $L$.
+When $L$ terminates,
+the updated state is saved
+to be used with the next activation.
+
+\paragraph{Encapsulation Primitive}
+
+The double category structure
+and the constructions we have described
+embed into the extended model.
+In addition,
+stateful components support an operation
+\[
+  \Sigma : A \rightarrow B \mathbin@ U
+  \quad \vdash \quad
+  \kw{fbk}_{u \in U}(\Sigma) : A \rightarrow B
+  \,,
+\]
+which incorporates a $U$ component into the private states of $\Sigma$
+and can be depicted as:
+\[
+  \text{[fig along the lines of:]}
+  \quad
+  \vcenter{\hbox{ \includegraphics[scale=0.16]{draftfig/encap} }}
+\]
+This operation interacts with simulations in the following way:
+\[
+  \begin{prooftree}
+    \hypo{\Sigma^\sharp
+      \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B \mathbin@ R}
+      \Sigma^\flat}
+    \hypo{u \mathrel{R} v}
+    \infer2{
+      \kw{fbk}_{u \in U}(\Sigma^\sharp)
+      \le_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+      \kw{fbk}_{v \in V}(\Sigma^\flat)}
+  \end{prooftree}
+\]
+
+\begin{example}
+ClightP with encapsulated private environment?
+\end{example}
+      
+
 %\begin{itemize}
 %  \item Beyond the world of C,
 %    many language features behave in this way.
@@ -2065,6 +2136,11 @@ would serve no purpose.
 %we show how persistent, encapsulated state
 %can be incorporated into
 %the semantic model of CompCertO.
+
+%For the most part, the C language relies on a global memory state.
+%Because all components can in principle access every part of this global memory,
+%cross-component interactions carry the current state of the memory
+%back and forth with every question and answer.
 
 %}}}
 
@@ -2942,33 +3018,6 @@ to make this possible.
 \section{Encapsulated State} \label{sec:encap} %{{{
 
 % Preamble {{{
-
-As discussed in \S\ref{sec:basic:compcerto},
-state in CompCertO exists in two forms:
-\begin{itemize}
-  \item The memory state is global and persistent.
-    It is shared across all components
-    and must be carried along
-    every time a question or answer transfers control
-    between components.
-  \item States within transition systems
-    are private to each component.
-    They can only be observed indirectly,
-    through a component's behavior
-    in future interactions with its environment.
-\end{itemize}
-State of the first kind
-is managed using language interfaces
-of the form $A@K$.
-Lifted components, of the form $L@K$,
-are insensitive to the global state $k$
-but pass it along unchanged
-when activated.
-The second kind of state is \emph{encapsulated}---%
-local to a component
-and inaccessible to the environment.
-In CompCertO, the scope of encapsulated state
-can only be a specific activation of the component.
 
 In this section,
 we explain how a richer model can be constructed
@@ -4083,7 +4132,7 @@ int count(void) { return c++; }
 % (perhaps associated with empty memory blocks)
 % or if we should have a custom \mintinline{Coq}{program} type.
 
-\subsection{Semantics}
+\subsection{Semantics} %{{{
 
 Private variables in a \ClightP{} program
 are not stored in the memory,
@@ -4177,7 +4226,9 @@ and add extra cases for updating the private states.
   \end{prooftree}}
 \end{gather*}
 
-\subsection{Composition}
+%}}}
+
+\subsection{Composition} %{{{
 
 Suppose a \ClightP program $M_1$
 invokes functions in a second program $M_2$.
@@ -4198,8 +4249,9 @@ as $\ClightP(M_1) \odot \ClightP(M_2)$.
 This is because \emph{each} component
 maintains its own private environment of type $\kw{penv}$.
 
+%}}}
 
-\subsection{Compiling to Clight}
+\subsection{Compiling to Clight} %{{{
 
 A \ClightP{} program can be compiled to Clight
 by erasing the \texttt{private} annotations
@@ -4339,6 +4391,8 @@ by applying \ref{thm:svcomp}, \ref{thm:scseq}, \ref{thm:promote} and \ref{thm:fb
 \subsection{Linking and Composition} %{{{
 
 Compose $\kw{penv} \times \kw{penv}$ into $\kw{penv}$.
+
+%}}}
 
 %}}}
 
