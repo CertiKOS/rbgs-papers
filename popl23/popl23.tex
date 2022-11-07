@@ -4178,12 +4178,11 @@ so that undesired behaviors can be avoided.
 \begin{gather*}
   cv \in \kw{cval} \mathrel{::=} \kw{Val}(v:\kw{val})
                      \mathrel{|} \kw{Arr}(sz:\mathbb{N},a:\mathbb{Z} \rightarrow \kw{cval})
-                     \mathrel{|} \kw{Str}(fs:[\kw{ident}],t:\kw{ident} \rightarrow \kw{cval})
   \\
   \kw{penv} \mathrel{::=} \kw{ident} \rightarrow \kw{cval}
   \\
   l \in \kw{lcval} \mathrel{::=} \kw{Lval}(i: \kw{ident})
-                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\kw{ident}+\mathbb{Z})
+                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\mathbb{Z})
 \end{gather*}
 
 We reuse the $\Clight$ expressions,
@@ -4192,35 +4191,37 @@ Similarly, we reuse the statements and small-step transitions
 and add extra cases for updating the private states.
 \begin{gather*}
   e \mathrel{::=} \cdots \mathrel{|} \kw{Epvar}(i:\kw{ident})
-  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, l:\kw{ident}+\mathbb{Z})
+  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, x: \kw{expr})
   \\[2ex]
-  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}(\kw{val})\\
-  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}(\kw{penv})
+  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}\ \kw{val}\\
+  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}\ \kw{penv}
   \\[2ex]
   {\begin{prooftree}
-    \hypo{\kw{pe}!i = \kw{Some}(\kw{Val}(v))}
+    \hypo{\kw{pe}[i] = \lfloor \kw{Val}(v) \rfloor }
     \infer1{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \downarrow v}
   \end{prooftree}}
   \qquad
   {\begin{prooftree}
-    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
+    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
+    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
+    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, i)) = \lfloor \kw{Val}(v) \rfloor }
+    \infer3{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
   \end{prooftree}}
   \\[2ex]
   {\begin{prooftree}
-    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
-    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, x)) = \kw{Some}(\kw{Val}(v))}
-    \infer2{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
+    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
   \end{prooftree}}
   \qquad
   {\begin{prooftree}
     \hypo{\kw{m},\kw{pe} \vdash e \Downarrow loc}
-    \infer1{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, x)}
+    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
+    \infer2{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, i)}
   \end{prooftree}}
   \\[2ex]
   {\begin{prooftree}
-    \hypo{\kw{m}, \kw{pe} \vdash a_1 \downarrow v}
-    \hypo{\kw{m}, \kw{pe} \vdash a_2 \Downarrow loc}
-    \hypo{\kw{pwrite}(pe, loc, v) = \kw{Some}(pe')}
+    \hypo{\kw{m}, \kw{pe} \vdash a_1 \Downarrow loc}
+    \hypo{\kw{m}, \kw{pe} \vdash a_2 \downarrow v}
+    \hypo{\kw{pwrite}(pe, loc, v) = \lfloor pe' \rfloor }
     \infer3{(\kw{m}, \kw{pe}, \kw{Sassign}(a_1, a_2)) \rightarrow
       (\kw{m}, \kw{pe'}, \kw{Sskip})}
   \end{prooftree}}
@@ -4276,16 +4277,16 @@ We will have to set up our extended notion of simulation
 in a way that supports those things.
 }
 
-We turn the $\ClightP$ expressions into $\Clight$ expressions
+$\ClightP$ expressions are turned into $\Clight$ expressions
 by replacing accesses to the private variables
 with accesses to the corresponding memory locations.
 \begin{gather*}
   \kw{transl\_expr}(\kw{Epvar}(i)) = \kw{Evar}(i)\\
-  \kw{transl\_expr}(\kw{Eaccess}(e, x)) = \kw{Oadd}(\kw{transl\_expr(e)}, \kw{get\_offset(e, x)})\\
+  \kw{transl\_expr}(\kw{Eaccess}(e, \iota_2(i))) = \kw{Oadd}(\kw{transl\_expr(e)}, \kw{transl\_expr(i)})
 \end{gather*}
-The auxiliary function $\kw{get\_offset}$
-exploits the type information associated with the expressions
-to calculate offset.
+The semantics of $\Clight$ is typed-directed
+so the offset calculated by $\kw{Oadd}$
+depends on the type of the array elements.
 After the expressions are transated, the statements
 are immediately valid $\Clight$ statements.
 
@@ -4293,104 +4294,101 @@ To establish the simulation between
 the source $\ClightP$ program and the target $\Clight$ program,
 we essentially transform the persistent environment into memory fragment,
 and merge the fragment with the regular memory state.
-We define a relation $\kw{se} \vdash \kw{pe} \rhd \kw{m}$
-to denote that the the persistent environment $\kw{pe}$ can be translated to
-the memory $\kw{m}$ under the symbol table $\kw{se}$.
+We define a relation $\kw{pe} \rhd \kw{m}$
+to denote that the the persistent environment $\kw{pe}$
+can be concretized to the memory $\kw{m}$ under the global symbol table $\kw{se}$.
 \[
   \begin{prooftree}
-    \hypo{\forall i \mapsto cv \in \kw{pe}, \exists b,  i \mapsto b \in se \wedge
-      \kw{m} \vdash (b,0) \leadsto cv}
-    \infer1{\kw{se} \vdash \kw{pe} \rhd \kw{m}}
+    \hypo{\forall i \mapsto cv \in \kw{pe}, \exists i \mapsto b \in se,
+      (b,0) \leadsto_{\kw{m}} cv}
+    \infer1{\kw{pe} \rhd \kw{m}}
   \end{prooftree}
 \]
-We define $\kw{m} \vdash (b, o) \leadsto cv$ as following
+We define $(b, o) \leadsto_{\kw{m}} cv$ as follows:
 \begin{gather*}
   {
   \begin{prooftree}
-    \hypo{\kw{load}(\kw{m}, b, o) = \kw{Some}(v)}
-    \infer1{\kw{m} \vdash (b, o) \leadsto \kw{Val}(v)}
+    \hypo{\kw{load}(\kw{m}, b, o) = \lfloor v \rfloor }
+    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Val}(v)}
   \end{prooftree}
   }
-  \\[1em]
+  \quad
   {
   \begin{prooftree}
-    \hypo{cv = \kw{Arr}(sz, a)}
-    \hypo{\forall i, \kw{m} \vdash (b, o+\kw{get\_offset}(cv, i)\}) \leadsto a[i]}
-    \infer2{\kw{m} \vdash (b, o) \leadsto cv}
-  \end{prooftree}
-  }
-  \\[1em]
-  {
-  \begin{prooftree}
-    \hypo{cv = \kw{Str}(fs, b)}
-    \hypo{\forall f, \kw{m} \vdash (b, o+\kw{get\_offset}(cv, f)) \leadsto t[f]}
-    \infer2{\kw{m} \vdash (b, o) \leadsto cv}
+    \hypo{\forall i, (b, o+\kw{offset}(a, i)) \leadsto_{\kw{m}} a[i]}
+    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Arr}(sz, a)}
   \end{prooftree}
   }
 \end{gather*}
-Again, the auxiliary function $\kw{get\_offset}$
-calculates the offset based on the type information,
-and is overloaded.
+The auxiliary function $\kw{offset}$
+calculates the offset based on the type information
+which is elided for readability.
 
 The other part of memory should remain the same.
-We could exploit the memory extension.
-However, it allows value refinement.
-Therefore, we introduce a notion of relation on memories
-$\kw{m_1} \cong_{P} \kw{m_2}$
-expressing the situation where
-the memories $\kw{m_1}$ and $\kw{m_2}$
-are almost identical except for the locations in $P$.
-In particular, the relation includes the following conditions.
-\begin{gather}
-  \kw{next\_block}(m_1) = \kw{next\_block}(m_2)\\
-  \forall (b, o) \notin P, \kw{content}(m_1, b, o) = \kw{content}(m_1, b, o)\\
-  \forall (b, o) \notin P, \kw{perm}(m_1, b, o) = \kw{perm}(m_2, b, o)\\
-  \forall (b, o) \in P, \neg \kw{perm}(m_1, b, o)\\
-  \forall (b, o) \in P, \kw{valid\_block}(m_1, b)
-\end{gather}
-It is straightforward to prove the relation
-is preserved by memory operations.
+We exploit the join operator defined in \ref{sec:sep}.
 Then we define the simulation convention
 \[
   \begin{prooftree}
-    \hypo{\kw{se} \vdash \kw{pe} \rhd \kw{m_2}}
-    \hypo{\kw{m_1} \cong_{\kw{pe}} \kw{m_2}}
-    \infer2{\kw{se} \Vdash f(\vec{a})@(\kw{pe}, \kw{m_1})\ R\ f(\vec{a})@\kw{m_2}}
+    \hypo{pe \rhd m}
+    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
+    \infer2{\kw{m} \Vdash (\kw{m}_{src}, pe) \ifr{\kw{pin}} \kw{m}_{tgt}}
   \end{prooftree}
   \qquad
   \begin{prooftree}
-    \hypo{\kw{se} \vdash \kw{pe} \rhd \kw{m_2}}
-    \hypo{\kw{m_1} \cong_{\kw{pe}} \kw{m_2}}
-    \infer2{\kw{se} \Vdash rv@(\kw{pe}, \kw{m_1})\ R\ rv@\kw{m_2}}
+    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
+    \infer1{\kw{m} \Vdash \kw{m}_{src} \ifr{\kw{pout}} \kw{m}_{tgt}}
   \end{prooftree}
 \]
-We prove the following simulation.
-\begin{theorem}[Correctness of compiling $\ClightP$]
-  Given a $\ClightP$ program $p$ with the associated transition system
-  $L(p): \mathcal{C}@\kw{mem} \rightarrow \mathcal{C}@(\kw{mem} \times \kw{penv})$,
-  we have the following simulation
+We then establish the correctness theorem:
+\begin{theorem}[Correctness of $\kw{ClightUnP}$]
+  For a $\ClightP$ program $M$ and and a $\Clight$ program $M'$
+  such that
+  $\kw{ClightUnP}(M) = M'$
+  the following simulation holds:
   \[
-    \begin{prooftree}
-      \hypo{\kw{compile}(p) = \kw{OK}(tp)}
-      \infer1{L(p) \le_{\mathcal{C} \twoheadrightarrow R} \Clight(tp)}
-    \end{prooftree}
+    \ClightP(M) \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} \Clight(M')
   \]
-eventually, we encapsulate the persistent environment
-by applying \ref{thm:svcomp}, \ref{thm:scseq}, \ref{thm:promote} and \ref{thm:fbksim}
-\[
-  \begin{prooftree}
-    \hypo{\ClightP(p) \le_{\mathcal{C} \twoheadrightarrow R} \Clight(tp)}
-    \hypo{\kw{id}_\mathcal{C} \sqsubseteq \kw{reveal}_{\mathcal{C}, \kw{penv}} \mathrel{;} \& R }
-    \infer2{\ClightP(p) \preceq_{\mathcal{C} \rightarrow \mathcal{C}} \& \Clight(tp)}
-  \end{prooftree}
-\]
 \end{theorem}
 
 %}}}
 
 \subsection{Linking and Composition} %{{{
 
-Compose $\kw{penv} \times \kw{penv}$ into $\kw{penv}$.
+The CompCertO compiler permits mutual recursion
+because it is designed to serve general purposes.
+Therefore, the simulation conventions
+on the incoming and outgoing side must agree
+so that the conditions one module relies on
+are exactly what the other module guarantees.
+This is achieved by the rich algebraic structures in simulation conventions.
+By contrast, the extra compilation pass $\ClightP$
+on top of the CompCertO compiler serves for verifying programs,
+and it does not support mutual recursive functions by design.
+Nevertheless, $\ClightP$ does allow programs to be composed
+in two ways: vertical composition and horizontal composition.
+These two common patterns are inherited from
+the certified abstraction layer framework,
+which have been proven to be sufficient for verifying
+large scale system softwares.
+
+\begin{lemma}[\kw{pin} and \kw{pout}]
+  \[
+    \kw{pin} \otimes \kw{pin} \sqsubseteq \kw{pin}
+    \qquad
+    \kw{pout} \sqsubseteq \kw{pout} \otimes \kw{pout}
+  \]
+\end{lemma}
+
+\begin{lemma}[Composition of $\ClightP$]
+  The following properties holds
+  \[
+    \begin{prooftree}
+      \hypo{L_1 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1}
+      \hypo{L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_2}
+      \infer2{L_1 \circ L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1 \circ L'_2}
+    \end{prooftree}
+  \]
+\end{lemma}
 
 %}}}
 
