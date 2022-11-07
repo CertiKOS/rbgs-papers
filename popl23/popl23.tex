@@ -741,56 +741,6 @@ We extend the semantic model of CompCertO in several directions:
 
 %}}}
 
-\begin{figure} % fig:code {{{
-  \centering\footnotesize
-  \begin{subfigure}{0.45\textwidth}
-\begin{minted}{C}
-/* Encapsulated state */
-static int c1, c2;
-static V buf[N];
-
-/* Accessors */
-int inc1() { int i = c1++; c1 %= N; return i; }
-int inc2() { int i = c2++; c2 %= N; return i; }
-V get(int i) { return buf[i]; }
-void set(int i, V val) { buf[i] = val; }
-\end{minted}
-  \subcaption{The translation unit $\kw{rb.c}$}
-  \label{fig:rb}
-  \end{subfigure}
-  \hspace{4em}
-  \begin{subfigure}{0.38\textwidth}
-\begin{minted}{C}
-/* Underlay signature */
-extern int inc1(void);
-extern int inc2(void);
-extern V get(int i);
-extern void set(int i, V val);
-
-/* Layer implementation */
-void enq(V val) { set(inc2(), val); }
-V deq() { return get(inc1()); }
-\end{minted}
-  \subcaption{The translation unit $\kw{bq.c}$}
-  \label{fig:bq}
-  \end{subfigure}
-  \caption{Running example, consisting of two C components.
-    The component $\kw{rb.c}$
-    implements a ring buffer by encapsulating an array
-    and two counters. It is used by the component
-    $\kw{bq.c}$ to implement a
-    bounded queue.}
-  \label{fig:code}
-%\caption{The state of a ring buffer,
-%  made of two counters and a fixed-size array,
-%  is encapsulated behind a simple interface.}
-%\label{fig:rb}
-%\caption{This component relies on the ring buffer primitives
-%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
-%\label{fig:bq}
-\end{figure}
-%}}}
-
 \section{Overview of the Framework} %{{{
 
 \subsection{Semantics in CompCertO} %{{{
@@ -877,6 +827,56 @@ To this end, CompCertO uses the following language interface:
 \end{figure}
 %}}}
 
+\begin{figure} % fig:code {{{
+  \centering\footnotesize
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+/* Encapsulated state */
+static int c1, c2;
+static V buf[N];
+
+/* Accessors */
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.38\textwidth}
+\begin{minted}{C}
+/* Underlay signature */
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+/* Layer implementation */
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Running example, consisting of two C components.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
+\end{figure}
+%}}}
+
 \paragraph{Transition Systems} %{{{
 
 We describe CompCertO's transition systems in detail in \S\ref{sec:base}.
@@ -926,7 +926,7 @@ the transition system $\kw{Clight}(\kw{rb.c})$ will behave as follows:
 \]
 Note that the memory is updated to store the new value of the counter $\kw{c1}$.
 By contrast, the function $\kw{deq}$ in $\kw{bq.c}$
-does not modify the memory itself,
+does not directly modify the memory,
 but it makes calls into $\kw{rb.c}$ which may have this effect.
 The corresponding executions of $\kw{Clight}(\kw{bq.c})$
 will have the shape
@@ -981,9 +981,9 @@ This is depicted in Fig.~\ref{fig:overview:ts}b.
 
 This mode of composition was hinted at in \citet{compcerto}.
 We provide a formal definition in \S\ref{sec:basic:lcomp}
-and show that it equips
-language interfaces and transition systems
-with the structure of a category.
+and show that
+it defines a category $\mathbf{TS}$ of
+language interfaces and transition systems.
 In particular,
 the unit for $\odot$ is
 the transition system $\kw{id}_A : A \twoheadrightarrow A$
@@ -1021,44 +1021,51 @@ within the CompCertO framework.
 Software systems are often constructed in layers:
 basic data structures and functionality
 are implemented by low-level code.
-We can then rely on these services
-without concern for the data representation
-and implementation details used by lower-level code;
-instead,
+We can then rely on this code
+without concern its implementation details
+or the data representation it uses.
+Instead,
 a programmer writing client code
 will understand and reason about
-this \emph{underlay} interface
+this layer of code
 in terms of a more abstract mental picture
 of its operation.
 For example,
-when using the code in Fig.~\ref{fig:code},
-we can think of the state of the queue
-as a simple sequence of elements
+when using the functions $\kw{enq}$ and $\kw{deq}$
+shown in Fig.~\ref{fig:code},
+we can think of the bounded queue they provide
+as a simple sequence of elements,
 and ignore the mechanics
 of the ring buffer used to implement it.
-
-Certified abstraction layers
-are a formalization of this methodology
-which was used to verify the operating system kernel
+\emph{Certified abstraction layers}
+formalize this methodology within CompCert
+and were used to verify the operating system kernel
 CertiKOS \cite{popl15}.
-Modeling layers required a modification of CompCert's
-closed semantics
-to augment them with abstract state and
-to achieve a limited form of compositionality.
-The closed semantics of CompCert can be described as:
+
+Modeling layers required a modification of CompCert's semantics
+to incorporate an \emph{underlay interface}
+described using an \emph{abstract state}.
+%to achieve a limited form of compositionality.
+The closed semantics of CompCert can be described as
 \[
   \chi : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}
-  \quad \vdash \quad
+  \: \vdash \:
   \kw{Clight}_\chi[M] : \top \twoheadrightarrow \mathbf{I}
+  \,,
+  \quad \text{ where }
+  \top := \langle \varnothing, \varnothing \rangle
+  \text{ and }
+  \mathbf{I} := \langle \mathbbm1, \mathbbm1 \rangle
+  \,.
 \]
 The transition system $\kw{Clight}_\chi[M]$
 is invoked with a trivial question ${*} \in \mathbf{I}^\que$,
-which initiates the execution of the $\kw{main}()$ function in $M$.
+which initiates the execution of the $\kw{main}$ function of $M$.
 When $M$ invokes an external function,
-the behavior of that function is directly obtained from the parameter $\chi$.
+the behavior of that function is obtained from the parameter $\chi$.
 In the CertiKOS proof,
 abstraction layers are formalized by using
-a modified version of CompCert,
+a variant CompCertX,
 whose semantic model can be described as:
 \[
   \forall D \in \mathbf{Set}
@@ -1073,7 +1080,7 @@ whose semantic model can be described as:
   \,.
 \]
 This allows the semantics of $M$ to be evaluated
-in the context of the underlay interface $L^\flat$,
+in the context of the \emph{underlay} interface $L^\flat$,
 whose primitives are described in terms of
 an \emph{abstract state} memory component of type $D$.
 A specification for the code in \autoref{fig:code}
@@ -1086,7 +1093,7 @@ will then generate traces such as:
   L_\kw{bq} \:\vDash\:
   \kw{enq}(v) \mathbin@ m \mathbin@ \vec{q}
   \:\rightarrowtail\:
-  {*} \mathbin@ m \mathbin@ \vec{q}v
+  \kw{undef} \mathbin@ m \mathbin@ \vec{q}v
   \qquad%\qquad
   L_\kw{bq} \:\vDash\:
   \kw{deq}() \mathbin@ m \mathbin@ v\vec{q}
@@ -1121,10 +1128,10 @@ and as an example application for the techniques we introduce.
 \subsubsection{Transition Systems} \label{sec:overview:slift:ts} %{{{
 
 In the example above,
-the client code does not directly access
-the abstract memory component, % in $D$,
+the client code $M$ does not directly access
+the abstract memory component $\vec{q}$, % in $D$,
 and can only affect it by invoking
-the primitives of the underlay. %~$L^\flat$.
+the primitives of the underlay interface $L_\kw{bq}$.
 In our compositional framework,
 a transition system
 $L : A \twoheadrightarrow B$,
@@ -1133,7 +1140,7 @@ can be extended to
   L \mathbin@ U : A \mathbin@ U \twoheadrightarrow B \mathbin@ U
   \,.
 \]
-The transition system $L \mathbin@ U$ obliviously passes along
+The transition system $L \mathbin@ U$ transparently passes along
 a state component of type $U$ as follows:
 \begin{equation} \label{eqn:slift}
   \begin{prooftree}
@@ -1158,7 +1165,7 @@ is initially received from the environment as part of the incoming question.
 $L \mathbin@ U$ then mirrors the execution of $L$
 but keeps track of this additional state component.
 The state is attached to any outgoing question in $A$
-and updated with the corresponding answer.
+and updated when the corresponding answer is received.
 When $L$ terminates,
 the final value of the state is returned with the answer in $B$.
 
@@ -1214,7 +1221,7 @@ in a reasonably straightforward way as well.
 % Simulation basics {{{
 
 CompCert establishes compiler correctness
-as a simulation property:
+as a simulation property
 \[
   \kw{CompCert}(M) = M'
   \quad\Rightarrow\quad
@@ -1222,9 +1229,9 @@ as a simulation property:
   \,.
 \]
 This means that when $M$ compiles to $M'$,
-the behavior of the compiled program $M'$
-is simulated by the behavior of $M$.
-The transitivity of simulations allows
+the behavior of the source program $M$
+is simulated by the behavior of $M'$.
+The transitivity of simulations enables
 \emph{vertical compositionality}:
 the overall correctness of the compiler
 can be derived from that of
@@ -1261,10 +1268,10 @@ with respect to a particular calling convention.
 %as part of the assembly semantics,
 CompCertO makes this explicit:
 simulations operate in the context of specified
-\emph{simulation conventions},
-which express the relationships between
-the source and target components'
-interactions with the environment.
+\emph{simulation conventions}.
+%which express the relationships between
+%the source and target components'
+%interactions with the environment.
 %
 This introduces a form of two-dimensional typing.
 To establish a simulation
@@ -1279,8 +1286,6 @@ for their outgoing calls.
 We can depict this situation
 in the following ways:
 \[
-  L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat
-  \qquad \qquad
   \begin{tikzcd}
     A^\sharp
       \ar[r, twoheadrightarrow, "L^\sharp"]
@@ -1291,6 +1296,8 @@ in the following ways:
       \ar[r, twoheadrightarrow, "L^\flat"'] &
     B^\flat
   \end{tikzcd}
+  \qquad \qquad
+  L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat
   \qquad \qquad
   \vcenter{ \hbox{\includegraphics[scale=0.095]{draftfig/simsd}} }
 \]
@@ -1325,6 +1332,22 @@ language interfaces and simulation conventions.
         L_2^\flat
   \]
   \[
+    \begin{tikzcd}[row sep=1.5em]
+      A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+	       \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+      B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+               \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
+      C^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_C"]
+      \\
+      A^\natural \ar[r, twoheadrightarrow, "L_2^\natural"]
+	       \ar[d, Leftrightarrow, "\mathbb{R}'_A"'] &
+      B^\natural \ar[d, Leftrightarrow, "\mathbb{R}'_B"]
+      \\
+      A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"] &
+      B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"] &
+      C^\flat
+    \end{tikzcd}
+    \qquad
     \begin{prooftree}
       \hypo{\pi_1 \quad}
       \hypo{\pi_2 \quad}
@@ -1342,22 +1365,6 @@ language interfaces and simulation conventions.
 	     \mathbb{R}_C}
 	L_1^\flat \odot L_2^\flat}
     \end{prooftree}
-    \qquad
-    \begin{tikzcd}[row sep=1.5em]
-      A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
-	       \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
-      B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
-               \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
-      C^\sharp \ar[dd, Leftrightarrow, "\mathbb{R}_C"]
-      \\
-      A^\natural \ar[r, twoheadrightarrow, "L_2^\natural"]
-	       \ar[d, Leftrightarrow, "\mathbb{R}'_A"'] &
-      B^\natural \ar[d, Leftrightarrow, "\mathbb{R}'_B"]
-      \\
-      A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"] &
-      B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"] &
-      C^\flat
-    \end{tikzcd}
     \qquad
     \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/simsdcomp}} }
   \]
@@ -1858,7 +1865,7 @@ and $\mu_U : \top \cong \top \mathbin@ U \in \mathbf{TS}$.
 
 %}}}
 
-\subsection{Separation Algebra} %{{{
+\subsection{Separation Algebra} \label{sec:overview:sepalg} %{{{
 
 The constructions we have outlined so far
 make it possible to describe
@@ -1916,12 +1923,12 @@ provided by the environment:
     r@m'}
   \infer1{
    {\begin{array}{r@{\:}l}
-    L \:\vDash\: q@(m_0 \bullet \hat{m}_0) \rightarrowtail
-      q_1@(m_1 \bullet \hat{m}_0) &\leadsto r_1@(m_1' \bullet \hat{m}_1) \rightarrowtail
+    L \:\vDash\: q@(m_0 \bullet w_0) \rightarrowtail
+      q_1@(m_1 \bullet w_0) &\leadsto r_1@(m_1' \bullet w_1) \rightarrowtail
       \cdots \\ \cdots \rightarrowtail
-      q_n@(m_n \bullet \hat{m}_{n-1}) &\leadsto r_n@(m_n' \bullet \hat{m}_n) \rightarrowtail
-      r@(m' \bullet \hat{m}_n)
-   \end{array}}}
+      q_n@(m_n \bullet w_{n-1}) &\leadsto r_n@(m_n' \bullet w_n) \rightarrowtail
+      r@(m' \bullet w_n)
+   \end{array}} }
   \end{prooftree}
 \end{equation}
 The similarity of (\ref{eqn:overview:sepalg:frame})
@@ -1937,22 +1944,95 @@ can be described as:
 \[
   L \mathbin@ \kw{mem}
   \:\:
-  \le_{A \otimes [\bullet] \twoheadrightarrow B \otimes [\bullet]}
+  \le_{\top \twoheadrightarrow B \otimes [\bullet]}
   \:\:
   L
+  \,.
 \]
 
 \begin{example}
-abstraction relation as
-\[
-  (\kw{mem} \times R) \mathbin; [\bullet]
-\]
+In Example~\ref{ex:overview:absrel} we saw that to relate a overlay interface
+$L^\sharp$
+% : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D^\sharp$
+with its implementation in terms of an underlay $L^\flat$,
+% : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D^\flat$,
+it was necessary to define a relation
+$R \subseteq (\kw{mem} \times D^\sharp) \times (\kw{mem} \times D^\flat)$
+and prove its compatibility with the semantics of client programs.
+Using $\bullet$,
+it is sufficient to define a relation
+$R \subseteq D^\sharp \times (\kw{mem} \times D^\flat)$
+[switch to using the concrete example?]
 \end{example}
 
 
 %}}}
 
-\subsection{Persistent State} %{{{
+\subsection{ClightP} %{{{
+
+To further facilitate the implementation of abstract state,
+we introduce the ClightP language,
+a variant of Clight
+where global variables can be declared \emph{private}.
+Private variables cannot be accessed
+from other translation units and
+their addresses cannot be taken.
+As a result, in the semantics
+$
+  \kw{ClightP}(M) :
+    \mathcal{C} \mathbin@ \kw{mem}
+    \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}
+$,
+private variables can be stored
+separately from the main memory,
+in a component-specific
+\emph{private environment} $p \in \kw{penv}$.
+
+The program $M$ can easily be compiled to a regular
+Clight program $M' := \kw{ClightUnP}(M)$
+by erasing the $\kw{private}$ annotations from all variables.
+The techniques outlined in \S\ref{sec:overview:sepalg}
+can then be used to formulate the correctness property
+\[
+  \vcenter{ \hbox{\includegraphics[scale=0.12]{draftfig/unclight}} }
+  \qquad
+  \text{where}
+  \qquad
+  \mathbf{R}_A :=
+    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-cca}} }
+    \,,
+  \qquad
+  \mathbf{R}_B :=
+    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-ccb}} }
+    \,.
+\]
+In the Clight program,
+formerly private variables are stored in the memory.
+For incoming calls ($\mathbf{R}_B$),
+we proceed as before and refine the private environment
+into a memory share which is then merge with the main memory.
+However, unlike layer interfaces,
+ClightP program can also perform outgoing calls.
+The use of
+$\kw{r}_\kw{mem} : \mathbf{I} \Leftrightarrow \kw{mem}$
+allows the target program to adjoin an extra memory share
+for private variables
+and requires the callee to leave this share unchanged.
+
+Using ClightP,
+implementing abstract data is a simple matter of
+defining a relation $R \subseteq D \times \kw{penv}$.
+We can then rely on $\kw{ClightUnP}$
+to incorporate this abstract data into the global memory.
+
+\begin{example}
+Maybe the implementation of $L_\kw{rb}$?
+\end{example}
+
+%}}}
+
+\subsection{Encapsulated State} %{{{
 
 %In fact,
 %multiple instances of $L$ may even be executing at the time
@@ -1988,7 +2068,7 @@ would serve no purpose.
 
 %}}}
 
-\subsection{ClightP}
+
 
 %}}}
 
@@ -2082,6 +2162,8 @@ such that $q \mathrel{I} s$,
 independently of any previous calls. % made into $L$.
 
 \begin{example}[Clight semantics] \label{ex:clightsem} %{{{
+[XXX update to refer to previous verion]
+
 In CompCertO,
 the semantics of a C translation unit $M$
 is given as a transition system of type:
@@ -2104,7 +2186,7 @@ the transition system $\kw{Clight}(\kw{rb.c})$ will behave as follows:
 \]
 Note that the memory is updated to store the new value of the counter $\kw{c1}$.
 By contrast, the function $\kw{deq}$ in $\kw{bq.c}$
-does not modify the memory itself,
+does not directly modify the memory itself,
 but it makes calls into $\kw{rb.c}$ which may have this effect.
 The corresponding executions of $\kw{Clight}(\kw{bq.c})$
 will have the shape
