@@ -9,7 +9,6 @@
 \setcopyright{none}
 \bibliographystyle{ACM-Reference-Format}
 \citestyle{acmauthoryear}
-\newtheorem{remark}{Remark}
 %}}}
 
 % Notations {{{
@@ -57,6 +56,7 @@
   Data Abstraction, Encapsulated State and Certified Compilation}
 
 \begin{document}
+\newtheorem{remark}[theorem]{Remark}
 
 \maketitle
 
@@ -903,7 +903,7 @@ $r_1, \ldots, r_n \in A^\ans$.
 Execution terminates with
 the top-level answer $r \in B^\ans$.
 
-\begin{example}[Clight semantics] \label{ex:clightsem} %{{{
+\begin{example}[Clight semantics] \label{ex:overview:clightsem} %{{{
 CompCertO defines
 the semantics of a C translation unit $M$
 as:
@@ -980,7 +980,7 @@ are directed back to the environment in $C$.
 This is depicted in Fig.~\ref{fig:overview:ts}b.
 
 This mode of composition was hinted at in \citet{compcerto}.
-We provide a formal definition in \S\ref{sec:basic:lcomp}
+We provide a formal definition in \S\ref{sec:base:lcomp}
 and show that
 it defines a category $\mathbf{TS}$ of
 language interfaces and transition systems.
@@ -1216,7 +1216,7 @@ in a reasonably straightforward way as well.
 
 %}}}
 
-\subsection{Simulations} %{{{
+\subsection{Simulations} \label{sec:overview:sim} %{{{
 
 % Simulation basics {{{
 
@@ -1374,7 +1374,7 @@ language interfaces and simulation conventions.
 \end{figure}
 %}}}
 
-\paragraph{Composition Properties} %{{{
+\paragraph{Composition Properties} \label{sec:overview:doublecat} %{{{
 
 As illustrated in Fig.~\ref{fig:overview:simcomp},
 when their boundaries are compatible,
@@ -1474,7 +1474,7 @@ to operate independently on their different components.
 
 %}}}
 
-\subsection{Monoidal Structures} %{{{
+\subsection{Monoidal Structures} \label{sec:overview:mon} %{{{
 
 We introduced in \S\ref{sec:overview:slift}
 the constructions $A \mathbin@ U$ and $L \mathbin@ U$
@@ -2144,56 +2144,41 @@ ClightP with encapsulated private environment?
 
 %}}}
 
-
-
 %}}}
 
 \section{A Double Category of Transition Systems} \label{sec:base} %{{{
 
 % Preamble {{{
 
-We begin our exposition by revisiting
-the semantic model used in CompCertO.
-As it stands (\S\ref{sec:basic:compcerto}),
-this model offers only a very specific notion
-of transition system composition,
-meant to model program linking
-in a context where
-mutually recursive calls are possible.
-
-By introducing a more general notion of composition (\S\ref{sec:basic:lcomp}),
-we equip the model with the structure of a category.
-This compositional structure
-is preserved by an interpretation of CompCertO transition systems
-into \emph{coherence spaces},
-modeled after Reddy's object-based semantics (\S\ref{sec:basic:coh}).
-
-In addition to transition systems,
-CompCertO introduces a notion of \emph{simulation convention},
-which formalizes the correspondance between the external interactions
-of source- and target-level transition systems.
-Simulation conventions carry their own categorical structure,
-and together with transition systems and simulations
-they constitute
-a \emph{double category} $\mathbf{LTS}$ (\S\ref{sec:basic:double}).
-
-This structure gives a formal underpinning to the usual notions of
+We begin our technical exposition with
+our extensions to the semantic model of CompCertO.
+After presenting CompCertO's notion of transition system
+(\S\ref{sec:base:ts}),
+we define layered composition
+(\S\ref{sec:base:lcomp})
+and present our extended notions of simulation and simulation convention
+(\S\ref{sec:base:sim}).
+As outlined in \S\ref{sec:overview:doublecat},
+these constructions equip CompCertO semantics
+with the structure of a double category,
+giving a formal underpinning to the usual notions of
 horizontal and vertical composition
 found in existing work on compositional certified compilers.
-This richer structure
-does not find a straightforward analogue
-at the level of coherence spaces.
-This illustrates an under-appreciated but important challenge
-for denotational semantics in the context certified compilation,
-namely the important role of abstraction
-in that application domain.
+
+Moreover,
+the monoidal structures described in \S\ref{sec:overview:mon}
+add one more dimension to the compositional structure of the model,
+spanning different components of a system's state.
+We formalize these structures for
+transition systems (\S\ref{sec:base:tsmon}),
+and for simulations (\S\ref{sec:base:scmon}).
 
 %}}}
 
-\subsection{Semantics in CompCertO} \label{sec:basic:compcerto} %{{{
+\subsection{Transition Systems} \label{sec:base:ts} %{{{
 
 As in the original CompCert semantics,
-a transition system
+a transition system in CompCertO
 executes by updating an internal state,
 which is not directly observable
 in its interactions with the environment.
@@ -2237,35 +2222,27 @@ Each new question $q \in B^\que$ initializes a fresh state $s$
 such that $q \mathrel{I} s$,
 independently of any previous calls. % made into $L$.
 
-\begin{example}[Clight semantics] \label{ex:clightsem} %{{{
-[XXX update to refer to previous verion]
-
-In CompCertO,
-the semantics of a C translation unit $M$
-is given as a transition system of type:
-\[
-  \kw{Clight}(M) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
-\]
-%Note that both incoming and outgoing call
-%use the same language interface $\mathcal{C}_\kw{m}$.
-%
-Consider the translation unit $\kw{rb.c}$ shown in Fig.~\ref{fig:code}.
-If $\kw{inc1}()$ is invoked
-with a memory state where the variable $\kw{c1}$ has value $5$,
-the transition system $\kw{Clight}(\kw{rb.c})$ will behave as follows:
+\begin{example}[Clight semantics] \label{ex:base:clightsem} %{{{
+In Example~\ref{ex:overview:clightsem}
+we discussed the externally observable behavior
+of the transition system
+$\kw{Clight}(\kw{rb.c}) :
+ \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
+ \mathcal{C} \mathbin@ \kw{mem}$.
+The trace mentioned in that example
+is generated by a transition sequence of the form
 \[
   \kw{inc1}()@m[\kw{c1} \mapsto 5]
   \mathrel{I}
   s_0 \rightarrow \cdots \rightarrow s_k
   \mathrel{F}
   5@m[\kw{c1} \mapsto 6]
+  \,.
 \]
-Note that the memory is updated to store the new value of the counter $\kw{c1}$.
-By contrast, the function $\kw{deq}$ in $\kw{bq.c}$
-does not directly modify the memory itself,
-but it makes calls into $\kw{rb.c}$ which may have this effect.
-The corresponding executions of $\kw{Clight}(\kw{bq.c})$
-will have the shape
+Likewise,
+our example for
+$\kw{Clight}(\kw{bq.c})$
+is generated by a transition sequence
 \begin{align*}
   \kw{deq}()@m
   \mathrel{I}
@@ -2285,219 +2262,31 @@ will have the shape
 \end{example}
 %}}}
 
-\subsubsection{Kripke Relators} %{{{
-
-Logical relations
-and relational parametricity
-play an important role
-in the construction of CompCertO's correctness theorem.
-To state relational properties,
-\citet{compcerto}
-introduces a Kripke relator framework,
-which we summarize below.
-%We will use it
-%to formulate various notions of simulation,
-%and summarize it below.
-
-Given two relations
-$R \subseteq A \times B$ and
-$S \subseteq U \times V$,
-the relation
-$(R \rightarrow S) \subseteq
- (A \rightarrow U) \times
- (B \rightarrow V)$
-is defined in the usual way:
-\[
-  f \ifr{R \rightarrow S} g
-  \quad:\Leftrightarrow\quad
-  \forall (a, b) \in A \times B \mathbin.
-    a \mathrel{R} b \Rightarrow
-    f(a) \mathrel{S} g(b)
-  \,.
-\]
-The more unusual powerset relator $\mathcal{P}^\le$
-is used to express simulation diagrams.
-Given $R \subseteq A \times B$,
-the relation
-$\mathcal{P}^\le(R) \subseteq \mathcal{P}(A) \times \mathcal{P}(B)$
-is defined as:
-\[
-  x \ifr{\mathcal{P}(R)^\le} y
-  \quad:\Leftrightarrow\quad
-  \forall a \in x \mathbin.
-  \exists b \in y \mathbin.
-  a \mathrel{R} b
-\]
-To see how this works,
-consider the simple transition systems
-$\alpha : A \rightarrow \mathcal{P}(A)$
-and
-$\beta : B \rightarrow \mathcal{P}(B)$.
-The relation $R$ is a simulation relation between them
-when the following property holds:
-\[
-  \alpha \:\ifr{R \rightarrow \mathcal{P}^\le(R)}\: \beta
-  \qquad\qquad\qquad
-  \begin{tikzcd}
-    a \ar[r, "\alpha"] \ar[d, dash, "R"'] &
-    a' \ar[d, dash, dashed, "R"] \\
-    b \ar[r, dashed, "\beta"'] &
-    b'
-  \end{tikzcd}
-\]
-
-Components of complex data structures
-must often be related in ways which vary
-depending on the context in which they appear,
-or the history of the computation.
-In such cases,
-component relations can be indexed over a set of \emph{worlds},
-which capture the relevant contextual information.
-Formally, a \emph{Kripke relation} over a set of worlds $W$
-is a ternary relation $R \subseteq W \times A \times B$.
-We will write $R \in \mathcal{R}_W(A, B)$,
-and use the notation
-$
-  w \Vdash a \mathrel{R} b
-$
-to mean that $(w, a, b) \in R$.
-In addition,
-\[
-  {} \Vdash a \mathrel{R} b
-  \quad :\Leftrightarrow \quad
-  \forall w\in W \mathbin. w \Vdash a \mathrel{R} b
-\]
-
-It is often useful to let the world evolve
-by endowing $W$ with an \emph{accessibility} relation
-${\leadsto} \subseteq W \times W$.
-World transitions are captured by the modal relator $\Diamond$,
-which associates to a Kripke relation $R \in \mathcal{R}_W(A, B)$
-the Kripke relation $\Diamond R$ of the same type, defined by:
-\[
-  w \Vdash a \ifr{\Diamond R} b
-  \quad:\Leftrightarrow\quad
-  \exists w' \mathbin. w \leadsto w' \wedge w' \Vdash a \mathrel{R} b
-\]
-For example,
-a Kripke simulation between $\alpha : A \rightarrow \mathcal{P}(A)$
-and $\beta : B \rightarrow \mathcal{P}(B)$
-operating in the context of a Kripke frame $\langle W, {\leadsto} \rangle$
-and a Kripke simulation relation $R \in \mathcal{R}_W(A, B)$
-can be formulated in the following way.
-The relators $\rightarrow$ and $\mathcal{P}^\le$
-can be promoted to Kripke relators
-by pointwise extension over the set of worlds.
-The complex Kripke simulation property:
-{\small
-\[
-  \forall w \in W \mathbin.
-  \forall a \in A \mathbin.
-  \forall b \in B \mathbin.
-  w \Vdash a \mathrel{R} b \Rightarrow
-  \forall a' \in \alpha(a) \mathbin.
-  \exists b' \in \beta(b) \mathbin.
-  \exists w' \in W \mathbin.
-  w \leadsto w' \wedge w' \Vdash a' \mathrel{R} b'
-\]
-}
-can be stated simply as:
-\[
-  \Vdash \alpha \ifr{R \rightarrow \mathcal{P}^\le(\Diamond R)} \beta
-  \,.
-\]
-
-%}}}
-
-\subsubsection{Simulations} %{{{
-
-\begin{remark}[to incorporate]
-In particular,
-in the absence of demonic nondeterminism,
-CompCert's notion of \emph{forward simulation} is appropriate:
-given two transition systems $L_1$ and $L_2$,
-it suffices to exhibit a relation between their possible states
-such that:
-\begin{itemize}
-  \item initial state of $L_1$ have related initial states in $L_2$;
-  \item state transitions in $L_1$ have corresponding sequences of transitions
-    from related states in $L_2$;
-  \item related state which produce a final outcome in $L_1$
-    have a corresponding final outcome in $L_2$.
-\end{itemize}
-To take into account event traces,
-the simulation works under the assumption that
-$L_1$ and $L_2$ are fed the same inputs by the environement,
-and requires that they produce identical outputs.
-The existence of a simulation relation satisfying these properties
-shows that the behavior of $L_1$ is refined by that of $L_2$;
-we say that $L_1$ is simulated by $L_2$ and write $L_1 \le L_2$.
-\end{remark}
-
-The conventions $\mathbb{R}_A$ and $\mathbb{R}_B$
-specify Kripke relations between source- and target-level interactions;
-the Kripke worlds can be used to ensure that
-question and their corresponding answers
-are related in a consistent way.
-
-\begin{definition}[Simulation Convention] \label{def:simconv}
-Given two language interfaces $A$ and $B$,
-a \emph{simulation convention} $\mathbb{R} : A \Leftrightarrow B$
-is a set of worlds $W$ together with two relations:
-\[
-  \mathbb{R}^\que \in \mathcal{R}_W(A^\que, B^\que)
-  \qquad
-  \mathbb{R}^\ans \in \mathcal{R}_W(A^\ans, B^\ans)
-\]
-\end{definition}
-
-Note that while simulation conventions
-carry a set of worlds,
-they do not specify an accessibility relation.
-
-\begin{definition}[Basic Simulation] \label{def:sim}
-\end{definition}
-
-\begin{definition}[Composition of Simulation Conventions] \label{def:ccomp}
-\end{definition}
-
-\begin{theorem}[Vertical Composition] \label{thm:vcomp}
-\end{theorem}
-
-%}}}
-
-%}}}
-
-\subsection{Layered Composition} \label{sec:basic:lcomp} %{{{
-
-To model linking,
-CompCertO introduces an operator $\oplus$
-which lets transition systems interact
-by having them handle each other's external calls.
-Because this operator permits mutual recursion,
-it is limited to transition systems which perform
-their incoming and outgoing calls
-according to the same language interface:
-\[
-  {\oplus_A} :
-    (A \twoheadrightarrow A) \times
-    (A \twoheadrightarrow A) \rightarrow
-    (A \twoheadrightarrow A)
-\]
-When mutual recursion is not needed,
-we can instead use the operator
-\[
-  {\odot_{A,B,C}} :
-    (B \twoheadrightarrow C) \times
-    (A \twoheadrightarrow B) \rightarrow
-    (A \twoheadrightarrow C)
-  \,,
-\]
-which is simpler in its construction
-and handles more general types.
-
-%which reflects at the level of transition systems
-%the categorical structure of $\ISpec$.
+%To model linking,
+%CompCertO introduces an operator $\oplus$
+%which lets transition systems interact
+%by having them handle each other's external calls.
+%Because this operator permits mutual recursion,
+%it is limited to transition systems which perform
+%their incoming and outgoing calls
+%according to the same language interface:
+%\[
+%  {\oplus_A} :
+%    (A \twoheadrightarrow A) \times
+%    (A \twoheadrightarrow A) \rightarrow
+%    (A \twoheadrightarrow A)
+%\]
+%When mutual recursion is not needed,
+%we can instead use the operator
+%\[
+%  {\odot_{A,B,C}} :
+%    (B \twoheadrightarrow C) \times
+%    (A \twoheadrightarrow B) \rightarrow
+%    (A \twoheadrightarrow C)
+%  \,,
+%\]
+%which is simpler in its construction
+%and handles more general types.
 
 \begin{definition}[Composition of transition systems] \label{def:lcomp} %{{{
 Suppose we have the transition systems
@@ -2514,17 +2303,13 @@ $
   L_1 \odot L_2 :=
   \langle S, {\rightarrow}, I, X, Y, F \rangle
   : A \twoheadrightarrow C
-$
-with the following components.
+$.
 States are taken in the set
 $
     S := S_1 + (S_2 \times S_1)
 $.
-The left summand is used when $L_1$ is active.
-The right summand is used when $L_2$ is active,
-and keeps track of the suspended state of $L_1$
-as well as the current state of $L_2$.
-Initially, a call in $C$ activates $L_1$:
+When an call in $C$ activates $L_1$,
+the left summand is used:
 \[
   \begin{prooftree}
     \hypo{q_C \mathrel{I_1} s_1}
@@ -2582,8 +2367,8 @@ $L_1$ is resumed:
 \end{definition}
 %}}}
 
-\begin{example}
-Referring back to Example~\ref{ex:clightsem},
+\begin{example} \label{ex:base:lcomp} %{{{
+Referring back to Example~\ref{ex:base:clightsem},
 consider the transition system:
 \[
   \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c}) :
@@ -2606,693 +2391,214 @@ may proceed as follows:
   \rightarrow \iota_1(u_5) \mathrel{F} v@m[\kw{c1} \mapsto 6]
 \end{align*}
 \end{example}
+%}}}
 
-Like the symmetric composition operator $\oplus$ used in CompCertO,
-the layered composition operator defined above
-is compatible with simulations.
-
-\begin{theorem}[Layered composition of simulations] \label{thm:lcompsim}
-Simulations compose as follows:
+\begin{definition}[Identity transition system]
+The transition system
+$\kw{id}_A : A \twoheadrightarrow A$
+is defined as:
 \[
-  \begin{prooftree}
-    \hypo{L_1^\sharp
-          \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
-          L_1^\flat}
-    \hypo{L_2^\sharp
-          \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-          L_2^\flat}
-    \infer2{L_1^\sharp \odot L_2^\sharp
-          \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
-          L_1^\flat \odot L_2^\flat}
-  \end{prooftree}
-  \qquad \qquad
+  \kw{id}_A \::=\:
+  \big\langle
+    A^\que + A^\ans, \:
+    \varnothing, \:
+    \iota_1, \:
+    \iota_1^{-1}, \:
+    \iota_2, \:
+    \iota_2^{-1}
+  \big\rangle
+  \,.
+\]
+\end{definition}
+
+%}}}
+
+\subsection{Kripke Relators} %{{{
+
+To formulate our simulation infrastructure,
+we will rely on the Kripke relator framework
+used in \citet{compcerto},
+which we summarize below.
+Relators are operations on relations
+which mirror operations on types.
+They are similar to functors on $\mathbf{Rel}$
+but satisfy weaker properties.
+
+\paragraph{Basic Relators for Simulations}
+
+Given two relations
+$R \subseteq A \times B$ and
+$S \subseteq U \times V$,
+the relation
+$(R \rightarrow S) \subseteq
+ (A \rightarrow U) \times
+ (B \rightarrow V)$
+is defined in the usual way:
+\[
+  f \ifr{R \rightarrow S} g
+  \quad:\Leftrightarrow\quad
+  \forall (a, b) \in A \times B \mathbin.
+    a \mathrel{R} b \Rightarrow
+    f(a) \mathrel{S} g(b)
+  \,.
+\]
+The more unusual powerset relator $\mathcal{P}^\le$
+is used to express simulation diagrams.
+Given $R \subseteq A \times B$,
+the relation
+$\mathcal{P}^\le(R) \subseteq \mathcal{P}(A) \times \mathcal{P}(B)$
+is defined as:
+\[
+  x \ifr{\mathcal{P}^\le(R)} y
+  \quad:\Leftrightarrow\quad
+  \forall a \in x \mathbin.
+  \exists b \in y \mathbin.
+  a \mathrel{R} b
+\]
+To see how this works,
+consider the simple transition systems
+$\alpha : A \rightarrow \mathcal{P}(A)$
+and
+$\beta : B \rightarrow \mathcal{P}(B)$.
+The relation $R$ is a simulation relation between them
+when the following property holds:
+\[
+  \alpha \:\ifr{R \rightarrow \mathcal{P}^\le(R)}\: \beta
+  \qquad\qquad\qquad
   \begin{tikzcd}
-    A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
-             \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
-    B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
-             \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
-    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
-    \\
-    A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"'] &
-    B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"'] &
-    C^\flat
+    a \ar[r, "\alpha"] \ar[d, dash, "R"'] &
+    a' \ar[d, dash, dashed, "R"] \\
+    b \ar[r, dashed, "\beta"'] &
+    b'
   \end{tikzcd}
 \]
-\end{theorem}
 
-Importantly,
-the composition operator $\odot$
-\emph{under-approximates}
-the semantic linking operator $\oplus$.
-Since CompCert's syntactic linking of assembly programs
-is known to implement $\oplus$,
-this shows that linking is also a correct implementation of
-the layered composition $\odot$.
+\paragraph{Kripke Relations}
 
-\begin{theorem}[Linking implements layered composition]
-For $L_1, L_2 : A \twoheadrightarrow A$,
-\[
-  L_1 \odot_{A,A,A} L_2
-  \le
-  L_1 \oplus_A L_2
- \,.
-\]
-\end{theorem}
-
-%}}}
-
-\subsection{Trace Semantics} \label{sec:basic:coh} %{{{
-
-%}}}
-
-\subsection{Double Category} \label{sec:basic:double} %{{{
-
-%}}}
-
-%}}}
-
-\section{Explicit State} %{{{
-
-We have mentioned in \S\ref{sec:basic:compcerto}
-CompCertO's approach to \emph{state}:
-the internal states of transition systems
-cannot be observed across components and
-persist only for the duration of a function activation;
-therefore,
-every question and answer must be annotated with
-the current state of the global memory
-at the time of a function's invocation or return,
-as shown in the language interface $\mathcal{C}@\kw{mem}$
-discussed in Example~\ref{ex:langint}.
-
-In this section,
-we show how this overall approach to persistent state
-can be generalized,
-and we introduce constructions
-which can be used to manage
-this kind of global state.
-
-\subsection{Adjoining Explicit State} \label{sec:basic:state} %{{{
-
-%In our approach to encapsulated state,
-%we need to systematically
-%annotate every question and answer
-%in an existing language interface
-%with a ``latest state'' field.
-%The following constructions help us manage
-%this kind of explicit state.
-
-In Example~\ref{ex:langint} we gave a direct definition
-for the language interface $\mathcal{C}@\kw{mem}$.
-In fact,
-this language interface can be derived from $\mathcal{C}$
-by using the following operation.
-
-\begin{definition}[Adjoining state]
-Given a language interface $A = \langle A^\que, A^\ans \rangle$
-and a set $K$,
-the language interface $A@K$ is defined as:
-\[
-  A@K := \langle A^\que \times K ,\: A^\ans \times K \rangle
-\]
-We write the questions and answers of this language interface as
-$q@k \in A^\que \times K$ and
-$r@k \in A^\ans \times K$.
-\end{definition}
-
-Note that in our examples,
-we have decomposed the CompCertO language interfaces
-into $\mathcal{C}@\kw{mem}$, $\mathcal{A}@\kw{mem}$, etc.
-The memory state is dropped from the language interface $\mathcal{C}$,
-whose questions are now just $f[\mathit{sg}](\vec{v})$,
-and reintroduced with $@\kw{mem}$ to obtain
-the full question $f[\mathit{sg}](\vec{v})@m$.
-This will be used in the context of CAL
-where layer interfaces can be defined in a memory-free manner
-($\mathcal{C}$ without $@\kw{mem}$),
-their behavior being entirely determined by their encapsulated state.
-
-\begin{example}[Layer specifications] \label{ex:rbspec} %{{{
-We can formulate a specification for
-the program component $\kw{rb.c}$ as follows.
-The state of the ring buffer
-is expressed as a tuple
-$(f, c_1, c_2) \in S_\kw{rb} := \kw{val}^N \times \mathbb{N} \times \mathbb{N}$.
-Operations do not otherwise access the memory,
-so the specification will be of type
-\[
-  L_\kw{rb} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{rb}
-  \,.
-\]
-To define it, we construct a simple transition system such that
-all executions take the shape
-\[
-  q@(f, c_1, c_2) \:\mathrel{I}\: (v', f', c_1', c_2')
-                  \:\mathrel{F}\: v'@(f', c_1', c_2')
-  \,.
-\]
-The predicates $X$, $Y$ and $\rightarrow$ are empty.
-As suggested above, $F$ is in essence the identity relation.
-This leaves us to define $I$ which specifies the component's
-actual behavior:
-\[ \begin{array}{c@{\qquad}c}
- {\begin{prooftree}
-    \hypo{i < N}
-    \infer1{
-      \kw{set}(i, v)@(f, c_1, c_2)
-      \mathrel{I_\kw{rb}}
-      (\kw{undef}, f[i := v], c_1, c_2)}
-  \end{prooftree}}
-  &
- {\begin{prooftree}
-    \hypo{c_1' = (c_1 + 1) \mathbin{\mathrm{mod}} N}
-    \infer1{
-      \kw{inc1}@(f, c_1, c_2)
-      \mathrel{I_\kw{rb}}
-      (c_1, f, c_1', c_2)}
-  \end{prooftree}}
-  \vspace{1em}
-  \\
- {\begin{prooftree}
-    \hypo{i < N}
-    \infer1{
-      \kw{get}(i)@(f, c_1, c_2)
-      \mathrel{I_\kw{rb}}
-      (f_i, f, c_1, c_2)
-    }
-  \end{prooftree}}
-  &
- {\begin{prooftree}
-    \hypo{c_2' = (c_2 + 1) \mathbin{\mathrm{mod}} N}
-    \infer1{
-      \kw{inc1}@(f, c_1, c_2)
-      \mathrel{I_\kw{rb}}
-      (c_2, f, c_1, c_2')}
-  \end{prooftree}}
-\end{array} \]
-We can then define
-$L_\kw{rb} := \langle
-  S_\kw{rb},\:
-  \varnothing,\:
-  I_\kw{rb},\:
-  \varnothing,\:
-  \varnothing,\:
-  {=}
- \rangle$.
-
-A similar approach can be use to define
-$L_\kw{bq} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{bq}$,
-where the states in $S_\kw{bq} := \kw{val}^*$
-are simply lists enumerating the contents of the queue.
-Here the operations will be specified as follows:
-\[
-  \begin{prooftree}
-    \hypo{|\vec{q}| < N}
-    \infer1{\kw{enq}(v)@\vec{q} \:\mathrel{I_\kw{bq}}\: (\kw{undef}, \vec{q}v)}
-  \end{prooftree}
-  \qquad\qquad
-  \begin{prooftree}
-    \hypo{\vec{q} = v\vec{p}}
-    \infer1{\kw{deq}(\epsilon)@\vec{q} \:\mathrel{I_\kw{bq}}\: (v, \vec{p})}
-  \end{prooftree}
-\]
-Again we can define $L_\kw{bq} := \langle
-  S_\kw{bq},\:
-  \varnothing,\:
-  I_\kw{bq},\:
-  \varnothing,\:
-  \varnothing,\:
-  {=}
-\rangle$.
-\end{example}
-%}}}
-
-Often,
-we will want to add a state annotation
-to the interface of an existing component.
-When lifting $L : A \twoheadrightarrow B$
-to operate as $L@K : A@K \twoheadrightarrow B@K$,
-the resulting transition system
-remains insensitive to the state annotation $K$,
-but keeps track of its value
-across all of its interactions.
-
-\begin{definition}[Lifting] \label{def:lift} %{{{
-Given %the transition system
-$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$
-we define $L@K : A@K \twoheadrightarrow B@K$ as:
-\begin{gather*}
-  L@K := \langle S \times K, {\rightarrow_K}, I_K, X_K, Y_K, F_K \rangle \\
- {\begin{prooftree}
-    \hypo{q \mathrel{I} s}
-    \infer1{q@k \mathrel{I_K} s@k}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{s \rightarrow s'}
-    \infer1{s@k \rightarrow_K s'@k}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{s \mathrel{X} m}
-    \infer1{s@k \mathrel{X_K} m@k}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{n \mathrel{Y}^s s'}
-    \infer1{n@k' \mathrel{Y^{s@k}_K} s'@k'}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{s \mathrel{F} r}
-    \infer1{s@k \mathrel{F_K} r@k}
-  \end{prooftree}}
-\end{gather*}
-\end{definition}
-%}}}
-
-This construction is used in particular when components are linked,
-to pass through the internal state of other components.
-
-\begin{example}[Interfacing $L_\kw{rb}$ with client code] \label{ex:context}
-Building on Example~\ref{ex:rbspec},
-consider the problem of interfacing
-the client code in $\kw{bq.c}$ with the underlay interface $L_\kw{rb}$.
-The types
-\[
-  L_\kw{rb} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{rb}
-  \qquad
-  \text{and}
-  \qquad
-  \Clight(\kw{bq.c}) : \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
-\]
-are not directly compatible,
-given that $L_\kw{rb}$ manipulates a state of type $S_\kw{rb}$
-and $\kw{rb.c}$ expects a memory state of type $\kw{mem}$.
-The solution is to lift each one to ``pass through''
-the state of the other:
-\[
-  \begin{tikzcd}[column sep=huge]
-    \mathbf{1}@\kw{mem}
-    \ar[r, "L_\kw{rb}@\kw{mem}"] &
-    \mathcal{C}@S_\kw{rb}@\kw{mem} \cong
-    \mathcal{C}@\kw{mem}@S_\kw{rb}
-    \ar[r, "\Clight(\kw{bq.c})@S_\kw{rb}"] &
-    \mathcal{C}@\kw{mem}@S_\kw{rb}
-  \end{tikzcd}
-\]
-Implicitly taking into account the isomorphisms
-\[
-  \mathbf{1} \cong \mathbf{1}@\kw{mem}
-  \qquad
-  \text{and}
-  \qquad
-  \mathcal{C}@S_\kw{rb}@\kw{mem} \cong
-  \mathcal{C}@\kw{mem}@S_\kw{rb} \cong
-  \mathcal{C}@(S_\kw{rb} \times \kw{mem})
-  \,,
-\]
-they can then be composed into
-\begin{gather*}
-  \Clight(\kw{bq.c})@S_\kw{rb} \odot
-  L_\kw{rb}@\kw{mem} :
-  \mathbf{1} \twoheadrightarrow \mathcal{C}@(S_\kw{rb} \times \kw{mem})
-  \,.
-\end{gather*}
-
-To establish that this combination implements the overlay interface $L_\kw{bq}$,
-we can lift the latter to:
-\[
-  L_\kw{bq}@\kw{mem} : \mathbf{1} \twoheadrightarrow
-    \mathcal{C}@(S_\kw{bq} \times \kw{mem})
-  \,.
-\]
-We will then need to define a simulation convention
-explaining the relationship between
-the states of type $S_\kw{bq}$ used by the specification and
-the states of type $S_\kw{rb}$ used by the implementation.
-
-%}}}
-
-\subsection{Certified Abstraction Layers} \label{sec:basic:abrel} %{{{
-
-In Example~\ref{ex:context},
-because of the difference between
-the abstract state components $S_\kw{rb}$ and $S_\kw{bq}$,
-they cannot be compared directly.
-We must first explain the correspondence between
-the two types of abstract states
-by formulating a proper simulation convention.
-This can be done as follows.
-\end{example}
-
-\begin{definition}
-For a language interface $A$ and a relation $R \subseteq K_1 \times K_2$,
-we define the simulation convention $A@R : A@K_1 \Leftrightarrow A@K_2$ as
+Components of complex data structures
+must often be related in ways which vary
+depending on the context in which they appear,
+or the history of the computation.
+In such cases,
+component relations can be indexed over a set of \emph{worlds},
+which capture the relevant contextual information.
+Formally, a \emph{Kripke relation} over a set of worlds $W$
+is a ternary relation $R \subseteq W \times A \times B$.
+We will write $R \in \mathcal{R}_W(A, B)$,
+and use the notation
 $
-  A@R := \langle \mathbf{1}, \: {=} \times R, \: {=} \times R \rangle
-$.
-\end{definition}
-
-The simulation convention $A@R$
-can be used to relate transition systems which use
-different types of explicit state.
-The \emph{abstraction relation} $R$
-specifies the correspondence between the two.
-
-\begin{example}[Correctness of \kw{bq.c}] \label{ex:bqcorrect}
-Carrying on with our running example,
-using the abstraction relation $R \subseteq S_\kw{bq} \times S_\kw{rb}$
-given in \citet{rbgs-cal}:
-\begin{align*}
-  \vec{q} \mathrel{R} (f, c_1, c_2) \:\Leftrightarrow\: {}
-    & (c_1 \le c_2 < N \:\wedge\: \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {} \\
-    & (c_2 \le c_1 < N \:\wedge\: \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
-\end{align*}
-we can formulate the correctness criterion:
-\[
-  L_\kw{bq}@\kw{mem}
-  \:\le_{\kw{id} \twoheadrightarrow \mathcal{C}@({=}_\kw{mem} \times R)}\:
-  \Clight(\kw{bq.c})@S_\kw{rb} \odot
-  L_\kw{rb}@\kw{mem}
-  \,.
-\]
-\end{example}
-
-This approach also works in more complex situations.
-For example,
-if part of a layer's abstract state is
-stored in the memory by its implementation,
-or if the implementation uses additional memory blocks
-for its own purposes,
-the abstraction relation ${=}_\kw{mem} \times R$
-can be transformed to reflect those details.
-This makes it possible for CompCertO
-to support certified abstraction layers.
-
-However,
-in the framework outlined so far,
-the user is expected to manage state explicitly.
-Ideally,
-once a layer has been implemented,
-these details could be hidden so that
-high-level composition and reasoning
-in which they play no role
-can be carried out without any unnecessary
-encumbrance.
-The next section
-extends our framework
-with state encapsulation primitives
-to make this possible.
-
-%In our treatment of certified abstraction layers (\S\ref{sec:cal}),
-%we will use this construction as well
-%to lift a memory-free layer interface $\Sigma : \mathbf{1} \rightarrow \mathcal{C}$
-%to $\Sigma@\kw{mem} : 1 \rightarrow \mathcal{C}@\kw{mem}$,
-%making it possible to interface it with client code.
-
-%}}}
-
-%}}}
-
-\section{Encapsulated State} \label{sec:encap} %{{{
-
-% Preamble {{{
-
-In this section,
-we explain how a richer model can be constructed
-to allow encapsulated state
-to be \emph{persistent} across
-successive activations of a component.
-Such persistent state
-is communicated from one activation to the next
-in the same way global state would be,
-but is marked as local to a given component
-to ensure that the environment cannot interfere
-with it between successive activations.
-
-%}}}
-
-\subsection{Stateful Components} %{{{
-
-Consider two transition systems $L_1$ and $L_2$
-which interact as follows:
-\[
-  \begin{tikzcd}[row sep=small, column sep=large]
-    & B \ar[r, twoheadrightarrow, "L_1"] & C \\
-    A \ar[r, twoheadrightarrow, "L_2"] &
-    B@K \ar[r, twoheadrightarrow, "L_1@K"] &
-    C@K
-  \end{tikzcd}
-\]
-The component $L_2$ expects
-incoming questions and answers in $B$
-to carry a persistent state $k \in K$.
-With each question in $B$,
-it may use this state to adjust its behavior.
-With each answer,
-it can communicate back an updated state to the caller.
-By contrast,
-$L_1@K$ is by construction insensitive to $k$,
-which cannot influence the behavior of $L_1$
-and is passed unchanged
-between $L_2$ and the environment.
-
-In other words,
-from the point of view of $L_1$,
-the state $k \in K$ is not directly observable.
-If we require that any further components
-added to the system
-behave in the same way with respect to $K$,
-in effect $k$ will become encapsulated state of $L_2$.
-Based on this insight,
-we define a stateful component as follows.
-
-\begin{definition} \label{def:slts}
-A stateful component
-$\Sigma = (\intl{k} \in K \mid L) : A \rightarrow B$.
-consists of:
-\begin{itemize}
-  \item a set of states $K$;
-  \item an initial state $\intl{k} \in K$;
-  \item a transition system $L : A \twoheadrightarrow B@K$.
-\end{itemize}
-\end{definition}
-
-From $\Sigma$'s point of view,
-the environment behaves in the following way.
-The first time $\Sigma$ is activated by a question $q \in B^\que$,
-the state $\intl{k}$ is adjoined to $q$
-and the transition system $L$ is initialized using the question $q@\intl{k}$.
-When $L$ terminates with an answer $r@k' \in (B@K)^\ans$,
-the private state component $k'$
-is set aside until
-the next activation of $\Sigma$,
-at which point it is fed back to $L$ and so on.
-
-A CompCertO LTS $L : A \twoheadrightarrow B$
-can be lifted to the persistent version
-by using a unit state:
-\[
-  \begin{prooftree}
-    \hypo{L : A \twoheadrightarrow B}
-    \infer1{\&L := (\mathbbm{1} \mid L) : A \rightarrow B}
-  \end{prooftree}
-\]
-State encapsulation is managed using an operation
-\[
-  \begin{prooftree}
-    \hypo{\Sigma = (Q \mid L) : A \rightarrow B@K}
-    \infer1{\mathsf{fbk}_K(\Sigma) := (Q \times K \mid L) : A \rightarrow B}
-  \end{prooftree}
-\]
-which adds a field of type $K$ to the encapsulated state within $\Sigma$.
-
-Once private state has been encapsulated,
-in principle it can only be observed by the environment
-through the way the transition system responds
-to successive queries.
-In particular,
-constructions on stateful components
-should preserve the following notion of equivalence.
-
-\begin{definition}[Simple Simulation] \label{def:ssim}
-We will say that $\Sigma_1 : A \rightarrow B$
-is refined by $\Sigma_2 : A \rightarrow B$
-and write $\Sigma_1 \preceq \Sigma_2$
-when there exists a relation $R \subseteq K_1 \times K_2$
-such that:
-\begin{itemize}
-  \item the initial states $\intl{k}_1, \intl{k}_2$ are related by $R$;
-  \item the transition systems satisfy
-    $L_1 \le_{\kw{id}_A \twoheadrightarrow B@R} L_2$.
-\end{itemize}
-We write $\Sigma_1 \equiv \Sigma_2$ when
-$\Sigma_1 \preceq \Sigma_2$ and
-$\Sigma_2 \preceq \Sigma_1$.
-\end{definition}
-
-%}}}
-
-\subsection{Composition} %{{{
-
-The composite $\Sigma_1 \circ \Sigma_2$
-uses states of type $K_1 \times K_2$.
-Each side of the pair is updated
-when the corresponding component is active.
-Incoming questions in $C$ are routed to $L_1 : B \twoheadrightarrow C@K_1$,
-which we lift to pass through an additional state component of type $K_2$.
-Outgoing questions of $L_1$ in $B$ can then be routed to $L_2$,
-as depicted in the following diagram:
-\[
-  \begin{tikzpicture}[yscale=0.5]
-    \draw (0,2) node[left] {$K_2$} -- (2,2) .. controls +(0.5,0) and +(-0.5,0) .. (3,1);
-    \draw (0,1) node[left] {$K_1$} -- (1,1);
-    \draw (0,0) node[left] {$C$} -- (1,0);
-    \draw (2,0) -- node[below] {$B$} (3,0);
-    \draw (4,0) -- (5,0) node[right] {$A$};
-    \draw (1,1.5) rectangle node {$L_1$} (2,-0.5);
-    \draw (3,1.5) rectangle node {$L_2$} (4,-0.5);
-  \end{tikzpicture}
-\]
-Formally,
-composition is defined as follows.
-
-\begin{definition}[Composition] \label{def:slcomp}
-Given two stateful components
-$\Sigma_1 = (K_1 \mid L_1) : B \rightarrow C$ and
-$\Sigma_2 = (K_2 \mid L_2) : A \rightarrow B$,
-we define their composition
-$\Sigma_1 \circ \Sigma_2 : A \rightarrow C$
-in the following way:
-\[
-  \Sigma_1 \circ \Sigma_2 :=
-    ( K_1 \times K_2 \mid L_1@K_2 \odot L_2 )
-\]
-Note that this formulation
-implicitly uses the isomorphism
-\[
-  L_1@K_2 : B@K_2 \twoheadrightarrow (C@K_1)@K_2 \cong C@(K_1 \times K_2)
-  \,.
-\]
-\end{definition}
-
-
-
-
-\begin{lemma}
-  This is compatible with:
-  \begin{itemize}
-    \item simple simulations;
-    \item lifting hence associativity is preserved.
-  \end{itemize}
-
-\end{lemma}
-
-%}}}
-
-\subsection{Combining Hidden and Explicit State} %{{{
-
-It is possible for a stateful component
-to hide only part of the explicit state
-used by the underlying transition system.
-For example,
-in a transition system
-$L : A \rightarrow B@(K \times U) \cong B@U@K$,
-we may choose to hide only $K$,
-to obtain a stateful component
-$\Sigma = (K \mid L) : A \rightarrow B@U$
-which still exchanges explicit state of type $U$
-with the environment.
-This makes it possible to construct
-complex stateful components incrementally
-from simpler, stateless parts,
-by first promoting them using $\&$,
-then hiding state in a step-by-step fashion
-using $\kw{fbk}$.
-
+  w \Vdash a \mathrel{R} b
+$
+to mean that $(w, a, b) \in R$.
 In addition,
-stateful components can be lifted
-to pass through explicit state.
-
-\begin{definition} \label{def:slift}
-The stateful component $\Sigma = (K \mid L) : A \rightarrow B$
-can be lifted to \[ \Sigma@U := (K \mid L@U) : A@U \rightarrow B@U \,. \]
-Note that this relies on the isomorphism
 \[
-  L@U : A@U \twoheadrightarrow (B@K)@U \cong (B@U)@K
+  {} \Vdash a \mathrel{R} b
+  \quad :\Leftrightarrow \quad
+  \forall w\in W \mathbin. w \Vdash a \mathrel{R} b
+\]
+
+It is often useful to let the world evolve
+by endowing $W$ with an \emph{accessibility} relation
+${\leadsto} \subseteq W \times W$.
+World transitions are then captured by the modal relator $\Diamond$,
+which associates to a Kripke relation $R \in \mathcal{R}_W(A, B)$
+the Kripke relation $\Diamond R$ of the same type, defined by:
+\[
+  w \Vdash a \ifr{\Diamond R} b
+  \quad:\Leftrightarrow\quad
+  \exists w' \mathbin. w \leadsto w' \wedge w' \Vdash a \mathrel{R} b
+\]
+For example,
+a Kripke simulation between $\alpha : A \rightarrow \mathcal{P}(A)$
+and $\beta : B \rightarrow \mathcal{P}(B)$
+operating in the context of a Kripke frame $\langle W, {\leadsto} \rangle$
+and a Kripke simulation relation $R \in \mathcal{R}_W(A, B)$
+can be formulated in the following way.
+The relators $\rightarrow$ and $\mathcal{P}^\le$
+can be promoted to Kripke relators
+by pointwise extension over the set of worlds.
+The complex Kripke simulation property:
+{\small
+\[
+  \forall w \in W \mathbin.
+  \forall a \in A \mathbin.
+  \forall b \in B \mathbin.
+  w \Vdash a \mathrel{R} b \Rightarrow
+  \forall a' \in \alpha(a) \mathbin.
+  \exists b' \in \beta(b) \mathbin.
+  \exists w' \in W \mathbin.
+  w \leadsto w' \wedge w' \Vdash a' \mathrel{R} b'
+\]
+}
+can be stated simply as:
+\[
+  \Vdash \alpha \ifr{R \rightarrow \mathcal{P}^\le(\Diamond R)} \beta
   \,.
 \]
-\end{definition}
-
-The following properties
-relate the promotion operator $\&$,
-the composition operators $\odot$ and $\circ$,
-and the hiding operator $\kw{fbk}$.
-
-\begin{lemma}
-  For $L_1 : B \twoheadrightarrow C@K_1$ and
-  $L_2 : A \twoheadrightarrow B@K_2$,
-  the following property holds:
-  \[
-    \&(L_1@K_2) \circ \&L_2 \equiv \&(L_1@K_2 \odot L_2)
-    \,.
-  \]
-  In addition, for $\Sigma_1 : B \rightarrow C@U_1$
-  and $\Sigma_2 : A \rightarrow B@U_2$,
-  the following property holds:
-  \[
-    \kw{fbk}_{U_1}(\Sigma_1) \circ \kw{fbk}_{U_2}(\Sigma_2) \equiv
-    \kw{fbk}_{U_1 \times U_2}(\Sigma_1@U_2 \circ \Sigma_2)
-    \,.
-  \]
-\end{lemma}
 
 %}}}
 
-\subsection{Stateful Simulations} %{{{
+\subsection{Simulation Conventions} %{{{
 
-Definition XXX introduced a simple notion of refinement
-between stateful components,
-but assumed that the interactions of both components
-with their environment were identical.
-By contrast, a key feature of CompCertO
-is the notion of \emph{simulation convention},
-which parameterizes simulations by
-specifying how the interactions of
-the source-level and target-level transition system
-are related.
-
-\subsubsection{Stateful Simulation Conventions} %{{{
-
-Transition systems in CompCertO are stateless,
-and as a consequence,
-successive activations of given
+Simulation conventions
+characterize the relationship between
 source- and target-level
-transition systems can be related in the same way.
-By contrast,
-our components may maintain encapsulated states
-and behave differently upon successive activations.
-As a consequence,
-the relationship between source- and target-level interactions
-may depend on the history of the computation.
-This means we must generalize simulation conventions
-so that they may maintain their own state as well.
+questions and answers.
+In CompCertO,
+every pair of calls is related in isolation,
+independently of any past or future calls.
+Our notion of simulation convention
+is more general,
+and maintains state across calls.
+%to operate on \emph{sequences} of calls.
+
+\begin{remark}[Motivating stateful simulation conventions] \label{rem:base:ssc} %{{{
+This will be useful in \S\ref{sec:encap}
+when we introduce encapsulation.
+Calls to a specification with encapsulated state
+may produce traces like:
+\begin{equation} \label{eqn:ssc:encap}
+  \kw{inc}() \cdot 0 \cdot \kw{inc}() \cdot 1 \,\cdots {}
+\end{equation}
+However, a more concrete version (and eventually, the implementation)
+may use explicit state:
+\begin{equation} \label{eqn:ssc:explicit}
+  \kw{inc}()@[\kw{c} \mapsto 0] \:\cdot\:
+  0@[\kw{c} \mapsto 1] \:\cdot\:
+  \kw{inc}()@[\kw{c} \mapsto 1] \:\cdot\:
+  1@[\kw{c} \mapsto 2] \:\cdots\: {}
+\end{equation}
+The correspondence between
+the questions and answers in (\ref{eqn:ssc:encap})
+and those in (\ref{eqn:ssc:explicit})
+cannot be formulated on a call-by-call basis
+but must take into account the history of the computation.
+\end{remark}
+%}}}
+
+State is maintained using Kripke worlds.
+In CompCertO's version,
+Kripke worlds are only used to ensure that
+questions and answers for a given call
+are related consistently.
+We extend the definition to incorporate
+caller and callee world transitions
+as well as an initial world.
 
 \begin{definition} \label{def:sconv} %{{{
-A \emph{stateful simulation convention}
+A \emph{simulation convention}
 $\mathbf{R} = \langle W, {\leadsto}, {\mapsto}, R^\que, R^\ans \rangle$
-between the language interfaces $A^\sharp$ and $A^\flat$
+between %the language interfaces
+$A^\sharp$ and $A^\flat$
 is specified by:
 \begin{itemize}
   \item a pointed set of worlds $W$,
     which store the current state of the simulation convention;
-  \item two accessibility relations
-    ${\leadsto}, {\mapsto} \subseteq W \times W$,
-    corresponding to \emph{internal} and \emph{external} transitions;
-  \item a Kripke relation $R^\que \in \mathcal{R}_W(A_\sharp^\que, A_\flat^\que)$
+  \item a \emph{caller} accessibility relation ${\mapsto} \subseteq W \times W$;
+  \item a \emph{callee} accessibility relation ${\leadsto} \subseteq W \times W$;
+  \item a Kripke relation $R^\que \in \mathcal{R}_W\big(A_\sharp^\que,\, A_\flat^\que\big)$
     between the language interfaces' questions, and
-  \item a Kripke relation $R^\ans \in \mathcal{R}_W(A_\sharp^\ans, B_\flat^\ans)$
+  \item a Kripke relation $R^\ans \in \mathcal{R}_W\big(A_\sharp^\ans,\, B_\flat^\ans\big)$
     between their answers.
 \end{itemize}
 The accessibility relations are required to be reflexive and transitive.
@@ -3306,39 +2612,54 @@ $\kw{id}_A := \langle
 \end{definition}
 %}}}
 
-The initial world $\intl{w}$ gives the simulation convention's initial state.
-While the environment is in control,
-the world may transition according to the relation $\mapsto$.
-When control is transferred to the system,
-the corresponding questions must be related by $w \Vdash R^\que$.
-World transitions may then occur according to $\leadsto$.
-Hence, when the system returns control to the environment,
-the corresponding answers
-will be related by $w' \Vdash R^\ans$,
-where $w'$ is a successor world of $w$ such that $w \leadsto w'$.
-The questions for any subsequent activation
-must in turn be related at a world $w''$ such that $w' \mapsto w''$,
-and so on and so forth indefinitely:
-\begin{align*}
-  \intl{w} \mapsto w_1 &\Vdash q^\sharp_1 \mathrel{R^\que} q^\flat_1 \\
-  w_1 \leadsto w_1' &\Vdash r^\sharp_1 \mathrel{R^\ans} r^\flat_1 \\
-  w_1' \mapsto w_2 &\Vdash q^\sharp_2 \mathrel{R^\que} q^\flat_2 \\
-  w_2 \leadsto w_2' &\Vdash r^\sharp_2 \mathrel{R^\ans} r^\flat_2 \\[-1ex]
-  &\:\:\vdots
-\end{align*}
+\begin{example} \label{ex:base:ssc} %{{{
+Referring to Remark~\ref{rem:base:ssc},
+we can formulate a simulation convention
+whose worlds capture the counter's value.
+The callee may update it
+but the caller must leave it unchanged.
+\[
+  \mathbf{R} := \langle \mathbb{N}, \top, {=}, R^\que, R^\ans \rangle
+  \qquad
+  \begin{prooftree}
+    \infer0{n \Vdash \kw{inc}() \mathrel{R^\que} \kw{inc}()@[\kw{c} \mapsto n]}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \infer0{n + 1 \Vdash n \mathrel{R^\ans} n@[\kw{c} \mapsto n + 1]}
+  \end{prooftree}
+\]
+The simulation convention $\mathbf{R}$ defined above
+relates the sequences (\ref{eqn:ssc:encap}) and (\ref{eqn:ssc:explicit}).
+\end{example}
+%}}}
+
+%The initial world $\intl{w}$ gives the simulation convention's initial state.
+%While the environment is in control,
+%the world may transition according to the relation $\mapsto$.
+%When control is transferred to the system,
+%the corresponding questions must be related by $w \Vdash R^\que$.
+%World transitions may then occur according to $\leadsto$.
+%Hence, when the system returns control to the environment,
+%the corresponding answers
+%will be related by $w' \Vdash R^\ans$,
+%where $w'$ is a successor world of $w$ such that $w \leadsto w'$.
+%The questions for any subsequent activation
+%must in turn be related at a world $w''$ such that $w' \mapsto w''$,
+%and so on and so forth indefinitely:
+%\begin{align*}
+%  \intl{w} \mapsto w_1 &\Vdash q^\sharp_1 \mathrel{R^\que} q^\flat_1 \\
+%  w_1 \leadsto w_1' &\Vdash r^\sharp_1 \mathrel{R^\ans} r^\flat_1 \\
+%  w_1' \mapsto w_2 &\Vdash q^\sharp_2 \mathrel{R^\que} q^\flat_2 \\
+%  w_2 \leadsto w_2' &\Vdash r^\sharp_2 \mathrel{R^\ans} r^\flat_2 \\[-1ex]
+%  &\:\:\vdots
+%\end{align*}
 
 %}}}
 
-\subsubsection{Stateful Simulations of Transition Systems} %{{{
+\subsection{Simulations} \label{sec:base:sim} %{{{
 
-Before we define simulations between stateful components,
-we first update CompCertO's notion of simulation of transition systems
-to take into account stateful conventions.
-%In particular,
-%using stateful simulation conventions,
-%the sequence of external calls performed by a transition system
-%will become important.
-
+We are now ready to define our generalized notion of simulation.
 Consider a simulation of type:
 \[
 \begin{tikzcd}
@@ -3348,9 +2669,9 @@ Consider a simulation of type:
 \end{tikzcd}
 \]
 The simulation simultaneously
-plays the role of the system with respect to
-the simulation convention $\mathbf{R}_B$ and
-the role of the environment with respect to $\mathbf{R}_A$.
+plays the role of the caller with respect to
+the simulation convention $\mathbf{R}_A$ and
+the role of the callee with respect to $\mathbf{R}_B$.
 Hence,
 it will operate in the context of a Kripke frame
 constructed from both $W_A$ and $W_B$.
@@ -3701,6 +3022,698 @@ $ \&(\mathbb{R}_1 \cdot \mathbb{R}_2) \equiv
 \end{theorem}
 
 %}}}
+
+\begin{remark}[to incorporate or cut]
+In particular,
+in the absence of demonic nondeterminism,
+CompCert's notion of \emph{forward simulation} is appropriate:
+given two transition systems $L_1$ and $L_2$,
+it suffices to exhibit a relation between their possible states
+such that:
+\begin{itemize}
+  \item initial state of $L_1$ have related initial states in $L_2$;
+  \item state transitions in $L_1$ have corresponding sequences of transitions
+    from related states in $L_2$;
+  \item related state which produce a final outcome in $L_1$
+    have a corresponding final outcome in $L_2$.
+\end{itemize}
+To take into account event traces,
+the simulation works under the assumption that
+$L_1$ and $L_2$ are fed the same inputs by the environement,
+and requires that they produce identical outputs.
+The existence of a simulation relation satisfying these properties
+shows that the behavior of $L_1$ is refined by that of $L_2$;
+we say that $L_1$ is simulated by $L_2$ and write $L_1 \le L_2$.
+\end{remark}
+
+
+
+%}}}
+
+\subsection{Double Category} \label{sec:base:double} %{{{
+
+
+Like the symmetric composition operator $\oplus$ used in CompCertO,
+the layered composition operator defined above
+is compatible with simulations.
+
+\begin{theorem}[Layered composition of simulations] \label{thm:lcompsim}
+Simulations compose as follows:
+\[
+  \begin{prooftree}
+    \hypo{L_1^\sharp
+          \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
+          L_1^\flat}
+    \hypo{L_2^\sharp
+          \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+          L_2^\flat}
+    \infer2{L_1^\sharp \odot L_2^\sharp
+          \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
+          L_1^\flat \odot L_2^\flat}
+  \end{prooftree}
+  \qquad \qquad
+  \begin{tikzcd}
+    A^\sharp \ar[r, twoheadrightarrow, "L_2^\sharp"]
+             \ar[d, Leftrightarrow, "\mathbb{R}_A"'] &
+    B^\sharp \ar[r, twoheadrightarrow, "L_1^\sharp"]
+             \ar[d, Leftrightarrow, "\mathbb{R}_B"] &
+    C^\sharp \ar[d, Leftrightarrow, "\mathbb{R}_C"]
+    \\
+    A^\flat \ar[r, twoheadrightarrow, "L_2^\flat"'] &
+    B^\flat \ar[r, twoheadrightarrow, "L_1^\flat"'] &
+    C^\flat
+  \end{tikzcd}
+\]
+\end{theorem}
+
+
+\begin{theorem}[Vertical Composition] \label{thm:vcomp}
+\end{theorem}
+
+
+
+Importantly,
+the composition operator $\odot$
+\emph{under-approximates}
+the semantic linking operator $\oplus$.
+Since CompCert's syntactic linking of assembly programs
+is known to implement $\oplus$,
+this shows that linking is also a correct implementation of
+the layered composition $\odot$.
+
+\begin{theorem}[Linking implements layered composition]
+For two assembly programs $M_1, M_2$,
+%For $L_1, L_2 : A \twoheadrightarrow A$,
+\[
+  \kw{Asm}(M_1) \odot \kw{Asm}(M_2)
+  \le
+  \kw{Asm}(M_1) \oplus \kw{Asm}(M_2)
+ \,.
+\]
+\end{theorem}
+
+This means that when a system is compositionally
+specified and verified at the Clight level,
+and an overall correctness property is derived
+in terms of $\odot$,
+we can compose it with the compiler's correctness theorem
+to obtain guarantees about the linked assembly program.
+
+%}}}
+
+%}}}
+
+\section{Explicit State} %{{{
+
+We have mentioned in \S\ref{sec:base:compcerto}
+CompCertO's approach to \emph{state}:
+the internal states of transition systems
+cannot be observed across components and
+persist only for the duration of a function activation;
+therefore,
+every question and answer must be annotated with
+the current state of the global memory
+at the time of a function's invocation or return,
+as shown in the language interface $\mathcal{C}@\kw{mem}$
+discussed in Example~\ref{ex:langint}.
+
+In this section,
+we show how this overall approach to persistent state
+can be generalized,
+and we introduce constructions
+which can be used to manage
+this kind of global state.
+
+\subsection{Adjoining Explicit State} \label{sec:base:state} %{{{
+
+%In our approach to encapsulated state,
+%we need to systematically
+%annotate every question and answer
+%in an existing language interface
+%with a ``latest state'' field.
+%The following constructions help us manage
+%this kind of explicit state.
+
+In Example~\ref{ex:langint} we gave a direct definition
+for the language interface $\mathcal{C}@\kw{mem}$.
+In fact,
+this language interface can be derived from $\mathcal{C}$
+by using the following operation.
+
+\begin{definition}[Adjoining state]
+Given a language interface $A = \langle A^\que, A^\ans \rangle$
+and a set $K$,
+the language interface $A@K$ is defined as:
+\[
+  A@K := \langle A^\que \times K ,\: A^\ans \times K \rangle
+\]
+We write the questions and answers of this language interface as
+$q@k \in A^\que \times K$ and
+$r@k \in A^\ans \times K$.
+\end{definition}
+
+Note that in our examples,
+we have decomposed the CompCertO language interfaces
+into $\mathcal{C}@\kw{mem}$, $\mathcal{A}@\kw{mem}$, etc.
+The memory state is dropped from the language interface $\mathcal{C}$,
+whose questions are now just $f[\mathit{sg}](\vec{v})$,
+and reintroduced with $@\kw{mem}$ to obtain
+the full question $f[\mathit{sg}](\vec{v})@m$.
+This will be used in the context of CAL
+where layer interfaces can be defined in a memory-free manner
+($\mathcal{C}$ without $@\kw{mem}$),
+their behavior being entirely determined by their encapsulated state.
+
+\begin{example}[Layer specifications] \label{ex:rbspec} %{{{
+We can formulate a specification for
+the program component $\kw{rb.c}$ as follows.
+The state of the ring buffer
+is expressed as a tuple
+$(f, c_1, c_2) \in S_\kw{rb} := \kw{val}^N \times \mathbb{N} \times \mathbb{N}$.
+Operations do not otherwise access the memory,
+so the specification will be of type
+\[
+  L_\kw{rb} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{rb}
+  \,.
+\]
+To define it, we construct a simple transition system such that
+all executions take the shape
+\[
+  q@(f, c_1, c_2) \:\mathrel{I}\: (v', f', c_1', c_2')
+                  \:\mathrel{F}\: v'@(f', c_1', c_2')
+  \,.
+\]
+The predicates $X$, $Y$ and $\rightarrow$ are empty.
+As suggested above, $F$ is in essence the identity relation.
+This leaves us to define $I$ which specifies the component's
+actual behavior:
+\[ \begin{array}{c@{\qquad}c}
+ {\begin{prooftree}
+    \hypo{i < N}
+    \infer1{
+      \kw{set}(i, v)@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (\kw{undef}, f[i := v], c_1, c_2)}
+  \end{prooftree}}
+  &
+ {\begin{prooftree}
+    \hypo{c_1' = (c_1 + 1) \mathbin{\mathrm{mod}} N}
+    \infer1{
+      \kw{inc1}@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (c_1, f, c_1', c_2)}
+  \end{prooftree}}
+  \vspace{1em}
+  \\
+ {\begin{prooftree}
+    \hypo{i < N}
+    \infer1{
+      \kw{get}(i)@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (f_i, f, c_1, c_2)
+    }
+  \end{prooftree}}
+  &
+ {\begin{prooftree}
+    \hypo{c_2' = (c_2 + 1) \mathbin{\mathrm{mod}} N}
+    \infer1{
+      \kw{inc1}@(f, c_1, c_2)
+      \mathrel{I_\kw{rb}}
+      (c_2, f, c_1, c_2')}
+  \end{prooftree}}
+\end{array} \]
+We can then define
+$L_\kw{rb} := \langle
+  S_\kw{rb},\:
+  \varnothing,\:
+  I_\kw{rb},\:
+  \varnothing,\:
+  \varnothing,\:
+  {=}
+ \rangle$.
+
+A similar approach can be use to define
+$L_\kw{bq} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{bq}$,
+where the states in $S_\kw{bq} := \kw{val}^*$
+are simply lists enumerating the contents of the queue.
+Here the operations will be specified as follows:
+\[
+  \begin{prooftree}
+    \hypo{|\vec{q}| < N}
+    \infer1{\kw{enq}(v)@\vec{q} \:\mathrel{I_\kw{bq}}\: (\kw{undef}, \vec{q}v)}
+  \end{prooftree}
+  \qquad\qquad
+  \begin{prooftree}
+    \hypo{\vec{q} = v\vec{p}}
+    \infer1{\kw{deq}(\epsilon)@\vec{q} \:\mathrel{I_\kw{bq}}\: (v, \vec{p})}
+  \end{prooftree}
+\]
+Again we can define $L_\kw{bq} := \langle
+  S_\kw{bq},\:
+  \varnothing,\:
+  I_\kw{bq},\:
+  \varnothing,\:
+  \varnothing,\:
+  {=}
+\rangle$.
+\end{example}
+%}}}
+
+Often,
+we will want to add a state annotation
+to the interface of an existing component.
+When lifting $L : A \twoheadrightarrow B$
+to operate as $L@K : A@K \twoheadrightarrow B@K$,
+the resulting transition system
+remains insensitive to the state annotation $K$,
+but keeps track of its value
+across all of its interactions.
+
+\begin{definition}[Lifting] \label{def:lift} %{{{
+Given %the transition system
+$L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$
+we define $L@K : A@K \twoheadrightarrow B@K$ as:
+\begin{gather*}
+  L@K := \langle S \times K, {\rightarrow_K}, I_K, X_K, Y_K, F_K \rangle \\
+ {\begin{prooftree}
+    \hypo{q \mathrel{I} s}
+    \infer1{q@k \mathrel{I_K} s@k}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{s \rightarrow s'}
+    \infer1{s@k \rightarrow_K s'@k}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{s \mathrel{X} m}
+    \infer1{s@k \mathrel{X_K} m@k}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{n \mathrel{Y}^s s'}
+    \infer1{n@k' \mathrel{Y^{s@k}_K} s'@k'}
+  \end{prooftree}}
+  \qquad
+ {\begin{prooftree}
+    \hypo{s \mathrel{F} r}
+    \infer1{s@k \mathrel{F_K} r@k}
+  \end{prooftree}}
+\end{gather*}
+\end{definition}
+%}}}
+
+This construction is used in particular when components are linked,
+to pass through the internal state of other components.
+
+\begin{example}[Interfacing $L_\kw{rb}$ with client code] \label{ex:context}
+Building on Example~\ref{ex:rbspec},
+consider the problem of interfacing
+the client code in $\kw{bq.c}$ with the underlay interface $L_\kw{rb}$.
+The types
+\[
+  L_\kw{rb} : \mathbf{1} \twoheadrightarrow \mathcal{C}@S_\kw{rb}
+  \qquad
+  \text{and}
+  \qquad
+  \Clight(\kw{bq.c}) : \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+\]
+are not directly compatible,
+given that $L_\kw{rb}$ manipulates a state of type $S_\kw{rb}$
+and $\kw{rb.c}$ expects a memory state of type $\kw{mem}$.
+The solution is to lift each one to ``pass through''
+the state of the other:
+\[
+  \begin{tikzcd}[column sep=huge]
+    \mathbf{1}@\kw{mem}
+    \ar[r, "L_\kw{rb}@\kw{mem}"] &
+    \mathcal{C}@S_\kw{rb}@\kw{mem} \cong
+    \mathcal{C}@\kw{mem}@S_\kw{rb}
+    \ar[r, "\Clight(\kw{bq.c})@S_\kw{rb}"] &
+    \mathcal{C}@\kw{mem}@S_\kw{rb}
+  \end{tikzcd}
+\]
+Implicitly taking into account the isomorphisms
+\[
+  \mathbf{1} \cong \mathbf{1}@\kw{mem}
+  \qquad
+  \text{and}
+  \qquad
+  \mathcal{C}@S_\kw{rb}@\kw{mem} \cong
+  \mathcal{C}@\kw{mem}@S_\kw{rb} \cong
+  \mathcal{C}@(S_\kw{rb} \times \kw{mem})
+  \,,
+\]
+they can then be composed into
+\begin{gather*}
+  \Clight(\kw{bq.c})@S_\kw{rb} \odot
+  L_\kw{rb}@\kw{mem} :
+  \mathbf{1} \twoheadrightarrow \mathcal{C}@(S_\kw{rb} \times \kw{mem})
+  \,.
+\end{gather*}
+
+To establish that this combination implements the overlay interface $L_\kw{bq}$,
+we can lift the latter to:
+\[
+  L_\kw{bq}@\kw{mem} : \mathbf{1} \twoheadrightarrow
+    \mathcal{C}@(S_\kw{bq} \times \kw{mem})
+  \,.
+\]
+We will then need to define a simulation convention
+explaining the relationship between
+the states of type $S_\kw{bq}$ used by the specification and
+the states of type $S_\kw{rb}$ used by the implementation.
+
+%}}}
+
+\subsection{Certified Abstraction Layers} \label{sec:base:abrel} %{{{
+
+In Example~\ref{ex:context},
+because of the difference between
+the abstract state components $S_\kw{rb}$ and $S_\kw{bq}$,
+they cannot be compared directly.
+We must first explain the correspondence between
+the two types of abstract states
+by formulating a proper simulation convention.
+This can be done as follows.
+\end{example}
+
+\begin{definition}
+For a language interface $A$ and a relation $R \subseteq K_1 \times K_2$,
+we define the simulation convention $A@R : A@K_1 \Leftrightarrow A@K_2$ as
+$
+  A@R := \langle \mathbf{1}, \: {=} \times R, \: {=} \times R \rangle
+$.
+\end{definition}
+
+The simulation convention $A@R$
+can be used to relate transition systems which use
+different types of explicit state.
+The \emph{abstraction relation} $R$
+specifies the correspondence between the two.
+
+\begin{example}[Correctness of \kw{bq.c}] \label{ex:bqcorrect}
+Carrying on with our running example,
+using the abstraction relation $R \subseteq S_\kw{bq} \times S_\kw{rb}$
+given in \citet{rbgs-cal}:
+\begin{align*}
+  \vec{q} \mathrel{R} (f, c_1, c_2) \:\Leftrightarrow\: {}
+    & (c_1 \le c_2 < N \:\wedge\: \vec{q} = f_{c_1} \cdots f_{c_2-1}) \vee {} \\
+    & (c_2 \le c_1 < N \:\wedge\: \vec{q} = f_{c_1} \cdots f_{N-1} f_0 \cdots f_{c_2 - 1})
+\end{align*}
+we can formulate the correctness criterion:
+\[
+  L_\kw{bq}@\kw{mem}
+  \:\le_{\kw{id} \twoheadrightarrow \mathcal{C}@({=}_\kw{mem} \times R)}\:
+  \Clight(\kw{bq.c})@S_\kw{rb} \odot
+  L_\kw{rb}@\kw{mem}
+  \,.
+\]
+\end{example}
+
+This approach also works in more complex situations.
+For example,
+if part of a layer's abstract state is
+stored in the memory by its implementation,
+or if the implementation uses additional memory blocks
+for its own purposes,
+the abstraction relation ${=}_\kw{mem} \times R$
+can be transformed to reflect those details.
+This makes it possible for CompCertO
+to support certified abstraction layers.
+
+However,
+in the framework outlined so far,
+the user is expected to manage state explicitly.
+Ideally,
+once a layer has been implemented,
+these details could be hidden so that
+high-level composition and reasoning
+in which they play no role
+can be carried out without any unnecessary
+encumbrance.
+The next section
+extends our framework
+with state encapsulation primitives
+to make this possible.
+
+%In our treatment of certified abstraction layers (\S\ref{sec:cal}),
+%we will use this construction as well
+%to lift a memory-free layer interface $\Sigma : \mathbf{1} \rightarrow \mathcal{C}$
+%to $\Sigma@\kw{mem} : 1 \rightarrow \mathcal{C}@\kw{mem}$,
+%making it possible to interface it with client code.
+
+%}}}
+
+%}}}
+
+\section{Encapsulated State} \label{sec:encap} %{{{
+
+% Preamble {{{
+
+In this section,
+we explain how a richer model can be constructed
+to allow encapsulated state
+to be \emph{persistent} across
+successive activations of a component.
+Such persistent state
+is communicated from one activation to the next
+in the same way global state would be,
+but is marked as local to a given component
+to ensure that the environment cannot interfere
+with it between successive activations.
+
+%}}}
+
+\subsection{Stateful Components} %{{{
+
+Consider two transition systems $L_1$ and $L_2$
+which interact as follows:
+\[
+  \begin{tikzcd}[row sep=small, column sep=large]
+    & B \ar[r, twoheadrightarrow, "L_1"] & C \\
+    A \ar[r, twoheadrightarrow, "L_2"] &
+    B@K \ar[r, twoheadrightarrow, "L_1@K"] &
+    C@K
+  \end{tikzcd}
+\]
+The component $L_2$ expects
+incoming questions and answers in $B$
+to carry a persistent state $k \in K$.
+With each question in $B$,
+it may use this state to adjust its behavior.
+With each answer,
+it can communicate back an updated state to the caller.
+By contrast,
+$L_1@K$ is by construction insensitive to $k$,
+which cannot influence the behavior of $L_1$
+and is passed unchanged
+between $L_2$ and the environment.
+
+In other words,
+from the point of view of $L_1$,
+the state $k \in K$ is not directly observable.
+If we require that any further components
+added to the system
+behave in the same way with respect to $K$,
+in effect $k$ will become encapsulated state of $L_2$.
+Based on this insight,
+we define a stateful component as follows.
+
+\begin{definition} \label{def:slts}
+A stateful component
+$\Sigma = (\intl{k} \in K \mid L) : A \rightarrow B$.
+consists of:
+\begin{itemize}
+  \item a set of states $K$;
+  \item an initial state $\intl{k} \in K$;
+  \item a transition system $L : A \twoheadrightarrow B@K$.
+\end{itemize}
+\end{definition}
+
+From $\Sigma$'s point of view,
+the environment behaves in the following way.
+The first time $\Sigma$ is activated by a question $q \in B^\que$,
+the state $\intl{k}$ is adjoined to $q$
+and the transition system $L$ is initialized using the question $q@\intl{k}$.
+When $L$ terminates with an answer $r@k' \in (B@K)^\ans$,
+the private state component $k'$
+is set aside until
+the next activation of $\Sigma$,
+at which point it is fed back to $L$ and so on.
+
+A CompCertO LTS $L : A \twoheadrightarrow B$
+can be lifted to the persistent version
+by using a unit state:
+\[
+  \begin{prooftree}
+    \hypo{L : A \twoheadrightarrow B}
+    \infer1{\&L := (\mathbbm{1} \mid L) : A \rightarrow B}
+  \end{prooftree}
+\]
+State encapsulation is managed using an operation
+\[
+  \begin{prooftree}
+    \hypo{\Sigma = (Q \mid L) : A \rightarrow B@K}
+    \infer1{\mathsf{fbk}_K(\Sigma) := (Q \times K \mid L) : A \rightarrow B}
+  \end{prooftree}
+\]
+which adds a field of type $K$ to the encapsulated state within $\Sigma$.
+
+Once private state has been encapsulated,
+in principle it can only be observed by the environment
+through the way the transition system responds
+to successive queries.
+In particular,
+constructions on stateful components
+should preserve the following notion of equivalence.
+
+\begin{definition}[Simple Simulation] \label{def:ssim}
+We will say that $\Sigma_1 : A \rightarrow B$
+is refined by $\Sigma_2 : A \rightarrow B$
+and write $\Sigma_1 \preceq \Sigma_2$
+when there exists a relation $R \subseteq K_1 \times K_2$
+such that:
+\begin{itemize}
+  \item the initial states $\intl{k}_1, \intl{k}_2$ are related by $R$;
+  \item the transition systems satisfy
+    $L_1 \le_{\kw{id}_A \twoheadrightarrow B@R} L_2$.
+\end{itemize}
+We write $\Sigma_1 \equiv \Sigma_2$ when
+$\Sigma_1 \preceq \Sigma_2$ and
+$\Sigma_2 \preceq \Sigma_1$.
+\end{definition}
+
+%}}}
+
+\subsection{Composition} %{{{
+
+The composite $\Sigma_1 \circ \Sigma_2$
+uses states of type $K_1 \times K_2$.
+Each side of the pair is updated
+when the corresponding component is active.
+Incoming questions in $C$ are routed to $L_1 : B \twoheadrightarrow C@K_1$,
+which we lift to pass through an additional state component of type $K_2$.
+Outgoing questions of $L_1$ in $B$ can then be routed to $L_2$,
+as depicted in the following diagram:
+\[
+  \begin{tikzpicture}[yscale=0.5]
+    \draw (0,2) node[left] {$K_2$} -- (2,2) .. controls +(0.5,0) and +(-0.5,0) .. (3,1);
+    \draw (0,1) node[left] {$K_1$} -- (1,1);
+    \draw (0,0) node[left] {$C$} -- (1,0);
+    \draw (2,0) -- node[below] {$B$} (3,0);
+    \draw (4,0) -- (5,0) node[right] {$A$};
+    \draw (1,1.5) rectangle node {$L_1$} (2,-0.5);
+    \draw (3,1.5) rectangle node {$L_2$} (4,-0.5);
+  \end{tikzpicture}
+\]
+Formally,
+composition is defined as follows.
+
+\begin{definition}[Composition] \label{def:slcomp}
+Given two stateful components
+$\Sigma_1 = (K_1 \mid L_1) : B \rightarrow C$ and
+$\Sigma_2 = (K_2 \mid L_2) : A \rightarrow B$,
+we define their composition
+$\Sigma_1 \circ \Sigma_2 : A \rightarrow C$
+in the following way:
+\[
+  \Sigma_1 \circ \Sigma_2 :=
+    ( K_1 \times K_2 \mid L_1@K_2 \odot L_2 )
+\]
+Note that this formulation
+implicitly uses the isomorphism
+\[
+  L_1@K_2 : B@K_2 \twoheadrightarrow (C@K_1)@K_2 \cong C@(K_1 \times K_2)
+  \,.
+\]
+\end{definition}
+
+
+
+
+\begin{lemma}
+  This is compatible with:
+  \begin{itemize}
+    \item simple simulations;
+    \item lifting hence associativity is preserved.
+  \end{itemize}
+
+\end{lemma}
+
+%}}}
+
+\subsection{Combining Hidden and Explicit State} %{{{
+
+It is possible for a stateful component
+to hide only part of the explicit state
+used by the underlying transition system.
+For example,
+in a transition system
+$L : A \rightarrow B@(K \times U) \cong B@U@K$,
+we may choose to hide only $K$,
+to obtain a stateful component
+$\Sigma = (K \mid L) : A \rightarrow B@U$
+which still exchanges explicit state of type $U$
+with the environment.
+This makes it possible to construct
+complex stateful components incrementally
+from simpler, stateless parts,
+by first promoting them using $\&$,
+then hiding state in a step-by-step fashion
+using $\kw{fbk}$.
+
+In addition,
+stateful components can be lifted
+to pass through explicit state.
+
+\begin{definition} \label{def:slift}
+The stateful component $\Sigma = (K \mid L) : A \rightarrow B$
+can be lifted to \[ \Sigma@U := (K \mid L@U) : A@U \rightarrow B@U \,. \]
+Note that this relies on the isomorphism
+\[
+  L@U : A@U \twoheadrightarrow (B@K)@U \cong (B@U)@K
+  \,.
+\]
+\end{definition}
+
+The following properties
+relate the promotion operator $\&$,
+the composition operators $\odot$ and $\circ$,
+and the hiding operator $\kw{fbk}$.
+
+\begin{lemma}
+  For $L_1 : B \twoheadrightarrow C@K_1$ and
+  $L_2 : A \twoheadrightarrow B@K_2$,
+  the following property holds:
+  \[
+    \&(L_1@K_2) \circ \&L_2 \equiv \&(L_1@K_2 \odot L_2)
+    \,.
+  \]
+  In addition, for $\Sigma_1 : B \rightarrow C@U_1$
+  and $\Sigma_2 : A \rightarrow B@U_2$,
+  the following property holds:
+  \[
+    \kw{fbk}_{U_1}(\Sigma_1) \circ \kw{fbk}_{U_2}(\Sigma_2) \equiv
+    \kw{fbk}_{U_1 \times U_2}(\Sigma_1@U_2 \circ \Sigma_2)
+    \,.
+  \]
+\end{lemma}
+
+%}}}
+
+\subsection{Stateful Simulations} %{{{
+
+Definition XXX introduced a simple notion of refinement
+between stateful components,
+but assumed that the interactions of both components
+with their environment were identical.
+By contrast, a key feature of CompCertO
+is the notion of \emph{simulation convention},
+which parameterizes simulations by
+specifying how the interactions of
+the source-level and target-level transition system
+are related.
 
 %}}}
 
@@ -4829,7 +4842,7 @@ Here we must go from:
 \end{itemize}
 }
 
-We have shown in \ref{sec:basic:abrel} that
+We have shown in \ref{sec:base:abrel} that
 abstraction relations are unwieldy,
 especially when they are promoted to simulation conventions.
 
@@ -5170,6 +5183,14 @@ for a detailed comparison between CompCertM and CompCertO.
 Finally,
 the problem of certified compilation itself
 is [emblematic ...]
+
+This richer structure
+does not find a straightforward analogue
+at the level of coherence spaces.
+This illustrates an under-appreciated but important challenge
+for denotational semantics in the context certified compilation,
+namely the important role of abstraction
+in that application domain.
 
 %}}}
 
