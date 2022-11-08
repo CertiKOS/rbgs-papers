@@ -1842,7 +1842,7 @@ $R \subseteq D^\sharp \times (\kw{mem} \times D^\flat)$
 %}}}
 
 \subsection{ClightP} %{{{
-
+\label{sec:overview:clightp}
 To further facilitate the implementation of abstract state,
 we introduce the ClightP language,
 a variant of Clight
@@ -3707,44 +3707,19 @@ separation relation such that:
 
 \section{Clight with module-local state} \label{sec:clightp} %{{{
 
-{
-\color{gray}
-[Note: this could be swapped with Section 3
-because it showcases the use of persistent state,
-but probably does not have much to gain
-from the memory separation framework.]
-
-Can we add a $\mathsf{private}$ keyword or storage class to Clight,
-formulate a semantics and show a correctness proof
-for erasure of the keyword?
-
-Main challenge: how to define the semantics of the new keyword
-in a way that's convenient.
-
-We need a good name for this language.
-For now I will use \ClightP{}.
-}
-
-To exploit the state encapsulation in actual programs,
-we present the \ClightP{} language,
-which introduces module-local state to the $\Clight$ language.
-The state is kept private via state encapsulation
-so that it will not be passed around like the usual memory state.
-By doing so, it is guaranteed that
-one module's private state will not be modified by other modules,
-and we can avoid complicated rely-guarantee conditions
-encoded as simulation conventions
-when reason about the behaviors.
-Additionally,
-the module local variables are usually translated
-to abstract state in the CAL framework.
-Thus, separating them from the other part of memory
-paves the way for data refinement with abstraction state.
-
-\subsection{Syntax}
-
+As mentioned in \ref{sec:overview:clightp},
+we introduce the \Clight{} language to support variables to be
+declared as private.
+The private variables are similar to the static global variables
+in regular C programs, which are only accessible
+within their own module.
+However, the static global variables can be referenced,
+and their addresses can be passed to other modules,
+which leads to potential leakage.
+By contrast, it is invalid to take the addresses of the private variables
+in \Clight{}.
+Other than that,
 \ClightP{} programs are identical to Clight programs,
-but allow the definition of module-local, private variables.
 For example:
 
 \begin{minted}{C}
@@ -3752,105 +3727,83 @@ private int c = 0;
 int count(void) { return c++; }
 \end{minted}
 
+The \ClightP{} language facilitates data abstraction
+and compositional verification
+in several aspects.
+First,
+introducing private variables separates out
+the fragment of the memory of our interest,
+which corresponds to abstract state,
+from the other part such as local variables and stack frames.
+With the separation, there is no need to
+worry about the irrelevant data in the memory state
+when we perform data abstraction.
+As we shall see, this separation is further
+achieved with the help of the PCM structure.
+Second, since private variables are module-local,
+they enforce separation among modules.
+In $\Clight$, the entire memory state is passed around
+when a component interacts with the environment.
+Thus, when reasoning its behaviors,
+one has to explicitly specify a protocal
+that part of the memory remains unchanged
+throughout the interaction,
+and expects the environment respects the protocol.
+This subtlety can be avoided with an appropriate extent of separation.
+
+% To exploit the state encapsulation in actual programs,
+% we present the \ClightP{} language,
+% which introduces module-local state to the $\Clight$ language.
+% The state is kept private via state encapsulation
+% so that it will not be passed around like the usual memory state.
+% By doing so, it is guaranteed that
+% one module's private state will not be modified by other modules,
+% and we can avoid complicated rely-guarantee conditions
+% encoded as simulation conventions
+% when reason about the behaviors.
+% Thus, separating them from the other part of memory
+% paves the way for data refinement with abstraction state.
+% Furthermore, [provides an interface for high level reasoning.
+% no need to deal with memory details]
+
+% \subsection{Syntax}
+
 % One question is whether such private variables
 % should be declared as globals
 % (perhaps associated with empty memory blocks)
 % or if we should have a custom \mintinline{Coq}{program} type.
 
-\subsection{Semantics} %{{{
+\subsection{Compiling to Clight} %{{{
 
-Private variables in a \ClightP{} program
-are not stored in the memory,
-but rather in a separate environment.
-This environment is similar to
-the local environments used to store temporaries,
-but instead of being used in the context of an activation,
-the private environment is used as persistent state.
-Hence for a program $p$, the \ClightP{} semantics is constructed
-first by defining a transition system of type
+The private variables are stored
+in a persistent environment.
+The simulation conventions translate
+this environment, denoted by $\rhd$,
+and attach it to the main memory.
 \[
-  L : \mathcal{C}@\mathsf{mem} \twoheadrightarrow
-      \mathcal{C}@(\mathsf{mem}\times\mathsf{penv})
-\]
-and then hiding the private environment as persistent state:
-\[
-  \ClightP{}(p) := \mathsf{fbk}_\mathsf{penv}(\&L) :
-    \mathcal{C}@\mathsf{mem} \rightarrow
-    \mathcal{C}@\mathsf{mem}
+  \begin{prooftree}
+    \hypo{pe \rhd m}
+    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
+    \infer2{\kw{m} \Vdash (\kw{m}_{src}, pe) \ifr{\kw{pin}} \kw{m}_{tgt}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
+    \infer1{\kw{m} \Vdash \kw{m}_{src} \ifr{\kw{pout}} \kw{m}_{tgt}}
+  \end{prooftree}
 \]
 
-% One subtlety in the case where private variables are globals,
-% is that the \texttt{initial\_state} predicate of $L$
-% must enforce empty permissions for private variables
-% in the incoming memory state.
 
-Unlike the temporaries,
-the module-local variables can also have type array or struct.
-Therefore, we extend the type $\kw{val}$ with composite types to $\kw{cval}$
-and define the $\kw{penv}$ as a map from identifiers to $\kw{cval}$.
-Lifting the variables from memory to a separate environment
-means that their address cannot be taken.
-So we introduce accessors $\kw{lcval}$ to simulate left values,
-which represent memory locations in $\Clight$,
-so that the module-static variables can be evaluated to left values similarly
-and updated accordingly.
-Under this approach, struct assignment is not supported
-because it is only possible to assign by value.
-However, this enforces the program not to pass the address
-of the private variables to other modules
-so that undesired behaviors can be avoided.
-
-\begin{gather*}
-  cv \in \kw{cval} \mathrel{::=} \kw{Val}(v:\kw{val})
-                     \mathrel{|} \kw{Arr}(sz:\mathbb{N},a:\mathbb{Z} \rightarrow \kw{cval})
-  \\
-  \kw{penv} \mathrel{::=} \kw{ident} \rightarrow \kw{cval}
-  \\
-  l \in \kw{lcval} \mathrel{::=} \kw{Lval}(i: \kw{ident})
-                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\mathbb{Z})
-\end{gather*}
-
-We reuse the $\Clight$ expressions,
-and add the following expressions to access the private variables.
-Similarly, we reuse the statements and small-step transitions
-and add extra cases for updating the private states.
-\begin{gather*}
-  e \mathrel{::=} \cdots \mathrel{|} \kw{Epvar}(i:\kw{ident})
-  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, x: \kw{expr})
-  \\[2ex]
-  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}\ \kw{val}\\
-  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}\ \kw{penv}
-  \\[2ex]
-  {\begin{prooftree}
-    \hypo{\kw{pe}[i] = \lfloor \kw{Val}(v) \rfloor }
-    \infer1{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \downarrow v}
-  \end{prooftree}}
-  \qquad
-  {\begin{prooftree}
-    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
-    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
-    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, i)) = \lfloor \kw{Val}(v) \rfloor }
-    \infer3{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
-  \end{prooftree}}
-  \\[2ex]
-  {\begin{prooftree}
-    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
-  \end{prooftree}}
-  \qquad
-  {\begin{prooftree}
-    \hypo{\kw{m},\kw{pe} \vdash e \Downarrow loc}
-    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
-    \infer2{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, i)}
-  \end{prooftree}}
-  \\[2ex]
-  {\begin{prooftree}
-    \hypo{\kw{m}, \kw{pe} \vdash a_1 \Downarrow loc}
-    \hypo{\kw{m}, \kw{pe} \vdash a_2 \downarrow v}
-    \hypo{\kw{pwrite}(pe, loc, v) = \lfloor pe' \rfloor }
-    \infer3{(\kw{m}, \kw{pe}, \kw{Sassign}(a_1, a_2)) \rightarrow
-      (\kw{m}, \kw{pe'}, \kw{Sskip})}
-  \end{prooftree}}
-\end{gather*}
+We then establish the correctness theorem:
+\begin{theorem}[Correctness of $\kw{ClightUnP}$]
+  For a $\ClightP$ program $M$ and and a $\Clight$ program $M'$
+  such that
+  $\kw{ClightUnP}(M) = M'$
+  the following simulation holds:
+  \[
+    \ClightP(M) \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} \Clight(M')
+  \]
+\end{theorem}
 
 %}}}
 
@@ -3875,109 +3828,8 @@ as $\ClightP(M_1) \odot \ClightP(M_2)$.
 This is because \emph{each} component
 maintains its own private environment of type $\kw{penv}$.
 
-%}}}
-
-\subsection{Compiling to Clight} %{{{
-
-A \ClightP{} program can be compiled to Clight
-by erasing the \texttt{private} annotations
-and turning privates variable into regular
-global variables.
-{
-\color{gray}
-Proving the correctness of this transformation
-should not be too difficult.
-We can just use a memory extension or injection.
-The only new part is that we must express
-the simulation convention for the underlying transition systems
-in a way that relates the source private environment
-to the target (public) memory state.
-The twist here is that
-the externally observable simulation convention
-should just enforce the empty permissions in the source memory.
-The relation between the private state and the target memory
-should be existentially quantified.
-But this means we need requirements on the initial target memory as well.
-We will have to set up our extended notion of simulation
-in a way that supports those things.
-}
-
-$\ClightP$ expressions are turned into $\Clight$ expressions
-by replacing accesses to the private variables
-with accesses to the corresponding memory locations.
-\begin{gather*}
-  \kw{transl\_expr}(\kw{Epvar}(i)) = \kw{Evar}(i)\\
-  \kw{transl\_expr}(\kw{Eaccess}(e, \iota_2(i))) = \kw{Oadd}(\kw{transl\_expr(e)}, \kw{transl\_expr(i)})
-\end{gather*}
-The semantics of $\Clight$ is typed-directed
-so the offset calculated by $\kw{Oadd}$
-depends on the type of the array elements.
-After the expressions are transated, the statements
-are immediately valid $\Clight$ statements.
-
-To establish the simulation between
-the source $\ClightP$ program and the target $\Clight$ program,
-we essentially transform the persistent environment into memory fragment,
-and merge the fragment with the regular memory state.
-We define a relation $\kw{pe} \rhd \kw{m}$
-to denote that the the persistent environment $\kw{pe}$
-can be concretized to the memory $\kw{m}$ under the global symbol table $\kw{se}$.
-\[
-  \begin{prooftree}
-    \hypo{\forall i \mapsto cv \in \kw{pe}, \exists i \mapsto b \in se,
-      (b,0) \leadsto_{\kw{m}} cv}
-    \infer1{\kw{pe} \rhd \kw{m}}
-  \end{prooftree}
-\]
-We define $(b, o) \leadsto_{\kw{m}} cv$ as follows:
-\begin{gather*}
-  {
-  \begin{prooftree}
-    \hypo{\kw{load}(\kw{m}, b, o) = \lfloor v \rfloor }
-    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Val}(v)}
-  \end{prooftree}
-  }
-  \quad
-  {
-  \begin{prooftree}
-    \hypo{\forall i, (b, o+\kw{offset}(a, i)) \leadsto_{\kw{m}} a[i]}
-    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Arr}(sz, a)}
-  \end{prooftree}
-  }
-\end{gather*}
-The auxiliary function $\kw{offset}$
-calculates the offset based on the type information
-which is elided for readability.
-
-The other part of memory should remain the same.
-We exploit the join operator defined in \ref{sec:sep}.
-Then we define the simulation convention
-\[
-  \begin{prooftree}
-    \hypo{pe \rhd m}
-    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
-    \infer2{\kw{m} \Vdash (\kw{m}_{src}, pe) \ifr{\kw{pin}} \kw{m}_{tgt}}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
-    \infer1{\kw{m} \Vdash \kw{m}_{src} \ifr{\kw{pout}} \kw{m}_{tgt}}
-  \end{prooftree}
-\]
-We then establish the correctness theorem:
-\begin{theorem}[Correctness of $\kw{ClightUnP}$]
-  For a $\ClightP$ program $M$ and and a $\Clight$ program $M'$
-  such that
-  $\kw{ClightUnP}(M) = M'$
-  the following simulation holds:
-  \[
-    \ClightP(M) \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} \Clight(M')
-  \]
-\end{theorem}
-
-%}}}
-
-\subsection{Linking and Composition} %{{{
+Note that in the composite \ClightP{} program,
+the persistent environment has become $\kw{penv} \times \kw{penv}$.
 
 The CompCertO compiler permits mutual recursion
 because it is designed to serve general purposes.
@@ -5468,7 +5320,168 @@ So the simulation invariant is the key ingredient to prove such properties.
   \]
 \end{theorem}
 
+\section{ClightP}
+\label{sec:clightp-1}
 
+
+{
+\color{gray}
+[Note: this could be swapped with Section 3
+because it showcases the use of persistent state,
+but probably does not have much to gain
+from the memory separation framework.]
+
+Can we add a $\mathsf{private}$ keyword or storage class to Clight,
+formulate a semantics and show a correctness proof
+for erasure of the keyword?
+
+Main challenge: how to define the semantics of the new keyword
+in a way that's convenient.
+
+We need a good name for this language.
+For now I will use \ClightP{}.
+}
+
+Unlike the temporaries,
+the module-local variables can also have type array or struct.
+Therefore, we extend the type $\kw{val}$ with composite types to $\kw{cval}$
+and define the $\kw{penv}$ as a map from identifiers to $\kw{cval}$.
+Lifting the variables from memory to a separate environment
+means that their address cannot be taken.
+So we introduce accessors $\kw{lcval}$ to simulate left values,
+which represent memory locations in $\Clight$,
+so that the module-static variables can be evaluated to left values similarly
+and updated accordingly.
+Under this approach, struct assignment is not supported
+because it is only possible to assign by value.
+However, this enforces the program not to pass the address
+of the private variables to other modules
+so that undesired behaviors can be avoided.
+
+\begin{gather*}
+  cv \in \kw{cval} \mathrel{::=} \kw{Val}(v:\kw{val})
+                     \mathrel{|} \kw{Arr}(sz:\mathbb{N},a:\mathbb{Z} \rightarrow \kw{cval})
+  \\
+  \kw{penv} \mathrel{::=} \kw{ident} \rightarrow \kw{cval}
+  \\
+  l \in \kw{lcval} \mathrel{::=} \kw{Lval}(i: \kw{ident})
+                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\mathbb{Z})
+\end{gather*}
+
+We reuse the $\Clight$ expressions,
+and add the following expressions to access the private variables.
+Similarly, we reuse the statements and small-step transitions
+and add extra cases for updating the private states.
+\begin{gather*}
+  e \mathrel{::=} \cdots \mathrel{|} \kw{Epvar}(i:\kw{ident})
+  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, x: \kw{expr})
+  \\[2ex]
+  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}\ \kw{val}\\
+  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}\ \kw{penv}
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{pe}[i] = \lfloor \kw{Val}(v) \rfloor }
+    \infer1{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \downarrow v}
+  \end{prooftree}}
+  \qquad
+  {\begin{prooftree}
+    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
+    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
+    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, i)) = \lfloor \kw{Val}(v) \rfloor }
+    \infer3{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
+  \end{prooftree}}
+  \\[2ex]
+  {\begin{prooftree}
+    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
+  \end{prooftree}}
+  \qquad
+  {\begin{prooftree}
+    \hypo{\kw{m},\kw{pe} \vdash e \Downarrow loc}
+    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
+    \infer2{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, i)}
+  \end{prooftree}}
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{m}, \kw{pe} \vdash a_1 \Downarrow loc}
+    \hypo{\kw{m}, \kw{pe} \vdash a_2 \downarrow v}
+    \hypo{\kw{pwrite}(pe, loc, v) = \lfloor pe' \rfloor }
+    \infer3{(\kw{m}, \kw{pe}, \kw{Sassign}(a_1, a_2)) \rightarrow
+      (\kw{m}, \kw{pe'}, \kw{Sskip})}
+  \end{prooftree}}
+\end{gather*}
+
+A \ClightP{} program can be compiled to Clight
+by erasing the \texttt{private} annotations
+and turning privates variable into regular
+global variables.
+{
+\color{gray}
+Proving the correctness of this transformation
+should not be too difficult.
+We can just use a memory extension or injection.
+The only new part is that we must express
+the simulation convention for the underlying transition systems
+in a way that relates the source private environment
+to the target (public) memory state.
+The twist here is that
+the externally observable simulation convention
+should just enforce the empty permissions in the source memory.
+The relation between the private state and the target memory
+should be existentially quantified.
+But this means we need requirements on the initial target memory as well.
+We will have to set up our extended notion of simulation
+in a way that supports those things.
+}
+
+$\ClightP$ expressions are turned into $\Clight$ expressions
+by replacing accesses to the private variables
+with accesses to the corresponding memory locations.
+\begin{gather*}
+  \kw{transl\_expr}(\kw{Epvar}(i)) = \kw{Evar}(i)\\
+  \kw{transl\_expr}(\kw{Eaccess}(e, \iota_2(i))) = \kw{Oadd}(\kw{transl\_expr(e)}, \kw{transl\_expr(i)})
+\end{gather*}
+The semantics of $\Clight$ is typed-directed
+so the offset calculated by $\kw{Oadd}$
+depends on the type of the array elements.
+After the expressions are transated, the statements
+are immediately valid $\Clight$ statements.
+
+To establish the simulation between
+the source $\ClightP$ program and the target $\Clight$ program,
+we essentially transform the persistent environment into memory fragment,
+and merge the fragment with the regular memory state.
+We define a relation $\kw{pe} \rhd \kw{m}$
+to denote that the the persistent environment $\kw{pe}$
+can be concretized to the memory $\kw{m}$ under the global symbol table $\kw{se}$.
+\[
+  \begin{prooftree}
+    \hypo{\forall i \mapsto cv \in \kw{pe}, \exists i \mapsto b \in se,
+      (b,0) \leadsto_{\kw{m}} cv}
+    \infer1{\kw{pe} \rhd \kw{m}}
+  \end{prooftree}
+\]
+We define $(b, o) \leadsto_{\kw{m}} cv$ as follows:
+\begin{gather*}
+  {
+  \begin{prooftree}
+    \hypo{\kw{load}(\kw{m}, b, o) = \lfloor v \rfloor }
+    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Val}(v)}
+  \end{prooftree}
+  }
+  \quad
+  {
+  \begin{prooftree}
+    \hypo{\forall i, (b, o+\kw{offset}(a, i)) \leadsto_{\kw{m}} a[i]}
+    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Arr}(sz, a)}
+  \end{prooftree}
+  }
+\end{gather*}
+The auxiliary function $\kw{offset}$
+calculates the offset based on the type information
+which is elided for readability.
+
+The other part of memory should remain the same.
+We exploit the join operator defined in \ref{sec:sep}.
 
 \end{document}
 %%% Local Variables: 
