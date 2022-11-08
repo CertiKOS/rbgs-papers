@@ -60,133 +60,6 @@
 
 \maketitle
 
-\section*{New material} %{{{
-
-\begin{definition}[Tensor product of simulation conventions] \label{def:sctens}
-For the language interfaces $A$ and $B$,
-the language interface $A \otimes B$ and $\mathbf{I}$
-are defined as:
-\[
-  A \otimes B \::=\:
-  \langle
-    A^\que \times B^\que, \:
-    A^\ans \times B^\ans
-  \rangle
-  \qquad
-  \mathbf{I} := \langle \mathbbm{1}, \mathbbm{1} \rangle
-\]
-Moreover,
-given $R_A : A^\sharp \Leftrightarrow A^\flat$
-and $R_B : B^\sharp \Leftrightarrow B^\flat$,
-we can define the simulation convention
-$R_A \otimes R_B : A^\sharp \otimes B^\sharp
-  \Leftrightarrow
-  A^\flat \otimes B^\flat$
-as follows:
-\[
-  R_A \otimes R_B \: := \:
-    \big\langle
-      W_A \times W_B, \:
-      R_A^\que \times R_B^\que, \:
-      R_A^\ans \times R_B^\ans
-    \big\rangle
-\]
-\end{definition}
-
-\begin{theorem}
-$\mathbf{SC}$ under $\otimes$ is a symmetric monoidal category.
-\end{theorem}
-
-\subsection*{Protected explicit state}
-
-The Kripke relation
-$\Lambda_U \in \mathcal{R}_V(\mathbbm{1}, U)$
-is defined by the rule:
-\[
-  \begin{prooftree}
-    \infer0{u \Vdash * \ifr{\Lambda_U} u}
-  \end{prooftree}
-\]
-
-\begin{definition}
-For a set $U$,
-the simulation convention $\caller{U} : I \Leftrightarrow U$
-is defined as:
-\[
-  \caller{U} := \big\langle U,
-      \Lambda_U,
-      \Lambda_U
-    \big\rangle
-\]
-\end{definition}
-
-\begin{definition}
-For a pointed set $U$,
-the stateful simulation convention
-$\callee{U} : I \leftrightarrow U$
-is defined as
-\[
-  \callee U \: := \: \big\langle
-      U, \,
-      \Lambda_U, \,
-      \Lambda_U, \,
-      {=}_U, \,
-      \top_U
-    \big\rangle
-\]
-\end{definition}
-
-\[
-  \begin{tikzcd}[sep=large]
-    \mathcal{C}\otimes\kw{mem}
-      \ar[r, "\mathsf{ClightP}(M)"]
-      \ar[d, equals] &
-    \mathcal{C}\otimes\kw{mem}
-      \ar[r, equals]
-      \ar[d, leftrightarrow, "\mathcal{C} \otimes \kw{mem} \otimes \callee{p_0}"] &
-    \mathcal{C}\otimes\kw{mem}
-      \ar[dd, leftrightarrow, "\mathcal{C} \otimes \kw{mem} \otimes \callee{m_0}"]
-    \\
-    \mathcal{C} \otimes \kw{mem}
-      \ar[r, "\mathsf{ClightP} \langle M \rangle"]
-      \ar[d, leftrightarrow, "\mathsf{C} \otimes \kw{mem} \otimes \caller{\kw{mem}}"'] &
-    \mathcal{C} \otimes \kw{mem} \otimes \kw{penv}
-      \ar[d, leftrightarrow, "\mathcal{C} \otimes \kw{mem} \otimes R"]
-    \\
-    \mathcal{C} \otimes \kw{mem} \otimes \kw{mem}
-      \ar[d, leftrightarrow, "\mathcal{C} \otimes {\bullet}"'] &
-    \mathcal{C} \otimes \kw{mem} \otimes \kw{mem}
-      \ar[d, leftrightarrow, "\mathcal{C} \otimes {\bullet}"]
-      \ar[r, equals] &
-    \mathcal{C} \otimes \kw{mem} \otimes \kw{mem}
-      \ar[d, leftrightarrow, "\mathcal{C} \otimes {\bullet}"]
-    \\
-    \mathcal{C} \otimes \kw{mem}
-      \ar[r, "\mathsf{Clight}(M)"] &
-    \mathcal{C} \otimes \kw{mem}
-      \ar[r, equals] &
-    \mathcal{C} \otimes \kw{mem}
-  \end{tikzcd}
-\]
-
-\[
-  \includegraphics[scale=0.18]{draftfig/assoc}
-\]
-
-\[
-  \includegraphics[scale=0.16]{draftfig/encap}
-  \qquad\qquad
-  \includegraphics[scale=0.16]{draftfig/encap-comp}
-\]
-
-\[
-  \includegraphics[scale=0.12]{draftfig/merge-caller}
-  \qquad\qquad
-  \includegraphics[scale=0.12]{draftfig/merge}
-\]
-
-%}}}
-
 \section{Introduction} \label{sec:intro} %{{{
 
 % Preamble {{{
@@ -3419,6 +3292,733 @@ to make this possible.
 
 %}}}
 
+\section{Memory Separation in CompCert} \label{sec:sep} %{{{
+
+The constructions we have introduced so far
+make it possible to manage and encapsulate persistent state
+in the context of CompCertO,
+with certified abstraction layers
+as one key application.
+The global memory state used in the semantics of CompCert languages
+can then be regarded as one possible kind of state among others,
+and replaced in specifications by more abstract data representations.
+
+Unfortunately,
+because of the monolithic nature of CompCert's memory,
+abstracting only part of it is challenging
+and yields complex simulation conventions.
+In Example~\ref{ex:rbcorrect},
+the abstraction relation had to involve
+not only the whole target memory state,
+but also the residual source memory state
+not subject to abstraction,
+and used complex properties to express their relationships.
+In other words,
+instead of focusing on the particular fragment of the memory
+which we seek to abstract away,
+we are to forced to characterize the effect of partial abstraction
+on the context as well,
+even though the remaining areas of the memory
+are not meaningfully involved in the task at hand.
+
+In this section,
+we use techniques from separation logic
+to address this problem.
+We propose to equip the CompCert memory model
+with a structure akin to separation algebra \cite{something-for-sa}
+and incorporate the resulting construction
+within the framework of simulation conventions,
+CompCert Kripke logical relations,
+and state encapsulation.
+
+\subsection{The CompCert Memory Model}
+
+In essence,
+a CompCert memory state
+assign to each possible memory address $i \in \kw{block} \times \mathbb{Z}$:
+\begin{itemize}
+  \item a permission level $p \in \kw{option}\,\kw{perm}$;
+  \item a memory value $v \in \kw{memval}$.
+\end{itemize}
+In addition,
+a memory state contains a $\kw{nextblock}$ counter
+which keeps track of the next block identifier to be allocated.
+We discuss these various components in more detail below.
+
+\subsubsection{Memory Addresses}
+
+The CompCert memory is divided in a number of \emph{blocks}.
+As new blocks are allocated,
+they are assigned a positive identifier $b \in \mathbb{N}_*$
+in sequential order.
+As mentioned above,
+the $\kw{nextblock}$ counter within each memory state
+keeps track of the smallest unallocated block identifier.
+When a new block identifier is needed,
+$\kw{nextblock}$ is incremented and its previous value
+is used for the new block.
+
+Memory blocks represent independent address spaces.
+Within each block,
+a byte can be addressed using an offset $o \in \mathbb{Z}$.
+When a new block is allocated,
+a range of addresses $[\mathit{lo}, \mathit{hi})$ must be provided;
+this range determines which addresses within the block are valid.
+However,
+rather than storing the range directly within the memory state,
+the allocation operation uses it to assign initial permissions
+for each address within the new block.
+
+\subsubsection{Permissions}
+
+Each memory address within a memory state
+is assigned a permission level among the following:
+\[
+  p \in \kw{option}\,\kw{perm} ::=
+    \bot \mid
+    \kw{nonempty} \mid
+    \kw{readable} \mid
+    \kw{writable} \mid
+    \kw{freeable}
+\]
+The permissions are listed above in increasing order,
+so that for example the permission level $\kw{writable}$ 
+represents the set of permissions
+$\{ \kw{nonempty}, \kw{readable}, \kw{writable} \}$.
+Permissions play an important role
+in the memory separation relation we define.
+
+When a block is first allocated,
+addresses within the provided range
+are assigned the permission level $\kw{freeable}$;
+all remaining addresses are assigned
+empty permissions $\bot$.
+Further memory operations may then decrease the permission level,
+but can never increase it.
+Memory operations which access a particular address
+will first check that this address has sufficient permissions,
+and fail if that is not the case.
+
+\subsubsection{Memory Values}
+
+Each memory value represents the contents of exactly one byte of memory.
+It may be stored as a concrete byte,
+or may be identified as a particular one-byte fragment
+within a larger, more abstract value
+(for instance, the third byte of a given pointer).
+
+The exact representation of memory values
+is not essential to the work discussed in this section.
+Therefore
+we will not discuss the specifics further,
+but refer the interested reader to \citet{compcertmmv2}
+for more background on this topic.
+
+\subsubsection{Memory Transformations}
+
+The compilation passes of CompCert
+often transform the structure of the memory state:
+multiple blocks can merged into one;
+new blocks may be introduced in the target memory
+and blocks may be dropped from the source memory.
+To express these transformations,
+CompCert introduces \emph{memory extensions} and \emph{memory injections}
+as possible relations between source- and target-level memory states.
+
+In CompCertO,
+these memory transformations are generalized and consolidated
+into a notion of \emph{CompCert Kripke Logical Relations} (CLKRs),
+which play an important role in defining simulation conventions.
+The underlying idea is that
+if two memory states are related by a CKLR,
+then memory operations which succeed at the source level
+should also succeed on at the target level,
+and their outcomes should in turn be related
+by the CKLR.
+
+Unfortunately,
+these memory transformations are difficult to use
+to express the relationships between
+different \emph{fragments} of a single memory state.
+The notion of \emph{separation relation} introduced below
+seeks to fill this gap.
+
+\subsection{Separation Relations} %{{{
+
+To express memory separation in CompCert,
+and define a \emph{join} relation
+$J \subseteq (\kw{mem} \times \kw{mem}) \times \kw{mem}$.
+We will write $J(m_1, m_2, m)$ as:
+\[
+  m_1 \bullet m_2 \equiv m
+  \,,
+\]
+understood to mean that
+the memory states $m_1$ and $m_2$
+can be merged into $m$.
+This relation satisfies the properties listed in Fig.~\ref{fig:sepalg}
+and defines a separation algebra in the sense of \citet{freshlook}.
+
+\begin{figure}
+  \begin{gather*}
+    m_1 \bullet m_2 \equiv m \:\wedge\:
+      m_1 \bullet m_2 \equiv m' \:\Rightarrow\:
+      m = m'
+      \\
+    m_1 \bullet m_2 \equiv m \:\wedge\:
+      m_1' \bullet m_2 \equiv m \:\Rightarrow\:
+      m_1 = m_1'
+      \text{ XXX}
+      \\
+    m_1 \bullet m_2 \equiv m \:\Rightarrow\:
+      m_2 \bullet m_1 \equiv m
+      \\
+    m_1 \bullet m_2 \equiv m_{12} \:\wedge\:
+      m_{12} \bullet m_3 \equiv m \:\Rightarrow\:
+      \exists m_{23} \mathrel.
+      m_2 \bullet m_3 \equiv m_{23} \:\wedge\:
+      m_1 \bullet m_{23} \equiv m
+      \\
+    m \bullet \kw{empty} \equiv m
+  \end{gather*}
+  \caption{Properties of separation algebras
+    in relational form. See also \citet{freshlook}.}
+  \label{fig:sepalg}
+\end{figure}
+
+In addition to these structural properties,
+the join relation must be compatible
+with CompCert's memory operations.
+If an operation which reads from the memory succeeds on a fragment,
+it should succeed with the same result on a larger memory state:
+\[
+  \begin{prooftree}
+    \hypo{\kw{op}(m_1) = \kw{Some}\,v}
+    \hypo{m_1 \bullet m_2 \equiv m}
+    \infer2{\kw{op}(m) = \kw{Some}\,v}
+  \end{prooftree}
+\]
+Likewise,
+operations which updates the memory
+should be insensitive to additional fragments:
+\[
+  \begin{prooftree}
+    \hypo{\kw{op}(m_1) = \kw{Some}\,m_1'}
+    \hypo{m_1 \bullet m_2 \equiv m}
+    \infer2{\exists m' \mathrel.
+      m_1' \bullet m_2 \equiv m' \wedge
+      \kw{op}(m) = \kw{Some}\,m'}
+  \end{prooftree}
+\]
+
+Together,
+these properties allow us to derive
+versions of the \emph{frame rule}
+for CompCert languages:
+if a program can successfully execute on $m_1$ alone
+to yield a new memory fragment $m_1'$,
+then executing it on a larger memory state
+$m_1 \bullet m_2$ will succeed as well,
+and yield a memory state $m_1' \bullet m_2$
+where the irrelevant portion $m_2$
+has not been modified.
+
+Moreover,
+executions which affect disjoint parts of the memory
+can be considered independently.
+Specifically, from the rules above
+we can derive the property:
+\[
+  \begin{prooftree}
+    \hypo{\kw{op}_1(m_1) = \kw{Some}\,m_1'}
+    \hypo{\kw{op}_2(m_2) = \kw{Some}\,m_2'}
+    \hypo{m_1 \bullet m_2 \equiv m}
+    \infer3{\exists m' \mathrel.
+      \kw{op}_1(\kw{op}_2(m)) =
+	%\kw{op}_2(\kw{op}_1(m)) =
+	m' \:\wedge\:
+      m_1' \bullet m_2' \equiv m'}
+  \end{prooftree}
+\]
+As in separation logic,
+this facilitates reasoning
+about program components
+which affect the memory state in independent ways.
+
+Below we explain how a separation relation can be defined
+for the CompCert memory model.
+
+\subsubsection{Memory Contents}
+
+A CompCert memory state essentially defines a map of type
+\[
+  \kw{ptr} \rightarrow \kw{option}\,\kw{perm} \times \kw{memval} \,,
+\]
+which assigns to every possible address
+a permission level and a memory value.
+Figure~\ref{fig:sepdef}
+shows the definition of a simple separation relation
+for the contents of individual memory cells.
+This relation can then be extended to the whole map
+in the obvious way.
+
+\begin{figure}
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \fbox{$J_\kw{contents}$}
+    \begin{gather*}
+      (p, v) \in \kw{option}\ \kw{perm} \times \kw{memval} \\[1ex]
+      (\bot, \kw{undef}) \bullet (p, v) \equiv (p, v) \\
+      (p, v) \bullet (\bot, \kw{undef}) \equiv (p, v)
+    \end{gather*}
+    \subcaption{Memory contents}
+    \label{fig:sepdef:contents}
+  \end{subfigure}
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \fbox{$J_\kw{nextblock}$}
+    \begin{gather*}
+      (\mathit{nb}, a) \in \kw{block} \times \kw{bool}
+      \\[1ex]
+     {\begin{prooftree}
+	\hypo{\mathrm{max}(\mathit{nb}_1, \mathit{nb}_2) = \mathit{nb}}
+	\hypo{\lnot (a_1 \wedge a_2)}
+	\infer2{(\mathit{nb}_1, a_1) \bullet (\mathit{nb}_2, a_2) \equiv
+	  (\mathit{nb},\, a_1 \mathbin\vee a_2)}
+      \end{prooftree}}
+    \end{gather*}
+    \subcaption{Fresh blocks}
+    \label{fig:sepdef:fresh}
+  \end{subfigure}
+  \caption{%
+    Basic ingredients for separation algebras
+    of the CompCert memory model.}
+  \label{fig:sepdef}
+\end{figure}
+
+\subsubsection{Block Validity}
+
+A more challenging issue is the treatment of $\kw{nextblock}$.
+When a memory state $m$ is separated into $m_1 \bullet m_2 \equiv m$,
+the fragments $m_1$ and $m_2$ will share a common view of the address space.
+However,
+they each carry their own copy of the $\kw{nextblock}$ counter.
+As a result,
+performing independent allocations in each fragment
+will break the separation property,
+because the new blocks will be assigned conflicting names.
+
+As a starting point,
+we solve this problem by
+making sure that new blocks
+can only be allocated in one of the fragments.
+In addition to the $\kw{nextblock}$ counter,
+memory states carry a boolean flag
+indicating whether allocations are permitted.
+When memory fragments are joined,
+this flag can only be set in one of the fragments.
+Figure~\ref{fig:sepdef:fresh}
+shows the corresponding separation algebra
+for the $\kw{nextblock}$ counter.
+
+%}}}
+
+\subsection{Frame rule} %{{{
+
+The compatibility of memory operations with our separation algebras
+can be used to show that
+more complex ways to manipulate memory states
+enjoy similar properties.
+Ultimately this allows us to derive
+a kind of \emph{frame rule} for the Clight semantics.
+We can state this informally as follows:
+\[
+  \begin{prooftree}
+    \hypo{\Clight(p) : m_1 \leadsto m_2}
+    \infer1{\Clight(p) : m_1 \bullet m \leadsto m_2 \bullet m}
+  \end{prooftree}
+\]
+In other words,
+if the program $p$ safely acts on a memory state $m_1$
+to transform it into a memory state $m_2$,
+then we can frame a memory fragment $m$ onto $m_1$
+and expect the program to leave that fragment intact.
+Intuitively, this holds because
+if $p$ ever needed or affected any of the memory present
+in fragment $m$,
+it would have gone wrong on $m_1$ alone.
+
+To formalize this property in the context of CompCertO,
+we can promote the memory separation relation
+to a simulation convention:
+\[
+  \forall A \:.\quad
+  A@{\bullet} : A@(\kw{mem} \times \kw{mem}) \Leftrightarrow A@\kw{mem}
+\]
+We will then compare the ``source''-level semantics
+\[
+  \Clight(p)@\kw{mem} :
+    \mathcal{C}@(\kw{mem} \times \kw{mem}) \twoheadrightarrow
+    \mathcal{C}@(\kw{mem} \times \kw{mem})
+  \,,
+\]
+which acts on one of the memory fragments
+but leaves the other one unchanged,
+to the concrete semantics of $p$ acting on the total memory state:
+\[
+  \Clight(p) : \mathcal{C}@\kw{mem} \Leftrightarrow \mathcal{C}@\kw{mem}
+  \,.
+\]
+This yields the following property.
+
+\begin{lemma}[Frame rule for Clight]
+\[
+  \Clight(p)@\kw{mem}
+  \le_{\mathcal{C}@{\bullet} \twoheadrightarrow \mathcal{C}@{\bullet}}
+  \Clight(p)
+\]
+\end{lemma}
+
+%}}}
+
+\subsection{Hiding Memory State} %{{{
+
+In \S\ref{sec:clightp:erasure}
+
+
+%}}}
+
+\subsection{Initial memory} %{{{
+
+The way we define $\kw{init\_mem}$ can work with the
+separation relation such that:
+\[
+  \kw{init\_mem}(p_1) \bullet \kw{init\_mem}(p_2) \equiv
+  \kw{init\_mem}(p_1 + p_2)
+\]
+
+%}}}
+
+\subsection{Implementing Memory Separation with Nominal CompCert} %{{{
+
+%}}}
+
+%}}}
+
+\section{Clight with module-local state} \label{sec:clightp} %{{{
+
+{
+\color{gray}
+[Note: this could be swapped with Section 3
+because it showcases the use of persistent state,
+but probably does not have much to gain
+from the memory separation framework.]
+
+Can we add a $\mathsf{private}$ keyword or storage class to Clight,
+formulate a semantics and show a correctness proof
+for erasure of the keyword?
+
+Main challenge: how to define the semantics of the new keyword
+in a way that's convenient.
+
+We need a good name for this language.
+For now I will use \ClightP{}.
+}
+
+To exploit the state encapsulation in actual programs,
+we present the \ClightP{} language,
+which introduces module-local state to the $\Clight$ language.
+The state is kept private via state encapsulation
+so that it will not be passed around like the usual memory state.
+By doing so, it is guaranteed that
+one module's private state will not be modified by other modules,
+and we can avoid complicated rely-guarantee conditions
+encoded as simulation conventions
+when reason about the behaviors.
+Additionally,
+the module local variables are usually translated
+to abstract state in the CAL framework.
+Thus, separating them from the other part of memory
+paves the way for data refinement with abstraction state.
+
+\subsection{Syntax}
+
+\ClightP{} programs are identical to Clight programs,
+but allow the definition of module-local, private variables.
+For example:
+
+\begin{minted}{C}
+private int c = 0;
+int count(void) { return c++; }
+\end{minted}
+
+% One question is whether such private variables
+% should be declared as globals
+% (perhaps associated with empty memory blocks)
+% or if we should have a custom \mintinline{Coq}{program} type.
+
+\subsection{Semantics} %{{{
+
+Private variables in a \ClightP{} program
+are not stored in the memory,
+but rather in a separate environment.
+This environment is similar to
+the local environments used to store temporaries,
+but instead of being used in the context of an activation,
+the private environment is used as persistent state.
+Hence for a program $p$, the \ClightP{} semantics is constructed
+first by defining a transition system of type
+\[
+  L : \mathcal{C}@\mathsf{mem} \twoheadrightarrow
+      \mathcal{C}@(\mathsf{mem}\times\mathsf{penv})
+\]
+and then hiding the private environment as persistent state:
+\[
+  \ClightP{}(p) := \mathsf{fbk}_\mathsf{penv}(\&L) :
+    \mathcal{C}@\mathsf{mem} \rightarrow
+    \mathcal{C}@\mathsf{mem}
+\]
+
+% One subtlety in the case where private variables are globals,
+% is that the \texttt{initial\_state} predicate of $L$
+% must enforce empty permissions for private variables
+% in the incoming memory state.
+
+Unlike the temporaries,
+the module-local variables can also have type array or struct.
+Therefore, we extend the type $\kw{val}$ with composite types to $\kw{cval}$
+and define the $\kw{penv}$ as a map from identifiers to $\kw{cval}$.
+Lifting the variables from memory to a separate environment
+means that their address cannot be taken.
+So we introduce accessors $\kw{lcval}$ to simulate left values,
+which represent memory locations in $\Clight$,
+so that the module-static variables can be evaluated to left values similarly
+and updated accordingly.
+Under this approach, struct assignment is not supported
+because it is only possible to assign by value.
+However, this enforces the program not to pass the address
+of the private variables to other modules
+so that undesired behaviors can be avoided.
+
+\begin{gather*}
+  cv \in \kw{cval} \mathrel{::=} \kw{Val}(v:\kw{val})
+                     \mathrel{|} \kw{Arr}(sz:\mathbb{N},a:\mathbb{Z} \rightarrow \kw{cval})
+  \\
+  \kw{penv} \mathrel{::=} \kw{ident} \rightarrow \kw{cval}
+  \\
+  l \in \kw{lcval} \mathrel{::=} \kw{Lval}(i: \kw{ident})
+                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\mathbb{Z})
+\end{gather*}
+
+We reuse the $\Clight$ expressions,
+and add the following expressions to access the private variables.
+Similarly, we reuse the statements and small-step transitions
+and add extra cases for updating the private states.
+\begin{gather*}
+  e \mathrel{::=} \cdots \mathrel{|} \kw{Epvar}(i:\kw{ident})
+  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, x: \kw{expr})
+  \\[2ex]
+  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}\ \kw{val}\\
+  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}\ \kw{penv}
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{pe}[i] = \lfloor \kw{Val}(v) \rfloor }
+    \infer1{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \downarrow v}
+  \end{prooftree}}
+  \qquad
+  {\begin{prooftree}
+    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
+    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
+    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, i)) = \lfloor \kw{Val}(v) \rfloor }
+    \infer3{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
+  \end{prooftree}}
+  \\[2ex]
+  {\begin{prooftree}
+    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
+  \end{prooftree}}
+  \qquad
+  {\begin{prooftree}
+    \hypo{\kw{m},\kw{pe} \vdash e \Downarrow loc}
+    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
+    \infer2{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, i)}
+  \end{prooftree}}
+  \\[2ex]
+  {\begin{prooftree}
+    \hypo{\kw{m}, \kw{pe} \vdash a_1 \Downarrow loc}
+    \hypo{\kw{m}, \kw{pe} \vdash a_2 \downarrow v}
+    \hypo{\kw{pwrite}(pe, loc, v) = \lfloor pe' \rfloor }
+    \infer3{(\kw{m}, \kw{pe}, \kw{Sassign}(a_1, a_2)) \rightarrow
+      (\kw{m}, \kw{pe'}, \kw{Sskip})}
+  \end{prooftree}}
+\end{gather*}
+
+%}}}
+
+\subsection{Composition} %{{{
+
+Suppose a \ClightP program $M_1$
+invokes functions in a second program $M_2$.
+We wish compute the behavior of the overall system
+from the semantics of each program.
+Their types
+\begin{align*}
+    \ClightP(M_2) &:
+    \mathcal{C}@\kw{mem} \twoheadrightarrow
+    \mathcal{C}@(\kw{mem} \times \kw{penv})
+  \\
+    \ClightP(M_1) &:
+    \mathcal{C}@\kw{mem} \twoheadrightarrow
+    \mathcal{C}@(\kw{mem} \times \kw{penv})
+\end{align*}
+show that the cannot be directly composed
+as $\ClightP(M_1) \odot \ClightP(M_2)$.
+This is because \emph{each} component
+maintains its own private environment of type $\kw{penv}$.
+
+%}}}
+
+\subsection{Compiling to Clight} %{{{
+
+A \ClightP{} program can be compiled to Clight
+by erasing the \texttt{private} annotations
+and turning privates variable into regular
+global variables.
+{
+\color{gray}
+Proving the correctness of this transformation
+should not be too difficult.
+We can just use a memory extension or injection.
+The only new part is that we must express
+the simulation convention for the underlying transition systems
+in a way that relates the source private environment
+to the target (public) memory state.
+The twist here is that
+the externally observable simulation convention
+should just enforce the empty permissions in the source memory.
+The relation between the private state and the target memory
+should be existentially quantified.
+But this means we need requirements on the initial target memory as well.
+We will have to set up our extended notion of simulation
+in a way that supports those things.
+}
+
+$\ClightP$ expressions are turned into $\Clight$ expressions
+by replacing accesses to the private variables
+with accesses to the corresponding memory locations.
+\begin{gather*}
+  \kw{transl\_expr}(\kw{Epvar}(i)) = \kw{Evar}(i)\\
+  \kw{transl\_expr}(\kw{Eaccess}(e, \iota_2(i))) = \kw{Oadd}(\kw{transl\_expr(e)}, \kw{transl\_expr(i)})
+\end{gather*}
+The semantics of $\Clight$ is typed-directed
+so the offset calculated by $\kw{Oadd}$
+depends on the type of the array elements.
+After the expressions are transated, the statements
+are immediately valid $\Clight$ statements.
+
+To establish the simulation between
+the source $\ClightP$ program and the target $\Clight$ program,
+we essentially transform the persistent environment into memory fragment,
+and merge the fragment with the regular memory state.
+We define a relation $\kw{pe} \rhd \kw{m}$
+to denote that the the persistent environment $\kw{pe}$
+can be concretized to the memory $\kw{m}$ under the global symbol table $\kw{se}$.
+\[
+  \begin{prooftree}
+    \hypo{\forall i \mapsto cv \in \kw{pe}, \exists i \mapsto b \in se,
+      (b,0) \leadsto_{\kw{m}} cv}
+    \infer1{\kw{pe} \rhd \kw{m}}
+  \end{prooftree}
+\]
+We define $(b, o) \leadsto_{\kw{m}} cv$ as follows:
+\begin{gather*}
+  {
+  \begin{prooftree}
+    \hypo{\kw{load}(\kw{m}, b, o) = \lfloor v \rfloor }
+    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Val}(v)}
+  \end{prooftree}
+  }
+  \quad
+  {
+  \begin{prooftree}
+    \hypo{\forall i, (b, o+\kw{offset}(a, i)) \leadsto_{\kw{m}} a[i]}
+    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Arr}(sz, a)}
+  \end{prooftree}
+  }
+\end{gather*}
+The auxiliary function $\kw{offset}$
+calculates the offset based on the type information
+which is elided for readability.
+
+The other part of memory should remain the same.
+We exploit the join operator defined in \ref{sec:sep}.
+Then we define the simulation convention
+\[
+  \begin{prooftree}
+    \hypo{pe \rhd m}
+    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
+    \infer2{\kw{m} \Vdash (\kw{m}_{src}, pe) \ifr{\kw{pin}} \kw{m}_{tgt}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
+    \infer1{\kw{m} \Vdash \kw{m}_{src} \ifr{\kw{pout}} \kw{m}_{tgt}}
+  \end{prooftree}
+\]
+We then establish the correctness theorem:
+\begin{theorem}[Correctness of $\kw{ClightUnP}$]
+  For a $\ClightP$ program $M$ and and a $\Clight$ program $M'$
+  such that
+  $\kw{ClightUnP}(M) = M'$
+  the following simulation holds:
+  \[
+    \ClightP(M) \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} \Clight(M')
+  \]
+\end{theorem}
+
+%}}}
+
+\subsection{Linking and Composition} %{{{
+
+The CompCertO compiler permits mutual recursion
+because it is designed to serve general purposes.
+Therefore, the simulation conventions
+on the incoming and outgoing side must agree
+so that the conditions one module relies on
+are exactly what the other module guarantees.
+This is achieved by the rich algebraic structures in simulation conventions.
+By contrast, the extra compilation pass $\ClightP$
+on top of the CompCertO compiler serves for verifying programs,
+and it does not support mutual recursive functions by design.
+Nevertheless, $\ClightP$ does allow programs to be composed
+in two ways: vertical composition and horizontal composition.
+These two common patterns are inherited from
+the certified abstraction layer framework,
+which have been proven to be sufficient for verifying
+large scale system softwares.
+
+\begin{lemma}[\kw{pin} and \kw{pout}]
+  \[
+    \kw{pin} \otimes \kw{pin} \sqsubseteq \kw{pin}
+    \qquad
+    \kw{pout} \sqsubseteq \kw{pout} \otimes \kw{pout}
+  \]
+\end{lemma}
+
+\begin{lemma}[Composition of $\ClightP$]
+  The following properties holds
+  \[
+    \begin{prooftree}
+      \hypo{L_1 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1}
+      \hypo{L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_2}
+      \infer2{L_1 \circ L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1 \circ L'_2}
+    \end{prooftree}
+  \]
+\end{lemma}
+
+%}}}
+
+%}}}
+
 \section{Encapsulated State} \label{sec:encap} %{{{
 
 % Preamble {{{
@@ -4045,734 +4645,431 @@ such that in particular:
 
 %}}}
 
-\section{Clight with module-local state} \label{sec:clightp} %{{{
+\section{Related Work} %{{{
 
-{
-\color{gray}
-[Note: this could be swapped with Section 3
-because it showcases the use of persistent state,
-but probably does not have much to gain
-from the memory separation framework.]
+Our approach is inspired by \citet{feedback,caots}.
 
-Can we add a $\mathsf{private}$ keyword or storage class to Clight,
-formulate a semantics and show a correctness proof
-for erasure of the keyword?
+\subsection{CompCert} \label{sec:related:compcert}
 
-Main challenge: how to define the semantics of the new keyword
-in a way that's convenient.
+\cite{sepcompcert}.
+The hybrid approach of CompCertM
+\cite{compcertm}
+consolidated these approaches
+into a verification framework
+where the final correctness theorem
+remains stated in terms of the closed semantics,
+but where a compositional semantics
+can be used to verify individual components.
+%This approach delivers much of the flexibility
+%of compositional semantics
+%with a fraction of the proof effort.
+%Yet because the correctness theorem
+%ultimately characterizes the behavior
+%of the target assembly code as a whole,
+%it is difficult to reuse
+%in a broader context where
+%different parts of the code
+%are intertwined and interact with
+%external components.
 
-We need a good name for this language.
-For now I will use \ClightP{}.
-}
+\paragraph{Accessibility Condition}
 
-To exploit the state encapsulation in actual programs,
-we present the \ClightP{} language,
-which introduces module-local state to the $\Clight$ language.
-The state is kept private via state encapsulation
-so that it will not be passed around like the usual memory state.
-By doing so, it is guaranteed that
-one module's private state will not be modified by other modules,
-and we can avoid complicated rely-guarantee conditions
-encoded as simulation conventions
-when reason about the behaviors.
-Additionally,
-the module local variables are usually translated
-to abstract state in the CAL framework.
-Thus, separating them from the other part of memory
-paves the way for data refinement with abstraction state.
+The $\sqsubseteq_{\kw{prv}}$ is similar to $\leadsto_{\bar{A}B}$
+while $\sqsubseteq$ is similar to $\leadsto_{AB}$. Or maybe not...
 
-\subsection{Syntax}
+\paragraph{Module Static Variables}
 
-\ClightP{} programs are identical to Clight programs,
-but allow the definition of module-local, private variables.
-For example:
-
-\begin{minted}{C}
-private int c = 0;
-int count(void) { return c++; }
-\end{minted}
-
-% One question is whether such private variables
-% should be declared as globals
-% (perhaps associated with empty memory blocks)
-% or if we should have a custom \mintinline{Coq}{program} type.
-
-\subsection{Semantics} %{{{
-
-Private variables in a \ClightP{} program
-are not stored in the memory,
-but rather in a separate environment.
-This environment is similar to
-the local environments used to store temporaries,
-but instead of being used in the context of an activation,
-the private environment is used as persistent state.
-Hence for a program $p$, the \ClightP{} semantics is constructed
-first by defining a transition system of type
-\[
-  L : \mathcal{C}@\mathsf{mem} \twoheadrightarrow
-      \mathcal{C}@(\mathsf{mem}\times\mathsf{penv})
-\]
-and then hiding the private environment as persistent state:
-\[
-  \ClightP{}(p) := \mathsf{fbk}_\mathsf{penv}(\&L) :
-    \mathcal{C}@\mathsf{mem} \rightarrow
-    \mathcal{C}@\mathsf{mem}
-\]
-
-% One subtlety in the case where private variables are globals,
-% is that the \texttt{initial\_state} predicate of $L$
-% must enforce empty permissions for private variables
-% in the incoming memory state.
-
-Unlike the temporaries,
-the module-local variables can also have type array or struct.
-Therefore, we extend the type $\kw{val}$ with composite types to $\kw{cval}$
-and define the $\kw{penv}$ as a map from identifiers to $\kw{cval}$.
-Lifting the variables from memory to a separate environment
-means that their address cannot be taken.
-So we introduce accessors $\kw{lcval}$ to simulate left values,
-which represent memory locations in $\Clight$,
-so that the module-static variables can be evaluated to left values similarly
-and updated accordingly.
-Under this approach, struct assignment is not supported
-because it is only possible to assign by value.
-However, this enforces the program not to pass the address
-of the private variables to other modules
-so that undesired behaviors can be avoided.
-
-\begin{gather*}
-  cv \in \kw{cval} \mathrel{::=} \kw{Val}(v:\kw{val})
-                     \mathrel{|} \kw{Arr}(sz:\mathbb{N},a:\mathbb{Z} \rightarrow \kw{cval})
-  \\
-  \kw{penv} \mathrel{::=} \kw{ident} \rightarrow \kw{cval}
-  \\
-  l \in \kw{lcval} \mathrel{::=} \kw{Lval}(i: \kw{ident})
-                          \mathrel{|} \kw{Lloc}(l:\kw{lcval}, x:\mathbb{Z})
-\end{gather*}
-
-We reuse the $\Clight$ expressions,
-and add the following expressions to access the private variables.
-Similarly, we reuse the statements and small-step transitions
-and add extra cases for updating the private states.
-\begin{gather*}
-  e \mathrel{::=} \cdots \mathrel{|} \kw{Epvar}(i:\kw{ident})
-  \mathrel{|} \kw{Eaccess}(e:\kw{expr}, x: \kw{expr})
-  \\[2ex]
-  \kw{pread} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{option}\ \kw{val}\\
-  \kw{pwrite} \mathrel{:} \kw{penv} \rightarrow \kw{lcval} \rightarrow \kw{val} \rightarrow \kw{option}\ \kw{penv}
-  \\[2ex]
-  {\begin{prooftree}
-    \hypo{\kw{pe}[i] = \lfloor \kw{Val}(v) \rfloor }
-    \infer1{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \downarrow v}
-  \end{prooftree}}
-  \qquad
-  {\begin{prooftree}
-    \hypo{\kw{m}, \kw{pe} \vdash e \Downarrow loc}
-    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
-    \hypo{\kw{pread}(\kw{pe}, \kw{Lloc}(loc, i)) = \lfloor \kw{Val}(v) \rfloor }
-    \infer3{\kw{m},\kw{pe} \vdash \kw{Eaccess}(e, x) \downarrow v}
-  \end{prooftree}}
-  \\[2ex]
-  {\begin{prooftree}
-    \infer0{\kw{m},\kw{pe} \vdash \kw{Epvar}(i) \Downarrow \kw{Lval}(i)}
-  \end{prooftree}}
-  \qquad
-  {\begin{prooftree}
-    \hypo{\kw{m},\kw{pe} \vdash e \Downarrow loc}
-    \hypo{\kw{m},\kw{pe} \vdash x \downarrow \kw{Vint}(i)}
-    \infer2{\kw{m}, \kw{pe} \vdash \kw{Eaccess}(e, x) \Downarrow \kw{Lloc}(loc, i)}
-  \end{prooftree}}
-  \\[2ex]
-  {\begin{prooftree}
-    \hypo{\kw{m}, \kw{pe} \vdash a_1 \Downarrow loc}
-    \hypo{\kw{m}, \kw{pe} \vdash a_2 \downarrow v}
-    \hypo{\kw{pwrite}(pe, loc, v) = \lfloor pe' \rfloor }
-    \infer3{(\kw{m}, \kw{pe}, \kw{Sassign}(a_1, a_2)) \rightarrow
-      (\kw{m}, \kw{pe'}, \kw{Sskip})}
-  \end{prooftree}}
-\end{gather*}
+\citet{compcertm} presents CompCertM,
+which supports module-static variables
+and reasoning about mutually recursive programs.
+The difficulty is to capture the effects that external calls may have on
+those variables through reentrant calls.
+\citet{compcertm} further generalizes the memory injection
+to include a notion of module-local invariants
+to enable reasoning on such variables.
+We could generalize the simulation convention in a similar manner
+to achieve the same reasoning power.
+However, for the purpose of revamping the CAL framework,
+mutual recursion is considered unnecessary
+so we keep things simple.
+We refer interested readers to \citet{compcerto}
+for a detailed comparison between CompCertM and CompCertO.
 
 %}}}
 
-\subsection{Composition} %{{{
+\section{Conclusion} %{{{
 
-Suppose a \ClightP program $M_1$
-invokes functions in a second program $M_2$.
-We wish compute the behavior of the overall system
-from the semantics of each program.
-Their types
-\begin{align*}
-    \ClightP(M_2) &:
-    \mathcal{C}@\kw{mem} \twoheadrightarrow
-    \mathcal{C}@(\kw{mem} \times \kw{penv})
-  \\
-    \ClightP(M_1) &:
-    \mathcal{C}@\kw{mem} \twoheadrightarrow
-    \mathcal{C}@(\kw{mem} \times \kw{penv})
-\end{align*}
-show that the cannot be directly composed
-as $\ClightP(M_1) \odot \ClightP(M_2)$.
-This is because \emph{each} component
-maintains its own private environment of type $\kw{penv}$.
+Finally,
+the problem of certified compilation itself
+is [emblematic ...]
+
+This richer structure
+does not find a straightforward analogue
+at the level of coherence spaces.
+This illustrates an under-appreciated but important challenge
+for denotational semantics in the context certified compilation,
+namely the important role of abstraction
+in that application domain.
 
 %}}}
 
-\subsection{Compiling to Clight} %{{{
+\bibliography{../references}
 
-A \ClightP{} program can be compiled to Clight
-by erasing the \texttt{private} annotations
-and turning privates variable into regular
-global variables.
-{
-\color{gray}
-Proving the correctness of this transformation
-should not be too difficult.
-We can just use a memory extension or injection.
-The only new part is that we must express
-the simulation convention for the underlying transition systems
-in a way that relates the source private environment
-to the target (public) memory state.
-The twist here is that
-the externally observable simulation convention
-should just enforce the empty permissions in the source memory.
-The relation between the private state and the target memory
-should be existentially quantified.
-But this means we need requirements on the initial target memory as well.
-We will have to set up our extended notion of simulation
-in a way that supports those things.
-}
+\appendix
 
-$\ClightP$ expressions are turned into $\Clight$ expressions
-by replacing accesses to the private variables
-with accesses to the corresponding memory locations.
-\begin{gather*}
-  \kw{transl\_expr}(\kw{Epvar}(i)) = \kw{Evar}(i)\\
-  \kw{transl\_expr}(\kw{Eaccess}(e, \iota_2(i))) = \kw{Oadd}(\kw{transl\_expr(e)}, \kw{transl\_expr(i)})
-\end{gather*}
-The semantics of $\Clight$ is typed-directed
-so the offset calculated by $\kw{Oadd}$
-depends on the type of the array elements.
-After the expressions are transated, the statements
-are immediately valid $\Clight$ statements.
+\newpage
 
-To establish the simulation between
-the source $\ClightP$ program and the target $\Clight$ program,
-we essentially transform the persistent environment into memory fragment,
-and merge the fragment with the regular memory state.
-We define a relation $\kw{pe} \rhd \kw{m}$
-to denote that the the persistent environment $\kw{pe}$
-can be concretized to the memory $\kw{m}$ under the global symbol table $\kw{se}$.
-\[
-  \begin{prooftree}
-    \hypo{\forall i \mapsto cv \in \kw{pe}, \exists i \mapsto b \in se,
-      (b,0) \leadsto_{\kw{m}} cv}
-    \infer1{\kw{pe} \rhd \kw{m}}
-  \end{prooftree}
-\]
-We define $(b, o) \leadsto_{\kw{m}} cv$ as follows:
-\begin{gather*}
-  {
-  \begin{prooftree}
-    \hypo{\kw{load}(\kw{m}, b, o) = \lfloor v \rfloor }
-    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Val}(v)}
-  \end{prooftree}
-  }
-  \quad
-  {
-  \begin{prooftree}
-    \hypo{\forall i, (b, o+\kw{offset}(a, i)) \leadsto_{\kw{m}} a[i]}
-    \infer1{(b, o) \leadsto_{\kw{m}} \kw{Arr}(sz, a)}
-  \end{prooftree}
-  }
-\end{gather*}
-The auxiliary function $\kw{offset}$
-calculates the offset based on the type information
-which is elided for readability.
-
-The other part of memory should remain the same.
-We exploit the join operator defined in \ref{sec:sep}.
-Then we define the simulation convention
-\[
-  \begin{prooftree}
-    \hypo{pe \rhd m}
-    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
-    \infer2{\kw{m} \Vdash (\kw{m}_{src}, pe) \ifr{\kw{pin}} \kw{m}_{tgt}}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
-    \infer1{\kw{m} \Vdash \kw{m}_{src} \ifr{\kw{pout}} \kw{m}_{tgt}}
-  \end{prooftree}
-\]
-We then establish the correctness theorem:
-\begin{theorem}[Correctness of $\kw{ClightUnP}$]
-  For a $\ClightP$ program $M$ and and a $\Clight$ program $M'$
-  such that
-  $\kw{ClightUnP}(M) = M'$
-  the following simulation holds:
-  \[
-    \ClightP(M) \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} \Clight(M')
-  \]
-\end{theorem}
-
-%}}}
-
-\subsection{Linking and Composition} %{{{
-
-The CompCertO compiler permits mutual recursion
-because it is designed to serve general purposes.
-Therefore, the simulation conventions
-on the incoming and outgoing side must agree
-so that the conditions one module relies on
-are exactly what the other module guarantees.
-This is achieved by the rich algebraic structures in simulation conventions.
-By contrast, the extra compilation pass $\ClightP$
-on top of the CompCertO compiler serves for verifying programs,
-and it does not support mutual recursive functions by design.
-Nevertheless, $\ClightP$ does allow programs to be composed
-in two ways: vertical composition and horizontal composition.
-These two common patterns are inherited from
-the certified abstraction layer framework,
-which have been proven to be sufficient for verifying
-large scale system softwares.
-
-\begin{lemma}[\kw{pin} and \kw{pout}]
-  \[
-    \kw{pin} \otimes \kw{pin} \sqsubseteq \kw{pin}
-    \qquad
-    \kw{pout} \sqsubseteq \kw{pout} \otimes \kw{pout}
-  \]
-\end{lemma}
-
-\begin{lemma}[Composition of $\ClightP$]
-  The following properties holds
+\begin{figure}[h] %{{{
+  \textbf{Notations}
+  \\[1em]
+  \begin{tabular}{llcllc}
+    Basic component & Def.~\ref{def:lts} &
+    $L : A \twoheadrightarrow B$ &
+    Stateful component & Def.~\ref{def:slts} &
+    $\Sigma : A \rightarrow B$
+    \\
+    Basic convention & Def.~\ref{def:simconv} &
+    $\mathbb{R} : A^\sharp \Leftrightarrow A^\flat$ &
+    Stateful convention & Def.~\ref{def:sconv} &
+    $\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
+    \\
+    Basic simulation & Def.~\ref{def:sim} &
+    $L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat$ &
+    Stateful simulation & Def.~\ref{def:ssim} &
+    $\Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat$
+  \end{tabular}
+  \\[1em]
+  \textbf{Layered composition}
+  \\[1em]
+  \begin{tabular}{cc@{\qquad}cc}
+    Def.~\ref{def:lcomp} &
+  {$\begin{prooftree}
+      \hypo{L_1 : B \twoheadrightarrow C}
+      \hypo{L_2 : A \twoheadrightarrow B}
+      \infer2{L_1 \odot L_2 : A \twoheadrightarrow C}
+    \end{prooftree}$}
+    &
+    Def.~\ref{def:slcomp} &
+  {$\begin{prooftree}
+      \hypo{\Sigma_1 : B \rightarrow C}
+      \hypo{\Sigma_2 : A \rightarrow B}
+      \infer2{\Sigma_1 \circ \Sigma_2 : A \rightarrow C}
+    \end{prooftree}$}
+    \vspace{1em} \\
+    Thm.~\ref{thm:lcompsim} &
+  {$\begin{prooftree}
+      \hypo{L_1^\sharp
+            \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
+            L_1^\flat}
+      \hypo{L_2^\sharp
+            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+            L_2^\flat}
+      \infer2{L_1^\sharp \odot L_2^\sharp
+            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
+            L_1^\flat \odot L_1^\flat}
+    \end{prooftree}$} &
+    Thm.~\ref{thm:slcompsim} &
+  {$\begin{prooftree}
+      \hypo{\Sigma_1^\sharp
+            \preceq_{\mathbf{R}_B \rightarrow \mathbf{R}_C}
+            \Sigma_1^\flat}
+      \hypo{\Sigma_2^\sharp
+            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+            \Sigma_2^\flat}
+      \infer2{\Sigma_1^\sharp \circ \Sigma_2^\sharp
+            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_C}
+            \Sigma_1^\flat \circ \Sigma_1^\flat}
+    \end{prooftree}$}
+  \end{tabular}
+  \\[1em]
+  \textbf{Vertical composition}
+  \\[1em]
+  \begin{tabular}{cc@{\qquad}cc}
+    Def.~\ref{def:ccomp} & {$
+    \begin{prooftree}
+      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\natural}
+      \hypo{\mathbb{S} : A^\natural \Leftrightarrow A^\flat}
+      \infer2{\mathbb{R} \cdot \mathbb{S} : A^\sharp \Leftrightarrow A^\flat}
+    \end{prooftree}
+    $} &
+    Def.~\ref{def:sccomp} & {$
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\natural}
+      \hypo{\mathbf{S} : A^\natural \leftrightarrow A^\flat}
+      \infer2{\mathbf{R} \mathbin; \mathbf{S} : A^\sharp \leftrightarrow A^\flat}
+    \end{prooftree}
+    $}
+    \vspace{1em} \\
+    Thm.~\ref{thm:vcomp} & {$
+    \begin{prooftree}
+      \hypo{L^\sharp
+        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+        L^\natural}
+      \hypo{L^\natural
+        \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B}
+        L^\flat}
+      \infer2{L^\sharp
+        \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
+             \mathbb{R}_B \cdot \mathbb{S}_B}
+        L^\flat}
+    \end{prooftree}
+    $} &
+    Thm.~\ref{thm:svcomp} & {$
+    \begin{prooftree}
+      \hypo{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
+        \Sigma^\natural}
+      \hypo{\Sigma^\natural
+        \preceq_{\mathbf{S}_A \twoheadrightarrow \mathbf{S}_B}
+        \Sigma^\flat}
+      \infer2{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \mathbin; \mathbf{S}_A \twoheadrightarrow
+             \mathbf{R}_B \mathbin; \mathbf{S}_B}
+        \Sigma^\flat}
+    \end{prooftree}
+    $}
+  \end{tabular}
+  \\[1em]
+  \textbf{Adjoining explicit state}
+  \\[1em]
+  \begin{tabular}{cc@{\qquad}cc}
+    Def.~\ref{def:lift} &
+    {$
+    \begin{prooftree}
+      \hypo{L : A \twoheadrightarrow B}
+      \infer1{L@K : A@K \twoheadrightarrow B@K}
+    \end{prooftree}
+    $} &
+    Def.~\ref{def:slift} &
+    {$
+    \begin{prooftree}
+      \hypo{\Sigma : A \rightarrow B}
+      \infer1{\Sigma@K : A@K \rightarrow B@K}
+    \end{prooftree}
+    $}
+    \vspace{1em} \\
+    & &
+    Def.~\ref{def:liftsconv} &
+    {$
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\flat}
+      \infer1{\mathbf{R}@\langle K^\sharp, K^\flat \rangle :
+        A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat}
+    \end{prooftree}
+    $}
+    \vspace{1em} \\
+    & &
+    Thm.~\ref{thm:liftssim} &
+    {$
+    \begin{prooftree}
+      \hypo{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+        \Sigma^\flat}
+      \infer1{\Sigma^\sharp@K^\sharp
+        \preceq_{\mathbf{R}_A@\langle K^\sharp, K^\flat \rangle \rightarrow
+                 \mathbf{R}_B@\langle K^\sharp, K^\flat \rangle}
+        \Sigma^\flat@K^\flat}
+    \end{prooftree}
+    $}
+  \end{tabular}
+  \\[1em]
+  \textbf{Embedding simple components}
   \[
     \begin{prooftree}
-      \hypo{L_1 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1}
-      \hypo{L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_2}
-      \infer2{L_1 \circ L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1 \circ L'_2}
+      \hypo{L : A \twoheadrightarrow B}
+      \infer1{\&L : A \rightarrow B}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\flat}
+      \infer1{\&\mathbb{R} : A^\sharp \leftrightarrow A^\flat}
+    \end{prooftree}
+    \qquad
+    \begin{array}{c}
+      \&(L_1 \odot L_2) \equiv \&L_1 \circ \&L_2
+      \\[1ex]
+      \&(\mathbb{R} \cdot \mathbb{S}) \equiv
+        \&\mathbb{R} \mathbin; \&\mathbb{S}
+    \end{array}
+    \qquad
+    \begin{prooftree}
+      \hypo{L^\sharp
+        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
+        L^\flat}
+      \infer1{\&L^\sharp
+        \preceq_{\&\mathbb{R}_A \rightarrow \&\mathbb{R}_B}
+        \&L^\flat}
     \end{prooftree}
   \]
-\end{lemma}
-
-%}}}
-
-%}}}
-
-\section{Memory Separation in CompCert} \label{sec:sep} %{{{
-
-The constructions we have introduced so far
-make it possible to manage and encapsulate persistent state
-in the context of CompCertO,
-with certified abstraction layers
-as one key application.
-The global memory state used in the semantics of CompCert languages
-can then be regarded as one possible kind of state among others,
-and replaced in specifications by more abstract data representations.
-
-Unfortunately,
-because of the monolithic nature of CompCert's memory,
-abstracting only part of it is challenging
-and yields complex simulation conventions.
-In Example~\ref{ex:rbcorrect},
-the abstraction relation had to involve
-not only the whole target memory state,
-but also the residual source memory state
-not subject to abstraction,
-and used complex properties to express their relationships.
-In other words,
-instead of focusing on the particular fragment of the memory
-which we seek to abstract away,
-we are to forced to characterize the effect of partial abstraction
-on the context as well,
-even though the remaining areas of the memory
-are not meaningfully involved in the task at hand.
-
-In this section,
-we use techniques from separation logic
-to address this problem.
-We propose to equip the CompCert memory model
-with a structure akin to separation algebra \cite{something-for-sa}
-and incorporate the resulting construction
-within the framework of simulation conventions,
-CompCert Kripke logical relations,
-and state encapsulation.
-
-\subsection{The CompCert Memory Model}
-
-In essence,
-a CompCert memory state
-assign to each possible memory address $i \in \kw{block} \times \mathbb{Z}$:
-\begin{itemize}
-  \item a permission level $p \in \kw{option}\,\kw{perm}$;
-  \item a memory value $v \in \kw{memval}$.
-\end{itemize}
-In addition,
-a memory state contains a $\kw{nextblock}$ counter
-which keeps track of the next block identifier to be allocated.
-We discuss these various components in more detail below.
-
-\subsubsection{Memory Addresses}
-
-The CompCert memory is divided in a number of \emph{blocks}.
-As new blocks are allocated,
-they are assigned a positive identifier $b \in \mathbb{N}_*$
-in sequential order.
-As mentioned above,
-the $\kw{nextblock}$ counter within each memory state
-keeps track of the smallest unallocated block identifier.
-When a new block identifier is needed,
-$\kw{nextblock}$ is incremented and its previous value
-is used for the new block.
-
-Memory blocks represent independent address spaces.
-Within each block,
-a byte can be addressed using an offset $o \in \mathbb{Z}$.
-When a new block is allocated,
-a range of addresses $[\mathit{lo}, \mathit{hi})$ must be provided;
-this range determines which addresses within the block are valid.
-However,
-rather than storing the range directly within the memory state,
-the allocation operation uses it to assign initial permissions
-for each address within the new block.
-
-\subsubsection{Permissions}
-
-Each memory address within a memory state
-is assigned a permission level among the following:
-\[
-  p \in \kw{option}\,\kw{perm} ::=
-    \bot \mid
-    \kw{nonempty} \mid
-    \kw{readable} \mid
-    \kw{writable} \mid
-    \kw{freeable}
-\]
-The permissions are listed above in increasing order,
-so that for example the permission level $\kw{writable}$ 
-represents the set of permissions
-$\{ \kw{nonempty}, \kw{readable}, \kw{writable} \}$.
-Permissions play an important role
-in the memory separation relation we define.
-
-When a block is first allocated,
-addresses within the provided range
-are assigned the permission level $\kw{freeable}$;
-all remaining addresses are assigned
-empty permissions $\bot$.
-Further memory operations may then decrease the permission level,
-but can never increase it.
-Memory operations which access a particular address
-will first check that this address has sufficient permissions,
-and fail if that is not the case.
-
-\subsubsection{Memory Values}
-
-Each memory value represents the contents of exactly one byte of memory.
-It may be stored as a concrete byte,
-or may be identified as a particular one-byte fragment
-within a larger, more abstract value
-(for instance, the third byte of a given pointer).
-
-The exact representation of memory values
-is not essential to the work discussed in this section.
-Therefore
-we will not discuss the specifics further,
-but refer the interested reader to \citet{compcertmmv2}
-for more background on this topic.
-
-\subsubsection{Memory Transformations}
-
-The compilation passes of CompCert
-often transform the structure of the memory state:
-multiple blocks can merged into one;
-new blocks may be introduced in the target memory
-and blocks may be dropped from the source memory.
-To express these transformations,
-CompCert introduces \emph{memory extensions} and \emph{memory injections}
-as possible relations between source- and target-level memory states.
-
-In CompCertO,
-these memory transformations are generalized and consolidated
-into a notion of \emph{CompCert Kripke Logical Relations} (CLKRs),
-which play an important role in defining simulation conventions.
-The underlying idea is that
-if two memory states are related by a CKLR,
-then memory operations which succeed at the source level
-should also succeed on at the target level,
-and their outcomes should in turn be related
-by the CKLR.
-
-Unfortunately,
-these memory transformations are difficult to use
-to express the relationships between
-different \emph{fragments} of a single memory state.
-The notion of \emph{separation relation} introduced below
-seeks to fill this gap.
-
-\subsection{Separation Relations} %{{{
-
-To express memory separation in CompCert,
-and define a \emph{join} relation
-$J \subseteq (\kw{mem} \times \kw{mem}) \times \kw{mem}$.
-We will write $J(m_1, m_2, m)$ as:
-\[
-  m_1 \bullet m_2 \equiv m
-  \,,
-\]
-understood to mean that
-the memory states $m_1$ and $m_2$
-can be merged into $m$.
-This relation satisfies the properties listed in Fig.~\ref{fig:sepalg}
-and defines a separation algebra in the sense of \citet{freshlook}.
-
-\begin{figure}
-  \begin{gather*}
-    m_1 \bullet m_2 \equiv m \:\wedge\:
-      m_1 \bullet m_2 \equiv m' \:\Rightarrow\:
-      m = m'
-      \\
-    m_1 \bullet m_2 \equiv m \:\wedge\:
-      m_1' \bullet m_2 \equiv m \:\Rightarrow\:
-      m_1 = m_1'
-      \text{ XXX}
-      \\
-    m_1 \bullet m_2 \equiv m \:\Rightarrow\:
-      m_2 \bullet m_1 \equiv m
-      \\
-    m_1 \bullet m_2 \equiv m_{12} \:\wedge\:
-      m_{12} \bullet m_3 \equiv m \:\Rightarrow\:
-      \exists m_{23} \mathrel.
-      m_2 \bullet m_3 \equiv m_{23} \:\wedge\:
-      m_1 \bullet m_{23} \equiv m
-      \\
-    m \bullet \kw{empty} \equiv m
-  \end{gather*}
-  \caption{Properties of separation algebras
-    in relational form. See also \citet{freshlook}.}
-  \label{fig:sepalg}
+  \\[1em]
+  \textbf{Encapsulating state}
+  \[
+    \begin{prooftree}
+      \hypo{\Sigma : A \rightarrow B@K}
+      \infer1{\kw{fbk}_K(\Sigma) : A \rightarrow B}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\Sigma^\sharp
+        \preceq_{\mathbf{R}_A \rightarrow
+                 \mathbf{R}_B@\langle K^\sharp,K^\flat \rangle}
+        \Sigma^\flat}
+      \infer1{\kw{fbk}_{K^\sharp}(\Sigma^\sharp)
+        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
+        \kw{fbk}_{K^\flat}(\Sigma^\flat)}
+    \end{prooftree}
+    \qquad
+    \kw{fbk}_\mathbbm{1}(\Sigma) \equiv \Sigma
+  \]
+  \vspace{1ex}
+  \[
+    \kw{fbk}_{K_1}(\Sigma_1) \circ \kw{fbk}_{K_2}(\Sigma_2) \equiv
+    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2)
+  \]
+  \caption{Summary of key notations, definitions and properties}
+    %Constructions on the left-hand side operate in terms of
+    %the original semantic framework of CompCertO.
+    %We extend that framework
+    %to account for persistent encapsulated state,
+    %shown on the right.
+    %Construction which enable the manipulation of
+    %encapsulated state are shown at the bottom.}
+  \label{fig:overview}
 \end{figure}
+%}}}
 
-In addition to these structural properties,
-the join relation must be compatible
-with CompCert's memory operations.
-If an operation which reads from the memory succeeds on a fragment,
-it should succeed with the same result on a larger memory state:
+\tableofcontents
+
+\section*{New material} %{{{
+
+\begin{definition}[Tensor product of simulation conventions] \label{def:sctens}
+For the language interfaces $A$ and $B$,
+the language interface $A \otimes B$ and $\mathbf{I}$
+are defined as:
 \[
-  \begin{prooftree}
-    \hypo{\kw{op}(m_1) = \kw{Some}\,v}
-    \hypo{m_1 \bullet m_2 \equiv m}
-    \infer2{\kw{op}(m) = \kw{Some}\,v}
-  \end{prooftree}
+  A \otimes B \::=\:
+  \langle
+    A^\que \times B^\que, \:
+    A^\ans \times B^\ans
+  \rangle
+  \qquad
+  \mathbf{I} := \langle \mathbbm{1}, \mathbbm{1} \rangle
 \]
-Likewise,
-operations which updates the memory
-should be insensitive to additional fragments:
-\[
-  \begin{prooftree}
-    \hypo{\kw{op}(m_1) = \kw{Some}\,m_1'}
-    \hypo{m_1 \bullet m_2 \equiv m}
-    \infer2{\exists m' \mathrel.
-      m_1' \bullet m_2 \equiv m' \wedge
-      \kw{op}(m) = \kw{Some}\,m'}
-  \end{prooftree}
-\]
-
-Together,
-these properties allow us to derive
-versions of the \emph{frame rule}
-for CompCert languages:
-if a program can successfully execute on $m_1$ alone
-to yield a new memory fragment $m_1'$,
-then executing it on a larger memory state
-$m_1 \bullet m_2$ will succeed as well,
-and yield a memory state $m_1' \bullet m_2$
-where the irrelevant portion $m_2$
-has not been modified.
-
 Moreover,
-executions which affect disjoint parts of the memory
-can be considered independently.
-Specifically, from the rules above
-we can derive the property:
+given $R_A : A^\sharp \Leftrightarrow A^\flat$
+and $R_B : B^\sharp \Leftrightarrow B^\flat$,
+we can define the simulation convention
+$R_A \otimes R_B : A^\sharp \otimes B^\sharp
+  \Leftrightarrow
+  A^\flat \otimes B^\flat$
+as follows:
+\[
+  R_A \otimes R_B \: := \:
+    \big\langle
+      W_A \times W_B, \:
+      R_A^\que \times R_B^\que, \:
+      R_A^\ans \times R_B^\ans
+    \big\rangle
+\]
+\end{definition}
+
+\begin{theorem}
+$\mathbf{SC}$ under $\otimes$ is a symmetric monoidal category.
+\end{theorem}
+
+\subsection*{Protected explicit state}
+
+The Kripke relation
+$\Lambda_U \in \mathcal{R}_V(\mathbbm{1}, U)$
+is defined by the rule:
 \[
   \begin{prooftree}
-    \hypo{\kw{op}_1(m_1) = \kw{Some}\,m_1'}
-    \hypo{\kw{op}_2(m_2) = \kw{Some}\,m_2'}
-    \hypo{m_1 \bullet m_2 \equiv m}
-    \infer3{\exists m' \mathrel.
-      \kw{op}_1(\kw{op}_2(m)) =
-	%\kw{op}_2(\kw{op}_1(m)) =
-	m' \:\wedge\:
-      m_1' \bullet m_2' \equiv m'}
+    \infer0{u \Vdash * \ifr{\Lambda_U} u}
   \end{prooftree}
 \]
-As in separation logic,
-this facilitates reasoning
-about program components
-which affect the memory state in independent ways.
 
-Below we explain how a separation relation can be defined
-for the CompCert memory model.
-
-\subsubsection{Memory Contents}
-
-A CompCert memory state essentially defines a map of type
+\begin{definition}
+For a set $U$,
+the simulation convention $\caller{U} : I \Leftrightarrow U$
+is defined as:
 \[
-  \kw{ptr} \rightarrow \kw{option}\,\kw{perm} \times \kw{memval} \,,
+  \caller{U} := \big\langle U,
+      \Lambda_U,
+      \Lambda_U
+    \big\rangle
 \]
-which assigns to every possible address
-a permission level and a memory value.
-Figure~\ref{fig:sepdef}
-shows the definition of a simple separation relation
-for the contents of individual memory cells.
-This relation can then be extended to the whole map
-in the obvious way.
+\end{definition}
 
-\begin{figure}
-  \begin{subfigure}{0.45\textwidth}
-    \centering
-    \fbox{$J_\kw{contents}$}
-    \begin{gather*}
-      (p, v) \in \kw{option}\ \kw{perm} \times \kw{memval} \\[1ex]
-      (\bot, \kw{undef}) \bullet (p, v) \equiv (p, v) \\
-      (p, v) \bullet (\bot, \kw{undef}) \equiv (p, v)
-    \end{gather*}
-    \subcaption{Memory contents}
-    \label{fig:sepdef:contents}
-  \end{subfigure}
-  \begin{subfigure}{0.45\textwidth}
-    \centering
-    \fbox{$J_\kw{nextblock}$}
-    \begin{gather*}
-      (\mathit{nb}, a) \in \kw{block} \times \kw{bool}
-      \\[1ex]
-     {\begin{prooftree}
-	\hypo{\mathrm{max}(\mathit{nb}_1, \mathit{nb}_2) = \mathit{nb}}
-	\hypo{\lnot (a_1 \wedge a_2)}
-	\infer2{(\mathit{nb}_1, a_1) \bullet (\mathit{nb}_2, a_2) \equiv
-	  (\mathit{nb},\, a_1 \mathbin\vee a_2)}
-      \end{prooftree}}
-    \end{gather*}
-    \subcaption{Fresh blocks}
-    \label{fig:sepdef:fresh}
-  \end{subfigure}
-  \caption{%
-    Basic ingredients for separation algebras
-    of the CompCert memory model.}
-  \label{fig:sepdef}
-\end{figure}
-
-\subsubsection{Block Validity}
-
-A more challenging issue is the treatment of $\kw{nextblock}$.
-When a memory state $m$ is separated into $m_1 \bullet m_2 \equiv m$,
-the fragments $m_1$ and $m_2$ will share a common view of the address space.
-However,
-they each carry their own copy of the $\kw{nextblock}$ counter.
-As a result,
-performing independent allocations in each fragment
-will break the separation property,
-because the new blocks will be assigned conflicting names.
-
-As a starting point,
-we solve this problem by
-making sure that new blocks
-can only be allocated in one of the fragments.
-In addition to the $\kw{nextblock}$ counter,
-memory states carry a boolean flag
-indicating whether allocations are permitted.
-When memory fragments are joined,
-this flag can only be set in one of the fragments.
-Figure~\ref{fig:sepdef:fresh}
-shows the corresponding separation algebra
-for the $\kw{nextblock}$ counter.
-
-%}}}
-
-\subsection{Frame rule} %{{{
-
-The compatibility of memory operations with our separation algebras
-can be used to show that
-more complex ways to manipulate memory states
-enjoy similar properties.
-Ultimately this allows us to derive
-a kind of \emph{frame rule} for the Clight semantics.
-We can state this informally as follows:
+\begin{definition}
+For a pointed set $U$,
+the stateful simulation convention
+$\callee{U} : I \leftrightarrow U$
+is defined as
 \[
-  \begin{prooftree}
-    \hypo{\Clight(p) : m_1 \leadsto m_2}
-    \infer1{\Clight(p) : m_1 \bullet m \leadsto m_2 \bullet m}
-  \end{prooftree}
+  \callee U \: := \: \big\langle
+      U, \,
+      \Lambda_U, \,
+      \Lambda_U, \,
+      {=}_U, \,
+      \top_U
+    \big\rangle
 \]
-In other words,
-if the program $p$ safely acts on a memory state $m_1$
-to transform it into a memory state $m_2$,
-then we can frame a memory fragment $m$ onto $m_1$
-and expect the program to leave that fragment intact.
-Intuitively, this holds because
-if $p$ ever needed or affected any of the memory present
-in fragment $m$,
-it would have gone wrong on $m_1$ alone.
+\end{definition}
 
-To formalize this property in the context of CompCertO,
-we can promote the memory separation relation
-to a simulation convention:
 \[
-  \forall A \:.\quad
-  A@{\bullet} : A@(\kw{mem} \times \kw{mem}) \Leftrightarrow A@\kw{mem}
-\]
-We will then compare the ``source''-level semantics
-\[
-  \Clight(p)@\kw{mem} :
-    \mathcal{C}@(\kw{mem} \times \kw{mem}) \twoheadrightarrow
-    \mathcal{C}@(\kw{mem} \times \kw{mem})
-  \,,
-\]
-which acts on one of the memory fragments
-but leaves the other one unchanged,
-to the concrete semantics of $p$ acting on the total memory state:
-\[
-  \Clight(p) : \mathcal{C}@\kw{mem} \Leftrightarrow \mathcal{C}@\kw{mem}
-  \,.
-\]
-This yields the following property.
-
-\begin{lemma}[Frame rule for Clight]
-\[
-  \Clight(p)@\kw{mem}
-  \le_{\mathcal{C}@{\bullet} \twoheadrightarrow \mathcal{C}@{\bullet}}
-  \Clight(p)
-\]
-\end{lemma}
-
-%}}}
-
-\subsection{Hiding Memory State} %{{{
-
-In \S\ref{sec:clightp:erasure}
-
-
-%}}}
-
-\subsection{Initial memory} %{{{
-
-The way we define $\kw{init\_mem}$ can work with the
-separation relation such that:
-\[
-  \kw{init\_mem}(p_1) \bullet \kw{init\_mem}(p_2) \equiv
-  \kw{init\_mem}(p_1 + p_2)
+  \begin{tikzcd}[sep=large]
+    \mathcal{C}\otimes\kw{mem}
+      \ar[r, "\mathsf{ClightP}(M)"]
+      \ar[d, equals] &
+    \mathcal{C}\otimes\kw{mem}
+      \ar[r, equals]
+      \ar[d, leftrightarrow, "\mathcal{C} \otimes \kw{mem} \otimes \callee{p_0}"] &
+    \mathcal{C}\otimes\kw{mem}
+      \ar[dd, leftrightarrow, "\mathcal{C} \otimes \kw{mem} \otimes \callee{m_0}"]
+    \\
+    \mathcal{C} \otimes \kw{mem}
+      \ar[r, "\mathsf{ClightP} \langle M \rangle"]
+      \ar[d, leftrightarrow, "\mathsf{C} \otimes \kw{mem} \otimes \caller{\kw{mem}}"'] &
+    \mathcal{C} \otimes \kw{mem} \otimes \kw{penv}
+      \ar[d, leftrightarrow, "\mathcal{C} \otimes \kw{mem} \otimes R"]
+    \\
+    \mathcal{C} \otimes \kw{mem} \otimes \kw{mem}
+      \ar[d, leftrightarrow, "\mathcal{C} \otimes {\bullet}"'] &
+    \mathcal{C} \otimes \kw{mem} \otimes \kw{mem}
+      \ar[d, leftrightarrow, "\mathcal{C} \otimes {\bullet}"]
+      \ar[r, equals] &
+    \mathcal{C} \otimes \kw{mem} \otimes \kw{mem}
+      \ar[d, leftrightarrow, "\mathcal{C} \otimes {\bullet}"]
+    \\
+    \mathcal{C} \otimes \kw{mem}
+      \ar[r, "\mathsf{Clight}(M)"] &
+    \mathcal{C} \otimes \kw{mem}
+      \ar[r, equals] &
+    \mathcal{C} \otimes \kw{mem}
+  \end{tikzcd}
 \]
 
-%}}}
+\[
+  \includegraphics[scale=0.18]{draftfig/assoc}
+\]
 
-\subsection{Implementing Memory Separation with Nominal CompCert} %{{{
+\[
+  \includegraphics[scale=0.16]{draftfig/encap}
+  \qquad\qquad
+  \includegraphics[scale=0.16]{draftfig/encap-comp}
+\]
 
-%}}}
+\[
+  \includegraphics[scale=0.12]{draftfig/merge-caller}
+  \qquad\qquad
+  \includegraphics[scale=0.12]{draftfig/merge}
+\]
 
 %}}}
 
 \section{Certified Abstraction Layers} \label{sec:cal} %{{{
+
+This section will be dropped.
 
 {
 \color{gray}
@@ -5077,301 +5374,6 @@ and verify them independently.
 %}}}
 
 %}}}
-
-\section{Related Work} %{{{
-
-Our approach is inspired by \citet{feedback,caots}.
-
-\subsection{CompCert} \label{sec:related:compcert}
-
-\cite{sepcompcert}.
-The hybrid approach of CompCertM
-\cite{compcertm}
-consolidated these approaches
-into a verification framework
-where the final correctness theorem
-remains stated in terms of the closed semantics,
-but where a compositional semantics
-can be used to verify individual components.
-%This approach delivers much of the flexibility
-%of compositional semantics
-%with a fraction of the proof effort.
-%Yet because the correctness theorem
-%ultimately characterizes the behavior
-%of the target assembly code as a whole,
-%it is difficult to reuse
-%in a broader context where
-%different parts of the code
-%are intertwined and interact with
-%external components.
-
-\paragraph{Accessibility Condition}
-
-The $\sqsubseteq_{\kw{prv}}$ is similar to $\leadsto_{\bar{A}B}$
-while $\sqsubseteq$ is similar to $\leadsto_{AB}$. Or maybe not...
-
-\paragraph{Module Static Variables}
-
-\citet{compcertm} presents CompCertM,
-which supports module-static variables
-and reasoning about mutually recursive programs.
-The difficulty is to capture the effects that external calls may have on
-those variables through reentrant calls.
-\citet{compcertm} further generalizes the memory injection
-to include a notion of module-local invariants
-to enable reasoning on such variables.
-We could generalize the simulation convention in a similar manner
-to achieve the same reasoning power.
-However, for the purpose of revamping the CAL framework,
-mutual recursion is considered unnecessary
-so we keep things simple.
-We refer interested readers to \citet{compcerto}
-for a detailed comparison between CompCertM and CompCertO.
-
-%}}}
-
-\section{Conclusion} %{{{
-
-Finally,
-the problem of certified compilation itself
-is [emblematic ...]
-
-This richer structure
-does not find a straightforward analogue
-at the level of coherence spaces.
-This illustrates an under-appreciated but important challenge
-for denotational semantics in the context certified compilation,
-namely the important role of abstraction
-in that application domain.
-
-%}}}
-
-\bibliography{../references}
-
-\appendix
-
-\newpage
-
-\begin{figure}[h] %{{{
-  \textbf{Notations}
-  \\[1em]
-  \begin{tabular}{llcllc}
-    Basic component & Def.~\ref{def:lts} &
-    $L : A \twoheadrightarrow B$ &
-    Stateful component & Def.~\ref{def:slts} &
-    $\Sigma : A \rightarrow B$
-    \\
-    Basic convention & Def.~\ref{def:simconv} &
-    $\mathbb{R} : A^\sharp \Leftrightarrow A^\flat$ &
-    Stateful convention & Def.~\ref{def:sconv} &
-    $\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
-    \\
-    Basic simulation & Def.~\ref{def:sim} &
-    $L^\sharp \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L^\flat$ &
-    Stateful simulation & Def.~\ref{def:ssim} &
-    $\Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat$
-  \end{tabular}
-  \\[1em]
-  \textbf{Layered composition}
-  \\[1em]
-  \begin{tabular}{cc@{\qquad}cc}
-    Def.~\ref{def:lcomp} &
-  {$\begin{prooftree}
-      \hypo{L_1 : B \twoheadrightarrow C}
-      \hypo{L_2 : A \twoheadrightarrow B}
-      \infer2{L_1 \odot L_2 : A \twoheadrightarrow C}
-    \end{prooftree}$}
-    &
-    Def.~\ref{def:slcomp} &
-  {$\begin{prooftree}
-      \hypo{\Sigma_1 : B \rightarrow C}
-      \hypo{\Sigma_2 : A \rightarrow B}
-      \infer2{\Sigma_1 \circ \Sigma_2 : A \rightarrow C}
-    \end{prooftree}$}
-    \vspace{1em} \\
-    Thm.~\ref{thm:lcompsim} &
-  {$\begin{prooftree}
-      \hypo{L_1^\sharp
-            \le_{\mathbb{R}_B \twoheadrightarrow \mathbb{R}_C}
-            L_1^\flat}
-      \hypo{L_2^\sharp
-            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-            L_2^\flat}
-      \infer2{L_1^\sharp \odot L_2^\sharp
-            \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_C}
-            L_1^\flat \odot L_1^\flat}
-    \end{prooftree}$} &
-    Thm.~\ref{thm:slcompsim} &
-  {$\begin{prooftree}
-      \hypo{\Sigma_1^\sharp
-            \preceq_{\mathbf{R}_B \rightarrow \mathbf{R}_C}
-            \Sigma_1^\flat}
-      \hypo{\Sigma_2^\sharp
-            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-            \Sigma_2^\flat}
-      \infer2{\Sigma_1^\sharp \circ \Sigma_2^\sharp
-            \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_C}
-            \Sigma_1^\flat \circ \Sigma_1^\flat}
-    \end{prooftree}$}
-  \end{tabular}
-  \\[1em]
-  \textbf{Vertical composition}
-  \\[1em]
-  \begin{tabular}{cc@{\qquad}cc}
-    Def.~\ref{def:ccomp} & {$
-    \begin{prooftree}
-      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\natural}
-      \hypo{\mathbb{S} : A^\natural \Leftrightarrow A^\flat}
-      \infer2{\mathbb{R} \cdot \mathbb{S} : A^\sharp \Leftrightarrow A^\flat}
-    \end{prooftree}
-    $} &
-    Def.~\ref{def:sccomp} & {$
-    \begin{prooftree}
-      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\natural}
-      \hypo{\mathbf{S} : A^\natural \leftrightarrow A^\flat}
-      \infer2{\mathbf{R} \mathbin; \mathbf{S} : A^\sharp \leftrightarrow A^\flat}
-    \end{prooftree}
-    $}
-    \vspace{1em} \\
-    Thm.~\ref{thm:vcomp} & {$
-    \begin{prooftree}
-      \hypo{L^\sharp
-        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-        L^\natural}
-      \hypo{L^\natural
-        \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B}
-        L^\flat}
-      \infer2{L^\sharp
-        \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
-             \mathbb{R}_B \cdot \mathbb{S}_B}
-        L^\flat}
-    \end{prooftree}
-    $} &
-    Thm.~\ref{thm:svcomp} & {$
-    \begin{prooftree}
-      \hypo{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
-        \Sigma^\natural}
-      \hypo{\Sigma^\natural
-        \preceq_{\mathbf{S}_A \twoheadrightarrow \mathbf{S}_B}
-        \Sigma^\flat}
-      \infer2{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \mathbin; \mathbf{S}_A \twoheadrightarrow
-             \mathbf{R}_B \mathbin; \mathbf{S}_B}
-        \Sigma^\flat}
-    \end{prooftree}
-    $}
-  \end{tabular}
-  \\[1em]
-  \textbf{Adjoining explicit state}
-  \\[1em]
-  \begin{tabular}{cc@{\qquad}cc}
-    Def.~\ref{def:lift} &
-    {$
-    \begin{prooftree}
-      \hypo{L : A \twoheadrightarrow B}
-      \infer1{L@K : A@K \twoheadrightarrow B@K}
-    \end{prooftree}
-    $} &
-    Def.~\ref{def:slift} &
-    {$
-    \begin{prooftree}
-      \hypo{\Sigma : A \rightarrow B}
-      \infer1{\Sigma@K : A@K \rightarrow B@K}
-    \end{prooftree}
-    $}
-    \vspace{1em} \\
-    & &
-    Def.~\ref{def:liftsconv} &
-    {$
-    \begin{prooftree}
-      \hypo{\mathbf{R} : A^\sharp \leftrightarrow A^\flat}
-      \infer1{\mathbf{R}@\langle K^\sharp, K^\flat \rangle :
-        A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat}
-    \end{prooftree}
-    $}
-    \vspace{1em} \\
-    & &
-    Thm.~\ref{thm:liftssim} &
-    {$
-    \begin{prooftree}
-      \hypo{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-        \Sigma^\flat}
-      \infer1{\Sigma^\sharp@K^\sharp
-        \preceq_{\mathbf{R}_A@\langle K^\sharp, K^\flat \rangle \rightarrow
-                 \mathbf{R}_B@\langle K^\sharp, K^\flat \rangle}
-        \Sigma^\flat@K^\flat}
-    \end{prooftree}
-    $}
-  \end{tabular}
-  \\[1em]
-  \textbf{Embedding simple components}
-  \[
-    \begin{prooftree}
-      \hypo{L : A \twoheadrightarrow B}
-      \infer1{\&L : A \rightarrow B}
-    \end{prooftree}
-    \qquad
-    \begin{prooftree}
-      \hypo{\mathbb{R} : A^\sharp \Leftrightarrow A^\flat}
-      \infer1{\&\mathbb{R} : A^\sharp \leftrightarrow A^\flat}
-    \end{prooftree}
-    \qquad
-    \begin{array}{c}
-      \&(L_1 \odot L_2) \equiv \&L_1 \circ \&L_2
-      \\[1ex]
-      \&(\mathbb{R} \cdot \mathbb{S}) \equiv
-        \&\mathbb{R} \mathbin; \&\mathbb{S}
-    \end{array}
-    \qquad
-    \begin{prooftree}
-      \hypo{L^\sharp
-        \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-        L^\flat}
-      \infer1{\&L^\sharp
-        \preceq_{\&\mathbb{R}_A \rightarrow \&\mathbb{R}_B}
-        \&L^\flat}
-    \end{prooftree}
-  \]
-  \\[1em]
-  \textbf{Encapsulating state}
-  \[
-    \begin{prooftree}
-      \hypo{\Sigma : A \rightarrow B@K}
-      \infer1{\kw{fbk}_K(\Sigma) : A \rightarrow B}
-    \end{prooftree}
-    \qquad
-    \begin{prooftree}
-      \hypo{\Sigma^\sharp
-        \preceq_{\mathbf{R}_A \rightarrow
-                 \mathbf{R}_B@\langle K^\sharp,K^\flat \rangle}
-        \Sigma^\flat}
-      \infer1{\kw{fbk}_{K^\sharp}(\Sigma^\sharp)
-        \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-        \kw{fbk}_{K^\flat}(\Sigma^\flat)}
-    \end{prooftree}
-    \qquad
-    \kw{fbk}_\mathbbm{1}(\Sigma) \equiv \Sigma
-  \]
-  \vspace{1ex}
-  \[
-    \kw{fbk}_{K_1}(\Sigma_1) \circ \kw{fbk}_{K_2}(\Sigma_2) \equiv
-    \kw{fbk}_{K_1 \times K_2}(\Sigma_1@K_2 \circ \Sigma_2)
-  \]
-  \caption{Summary of key notations, definitions and properties}
-    %Constructions on the left-hand side operate in terms of
-    %the original semantic framework of CompCertO.
-    %We extend that framework
-    %to account for persistent encapsulated state,
-    %shown on the right.
-    %Construction which enable the manipulation of
-    %encapsulated state are shown at the bottom.}
-  \label{fig:overview}
-\end{figure}
-%}}}
-
-\tableofcontents
 
 \section{Cut material to keep for now}
 
