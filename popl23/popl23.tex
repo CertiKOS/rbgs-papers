@@ -276,11 +276,11 @@ which provides these features:
     Conversely,
     we extend the compiler's source language Clight
     to take advantage of our treatment of state (\S\ref{sec:clightp}).
-    The language ClightP allows the used to define
+    The resulting language ClightP allows the definition of
     component-local \emph{private} variables
-    which are kept separate from the global memory,
-    in a distinct \emph{private environment}
-    which can be handled in isolation.
+    which are kept separate from the global memory.
+    %in a distinct \emph{private environment}
+    %which can be handled in isolation.
   \item
     Finally,
     we extend our model with state encapsulation (\S\ref{sec:encap}),
@@ -419,10 +419,12 @@ can be reused and incorporated into our framework as-is.
 
 \section{Overview of the Framework} %{{{
 
-We begin by providing a high-level overview of our framework,
-summarized in \autoref{tbl:roadmap}.
-As their dimensionality increases,
-the objects we will manipulate
+We begin by providing a high-level overview of our framework.
+Its ingredients are
+shown in \autoref{tbl:roadmap}.
+Note that
+as their dimensionality increases,
+the objects we manipulate
 support increasingly many composition operations.
 Our starting point is the semantic model used in CompCertO.
 
@@ -1789,7 +1791,7 @@ Maybe the implementation of $L_\kw{rb}$?
 
 %}}}
 
-\subsection{Encapsulated State} %{{{
+\subsection{Encapsulated State} \label{sec:overview:encap} %{{{
 
 In the semantic model of CompCertO, state exists in two forms:
 \begin{itemize}
@@ -3767,601 +3769,340 @@ large scale system softwares.
 \section{Encapsulated State} \label{sec:encap} %{{{
 
 % Preamble {{{
-
-In this section,
-we explain how a richer model can be constructed
-to allow encapsulated state
-to be \emph{persistent} across
-successive activations of a component.
-Such persistent state
+We now construct a version of our model
+which allows state components to be \emph{encapsulated}.
+The underlying transition systems are unchanged,
+and encapsulated state
 is communicated from one activation to the next
-in the same way global state would be,
-but is marked as local to a given component
-to ensure that the environment cannot interfere
-with it between successive activations.
-
+in the same way global state would be.
+However,
+marking state as encapsulated
+removes it from a component's type,
+and prevents the environment from accessing it.
 %}}}
 
-\subsection{Stateful Components} %{{{
+\subsection{Components} %{{{
 
 The compositional treatment of state
-we have presented in \S\ref{sec:scomp}
-makes it possible to express
-the indifference of a component
-with respect to some the global state:
-\emph{by construction},
-a transition system
-$L \mathbin@ U : A \mathbin@ U \twoheadrightarrow B \mathbin@ U$
-is unaffected by the state component $U$.
+presented in \S\ref{sec:scomp}
+allows a component $L_1 : B \rightarrow C \in \mathbf{TS}$
+to interact with %a component
+$L_2 : A \rightarrow B \mathbin@ U$
+as the composite $(L_1 \mathbin@ U) \odot L_2$.
+This guarantees that
+$L_1$ will not interfere with the state in $U$.
+Our approach to state encapsulation
+is to force the environment to
+interact with components in this manner.
+In the extended model,
+a component $L : A \rightarrow B \in \mathbf{TS}^\dagger$
+is defined using an underlying transition system
+of type $A \rightarrow B \mathbin@ U$
+with
+an additional state component $U \in \mathbf{Bij}$.
 
 \begin{definition} \label{def:slts}
-A stateful component
-$\Sigma = (\intl{k} \in K \mid L) : A \rightarrow B \in \mathbf{TS}^\dagger$
-consists of:
-\begin{itemize}
-  \item a set of states $K$;
-  \item an initial state $\intl{k} \in K$;
-  \item a transition system $L : A \twoheadrightarrow B@K$.
-\end{itemize}
-\end{definition}
-
-From $\Sigma$'s point of view,
-the environment behaves in the following way.
-The first time $\Sigma$ is activated by a question $q \in B^\que$,
-the state $\intl{k}$ is adjoined to $q$
-and the transition system $L$ is initialized using the question $q@\intl{k}$.
-When $L$ terminates with an answer $r@k' \in (B@K)^\ans$,
-the private state component $k'$
-is set aside until
-the next activation of $\Sigma$,
-at which point it is fed back to $L$ and so on.
-
-A CompCertO LTS $L : A \twoheadrightarrow B$
-can be lifted to the persistent version
-by using a unit state:
-\[
-  \begin{prooftree}
-    \hypo{L : A \twoheadrightarrow B}
-    \infer1{\&L := (\mathbbm{1} \mid L) : A \rightarrow B}
-  \end{prooftree}
-\]
-State encapsulation is managed using an operation
-\[
-  \begin{prooftree}
-    \hypo{\Sigma = (Q \mid L) : A \rightarrow B@K}
-    \infer1{\mathsf{fbk}_K(\Sigma) := (Q \times K \mid L) : A \rightarrow B}
-  \end{prooftree}
-\]
-which adds a field of type $K$ to the encapsulated state within $\Sigma$.
-
-Once private state has been encapsulated,
-in principle it can only be observed by the environment
-through the way the transition system responds
-to successive queries.
-In particular,
-constructions on stateful components
-should preserve the following notion of equivalence.
-
-\begin{definition}[Simple Simulation] \label{def:ssim}
-We will say that $\Sigma_1 : A \rightarrow B$
-is refined by $\Sigma_2 : A \rightarrow B$
-and write $\Sigma_1 \preceq \Sigma_2$
-when there exists a relation $R \subseteq K_1 \times K_2$
-such that:
-\begin{itemize}
-  \item the initial states $\intl{k}_1, \intl{k}_2$ are related by $R$;
-  \item the transition systems satisfy
-    $L_1 \le_{\kw{id}_A \twoheadrightarrow B@R} L_2$.
-\end{itemize}
-We write $\Sigma_1 \equiv \Sigma_2$ when
-$\Sigma_1 \preceq \Sigma_2$ and
-$\Sigma_2 \preceq \Sigma_1$.
-\end{definition}
-
-%}}}
-
-\subsection{Composition} %{{{
-
-The composite $\Sigma_1 \circ \Sigma_2$
-uses states of type $K_1 \times K_2$.
-Each side of the pair is updated
-when the corresponding component is active.
-Incoming questions in $C$ are routed to $L_1 : B \twoheadrightarrow C@K_1$,
-which we lift to pass through an additional state component of type $K_2$.
-Outgoing questions of $L_1$ in $B$ can then be routed to $L_2$,
-as depicted in the following diagram:
-\[
-  \begin{tikzpicture}[yscale=0.5]
-    \draw (0,2) node[left] {$K_2$} -- (2,2) .. controls +(0.5,0) and +(-0.5,0) .. (3,1);
-    \draw (0,1) node[left] {$K_1$} -- (1,1);
-    \draw (0,0) node[left] {$C$} -- (1,0);
-    \draw (2,0) -- node[below] {$B$} (3,0);
-    \draw (4,0) -- (5,0) node[right] {$A$};
-    \draw (1,1.5) rectangle node {$L_1$} (2,-0.5);
-    \draw (3,1.5) rectangle node {$L_2$} (4,-0.5);
-  \end{tikzpicture}
-\]
-Formally,
-composition is defined as follows.
-
-\begin{definition}[Composition] \label{def:slcomp}
-Given two stateful components
-$\Sigma_1 = (K_1 \mid L_1) : B \rightarrow C$ and
-$\Sigma_2 = (K_2 \mid L_2) : A \rightarrow B$,
-we define their composition
-$\Sigma_1 \circ \Sigma_2 : A \rightarrow C$
-in the following way:
-\[
-  \Sigma_1 \circ \Sigma_2 :=
-    ( K_1 \times K_2 \mid L_1@K_2 \odot L_2 )
-\]
-Note that this formulation
-implicitly uses the isomorphism
-\[
-  L_1@K_2 : B@K_2 \twoheadrightarrow (C@K_1)@K_2 \cong C@(K_1 \times K_2)
-  \,.
-\]
-\end{definition}
-
-
-
-
-\begin{lemma}
-  This is compatible with:
-  \begin{itemize}
-    \item simple simulations;
-    \item lifting hence associativity is preserved.
-  \end{itemize}
-
-\end{lemma}
-
-%}}}
-
-\subsection{Combining Hidden and Explicit State} %{{{
-
-It is possible for a stateful component
-to hide only part of the explicit state
-used by the underlying transition system.
-For example,
-in a transition system
-$L : A \rightarrow B@(K \times U) \cong B@U@K$,
-we may choose to hide only $K$,
-to obtain a stateful component
-$\Sigma = (K \mid L) : A \rightarrow B@U$
-which still exchanges explicit state of type $U$
-with the environment.
-This makes it possible to construct
-complex stateful components incrementally
-from simpler, stateless parts,
-by first promoting them using $\&$,
-then hiding state in a step-by-step fashion
-using $\kw{fbk}$.
-
-In addition,
-stateful components can be lifted
-to pass through explicit state.
-
-\begin{definition} \label{def:slift}
-The stateful component $\Sigma = (K \mid L) : A \rightarrow B$
-can be lifted to \[ \Sigma@U := (K \mid L@U) : A@U \rightarrow B@U \,. \]
-Note that this relies on the isomorphism
-\[
-  L@U : A@U \twoheadrightarrow (B@K)@U \cong (B@U)@K
-  \,.
-\]
-\end{definition}
-
-The following properties
-relate the promotion operator $\&$,
-the composition operators $\odot$ and $\circ$,
-and the hiding operator $\kw{fbk}$.
-
-\begin{lemma}
-  For $L_1 : B \twoheadrightarrow C@K_1$ and
-  $L_2 : A \twoheadrightarrow B@K_2$,
-  the following property holds:
-  \[
-    \&(L_1@K_2) \circ \&L_2 \equiv \&(L_1@K_2 \odot L_2)
-    \,.
-  \]
-  In addition, for $\Sigma_1 : B \rightarrow C@U_1$
-  and $\Sigma_2 : A \rightarrow B@U_2$,
-  the following property holds:
-  \[
-    \kw{fbk}_{U_1}(\Sigma_1) \circ \kw{fbk}_{U_2}(\Sigma_2) \equiv
-    \kw{fbk}_{U_1 \times U_2}(\Sigma_1@U_2 \circ \Sigma_2)
-    \,.
-  \]
-\end{lemma}
-
-%}}}
-
-\subsection{Stateful Simulations} %{{{
-
-Definition XXX introduced a simple notion of refinement
-between stateful components,
-but assumed that the interactions of both components
-with their environment were identical.
-By contrast, a key feature of CompCertO
-is the notion of \emph{simulation convention},
-which parameterizes simulations by
-specifying how the interactions of
-the source-level and target-level transition system
-are related.
-
-%}}}
-
-\subsection{Simulation of Stateful Components} %{{{
-
-We have defined stateful simulations of transition systems.
-We now seek to extend them to cover stateful components.
-Such simulations will essentially be
-stateful simulations between the underlying transition systems.
-However,
-because encapsulated states are not observed by the environment,
-we expect a simulation between the stateful components
-$\Sigma^\sharp : A^\sharp \rightarrow B^\sharp$ and
-$\Sigma^\flat : A^\flat \rightarrow B^\flat$
-to be typed as
+Consider a category $\mathbf{C}$
+equipped with a functor
+${\star} : \mathbf{C} \times \mathbf{Bij} \rightarrow \mathbf{C}$
+and a family of isomorphisms
 $
-  \Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-  \Sigma^\flat
-$
-with $\mathbf{R}_B : B^\sharp \leftrightarrow B^\flat$.
-The challenge is then to make it possible for
-the internal states of the underlying transition systems
-$L^\sharp : A^\sharp \rightarrow B^\sharp@K^\sharp$
-and
-$L^\flat : A^\flat \rightarrow B^\flat@K^\flat$
-to be taken into account by the simulation.
-
-Our solution will be to construct a simulation convention
-$\mathbf{R}_B@\langle K^\sharp, K^\flat \rangle :
- B^\sharp@K^\sharp \leftrightarrow B^\flat@K^\flat$,
-which will incorporate states into the worlds
-but otherwise behave identically to $\mathbf{R}_B$.
-
-\begin{definition}[Lifting simulation conventions] \label{def:liftsconv} %{{{
-For a stateful convention
-$\mathbf{R} : A^\sharp \leftrightarrow A^\flat$
-and two pointed sets $K^\sharp, K^\flat$, 
-we define %the stateful convention
-$\mathbf{R}@\langle K^\sharp,K^\flat \rangle :
-   A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat$
-with the following components:
-\begin{gather*}
-  W := W_\mathbf{R} \times K^\sharp \times K^\flat
-  \qquad
-  \intl{w} := \big( \intl{w}_\mathbf{R}, \intl{k}^\sharp, \intl{k}^\flat \big)
-  \\
- {\begin{prooftree}
-    \hypo{w \leadsto_\mathbf{R} w'}
-    \infer1{(w, k_\sharp, k_\flat) \leadsto (w', k_\sharp', k_\flat')}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{w \mapsto_\mathbf{R} w'}
-    \infer1{(w, k^\sharp, k^\flat) \mapsto (w', k^\sharp, k^\flat)}
-  \end{prooftree}}
-  \\
- {\begin{prooftree}
-    \hypo{w \Vdash q^\sharp \mathrel{\mathbf{R}^\que}
-                   q^\flat}
-    \infer1{
-      (w, k^\sharp, k^\flat) \Vdash
-      q^\sharp@k^\sharp
-      \mathrel{[\mathbf{R}@\langle K_1, K_2 \rangle]^\que}
-      q^\flat@k^\flat}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{w \Vdash r^\sharp \mathrel{\mathbf{R}^\ans}
-                   r^\flat}
-    \infer1{
-      (w, k^\sharp, k^\flat) \Vdash
-      r^\sharp@k^\sharp
-      \mathrel{[\mathbf{R}@\langle K_1, K_2 \rangle]^\ans}
-      r^\flat@k^\flat}
-  \end{prooftree}}
-\end{gather*}
-\end{definition}
-%}}}
-
-For simulations of stateful components,
-the underlying simulation of transition systems
-can then operate in terms
-of the instrumented simulation convention defined above.
-In particular, this allows
-the (existentially quantified) world invariant
-$W \subseteq W_A \times W_B \times K^\sharp \times K^\flat$
-used by the simulation
-to impose constraints on the encapsulated states.
-
-\begin{definition}[Simulation] \label{def:ssim} %{{{
-There is a \emph{simulation} of type
+  \alpha_{A,U,V} : A \star (U \times V) \cong A \star U \star V
+$.
+We define a category $\mathbf{C}^\dagger$
+with the same objects,
+where morphism take the form
+$(u \in U \mid L) : A \rightarrow B \in \mathbf{C}^\dagger$
+and consist of:
+\begin{itemize}
+  \item a set of states $U$ with a distinguished initial state $u \in U$;
+  \item a morphism $L : A \rightarrow B \star U \in \mathbf{C}$
+    of the underlying category.
+\end{itemize}
+Composition in $\mathbf{C}^\dagger$ is defined as:
 \[
-  \Sigma^\sharp \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B} \Sigma^\flat
+  (u \in U \mid L_1) \,\circ\, (v \in V \mid L_2) \::=\:
+  \big( (u, v) \in U \times V \mid
+        \alpha^{-1} \circ (L_1 \star V) \circ L_2 \big)
+\]
+An embedding of $\mathbf{C}$ into $\mathbf{C}^\dagger$
+is defined by $(* \in \mathbbm{1} \mid {-})$.
+\end{definition}
+
+The construction above can be applied both to
+the active components in $\mathbf{TS}$ (with ${\star} := {\mathbin@}$) and
+the passive components in $\mathbf{Bij}$ (with ${\star} := {\otimes}$).
+The first time a component
+$(u \in U \mid L) : A \rightarrow B \in \mathbf{TS}^\dagger$
+is activated by a question $q \in B^\que$,
+%the state $u$ is adjoined to $q$ and
+the transition system $L$ is initialized using %the question
+$q@u \in (B \mathbin@ U)^\que$.
+When $L$ terminates with an answer $r@u' \in (B \mathbin@ U)^\ans$,
+the component passes $r \in B^\ans$ on to the environment and
+the new state $u'$ is set aside to be used with the next activation.
+
+In addition to composition,
+the functor ${\star} : \mathbf{C} \times \mathbf{Bij} \rightarrow \mathbf{C}$
+can also be extended to
+${\star} : \mathbf{C}^\dagger \times \mathbf{Bij}^\dagger \rightarrow \mathbf{C}^\dagger$.
+This can be shown using string diagrams of the following form:
+\[
+  \text{[draft fig]}
+  \qquad\qquad
+  \text{[draft fig]}
+  \qquad\qquad
+  \text{[draft fig]}
+\]
+where the beads on the left-hand side
+represent the encapsulated state components.
+This representation stems from the fact that
+any morphism in $\mathbf{C}^\dagger$
+can be defined using the embedded morphisms of $\mathbf{C}$
+together with the following state encapsulation primitive:
+\[
+  \langle u \in U \rangle : U \rightarrow \mathbbm{1} \in \mathbf{Bij}^\dagger
   \qquad \qquad
-\begin{tikzcd}
-  A^\sharp \ar[r, "\Sigma^\sharp"]
-      \ar[d, leftrightarrow, "\mathbf{R}_A"'] &
-  B^\sharp \ar[d, leftrightarrow, "\mathbf{R}_B"] \\
-  A^\flat \ar[r, "\Sigma^\flat"] &
-  B^\flat
-\end{tikzcd}
+  \langle u \in U \rangle  :=  (u \in U \mid \kw{id}_U)
+    = \text{[draft fig]}
 \]
-between
-the stateful components
-$\Sigma^\sharp = (K^\sharp \mid L^\sharp) : A^\sharp \rightarrow B^\sharp$ and
-$\Sigma^\flat = (K^\flat \mid L^\flat) : A^\flat \rightarrow B^\flat$
-when
+
+%Once private state has been encapsulated,
+%in principle it can only be observed by the environment
+%through the way the transition system responds
+%to successive queries.
+%In particular,
+%constructions on stateful components
+%should preserve the following notion of equivalence.
+%
+%\begin{definition}[Simple Simulation] \label{def:ssim}
+%We will say that $\Sigma_1 : A \rightarrow B$
+%is refined by $\Sigma_2 : A \rightarrow B$
+%and write $\Sigma_1 \preceq \Sigma_2$
+%when there exists a relation $R \subseteq K_1 \times K_2$
+%such that:
+%\begin{itemize}
+%  \item the initial states $\intl{k}_1, \intl{k}_2$ are related by $R$;
+%  \item the transition systems satisfy
+%    $L_1 \le_{\kw{id}_A \twoheadrightarrow B@R} L_2$.
+%\end{itemize}
+%We write $\Sigma_1 \equiv \Sigma_2$ when
+%$\Sigma_1 \preceq \Sigma_2$ and
+%$\Sigma_2 \preceq \Sigma_1$.
+%\end{definition}
+
+%}}}
+
+%\subsection{Composition} %{{{
+%
+%The composite $\Sigma_1 \circ \Sigma_2$
+%uses states of type $K_1 \times K_2$.
+%Each side of the pair is updated
+%when the corresponding component is active.
+%Incoming questions in $C$ are routed to $L_1 : B \twoheadrightarrow C@K_1$,
+%which we lift to pass through an additional state component of type $K_2$.
+%Outgoing questions of $L_1$ in $B$ can then be routed to $L_2$,
+%as depicted in the following diagram:
+%\[
+%  \begin{tikzpicture}[yscale=0.5]
+%    \draw (0,2) node[left] {$K_2$} -- (2,2) .. controls +(0.5,0) and +(-0.5,0) .. (3,1);
+%    \draw (0,1) node[left] {$K_1$} -- (1,1);
+%    \draw (0,0) node[left] {$C$} -- (1,0);
+%    \draw (2,0) -- node[below] {$B$} (3,0);
+%    \draw (4,0) -- (5,0) node[right] {$A$};
+%    \draw (1,1.5) rectangle node {$L_1$} (2,-0.5);
+%    \draw (3,1.5) rectangle node {$L_2$} (4,-0.5);
+%  \end{tikzpicture}
+%\]
+%Formally,
+%composition is defined as follows.
+%
+%\begin{definition}[Composition] \label{def:slcomp}
+%Given two stateful components
+%$\Sigma_1 = (K_1 \mid L_1) : B \rightarrow C$ and
+%$\Sigma_2 = (K_2 \mid L_2) : A \rightarrow B$,
+%we define their composition
+%$\Sigma_1 \circ \Sigma_2 : A \rightarrow C$
+%in the following way:
+%\[
+%  \Sigma_1 \circ \Sigma_2 :=
+%    ( K_1 \times K_2 \mid L_1@K_2 \odot L_2 )
+%\]
+%Note that this formulation
+%implicitly uses the isomorphism
+%\[
+%  L_1@K_2 : B@K_2 \twoheadrightarrow (C@K_1)@K_2 \cong C@(K_1 \times K_2)
+%  \,.
+%\]
+%\end{definition}
+%
+%
+%
+%
+%\begin{lemma}
+%  This is compatible with:
+%  \begin{itemize}
+%    \item simple simulations;
+%    \item lifting hence associativity is preserved.
+%  \end{itemize}
+%
+%\end{lemma}
+%
+%%}}}
+
+%\subsection{Combining Hidden and Explicit State} %{{{
+%
+%It is possible for a stateful component
+%to hide only part of the explicit state
+%used by the underlying transition system.
+%For example,
+%in a transition system
+%$L : A \rightarrow B@(K \times U) \cong B@U@K$,
+%we may choose to hide only $K$,
+%to obtain a stateful component
+%$\Sigma = (K \mid L) : A \rightarrow B@U$
+%which still exchanges explicit state of type $U$
+%with the environment.
+%This makes it possible to construct
+%complex stateful components incrementally
+%from simpler, stateless parts,
+%by first promoting them using $\&$,
+%then hiding state in a step-by-step fashion
+%using $\kw{fbk}$.
+%
+%In addition,
+%stateful components can be lifted
+%to pass through explicit state.
+%
+%\begin{definition} \label{def:slift}
+%The stateful component $\Sigma = (K \mid L) : A \rightarrow B$
+%can be lifted to \[ \Sigma@U := (K \mid L@U) : A@U \rightarrow B@U \,. \]
+%Note that this relies on the isomorphism
+%\[
+%  L@U : A@U \twoheadrightarrow (B@K)@U \cong (B@U)@K
+%  \,.
+%\]
+%\end{definition}
+%
+%The following properties
+%relate the promotion operator $\&$,
+%the composition operators $\odot$ and $\circ$,
+%and the hiding operator $\kw{fbk}$.
+%
+%\begin{lemma}
+%  For $L_1 : B \twoheadrightarrow C@K_1$ and
+%  $L_2 : A \twoheadrightarrow B@K_2$,
+%  the following property holds:
+%  \[
+%    \&(L_1@K_2) \circ \&L_2 \equiv \&(L_1@K_2 \odot L_2)
+%    \,.
+%  \]
+%  In addition, for $\Sigma_1 : B \rightarrow C@U_1$
+%  and $\Sigma_2 : A \rightarrow B@U_2$,
+%  the following property holds:
+%  \[
+%    \kw{fbk}_{U_1}(\Sigma_1) \circ \kw{fbk}_{U_2}(\Sigma_2) \equiv
+%    \kw{fbk}_{U_1 \times U_2}(\Sigma_1@U_2 \circ \Sigma_2)
+%    \,.
+%  \]
+%\end{lemma}
+%
+%%}}}
+
+\begin{example}[Encapsulation in ClightP]
+\end{example}
+
+\subsection{Simulations} %{{{
+
+We must now extend the double category structure of $\mathbf{TSC}$
+to the encapsulated state model.
+The same notion of simulation convention can be reused as-is.
+In addition,
+the simulation property
+$L^\sharp \le_{\mathbf{R} \rightarrow \mathbf{S}} L^\flat \in \mathbf{TSC}^\dagger$
+can be defined using a simulation
+in the original model $\mathbf{TSC}$
+between the underlying transition systems.
+However,
+to take into account the components' encapsulated states,
+we must first incorporate those states into
+the incoming simulation convention $\mathbf{S}$.
+To this end,
+we will use the elementary simulation conventions
+$\langle u \rangle^*$ and $\langle u \rangle_*$
+mentioned in \S\ref{sec:overview:encap}.
+
+\begin{definition}
+For $u \in U$,
+the simulation conventions
+$\langle u \rangle^*$ and
+$\langle u \rangle^*$ are defined as:
 \[
+  \langle u \rangle^* :=
+    \big\langle U,\, u,\, \top,\, {=},\, \Gamma_U,\, \Gamma_U \big\rangle
+    : U \leftrightarrow \mathbf{I}
+  \qquad \qquad
+  \langle u \rangle^* :=
+    \big\langle U,\, u,\, \top,\, {=},\, \Gamma_U^\kw{op},\, \Gamma_U^\kw{op} \big\rangle
+    : \mathbf{I} \leftrightarrow U
+\]
+where the Kripke relation $\Gamma_U \in \mathcal{R}(U, \mathbbm{1})$
+is defined by the following rule:
+\[
+  \begin{prooftree}
+    \infer0{u \Vdash u \mathrel{\Gamma_U} *}
+  \end{prooftree}
+\]
+\end{definition}
+
+These elementary simulation conventions
+internalize a state component of type $U$ in their Kripke worlds,
+and express the guarantees provided by the environment
+for encapsulated state:
+on the first call, the source (resp. target) component
+must be passed the initial state $u \in U$.
+It may then modify the state,
+performing a callee world transition
+in $\langle u \rangle^*$ (resp. $\langle u \rangle_*$).
+However,
+between successive calls,
+the caller may not update the world.
+With the ability to express these constraints,
+we can define our notion of simulation
+for components with encapsulated states.
+
+\begin{definition} \label{def:ssim} %{{{
+Simulations of components with encapsulated state are defined by
+\[
+  (u \in U \mid L^\sharp)
+  \le_{\mathbf{R} \rightarrow \mathbf{S}}
+  (v \in V \mid L^\flat)
+  \in \mathbf{TSC}^\dagger
+  \quad:\Leftrightarrow\quad
   L^\sharp
-  \preceq_{\mathbf{R}_A \twoheadrightarrow
-           \mathbf{R}_B@\langle K^\sharp, K^\flat \rangle}
+  \le_{\mathbf{R} \rightarrow
+       \mathbf{S} \otimes (\langle u \rangle^* \mathbin; \langle v \rangle_*)}
   L^\flat
+  \in
+  \mathbf{TSC}
   \,.
 \]
 \end{definition}
 %}}}
-
-Defined in this way,
-simulations of stateful components generalize
-the original simulations used in CompCertO.
-First,
-basic simulations between transition systems
-can be promoted to stateful simulations.
-Then,
-these stateful simulations induce
-simulations between the corresponding
-embedded stateful components.
 
 \begin{lemma}[Promoting simulations] \label{thm:promote} %{{{
-\[
-  \begin{prooftree}
-    \hypo{L^\sharp
-      \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B}
-      L^\flat}
-    \infer1{L^\sharp
-      \preceq_{\&\mathbb{R}_A \twoheadrightarrow \&\mathbb{R}_B}
-      L^\flat}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{L^\sharp
-      \preceq_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B}
-      L^\flat}
-    \infer1{\&L^\sharp
-      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-      \&L^\flat}
-  \end{prooftree}
-\]
-\end{lemma}
-%}}}
-[Yu:
-The first one overlaps with \ref{lemma:stsim}.
-It worths mentioning that the first one promotes
-a ``bare'' CompCertO simulation into a stateful simulation,
-and the second one promotes
-a stateful simulation into
-a simulation between components with encapsulated states.
-]
-
-Moreover,
-simulations of stateful components satisfy the expected
-composition properties.
-
-\begin{lemma}[Layered composition of simulations] \label{thm:slcompsim} %{{{
-\[
-  \begin{prooftree}
-    \hypo{
-      \Sigma_1^\sharp
-      \preceq_{\mathbf{R}_B \rightarrow \mathbf{R}_C}
-      \Sigma_1^\flat}
-    \hypo{
-      \Sigma_2^\sharp
-      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-      \Sigma_2^\flat}
-    \infer2{
-      \Sigma_1^\sharp \circ \Sigma_2^\sharp
-      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_C}
-      \Sigma_1^\flat \circ \Sigma_2^\flat}
-  \end{prooftree}
-  \qquad
-  \begin{tikzcd}
-    A^\sharp \ar[r, rightarrow, "\Sigma_2^\sharp"]
-	     \ar[d, leftrightarrow, "\mathbf{R}_A"] &
-    B^\sharp \ar[r, rightarrow, "\Sigma_1^\sharp"]
-	     \ar[d, leftrightarrow, "\mathbf{R}_B"] &
-    C^\sharp \ar[d, leftrightarrow, "\mathbf{R}_C"]
-    \\
-    A^\flat \ar[r, rightarrow, "\Sigma_2^\flat"'] &
-    B^\flat \ar[r, rightarrow, "\Sigma_1^\flat"'] &
-    C^\flat
-  \end{tikzcd}
-\]
 \end{lemma}
 %}}}
 
-\begin{lemma}[Vertical composition of simulations] \label{thm:evcomp} %{{{
-\[
-  \begin{prooftree}
-    \hypo{\Sigma^\sharp
-      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-      \Sigma^\natural}
-    \hypo{\Sigma^\natural
-      \preceq_{\mathbf{S}_A \rightarrow \mathbf{S}_B}
-      \Sigma^\flat}
-    \infer2{\Sigma^\sharp
-      \preceq_{\mathbf{R}_A \mathbin; \mathbf{S}_A \rightarrow
-	   \mathbf{R}_B \mathbin; \mathbf{S}_B}
-      \Sigma^\flat}
-  \end{prooftree}
-\]
+\begin{lemma}[Composition of simulations] \label{thm:scompsim} %{{{
 \end{lemma}
 %}}}
-[Yu: Note the difference between \ref{thm:svcomp} and \ref{thm:evcomp}.
-The former is stateful simulation between regular components,
-and the latter is the simulation between encapsulated components.]
-
-[This means in particular that language interfaces and stateful components
-also constitute a double category,
-and our embedding constitutes a double functor.]
 
 %}}}
 
 \subsection{Relating Hidden and Explicit State} %{{{
 
-To conclude this section we discuss how
-state encapsulation primitives and simulations interact.
-
-Recall that in Definition~\ref{def:liftsconv}, we defined a simulation convention
-$\mathbf{R}@\langle K^\sharp, K^\flat \rangle$,
-which was then used in Definition~\ref{def:ssim}
-to relate the underlying transition systems
-of stateful components.
-Expressed in the context of the state encapsulation primitive $\kw{fbk}$,
-this gives rise to the following principle.
-
-\begin{lemma}[Proving simulations for encapsulated components] \label{thm:fbksim}
-Given $\Sigma^{\sharp} : A^{\sharp} \rightarrow B^{\sharp}@K^{\sharp}$
-and $\Sigma^{\flat} : A^{\flat} \rightarrow B^{\flat}@K^{\flat}$
-\[
-  \begin{prooftree}
-    \hypo{\Sigma^\sharp
-      \preceq_{\mathbf{R}_A \rightarrow
-	       \mathbf{R}_B@\langle K^\sharp,K^\flat \rangle}
-      \Sigma^\flat}
-    \infer1{\kw{fbk}_{K^\sharp}(\Sigma^\sharp)
-      \preceq_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-      \kw{fbk}_{K^\flat}(\Sigma^\flat)}
-  \end{prooftree}
-\]
-\end{lemma}
-[$\mathbf{R}_B@\langle \cdots \rangle$ could be generalized to
-$\mathbf{R}_B@R_{k}$]
-
-Because of the properties of $\kw{fbk}$,
-and because state can be hidden incrementally,
-the source and target transition systems in a simulation
-may differ in how much of their state is encapsulated.
-For example,
-we will often want to show that
-a given high-level component with encapsulated state
-is realized by a low-level implementation
-where all state remains explicit.
-In this case,
-the stateful convention used by the simulation
-will enforce the expectation that
-the context may not modify the concrete explicit state
-between successive invocations of the component.
-
-In the simplest case,
-suppose we want to show a simulation between the stateful component
-$\kw{fbk}_K(\Sigma) : A \rightarrow B$ which encapsulates $K$
-and the ``naked'' underlying component $\Sigma : A \rightarrow B@K$.
-We must choose a simulation convention
-$\kw{reveal}_{B,K} : B \leftrightarrow B@K$ such that
-$
-  \Sigma
-  \preceq_{\kw{id}_A \rightarrow \kw{reveal}_{B,K}@\langle K, \mathbbm{1} \rangle}
-  \Sigma
-$.
-Since $\Sigma \equiv \kw{fbk}_\mathbbm{1}(\Sigma)$,
-we can then apply Theorem~\ref{thm:fbksim} to obtain
-the desired simulation property
-\[
-  \kw{fbk}_K(\Sigma)
-  \preceq_{\kw{id}_A \rightarrow \kw{reveal}_{B,K}}
-  \Sigma
-  \,.
-\]
-Such a simulation convention can in fact be defined in the general case.
-
-\begin{definition}
-For a simulation convention
-$\mathbf{R} : A^\sharp@K^\sharp \leftrightarrow A^\flat@K^\flat$,
-we define the simulation convention
-$\kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R}) :
- A^\sharp \leftrightarrow A^\flat$
-as follows:
-\begin{gather*}
-  W := W_\mathbf{R} \times K^\sharp \times K^\flat
-  \qquad \intl{w} := (\intl{w}_\mathbf{R}, \intl{k}^\sharp, \intl{k}^\flat)
-  \\[1ex]
- {\begin{prooftree}
-    \hypo{w \leadsto_\mathbf{R} w'}
-    \infer1{(w, k_\sharp, k_\flat) \leadsto (w', k_\sharp', k_\flat')}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{w \mapsto_\mathbf{R} w'}
-    \infer1{(w, k^\sharp, k^\flat) \mapsto (w', k^\sharp, k^\flat)}
-  \end{prooftree}}
-  \\[1ex]
- {\begin{prooftree}
-    \hypo{w \Vdash q^\sharp@k^\sharp \mathrel{\mathbf{R}^\que}
-                   q^\flat@k^\flat}
-    \infer1{
-      (w, k^\sharp, k^\flat) \Vdash
-      q^\sharp
-      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R})]^\que}
-      q^\flat}
-  \end{prooftree}}
-  \qquad
- {\begin{prooftree}
-    \hypo{w \Vdash r^\sharp@k^\sharp \mathrel{\mathbf{R}^\ans}
-                   r^\flat@k^\flat}
-    \infer1{
-      (w, k^\sharp, k^\flat) \Vdash
-      r^\sharp
-      \mathrel{[\kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R})]^\ans}
-      r^\flat}
-  \end{prooftree}}
-\end{gather*}
-\end{definition}
-
-\begin{lemma}[XXX: Somewhat speculative]
-\[
-  \mathbf{R}
-  \:\sqsubseteq\:
-  \kw{fbk}_{K^\sharp,K^\flat}(\mathbf{R})@\langle K^\sharp, K^\flat \rangle
-\]
-\end{lemma}
-
-%$\kw{fbk}_{K_1,K_2}(\mathbb{R}@R_K) \sqsubseteq \mathbb{R}$
-%\begin{proof}
-%We would have to define refinement for stateful simulation conventions
-%for this question to even make sense to begin with.
-%\end{proof}
-
-Combined with Theorem~\ref{thm:fbksim},
-this entails the following property.
-
-\begin{lemma}
-\[
-  \begin{prooftree}
-    \hypo{\Sigma_1 \preceq_{\mathbb{R}_A \rightarrow \mathbb{R}_B} \Sigma_2}
-    \infer1{
-      \kw{fbk}_{K_1}(\Sigma_1)
-      \preceq_{\mathbb{R}_A \rightarrow \kw{fbk}_{K_1, K_2}(\mathbb{R}_B)}
-      \kw{fbk}_{K_2}(\Sigma_2)}
-  \end{prooftree}
-\]
-\end{lemma}
-
-We can the define the simulation convention $\kw{reveal}_{B,K}$ as:
-\[
-  \kw{reveal}_{B,K} := \kw{fbk}_{K,\mathbbm{1}}(\kw{id}_{B@K}) : B \leftrightarrow B@K
-  \,,
-\]
-such that in particular:
-\[
-  \kw{fbk}_K(\Sigma)
-  \preceq_{A \rightarrow \kw{reveal}_K(B)}
-  \Sigma
-  \,.
-\]
+Companion and conjoint status for $\langle u \rangle^*$, $\langle u \rangle_*$
 
 %}}}
 
