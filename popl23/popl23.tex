@@ -611,11 +611,11 @@ To this end, CompCertO uses the following language interface:
 
 \begin{figure} % fig:overview:ts {{{
   \[
-    \includegraphics[scale=0.1]{draftfig/interaction}
+    \draftfig{0.08}{interaction}
     \qquad
-    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/composition}} }
+    \draftfig{0.08}{composition}
     \qquad
-    \includegraphics[scale=0.06]{draftfig/identity}
+    \draftfig{0.08}{identity}
   \]
   \caption{Informal description of CompCertO's transition systems
     and their composition}  
@@ -1635,47 +1635,10 @@ in a separate
 The program $M$ can easily be compiled to a regular
 Clight program $M' := \kw{ClightUnP}(M)$
 by erasing the $\kw{private}$ annotations from all variables.
-
-The techniques outlined in \S\ref{sec:overview:sepalg}
-can then be used to formulate a correctness property
+We will see in \S\ref{sec:clightp}
+that the techniques presented in \S\ref{sec:overview:sepalg} 
+play a key role in formulating the corresponding correctness property
 for this transformation.
-We will write $\mathbf{R}^\bullet$ for the simulation convention
-$(\kw{mem} \otimes \mathbf{R}) \mathbin; [\bullet] :
- \kw{mem} \otimes A \leftrightarrow \kw{mem}$,
-which modifies $\mathbf{R} : A \leftrightarrow \kw{mem}$
-to merge its target into another memory state component.
-In addition,
-the simulation convention $[U]_* : \mathbf{I} \leftrightarrow U$
-allows the caller to use an arbitrary target question $u$
-but requires the callee to return it unchanged.
-The correctness of $\kw{ClightUnP}$
-can then be stated as:
-\[
-  \vcenter{ \hbox{\includegraphics[scale=0.12]{draftfig/unclight}} }
-  \,,
-  \qquad
-  \text{where}
-  \qquad
-  R_\kw{P}^\bullet =
-    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-ccb}} }
-    \,,
-  \qquad
-  [\kw{mem}]_*^\bullet =
-    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-cca}} }
-    \,.
-\]
-The Clight program
-stores formerly private variables in the main memory.
-For incoming calls ($R_\kw{P}^\bullet$),
-the private environment is refined
-into a memory share according to a relation $R_\kw{P}$,
-and is then merged with the main memory.
-For outgoing calls,
-the private environment is not included
-but the variables are still stored in the target memory.
-The use of $[\kw{mem}]_*^\bullet$
-expresses the expectation that the callee will return
-this region of the memory unchanged.
 
 \begin{example}[Verifying $\kw{rb.c}$]
 Using ClightP,
@@ -1690,8 +1653,6 @@ in order to verify
   (L_\kw{rb} \mathbin@ \kw{mem})
   \le_{\varnothing \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ R_\kw{rb}}
   \kw{ClightP}(\kw{rb.c})
-  \le_{[\kw{mem}]_*^\bullet \twoheadrightarrow R_\kw{P}^\bullet}
-  \kw{Clight}(\kw{ClightUnP}(\kw{rb.c}))
   \,.
 \]
 \end{example}
@@ -1819,37 +1780,6 @@ where different amounts of state have been encapsulated.
 The last property
 establishes a form of representation independence
 for encapsulated state.
-
-\begin{example}[ClightP correctness with encapsulation]
-These constructions allow us to
-derive a correctness property for \kw{ClightUnP}
-stated in terms of the encapsulated semantics:
-\[
-\begin{array}{c}
-  {\begin{prooftree}
-    \small
-    \hypo{\kw{ClightUnP}(M) = M'}
-    \infer1{\kw{ClightP}\langle M \rangle
-      \le_{\mathbf{R}_A \rightarrow \mathbf{R}_B}
-      \kw{Clight}(M') \,,}
-  \end{prooftree}} \\[2em]
-  \text{where:} \\
-  \mathbf{R}_A :=
-    \mathcal{C} \otimes (\kw{mem} \otimes \kw{r}_\kw{mem} \mathbin; {\bullet}) \\
-  \mathbf{R}_B :=
-    \mathcal{C} \otimes (\kw{mem} \otimes \langle m_0 \rangle_* \mathbin; {\bullet})
-\end{array}
-  \qquad
-  \draftfig{0.12}{encap-clightunp}
-\]
-Here, $m_0 := \kw{init\_mem} \big(M'_\kw{priv}\big)$
-is the initial memory fragment associated with
-the global variable definitions introduced in $M'$
-in order to implement the private variables of $M$.
-Note that private environments
-no longer appear in the type of the ClightP semantics
-or in the correctness property.
-\end{example}
 
 %\begin{itemize}
 %  \item Beyond the world of C,
@@ -3044,175 +2974,154 @@ $[-] : \mathbf{SBR} \hookrightarrow \mathbf{TSC}$.
 
 \section{Clight with module-local state} \label{sec:clightp} %{{{
 
-As mentioned in \ref{sec:overview:clightp},
-we introduce the \Clight{} language to support variables to be
-declared as private.
-The private variables are similar to the static global variables
-in regular C programs, which are only accessible
-within their own module.
-However, the static global variables can be referenced,
-and their addresses can be passed to other modules,
-which leads to potential leakage.
-By contrast, it is invalid to take the addresses of the private variables
-in \Clight{}.
-Other than that,
-\ClightP{} programs are identical to Clight programs,
-For example:
+We have briefly introduced in \S\ref{sec:overview:clightp}
+the language ClightP which allows \emph{private} variables
+to be stored in a separate environment.
+We now discuss the correctness of
+the transformation $\kw{ClightUnP}$
+which converts private variables into regular variables
+stored in the global memory state.
+The corresponding correctness property is
+formulated using the techniques outlined in \S\ref{sec:overview:sepalg}.
 
-\begin{minted}{C}
-private int c = 0;
-int count(void) { return c++; }
-\end{minted}
+\subsection{Correctness Property}
 
-The \ClightP{} language facilitates data abstraction
-and compositional verification
-in several aspects.
-First,
-introducing private variables separates out
-the fragment of the memory of our interest,
-which corresponds to abstract state,
-from the other part such as local variables and stack frames.
-With the separation, there is no need to
-worry about the irrelevant data in the memory state
-when we perform data abstraction.
-As we shall see, this separation is further
-achieved with the help of the PCM structure.
-Second, since private variables are module-local,
-they enforce separation among modules.
-In $\Clight$, the entire memory state is passed around
-when a component interacts with the environment.
-Thus, when reasoning its behaviors,
-one has to explicitly specify a protocal
-that part of the memory remains unchanged
-throughout the interaction,
-and expects the environment respects the protocol.
-This subtlety can be avoided with an appropriate extent of separation.
-
-% To exploit the state encapsulation in actual programs,
-% we present the \ClightP{} language,
-% which introduces module-local state to the $\Clight$ language.
-% The state is kept private via state encapsulation
-% so that it will not be passed around like the usual memory state.
-% By doing so, it is guaranteed that
-% one module's private state will not be modified by other modules,
-% and we can avoid complicated rely-guarantee conditions
-% encoded as simulation conventions
-% when reason about the behaviors.
-% Thus, separating them from the other part of memory
-% paves the way for data refinement with abstraction state.
-% Furthermore, [provides an interface for high level reasoning.
-% no need to deal with memory details]
-
-% \subsection{Syntax}
-
-% One question is whether such private variables
-% should be declared as globals
-% (perhaps associated with empty memory blocks)
-% or if we should have a custom \mintinline{Coq}{program} type.
-
-\subsection{Compiling to Clight} %{{{
-
-The private variables are stored
-in a persistent environment.
-The simulation conventions translate
-this environment, denoted by $\rhd$,
-and attach it to the main memory.
+Given a simulation convention $\mathbf{R} : A \leftrightarrow \kw{mem}$,
+we write $\mathbf{R}^\bullet :=
+(\kw{mem} \otimes \mathbf{R}) \mathbin; [\bullet] :
+ \kw{mem} \otimes A \leftrightarrow \kw{mem}$
+for the simulation convention
+which merges the target memory share of $\mathbf{R}$
+into another memory component.
+In addition,
+the simulation convention $[U]_* : \mathbf{I} \leftrightarrow U$
+allows the caller to use an arbitrary target question $u$
+but requires the callee to return it unchanged.
+The correctness of $\kw{ClightUnP}$
+can then be stated as:
 \[
-  \begin{prooftree}
-    \hypo{pe \rhd m}
-    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
-    \infer2{\kw{m} \Vdash (\kw{m}_{src}, pe) \ifr{\kw{pin}} \kw{m}_{tgt}}
-  \end{prooftree}
+  \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight}} }
+  \,,
+  \quad
+  \text{where}
+  \quad
+  R_\kw{P}^\bullet =
+    \vcenter{ \hbox{\includegraphics[scale=0.09]{draftfig/unclight-ccb}} }
+    \,,
   \qquad
-  \begin{prooftree}
-    \hypo{\kw{m}_{src} \bullet \kw{m} = \kw{m}_{tgt}}
-    \infer1{\kw{m} \Vdash \kw{m}_{src} \ifr{\kw{pout}} \kw{m}_{tgt}}
-  \end{prooftree}
+  [\kw{mem}]_*^\bullet =
+    \vcenter{ \hbox{\includegraphics[scale=0.09]{draftfig/unclight-cca}} }
+    \,.
 \]
+The Clight program
+stores formerly private variables in the main memory.
+For incoming calls,
+the private environment is refined
+into a memory share according to a relation $R_\kw{P}$,
+and is then merged with the main memory.
+For outgoing calls,
+the private environment is not included in the source question,
+but the variables are still stored in the target memory.
+The use of $[\kw{mem}]_*^\bullet$
+requires the callee to return
+this region of the memory unchanged.
 
+\subsection{Encapsulating Private Environments}
 
-We then establish the correctness theorem:
-\begin{theorem}[Correctness of $\kw{ClightUnP}$]
-  For a $\ClightP$ program $M$ and and a $\Clight$ program $M'$
-  such that
-  $\kw{ClightUnP}(M) = M'$
-  the following simulation holds:
-  \[
-    \ClightP(M) \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} \Clight(M')
-  \]
-\end{theorem}
+In order to give the semantics
+a more tractable type,
+we can encapsulate the private environment:
+\[
+  \kw{ClightP} \langle M \rangle :=
+    (C \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle_*) \odot
+    \kw{ClightP}(M)
+    :
+    \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem}
+\]
+Here $p_0 := \kw{init\_penv}(M)$ is the initial private environment for $M$.
+The facilities discussed in \S\ref{sec:overview:encap}
+can then be used to
+derive a correctness property
+stated in terms of the encapsulated semantics:
+\[
+  \draftfig{0.08}{encap-clightunp}
+\]
+Here, $m_0 := \kw{init\_mem} \big(M'_\kw{priv}\big)$
+is the initial memory fragment associated with
+the global variable definitions introduced in $M'$
+in order to implement the private variables of $M$.
+Note that private environments
+no longer appear in the type of the ClightP semantics
+or in the correctness property.
 
-%}}}
+\subsection{Composition}
 
-\subsection{Composition} %{{{
+One challenge is that the correctness property depicted above
+is not compositional,
+because the incoming and outgoing simulation conventions are different:
+\[
+    \kw{ClightP}\langle M \rangle
+      \le_{\mathcal{C} \otimes \langle m_0 \rangle_*^\bullet
+           \twoheadrightarrow
+           \mathcal{C} \otimes [\kw{mem}]_*^\bullet}
+      \kw{Clight}(M')
+\]
+Two ClightP modules
+$
+  \kw{ClightP} \langle M_1 \rangle \odot \kw{ClightP}\langle M_2 \rangle
+$
+can be composed,
+but the associated $\kw{ClightUnP}$ correctness properties
+do not directly compose alongside them.
+We will use the following strategy:
+\[
+  \draftfig{0.09}{clightp-comp}
+\]
+First,
+we will establish self-simulation properties
+for $\kw{ClightP}$ (1) and $\kw{Clight}$ (2)
+which show that they are compatible with
+the simulation conventions $\langle m \rangle_*^\bullet$
+and $[\kw{mem}]_*^\bullet$.
+These properties follow mainly from the frame rule
+of our memory separation primitives.
+Second,
+we show that the incoming (3) and outgoing (4)
+simulation conventions compose with themselves.
 
-Suppose a \ClightP program $M_1$
-invokes functions in a second program $M_2$.
-We wish compute the behavior of the overall system
-from the semantics of each program.
-Their types
-\begin{align*}
-    \ClightP(M_2) &:
-    \mathcal{C}@\kw{mem} \twoheadrightarrow
-    \mathcal{C}@(\kw{mem} \times \kw{penv})
-  \\
-    \ClightP(M_1) &:
-    \mathcal{C}@\kw{mem} \twoheadrightarrow
-    \mathcal{C}@(\kw{mem} \times \kw{penv})
-\end{align*}
-show that the cannot be directly composed
-as $\ClightP(M_1) \odot \ClightP(M_2)$.
-This is because \emph{each} component
-maintains its own private environment of type $\kw{penv}$.
+First,
+the property
+$
+  \kw{Clight}(M)
+  \le_{\langle m \rangle_*^\bullet \twoheadrightarrow \langle m \rangle_*^\bullet}
+  \kw{Clight}(M)
+$,
+stems from the fact that
+\[
+L \odot (A \mathbin@ \langle u \rangle) = L \mathbin@ \langle u \rangle =
+ (B \mathbin@ \langle u \rangle) \odot (L \mathbin@  U)
+  \quad\text{for any}  \quad L : A \twoheadrightarrow B
+  \,.
+\]
+This can be combined with the frame rule and properties of $\langle m_0 \rangle_*$ to show:
+\[
+  \draftfig{0.08}{spinwheel}
+\]
+A similar argument can be used to show
+the analogous property of ClightP.
 
-Note that in the composite \ClightP{} program,
-the persistent environment has become $\kw{penv} \times \kw{penv}$.
-
-The CompCertO compiler permits mutual recursion
-because it is designed to serve general purposes.
-Therefore, the simulation conventions
-on the incoming and outgoing side must agree
-so that the conditions one module relies on
-are exactly what the other module guarantees.
-This is achieved by the rich algebraic structures in simulation conventions.
-By contrast, the extra compilation pass $\ClightP$
-on top of the CompCertO compiler serves for verifying programs,
-and it does not support mutual recursive functions by design.
-Nevertheless, $\ClightP$ does allow programs to be composed
-in two ways: vertical composition and horizontal composition.
-These two common patterns are inherited from
-the certified abstraction layer framework,
-which have been proven to be sufficient for verifying
-large scale system softwares.
-
-\begin{lemma}[\kw{pin} and \kw{pout}]
-  \[
-    \kw{pin} \otimes \kw{pin} \sqsubseteq \kw{pin}
-    \qquad
-    \kw{pout} \sqsubseteq \kw{pout} \otimes \kw{pout}
-  \]
-\end{lemma}
-
-\begin{lemma}[Composition of $\ClightP$]
-  The following properties holds
-  \[
-    \begin{prooftree}
-      \hypo{L_1 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1}
-      \hypo{L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_2}
-      \infer2{L_1 \circ L_2 \le_{\mathsf{C}@\kw{pout} \twoheadrightarrow \mathsf{C}@\kw{pin}} L'_1 \circ L'_2}
-    \end{prooftree}
-  \]
-\end{lemma}
-
-%}}}
+Second,
+the self-composition of the simulation conventions involved
+follows mostly from properties of the partial commutative monoid.
 
 %}}}
 
 \section{Encapsulated State} \label{sec:encap} %{{{
 
 % Preamble {{{
-We now construct a version of our model
-which allows state components to be \emph{encapsulated}.
+We now construct the version of our model
+which allows state components to be encapsulated.
 The underlying transition systems are unchanged,
 and encapsulated state
 is communicated from one activation to the next
@@ -3290,11 +3199,9 @@ can also be extended to
 ${\star} : \mathbf{C}^\dagger \times \mathbf{Bij}^\dagger \rightarrow \mathbf{C}^\dagger$.
 This can be shown using string diagrams of the following form:
 \[
-  \text{[draft fig]}
+  \draftfig{0.1}{encap-comp}
   \qquad\qquad
-  \text{[draft fig]}
-  \qquad\qquad
-  \text{[draft fig]}
+  \draftfig{0.08}{encap-tens}
 \]
 where the beads on the left-hand side
 represent the encapsulated state components.
@@ -3306,7 +3213,7 @@ together with the following state encapsulation primitive:
   \langle u \in U \rangle : U \rightarrow \mathbbm{1} \in \mathbf{Bij}^\dagger
   \qquad \qquad
   \langle u \in U \rangle  :=  (u \in U \mid \kw{id}_U)
-    = \text{[draft fig]}
+    = \quad u \circ \!\!-
 \]
 
 %Once private state has been encapsulated,
@@ -4089,6 +3996,9 @@ This yields the following property.
 %}}}
 
 %}}}
+
+\end{document}
+\endinput
 
 \newpage
 
