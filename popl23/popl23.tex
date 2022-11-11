@@ -436,7 +436,7 @@ can be incorporated into our framework as-is.
 
 %}}}
 
-\begin{table}[h] % tbl:roadmap -- Roadmap and notations {{{
+\begin{table} % tbl:roadmap -- Roadmap and notations {{{
   \caption{
     A summary of
     the various kinds of mathematical objects
@@ -843,20 +843,22 @@ $D_\kw{rb} := \kw{val}^N \times \mathbb{N} \times \mathbb{N}$,
 and define
 $L_\kw{rb} : \top \twoheadrightarrow \mathcal{C}@D_\kw{rb}$
 such that:
+{%\small
 \begin{align*}
   L_\kw{rb} &\vDash
     \kw{set}(i, v)@(b, c_1, c_2) \rightarrowtail
-    *@(b[i := v], c_1, c_2) &
+    \kw{undef}@(b[i := v], c_1, c_2) &
   L_\kw{rb} &\vDash
     \kw{inc1}()@(b, c_1, c_2) \rightarrowtail
-    c_1@(b, c_1+1, c_2) \\
+    c_1@(b, c_1\!\!+\!\!1, c_2) \\
   L_\kw{rb} &\vDash
     \kw{get}(i)@(b, c_1, c_2) \rightarrowtail
     b_i@(b, c_1, c_2) &
   L_\kw{rb} &\vDash
     \kw{inc2}()@(b, c_1, c_2) \rightarrowtail
-    c_2@(b, c_1, c_2+1)
+    c_2@(b, c_1, c_2\!\!+\!\!1)
 \end{align*}
+}
 Finally,
 note that $\kw{bq.c}$ does not use any state of its own.
 We can describe it simply as
@@ -3468,13 +3470,8 @@ $\langle u \rangle^*$ are defined as:
     \big\langle U,\, u,\, \top,\, {=},\, \Gamma_U^\kw{op},\, \Gamma_U^\kw{op} \big\rangle
     : \mathbf{I} \leftrightarrow U
 \]
-where the Kripke relation $\Gamma_U \in \mathcal{R}(U, \mathbbm{1})$
-is defined by the following rule:
-\[
-  \begin{prooftree}
-    \infer0{u \Vdash u \mathrel{\Gamma_U} *}
-  \end{prooftree}
-\]
+where $\Gamma_U \in \mathcal{R}(U, \mathbbm{1})$
+is the smallest Kripke relation containing $u \Vdash u \mathrel{\Gamma_U} *$ for all $u \in U$.
 \end{definition}
 
 These elementary simulation conventions
@@ -3532,53 +3529,83 @@ Companion and conjoint status for $\langle u \rangle^*$, $\langle u \rangle_*$
 
 \section{Related Work} %{{{
 
-Our approach is inspired by \citet{feedback,caots}.
+\subsection{CompCert-based Vertification Frameworks}
 
-\subsection{CompCert} \label{sec:related:compcert}
+CompCert \cite{compcert}
+is the first certified C compiler offering industrial-grade performance.
+As a result,
+there has long been interest in extending the compiler
+to offer verification frameworks
+with formal guarantees going all the way to assembly code.
+For example, VST \cite{vst}
+provides a separation logic for Clight
+whose soundness proof interfaces with CompCert's correctness proof.
 
-\cite{sepcompcert}.
-The hybrid approach of CompCertM
-\cite{compcertm}
-consolidated these approaches
-into a verification framework
-where the final correctness theorem
-remains stated in terms of the closed semantics,
-but where a compositional semantics
-can be used to verify individual components.
-%This approach delivers much of the flexibility
-%of compositional semantics
-%with a fraction of the proof effort.
-%Yet because the correctness theorem
-%ultimately characterizes the behavior
-%of the target assembly code as a whole,
-%it is difficult to reuse
-%in a broader context where
-%different parts of the code
-%are intertwined and interact with
-%external components.
-
-\paragraph{Accessibility Condition}
-
-The $\sqsubseteq_{\kw{prv}}$ is similar to $\leadsto_{\bar{A}B}$
-while $\sqsubseteq$ is similar to $\leadsto_{AB}$. Or maybe not...
-
-\paragraph{Module Static Variables}
-
-\citet{compcertm} presents CompCertM,
-which supports module-static variables
-and reasoning about mutually recursive programs.
-The difficulty is to capture the effects that external calls may have on
-those variables through reentrant calls.
-\citet{compcertm} further generalizes the memory injection
-to include a notion of module-local invariants
-to enable reasoning on such variables.
-We could generalize the simulation convention in a similar manner
-to achieve the same reasoning power.
-However, for the purpose of revamping the CAL framework,
-mutual recursion is considered unnecessary
-so we keep things simple.
+Compositional semantics were introduced by
+Compositional CompCert \cite{compcompcert}
+in part to support the verification of
+programs with multiple translation units,
+potentially written in different languages,
+but used a fixed language interface and simulation convention.
+CompCertM \cite{compcertm} refined this approach
+with a better model of the interaction between
+C and assembly programs,
+and more flexibility in simulation conventions,
+making it possible to introduce of module-local state
+by expressing constraints on the environment.
+However,
+neither Compositional CompCert nor CompCertM
+support data abstraction or state encapsulation
+of the kinds we have presented,
+and the general notions of
+language interface and simulation convention
+were first introduced in CompCertO.
 We refer interested readers to \citet{compcerto}
 for a detailed comparison between CompCertM and CompCertO.
+
+\subsection{Categorical Structures}
+
+To our knowledge,
+the work described in this paper
+constitutes the first formal and explicit use of
+double categories in the context of compositional verification,
+although the approach was initially suggested in \citet{compcerto}.
+String diagrams for double categories,
+which use for simulation proofs,
+were developed and shown to be sound in \citet{dcsd}.
+Monoidal categories and their string diagrams
+are much more ubiquitous---a good introduction is provided by \citet{rosetta}.
+
+The construction $\mathbf{C}^\dagger$ which we used in \S\ref{sec:encap}
+bears some resemblance and was inspired by
+the \emph{free category with feedback} construction \cite{feedback,caots}.
+Indeed,
+categories with feedback could provide a basis for encapsulation
+in a version of our framework supporting reentrancy and mutual recursion.
+The present version
+based on an elementary encapsulation primitive $\langle u \rangle$
+is simpler but less powerful.
+
+%\paragraph{Accessibility Condition}
+%
+%The $\sqsubseteq_{\kw{prv}}$ is similar to $\leadsto_{\bar{A}B}$
+%while $\sqsubseteq$ is similar to $\leadsto_{AB}$. Or maybe not...
+%
+%\paragraph{Module Static Variables}
+%
+%\citet{compcertm} presents CompCertM,
+%which supports module-static variables
+%and reasoning about mutually recursive programs.
+%The difficulty is to capture the effects that external calls may have on
+%those variables through reentrant calls.
+%\citet{compcertm} further generalizes the memory injection
+%to include a notion of module-local invariants
+%to enable reasoning on such variables.
+%We could generalize the simulation convention in a similar manner
+%to achieve the same reasoning power.
+%However, for the purpose of revamping the CAL framework,
+%mutual recursion is considered unnecessary
+%so we keep things simple.
 
 %}}}
 
