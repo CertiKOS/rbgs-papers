@@ -1572,6 +1572,11 @@ $
   L
 $.
 
+The partial commutative monoid we use
+is similar in spirit to the \emph{algebraic memory model}
+of \citet{ccal};
+its construction is explained in Appendix~\ref{sec:sep}.
+
 %}}}
 
 \subsection{ClightP} %{{{
@@ -3028,419 +3033,6 @@ to make this possible.
 
 %}}}
 
-\section{Memory Separation in CompCert} \label{sec:sep} %{{{
-
-The constructions we have introduced so far
-make it possible to manage and encapsulate persistent state
-in the context of CompCertO,
-with certified abstraction layers
-as one key application.
-The global memory state used in the semantics of CompCert languages
-can then be regarded as one possible kind of state among others,
-and replaced in specifications by more abstract data representations.
-
-Unfortunately,
-because of the monolithic nature of CompCert's memory,
-abstracting only part of it is challenging
-and yields complex simulation conventions.
-In Example~\ref{ex:rbcorrect},
-the abstraction relation had to involve
-not only the whole target memory state,
-but also the residual source memory state
-not subject to abstraction,
-and used complex properties to express their relationships.
-In other words,
-instead of focusing on the particular fragment of the memory
-which we seek to abstract away,
-we are to forced to characterize the effect of partial abstraction
-on the context as well,
-even though the remaining areas of the memory
-are not meaningfully involved in the task at hand.
-
-In this section,
-we use techniques from separation logic
-to address this problem.
-We propose to equip the CompCert memory model
-with a structure akin to separation algebra \cite{something-for-sa}
-and incorporate the resulting construction
-within the framework of simulation conventions,
-CompCert Kripke logical relations,
-and state encapsulation.
-
-\subsection{The CompCert Memory Model}
-
-In essence,
-a CompCert memory state
-assign to each possible memory address $i \in \kw{block} \times \mathbb{Z}$:
-\begin{itemize}
-  \item a permission level $p \in \kw{option}\,\kw{perm}$;
-  \item a memory value $v \in \kw{memval}$.
-\end{itemize}
-In addition,
-a memory state contains a $\kw{nextblock}$ counter
-which keeps track of the next block identifier to be allocated.
-We discuss these various components in more detail below.
-
-\subsubsection{Memory Addresses}
-
-The CompCert memory is divided in a number of \emph{blocks}.
-As new blocks are allocated,
-they are assigned a positive identifier $b \in \mathbb{N}_*$
-in sequential order.
-As mentioned above,
-the $\kw{nextblock}$ counter within each memory state
-keeps track of the smallest unallocated block identifier.
-When a new block identifier is needed,
-$\kw{nextblock}$ is incremented and its previous value
-is used for the new block.
-
-Memory blocks represent independent address spaces.
-Within each block,
-a byte can be addressed using an offset $o \in \mathbb{Z}$.
-When a new block is allocated,
-a range of addresses $[\mathit{lo}, \mathit{hi})$ must be provided;
-this range determines which addresses within the block are valid.
-However,
-rather than storing the range directly within the memory state,
-the allocation operation uses it to assign initial permissions
-for each address within the new block.
-
-\subsubsection{Permissions}
-
-Each memory address within a memory state
-is assigned a permission level among the following:
-\[
-  p \in \kw{option}\,\kw{perm} ::=
-    \bot \mid
-    \kw{nonempty} \mid
-    \kw{readable} \mid
-    \kw{writable} \mid
-    \kw{freeable}
-\]
-The permissions are listed above in increasing order,
-so that for example the permission level $\kw{writable}$ 
-represents the set of permissions
-$\{ \kw{nonempty}, \kw{readable}, \kw{writable} \}$.
-Permissions play an important role
-in the memory separation relation we define.
-
-When a block is first allocated,
-addresses within the provided range
-are assigned the permission level $\kw{freeable}$;
-all remaining addresses are assigned
-empty permissions $\bot$.
-Further memory operations may then decrease the permission level,
-but can never increase it.
-Memory operations which access a particular address
-will first check that this address has sufficient permissions,
-and fail if that is not the case.
-
-\subsubsection{Memory Values}
-
-Each memory value represents the contents of exactly one byte of memory.
-It may be stored as a concrete byte,
-or may be identified as a particular one-byte fragment
-within a larger, more abstract value
-(for instance, the third byte of a given pointer).
-
-The exact representation of memory values
-is not essential to the work discussed in this section.
-Therefore
-we will not discuss the specifics further,
-but refer the interested reader to \citet{compcertmmv2}
-for more background on this topic.
-
-\subsubsection{Memory Transformations}
-
-The compilation passes of CompCert
-often transform the structure of the memory state:
-multiple blocks can merged into one;
-new blocks may be introduced in the target memory
-and blocks may be dropped from the source memory.
-To express these transformations,
-CompCert introduces \emph{memory extensions} and \emph{memory injections}
-as possible relations between source- and target-level memory states.
-
-In CompCertO,
-these memory transformations are generalized and consolidated
-into a notion of \emph{CompCert Kripke Logical Relations} (CLKRs),
-which play an important role in defining simulation conventions.
-The underlying idea is that
-if two memory states are related by a CKLR,
-then memory operations which succeed at the source level
-should also succeed on at the target level,
-and their outcomes should in turn be related
-by the CKLR.
-
-Unfortunately,
-these memory transformations are difficult to use
-to express the relationships between
-different \emph{fragments} of a single memory state.
-The notion of \emph{separation relation} introduced below
-seeks to fill this gap.
-
-\subsection{Separation Relations} %{{{
-
-To express memory separation in CompCert,
-and define a \emph{join} relation
-$J \subseteq (\kw{mem} \times \kw{mem}) \times \kw{mem}$.
-We will write $J(m_1, m_2, m)$ as:
-\[
-  m_1 \bullet m_2 \equiv m
-  \,,
-\]
-understood to mean that
-the memory states $m_1$ and $m_2$
-can be merged into $m$.
-This relation satisfies the properties listed in Fig.~\ref{fig:sepalg}
-and defines a separation algebra in the sense of \citet{freshlook}.
-
-\begin{figure}
-  \begin{gather*}
-    m_1 \bullet m_2 \equiv m \:\wedge\:
-      m_1 \bullet m_2 \equiv m' \:\Rightarrow\:
-      m = m'
-      \\
-    m_1 \bullet m_2 \equiv m \:\wedge\:
-      m_1' \bullet m_2 \equiv m \:\Rightarrow\:
-      m_1 = m_1'
-      \text{ XXX}
-      \\
-    m_1 \bullet m_2 \equiv m \:\Rightarrow\:
-      m_2 \bullet m_1 \equiv m
-      \\
-    m_1 \bullet m_2 \equiv m_{12} \:\wedge\:
-      m_{12} \bullet m_3 \equiv m \:\Rightarrow\:
-      \exists m_{23} \mathrel.
-      m_2 \bullet m_3 \equiv m_{23} \:\wedge\:
-      m_1 \bullet m_{23} \equiv m
-      \\
-    m \bullet \kw{empty} \equiv m
-  \end{gather*}
-  \caption{Properties of separation algebras
-    in relational form. See also \citet{freshlook}.}
-  \label{fig:sepalg}
-\end{figure}
-
-In addition to these structural properties,
-the join relation must be compatible
-with CompCert's memory operations.
-If an operation which reads from the memory succeeds on a fragment,
-it should succeed with the same result on a larger memory state:
-\[
-  \begin{prooftree}
-    \hypo{\kw{op}(m_1) = \kw{Some}\,v}
-    \hypo{m_1 \bullet m_2 \equiv m}
-    \infer2{\kw{op}(m) = \kw{Some}\,v}
-  \end{prooftree}
-\]
-Likewise,
-operations which updates the memory
-should be insensitive to additional fragments:
-\[
-  \begin{prooftree}
-    \hypo{\kw{op}(m_1) = \kw{Some}\,m_1'}
-    \hypo{m_1 \bullet m_2 \equiv m}
-    \infer2{\exists m' \mathrel.
-      m_1' \bullet m_2 \equiv m' \wedge
-      \kw{op}(m) = \kw{Some}\,m'}
-  \end{prooftree}
-\]
-
-Together,
-these properties allow us to derive
-versions of the \emph{frame rule}
-for CompCert languages:
-if a program can successfully execute on $m_1$ alone
-to yield a new memory fragment $m_1'$,
-then executing it on a larger memory state
-$m_1 \bullet m_2$ will succeed as well,
-and yield a memory state $m_1' \bullet m_2$
-where the irrelevant portion $m_2$
-has not been modified.
-
-Moreover,
-executions which affect disjoint parts of the memory
-can be considered independently.
-Specifically, from the rules above
-we can derive the property:
-\[
-  \begin{prooftree}
-    \hypo{\kw{op}_1(m_1) = \kw{Some}\,m_1'}
-    \hypo{\kw{op}_2(m_2) = \kw{Some}\,m_2'}
-    \hypo{m_1 \bullet m_2 \equiv m}
-    \infer3{\exists m' \mathrel.
-      \kw{op}_1(\kw{op}_2(m)) =
-	%\kw{op}_2(\kw{op}_1(m)) =
-	m' \:\wedge\:
-      m_1' \bullet m_2' \equiv m'}
-  \end{prooftree}
-\]
-As in separation logic,
-this facilitates reasoning
-about program components
-which affect the memory state in independent ways.
-
-Below we explain how a separation relation can be defined
-for the CompCert memory model.
-
-\subsubsection{Memory Contents}
-
-A CompCert memory state essentially defines a map of type
-\[
-  \kw{ptr} \rightarrow \kw{option}\,\kw{perm} \times \kw{memval} \,,
-\]
-which assigns to every possible address
-a permission level and a memory value.
-Figure~\ref{fig:sepdef}
-shows the definition of a simple separation relation
-for the contents of individual memory cells.
-This relation can then be extended to the whole map
-in the obvious way.
-
-\begin{figure}
-  \begin{subfigure}{0.45\textwidth}
-    \centering
-    \fbox{$J_\kw{contents}$}
-    \begin{gather*}
-      (p, v) \in \kw{option}\ \kw{perm} \times \kw{memval} \\[1ex]
-      (\bot, \kw{undef}) \bullet (p, v) \equiv (p, v) \\
-      (p, v) \bullet (\bot, \kw{undef}) \equiv (p, v)
-    \end{gather*}
-    \subcaption{Memory contents}
-    \label{fig:sepdef:contents}
-  \end{subfigure}
-  \begin{subfigure}{0.45\textwidth}
-    \centering
-    \fbox{$J_\kw{nextblock}$}
-    \begin{gather*}
-      (\mathit{nb}, a) \in \kw{block} \times \kw{bool}
-      \\[1ex]
-     {\begin{prooftree}
-	\hypo{\mathrm{max}(\mathit{nb}_1, \mathit{nb}_2) = \mathit{nb}}
-	\hypo{\lnot (a_1 \wedge a_2)}
-	\infer2{(\mathit{nb}_1, a_1) \bullet (\mathit{nb}_2, a_2) \equiv
-	  (\mathit{nb},\, a_1 \mathbin\vee a_2)}
-      \end{prooftree}}
-    \end{gather*}
-    \subcaption{Fresh blocks}
-    \label{fig:sepdef:fresh}
-  \end{subfigure}
-  \caption{%
-    Basic ingredients for separation algebras
-    of the CompCert memory model.}
-  \label{fig:sepdef}
-\end{figure}
-
-\subsubsection{Block Validity}
-
-A more challenging issue is the treatment of $\kw{nextblock}$.
-When a memory state $m$ is separated into $m_1 \bullet m_2 \equiv m$,
-the fragments $m_1$ and $m_2$ will share a common view of the address space.
-However,
-they each carry their own copy of the $\kw{nextblock}$ counter.
-As a result,
-performing independent allocations in each fragment
-will break the separation property,
-because the new blocks will be assigned conflicting names.
-
-As a starting point,
-we solve this problem by
-making sure that new blocks
-can only be allocated in one of the fragments.
-In addition to the $\kw{nextblock}$ counter,
-memory states carry a boolean flag
-indicating whether allocations are permitted.
-When memory fragments are joined,
-this flag can only be set in one of the fragments.
-Figure~\ref{fig:sepdef:fresh}
-shows the corresponding separation algebra
-for the $\kw{nextblock}$ counter.
-
-%}}}
-
-\subsection{Frame rule} %{{{
-
-The compatibility of memory operations with our separation algebras
-can be used to show that
-more complex ways to manipulate memory states
-enjoy similar properties.
-Ultimately this allows us to derive
-a kind of \emph{frame rule} for the Clight semantics.
-We can state this informally as follows:
-\[
-  \begin{prooftree}
-    \hypo{\Clight(p) : m_1 \leadsto m_2}
-    \infer1{\Clight(p) : m_1 \bullet m \leadsto m_2 \bullet m}
-  \end{prooftree}
-\]
-In other words,
-if the program $p$ safely acts on a memory state $m_1$
-to transform it into a memory state $m_2$,
-then we can frame a memory fragment $m$ onto $m_1$
-and expect the program to leave that fragment intact.
-Intuitively, this holds because
-if $p$ ever needed or affected any of the memory present
-in fragment $m$,
-it would have gone wrong on $m_1$ alone.
-
-To formalize this property in the context of CompCertO,
-we can promote the memory separation relation
-to a simulation convention:
-\[
-  \forall A \:.\quad
-  A@{\bullet} : A@(\kw{mem} \times \kw{mem}) \leftrightarrow A@\kw{mem}
-\]
-We will then compare the ``source''-level semantics
-\[
-  \Clight(p)@\kw{mem} :
-    \mathcal{C}@(\kw{mem} \times \kw{mem}) \twoheadrightarrow
-    \mathcal{C}@(\kw{mem} \times \kw{mem})
-  \,,
-\]
-which acts on one of the memory fragments
-but leaves the other one unchanged,
-to the concrete semantics of $p$ acting on the total memory state:
-\[
-  \Clight(p) : \mathcal{C}@\kw{mem} \leftrightarrow \mathcal{C}@\kw{mem}
-  \,.
-\]
-This yields the following property.
-
-\begin{lemma}[Frame rule for Clight]
-\[
-  \Clight(p)@\kw{mem}
-  \le_{\mathcal{C}@{\bullet} \twoheadrightarrow \mathcal{C}@{\bullet}}
-  \Clight(p)
-\]
-\end{lemma}
-
-%}}}
-
-\subsection{Hiding Memory State} %{{{
-
-In \S\ref{sec:clightp:erasure}
-
-
-%}}}
-
-\subsection{Initial memory} %{{{
-
-The way we define $\kw{init\_mem}$ can work with the
-separation relation such that:
-\[
-  \kw{init\_mem}(p_1) \bullet \kw{init\_mem}(p_2) \equiv
-  \kw{init\_mem}(p_1 + p_2)
-\]
-
-%}}}
-
-\subsection{Implementing Memory Separation with Nominal CompCert} %{{{
-
-%}}}
-
-%}}}
-
 \section{Clight with module-local state} \label{sec:clightp} %{{{
 
 As mentioned in \ref{sec:overview:clightp},
@@ -4020,6 +3612,420 @@ in that application domain.
 \bibliography{../references}
 
 \appendix
+
+\section{Memory Separation in CompCert} \label{sec:sep} %{{{
+
+The constructions we have introduced so far
+make it possible to manage and encapsulate persistent state
+in the context of CompCertO,
+with certified abstraction layers
+as one key application.
+The global memory state used in the semantics of CompCert languages
+can then be regarded as one possible kind of state among others,
+and replaced in specifications by more abstract data representations.
+
+Unfortunately,
+because of the monolithic nature of CompCert's memory,
+abstracting only part of it is challenging
+and yields complex simulation conventions.
+In Example~\ref{ex:rbcorrect},
+the abstraction relation had to involve
+not only the whole target memory state,
+but also the residual source memory state
+not subject to abstraction,
+and used complex properties to express their relationships.
+In other words,
+instead of focusing on the particular fragment of the memory
+which we seek to abstract away,
+we are to forced to characterize the effect of partial abstraction
+on the context as well,
+even though the remaining areas of the memory
+are not meaningfully involved in the task at hand.
+
+In this section,
+we use techniques from separation logic
+to address this problem.
+We propose to equip the CompCert memory model
+with a structure akin to separation algebra \cite{something-for-sa}
+and incorporate the resulting construction
+within the framework of simulation conventions,
+CompCert Kripke logical relations,
+and state encapsulation.
+
+\subsection{The CompCert Memory Model}
+
+In essence,
+a CompCert memory state
+assign to each possible memory address $i \in \kw{block} \times \mathbb{Z}$:
+\begin{itemize}
+  \item a permission level $p \in \kw{option}\,\kw{perm}$;
+  \item a memory value $v \in \kw{memval}$.
+\end{itemize}
+In addition,
+a memory state contains a $\kw{nextblock}$ counter
+which keeps track of the next block identifier to be allocated.
+We discuss these various components in more detail below.
+
+\subsubsection{Memory Addresses}
+
+The CompCert memory is divided in a number of \emph{blocks}.
+As new blocks are allocated,
+they are assigned a positive identifier $b \in \mathbb{N}_*$
+in sequential order.
+As mentioned above,
+the $\kw{nextblock}$ counter within each memory state
+keeps track of the smallest unallocated block identifier.
+When a new block identifier is needed,
+$\kw{nextblock}$ is incremented and its previous value
+is used for the new block.
+
+Memory blocks represent independent address spaces.
+Within each block,
+a byte can be addressed using an offset $o \in \mathbb{Z}$.
+When a new block is allocated,
+a range of addresses $[\mathit{lo}, \mathit{hi})$ must be provided;
+this range determines which addresses within the block are valid.
+However,
+rather than storing the range directly within the memory state,
+the allocation operation uses it to assign initial permissions
+for each address within the new block.
+
+\subsubsection{Permissions}
+
+Each memory address within a memory state
+is assigned a permission level among the following:
+\[
+  p \in \kw{option}\,\kw{perm} ::=
+    \bot \mid
+    \kw{nonempty} \mid
+    \kw{readable} \mid
+    \kw{writable} \mid
+    \kw{freeable}
+\]
+The permissions are listed above in increasing order,
+so that for example the permission level $\kw{writable}$ 
+represents the set of permissions
+$\{ \kw{nonempty}, \kw{readable}, \kw{writable} \}$.
+Permissions play an important role
+in the memory separation relation we define.
+
+When a block is first allocated,
+addresses within the provided range
+are assigned the permission level $\kw{freeable}$;
+all remaining addresses are assigned
+empty permissions $\bot$.
+Further memory operations may then decrease the permission level,
+but can never increase it.
+Memory operations which access a particular address
+will first check that this address has sufficient permissions,
+and fail if that is not the case.
+
+\subsubsection{Memory Values}
+
+Each memory value represents the contents of exactly one byte of memory.
+It may be stored as a concrete byte,
+or may be identified as a particular one-byte fragment
+within a larger, more abstract value
+(for instance, the third byte of a given pointer).
+
+The exact representation of memory values
+is not essential to the work discussed in this section.
+Therefore
+we will not discuss the specifics further,
+but refer the interested reader to \citet{compcertmmv2}
+for more background on this topic.
+
+\subsubsection{Memory Transformations}
+
+The compilation passes of CompCert
+often transform the structure of the memory state:
+multiple blocks can merged into one;
+new blocks may be introduced in the target memory
+and blocks may be dropped from the source memory.
+To express these transformations,
+CompCert introduces \emph{memory extensions} and \emph{memory injections}
+as possible relations between source- and target-level memory states.
+
+In CompCertO,
+these memory transformations are generalized and consolidated
+into a notion of \emph{CompCert Kripke Logical Relations} (CLKRs),
+which play an important role in defining simulation conventions.
+The underlying idea is that
+if two memory states are related by a CKLR,
+then memory operations which succeed at the source level
+should also succeed on at the target level,
+and their outcomes should in turn be related
+by the CKLR.
+
+Unfortunately,
+these memory transformations are difficult to use
+to express the relationships between
+different \emph{fragments} of a single memory state.
+The notion of \emph{separation relation} introduced below
+seeks to fill this gap.
+
+\subsection{Separation Relations} %{{{
+
+To express memory separation in CompCert,
+and define a \emph{join} relation
+$J \subseteq (\kw{mem} \times \kw{mem}) \times \kw{mem}$.
+We will write $J(m_1, m_2, m)$ as:
+\[
+  m_1 \bullet m_2 \equiv m
+  \,,
+\]
+understood to mean that
+the memory states $m_1$ and $m_2$
+can be merged into $m$.
+This relation satisfies the properties listed in Fig.~\ref{fig:sepalg}
+and defines a separation algebra in the sense of \citet{freshlook}.
+
+\begin{figure}
+  \begin{gather*}
+    m_1 \bullet m_2 \equiv m \:\wedge\:
+      m_1 \bullet m_2 \equiv m' \:\Rightarrow\:
+      m = m'
+      \\
+    m_1 \bullet m_2 \equiv m \:\wedge\:
+      m_1' \bullet m_2 \equiv m \:\Rightarrow\:
+      m_1 = m_1'
+      \text{ XXX}
+      \\
+    m_1 \bullet m_2 \equiv m \:\Rightarrow\:
+      m_2 \bullet m_1 \equiv m
+      \\
+    m_1 \bullet m_2 \equiv m_{12} \:\wedge\:
+      m_{12} \bullet m_3 \equiv m \:\Rightarrow\:
+      \exists m_{23} \mathrel.
+      m_2 \bullet m_3 \equiv m_{23} \:\wedge\:
+      m_1 \bullet m_{23} \equiv m
+      \\
+    m \bullet \kw{empty} \equiv m
+  \end{gather*}
+  \caption{Properties of separation algebras
+    in relational form. See also \citet{freshlook}.}
+  \label{fig:sepalg}
+\end{figure}
+
+In addition to these structural properties,
+the join relation must be compatible
+with CompCert's memory operations.
+If an operation which reads from the memory succeeds on a fragment,
+it should succeed with the same result on a larger memory state:
+\[
+  \begin{prooftree}
+    \hypo{\kw{op}(m_1) = \kw{Some}\,v}
+    \hypo{m_1 \bullet m_2 \equiv m}
+    \infer2{\kw{op}(m) = \kw{Some}\,v}
+  \end{prooftree}
+\]
+Likewise,
+operations which updates the memory
+should be insensitive to additional fragments:
+\[
+  \begin{prooftree}
+    \hypo{\kw{op}(m_1) = \kw{Some}\,m_1'}
+    \hypo{m_1 \bullet m_2 \equiv m}
+    \infer2{\exists m' \mathrel.
+      m_1' \bullet m_2 \equiv m' \wedge
+      \kw{op}(m) = \kw{Some}\,m'}
+  \end{prooftree}
+\]
+
+Together,
+these properties allow us to derive
+versions of the \emph{frame rule}
+for CompCert languages:
+if a program can successfully execute on $m_1$ alone
+to yield a new memory fragment $m_1'$,
+then executing it on a larger memory state
+$m_1 \bullet m_2$ will succeed as well,
+and yield a memory state $m_1' \bullet m_2$
+where the irrelevant portion $m_2$
+has not been modified.
+
+Moreover,
+executions which affect disjoint parts of the memory
+can be considered independently.
+Specifically, from the rules above
+we can derive the property:
+\[
+  \begin{prooftree}
+    \hypo{\kw{op}_1(m_1) = \kw{Some}\,m_1'}
+    \hypo{\kw{op}_2(m_2) = \kw{Some}\,m_2'}
+    \hypo{m_1 \bullet m_2 \equiv m}
+    \infer3{\exists m' \mathrel.
+      \kw{op}_1(\kw{op}_2(m)) =
+	%\kw{op}_2(\kw{op}_1(m)) =
+	m' \:\wedge\:
+      m_1' \bullet m_2' \equiv m'}
+  \end{prooftree}
+\]
+As in separation logic,
+this facilitates reasoning
+about program components
+which affect the memory state in independent ways.
+
+Below we explain how a separation relation can be defined
+for the CompCert memory model.
+
+\subsubsection{Memory Contents}
+
+A CompCert memory state essentially defines a map of type
+\[
+  \kw{ptr} \rightarrow \kw{option}\,\kw{perm} \times \kw{memval} \,,
+\]
+which assigns to every possible address
+a permission level and a memory value.
+Figure~\ref{fig:sepdef}
+shows the definition of a simple separation relation
+for the contents of individual memory cells.
+This relation can then be extended to the whole map
+in the obvious way.
+
+\begin{figure}
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \fbox{$J_\kw{contents}$}
+    \begin{gather*}
+      (p, v) \in \kw{option}\ \kw{perm} \times \kw{memval} \\[1ex]
+      (\bot, \kw{undef}) \bullet (p, v) \equiv (p, v) \\
+      (p, v) \bullet (\bot, \kw{undef}) \equiv (p, v)
+    \end{gather*}
+    \subcaption{Memory contents}
+    \label{fig:sepdef:contents}
+  \end{subfigure}
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \fbox{$J_\kw{nextblock}$}
+    \begin{gather*}
+      (\mathit{nb}, a) \in \kw{block} \times \kw{bool}
+      \\[1ex]
+     {\begin{prooftree}
+	\hypo{\mathrm{max}(\mathit{nb}_1, \mathit{nb}_2) = \mathit{nb}}
+	\hypo{\lnot (a_1 \wedge a_2)}
+	\infer2{(\mathit{nb}_1, a_1) \bullet (\mathit{nb}_2, a_2) \equiv
+	  (\mathit{nb},\, a_1 \mathbin\vee a_2)}
+      \end{prooftree}}
+    \end{gather*}
+    \subcaption{Fresh blocks}
+    \label{fig:sepdef:fresh}
+  \end{subfigure}
+  \caption{%
+    Basic ingredients for separation algebras
+    of the CompCert memory model.}
+  \label{fig:sepdef}
+\end{figure}
+
+\subsubsection{Block Validity}
+
+A more challenging issue is the treatment of $\kw{nextblock}$.
+When a memory state $m$ is separated into $m_1 \bullet m_2 \equiv m$,
+the fragments $m_1$ and $m_2$ will share a common view of the address space.
+However,
+they each carry their own copy of the $\kw{nextblock}$ counter.
+As a result,
+performing independent allocations in each fragment
+will break the separation property,
+because the new blocks will be assigned conflicting names.
+
+As a starting point,
+we solve this problem by
+making sure that new blocks
+can only be allocated in one of the fragments.
+In addition to the $\kw{nextblock}$ counter,
+memory states carry a boolean flag
+indicating whether allocations are permitted.
+When memory fragments are joined,
+this flag can only be set in one of the fragments.
+Figure~\ref{fig:sepdef:fresh}
+shows the corresponding separation algebra
+for the $\kw{nextblock}$ counter.
+
+%}}}
+
+\subsection{Frame rule} %{{{
+
+The compatibility of memory operations with our separation algebras
+can be used to show that
+more complex ways to manipulate memory states
+enjoy similar properties.
+Ultimately this allows us to derive
+a kind of \emph{frame rule} for the Clight semantics.
+We can state this informally as follows:
+\[
+  \begin{prooftree}
+    \hypo{\Clight(p) : m_1 \leadsto m_2}
+    \infer1{\Clight(p) : m_1 \bullet m \leadsto m_2 \bullet m}
+  \end{prooftree}
+\]
+In other words,
+if the program $p$ safely acts on a memory state $m_1$
+to transform it into a memory state $m_2$,
+then we can frame a memory fragment $m$ onto $m_1$
+and expect the program to leave that fragment intact.
+Intuitively, this holds because
+if $p$ ever needed or affected any of the memory present
+in fragment $m$,
+it would have gone wrong on $m_1$ alone.
+
+To formalize this property in the context of CompCertO,
+we can promote the memory separation relation
+to a simulation convention:
+\[
+  \forall A \:.\quad
+  A@{\bullet} : A@(\kw{mem} \times \kw{mem}) \leftrightarrow A@\kw{mem}
+\]
+We will then compare the ``source''-level semantics
+\[
+  \Clight(p)@\kw{mem} :
+    \mathcal{C}@(\kw{mem} \times \kw{mem}) \twoheadrightarrow
+    \mathcal{C}@(\kw{mem} \times \kw{mem})
+  \,,
+\]
+which acts on one of the memory fragments
+but leaves the other one unchanged,
+to the concrete semantics of $p$ acting on the total memory state:
+\[
+  \Clight(p) : \mathcal{C}@\kw{mem} \leftrightarrow \mathcal{C}@\kw{mem}
+  \,.
+\]
+This yields the following property.
+
+\begin{lemma}[Frame rule for Clight]
+\[
+  \Clight(p)@\kw{mem}
+  \le_{\mathcal{C}@{\bullet} \twoheadrightarrow \mathcal{C}@{\bullet}}
+  \Clight(p)
+\]
+\end{lemma}
+
+%}}}
+
+\subsection{Hiding Memory State} %{{{
+
+In \S\ref{sec:clightp:erasure}
+
+
+%}}}
+
+\subsection{Initial memory} %{{{
+
+The way we define $\kw{init\_mem}$ can work with the
+separation relation such that:
+\[
+  \kw{init\_mem}(p_1) \bullet \kw{init\_mem}(p_2) \equiv
+  \kw{init\_mem}(p_1 + p_2)
+\]
+
+%}}}
+
+\subsection{Implementing Memory Separation with Nominal CompCert} %{{{
+
+%}}}
+
+%}}}
+
 
 \newpage
 
