@@ -1512,7 +1512,7 @@ make it possible to describe
 the state of complex systems compositionally.
 State can be separated into different fields;
 we can then describe and reason about individual components
-independently of the fields that they do not access,
+independently of the fields which they do not access,
 and use the $\mathbin@$ operator
 to connect these components with the rest of the system.
 
@@ -1549,9 +1549,9 @@ additional memory shares:
   \infer1{
    {\begin{array}{r@{\:}l}
     L \:\vDash\: q@(m_0 \bullet w_0) \rightarrowtail
-      q_1@(m_1 \bullet w_0) &\leadsto r_1@(m_1' \bullet w_1) \rightarrowtail
+      \big( q_1@(m_1 \bullet w_0) &\leadsto r_1@(m_1' \bullet w_1) \big) \rightarrowtail
       \cdots \\ \cdots \rightarrowtail
-      q_n@(m_n \bullet w_{n-1}) &\leadsto r_n@(m_n' \bullet w_n) \rightarrowtail
+      \big( q_n@(m_n \bullet w_{n-1}) &\leadsto r_n@(m_n' \bullet w_n) \big) \rightarrowtail
       r@(m' \bullet w_n)
    \end{array}} }
   \end{prooftree}
@@ -1579,8 +1579,8 @@ its construction is explained in Appendix~\ref{sec:sep}.
 
 %}}}
 
-\subsection{ClightP} %{{{
-\label{sec:overview:clightp}
+\subsection{ClightP} \label{sec:overview:clightp} %{{{
+
 To further facilitate the implementation of abstract state,
 we introduce the language
 \[
@@ -1596,47 +1596,68 @@ Private variables cannot be accessed
 from other translation units and are stored
 in a separate
 \emph{private environment} $p \in \kw{penv}$.
-
 The program $M$ can easily be compiled to a regular
 Clight program $M' := \kw{ClightUnP}(M)$
 by erasing the $\kw{private}$ annotations from all variables.
+
 The techniques outlined in \S\ref{sec:overview:sepalg}
-can then be used to formulate the correctness property
+can then be used to formulate a correctness property
+for this transformation.
+We will write $\mathbf{R}^\bullet$ for the simulation convention
+$(\kw{mem} \otimes \mathbf{R}) \mathbin; [\bullet] :
+ \kw{mem} \otimes A \leftrightarrow \kw{mem}$,
+which modifies $\mathbf{R} : A \leftrightarrow \kw{mem}$
+to merge its target into another memory state component.
+In addition,
+the simulation convention $[U]_* : \mathbf{I} \leftrightarrow U$
+allows the caller to use an arbitrary target question $u$
+but requires the callee to return it unchanged.
+The correctness of $\kw{ClightUnP}$
+can then be stated as:
 \[
   \vcenter{ \hbox{\includegraphics[scale=0.12]{draftfig/unclight}} }
   \,,
   \qquad
   \text{where}
   \qquad
-  \mathbf{R}_A :=
-    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-cca}} }
+  R_\kw{P}^\bullet =
+    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-ccb}} }
     \,,
   \qquad
-  \mathbf{R}_B :=
-    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-ccb}} }
+  [\kw{mem}]_*^\bullet =
+    \vcenter{ \hbox{\includegraphics[scale=0.1]{draftfig/unclight-cca}} }
     \,.
 \]
-In the Clight program,
-formerly private variables are stored in the memory.
-For incoming calls ($\mathbf{R}_B$),
-we proceed as before and refine the private environment
-into a memory share which is then merged with the main memory.
-However, unlike layer interfaces,
-ClightP program can also perform outgoing calls.
-The use of
-$\kw{r}_\kw{mem} : \mathbf{I} \leftrightarrow \kw{mem}$
-allows the target program to adjoin an extra memory share
-for private variables
-and requires the callee to leave this share unchanged.
+The Clight program
+stores formerly private variables in the main memory.
+For incoming calls ($R_\kw{P}^\bullet$),
+the private environment is refined
+into a memory share according to a relation $R_\kw{P}$,
+and is then merged with the main memory.
+For outgoing calls,
+the private environment is not included
+but the variables are still stored in the target memory.
+The use of $[\kw{mem}]_*^\bullet$
+expresses the expectation that the callee will return
+this region of the memory unchanged.
 
+\begin{example}[Verifying $\kw{rb.c}$]
 Using ClightP,
-implementing abstract state is a simple matter of
-defining a relation $R \subseteq D \times \kw{penv}$.
-We can then rely on $\kw{ClightUnP}$
-to incorporate this abstract data into the global memory.
-
-\begin{example}
-Maybe the implementation of $L_\kw{rb}$?
+we can declare the variables
+\texttt{c1}, \texttt{c2} and \texttt{buf}
+as private.
+We can then
+define a relation $R_\kw{rb} \subseteq D_\kw{rb} \times \kw{penv}$
+in order to verify
+\[
+  (\mathcal{C} \mathbin@ \gamma) \odot
+  (L_\kw{rb} \mathbin@ \kw{mem})
+  \le_{\varnothing \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ R_\kw{rb}}
+  \kw{ClightP}(\kw{rb.c})
+  \le_{[\kw{mem}]_*^\bullet \twoheadrightarrow R_\kw{P}^\bullet}
+  \kw{Clight}(\kw{ClightUnP}(\kw{rb.c}))
+  \,.
+\]
 \end{example}
 
 %}}}
