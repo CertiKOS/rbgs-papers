@@ -52,6 +52,8 @@
 %\newcommand{\callee}[1]{{\ltimes}#1}
 \newcommand{\caller}[1]{\langle #1 ]}
 \newcommand{\callee}[1]{[ #1 \rangle}
+\newcommand{\lensarrow}{\leftrightarrows}
+\newcommand{\lensle}{\preccurlyeq}
 %}}}
 
 % Names of things {{{
@@ -476,8 +478,8 @@ can be incorporated into our framework as-is.
     Note that
     the two-dimensional structure $\mathbf{TSC}$
     contains $\mathbf{TS}$ and $\mathbf{SC}$ as its edges,
-    and likewise $\mathbf{BSR}$
-    contains $\mathbf{Bij}$ and $\mathbf{Rel}$.
+    and likewise $\mathbf{LSR}$
+    contains $\mathbf{Lens}$ and $\mathbf{Rel}$.
 } \label{tbl:roadmap}
   \small
   \begin{tabular}{
@@ -514,14 +516,14 @@ can be incorporated into our framework as-is.
       Interface
         & Sets & $U, V$ && & & $\times$ \\ &
       Behavior
-        & Bijections & $f : U \cong V \in \mathbf{Bij}$ &&
+        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}$ &&
             $\circ$ & & $\times$ &&& $\circ$ & $\times$ \\ &
       Abstraction
         & Simulation relations & $R \subseteq U \times V \in \mathbf{Rel}$ &&
             & $\cdot$ & $\times$ &&& $\times$ & $\,\cdot\,$ \\ &
       Refinement
         & Bisimulations &
-          $\hspace{-1em} \phi : f \equiv_{R \cong S} g \in \mathbf{BSR}$ &&
+          $\hspace{-1em} \phi : f \lensle_{R \lensarrow S} g \in \mathbf{LSR}$ &&
           $\circ$ & $\cdot$ & $\times$ &&& $\circ$ & $\,\cdot\,$ \\
     \bottomrule
   \end{tabular}
@@ -1470,35 +1472,56 @@ that there will be a way to
 combine them meaningfully
 into questions of $A_1 \otimes A_2$.
 
-Although $\mathbf{TS}$
-cannot be made into a symmetric monoidal category,
-the state threading construction $L@U$ can be generalized
-to allow the added state component
-to use different representations in incoming and outgoing questions.
-Formally, we define a functor
-$
-  \mathbin@ : \mathbf{TS} \times \mathbf{Bij}
-    \rightarrow \mathbf{TS}
-$
-which from a transition system $L : A \twoheadrightarrow B$
-and a bijection $f : U \cong V$
-constructs a transition system
+Nevertheless,
+it possible to generalize the construction $L@U$
+introduced in \S\ref{sec:overview:slift}
+to incorporate a \emph{lens} $f : U \lensarrow V$
+with a more sophisticated action on the state component.
+Such a lens provides access to a filed of type $U$ within $V$,
+in the form of two functions:
 \[
-  L \mathbin@ f \::\: A \otimes [U] \:\twoheadrightarrow\: B \otimes [V]
-  \,.
+  \begin{array}{c}
+    \kw{get}_f : V \rightarrow U \\[1ex]
+    \kw{set}_f : V \times U \rightarrow V
+  \end{array}
+  \qquad
+  \text{such that}
+  \qquad
+  \begin{array}{r@{\:}l}
+    \kw{get}(\kw{set}(v, u)) &= u \\
+    \kw{set}(v, \kw{get}(v)) &= v \\
+    \kw{set}(\kw{set}(v, u_1), u_2) &= \kw{set}(v, u_2)
+    \,.
+  \end{array}
 \]
-The behavior of this transition system is similar to that of $L@U$,
-but the bijection $f$ is used to translate the state component
-between incoming and outgoing questions.
+The transition system
+$L \mathbin@ f : A \mathbin@ U \rightarrow B \mathbin@ V$
+can then use $\kw{get}_f$ to extract $u \in U$ from the incoming state in $V$,
+thread that $U$ state component through the external calls of $L$,
+and use $\kw{set}_f$ to update the state component of type $V$
+in the top-level answer of $L$.
 
+Sets and lenses form a category,
+and the construction described above defines a functor
+\[
+  \mathbin@ : \mathbf{TS} \times \mathbf{Lens}
+    \rightarrow \mathbf{TS}
+  \,,
+\]
+which from $L : A \twoheadrightarrow B$
+and $f : U \lensarrow V$
+constructs
+$
+  L \mathbin@ f \::\: A \mathbin@ U \:\twoheadrightarrow\: B \mathbin@ V
+$.
 Since the right-hand side argument of $\mathbin@$
-is limited to sets and bijections,
+is limited to sets and lenses,
 it cannot be used to define a proper monoidal structure on $\mathbf{TS}$.
 Nevertheless, there are transition systems
 \[
-  \lambda^\kw{L}_A : \mathbf{I} \mathbin@ U \cong [U]
+  \lambda_A : \mathbf{I} \mathbin@ U \cong [U]
   \qquad
-  \lambda^\kw{R}_A : A \mathbin@ \mathbbm{1} \cong A
+  \rho_A : A \mathbin@ \mathbbm{1} \cong A
   \qquad
   \alpha_{AUV} : A \mathbin@ (U \times V) \cong
     (A \mathbin@ U) \mathbin@ V
@@ -1517,8 +1540,7 @@ This can be achieved in the following way:
   \\[1ex]
      (\kw{Clight}(\kw{bq.c}) \mathbin@ D_\kw{rb}) \odot
      (\mathcal{C} \mathbin@ \gamma_{\kw{mem}, D_\kw{rb}}) \odot
-     (L_\kw{bq} \mathbin@ \kw{mem}) \odot
-     \mu_\kw{mem}
+     (L_\kw{bq} \mathbin@ *_\kw{mem})
 \end{gather*}
 Composition runs from left to right
 and the product
@@ -1528,12 +1550,13 @@ Lines and nodes connecting the shaded area
 to the rest of the diagram
 can be arbitrary language interfaces and transition systems,
 but those appearing in the upper part
-are restricted to sets and bijections.
+are restricted to sets and lenses.
 We have drawn
-$\gamma_{UV} : U \times V \cong V \times U \in \mathbf{Bij}$
+$\gamma_{UV} : U \times V \lensarrow V \times U \in \mathbf{Lens}$
 as a twist
-and it is trivial to define
-$\mu_U : \top \twoheadrightarrow \top \mathbin@ U$.
+and
+${*}_U : \mathbbm{1} \lensarrow U$
+as a circle.
 \end{example}
 %}}}
 
@@ -1695,7 +1718,7 @@ In \S\ref{sec:encap},
 %
 %Rather than modifying the definition of transition systems,
 we introduce a construction $\mathbf{C}^\dagger$
-which can be applied to $\mathbf{TS}$ and $\mathbf{Bij}$
+which can be applied to $\mathbf{TS}$ and $\mathbf{Lens}$
 to obtain a model with state encapsulation.
 
 %inspired by \citet{feedback,caots}.
@@ -1718,19 +1741,24 @@ The double category structure
 and the constructions we have described
 embed into the extended model.
 In addition,
-the extended model supports a component:
+that model supports a component:
 \[
-  \langle u \rangle : [U] \rightarrow \mathbf{I}
+  \langle u \rangle : U \lensarrow \mathbbm{1} \in \mathbf{Lens}^\dagger
   \qquad
-  \langle u \rangle := (u \in U \mid \kw{id}_U)
+  \langle u \rangle := (u \in U \mid \rho^{-1}_U)
   =\:
   \draftfig{0.1}{encap-prim}
 \]
-When this component is activated
-by an incoming question $* \in \mathbf{I}^\que$,
-it uses the state $u \in U$ as an outgoing question.
-When an answer $u' \in U$ is received,
-it stores $u'$ as the next state and returns control to the environment.
+This component is constructed from
+$\rho^{-1}_U : U \cong \mathbbm{1} \times U \in \mathbf{Lens}$,
+but the incoming $U$ component is hidden from its interface.
+When the component is activated
+by an incoming question $* \in \mathbbm{1}$,
+the initial state $u \in U$ is adjoined
+and propagated by $\rho^{-1}_U$ into an outgoing question.
+When an answer $u' \in U$ is received
+and propagated back by $\rho^{-1}_U$,
+the component stores $u'$ as the next state and returns control to the environment.
 This allows $\langle u \rangle$ to act
 as a state encapsulation primitive.
 
