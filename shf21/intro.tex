@@ -110,27 +110,30 @@ expect the verification framework to fix in advance the dozens or
 hundreds of kinds of resources which may be involved in the course of
 verifying a large-scale system.
 
-\subsection{Research Direction}
-
 Fortunately, advances in compositional semantics offer a realistic
-path to tackling problems of this kind.  In particular, game semantics
+path to tackling problems of this kind.
+Game semantics
 (\S\ref{sec:gamesem}) provides a general and expressive framework to
 model interactions between typed components.
 Yet work on compositional semantics in general,
 and game semantics in particular,
-has often been targeted towards developing
-better a better theoretical understanding
-of specific programming languages,
-whereas practitioners of formal methods and verification
-have relied on more concrete operational models.
+is often oriented towards theoretical understanding,
+while practitioners of formal methods and verification
+tend to rely on more concrete operational models.
 
-Our ambition is to show that beyond theoretical interest,
+\subsection{Research Direction}
+
+Our ambition is to show that %beyond theoretical interest,
 game semantics
 can serve as the foundation
-of a powerful compositional verification framework,
-making it possible to bring together strands of research
+for a rich and compositional framework
+suitable for the end-to-end verification of
+large-scale, heterogeneous systems.
+This framework would
+bring together strands of research
 which to date have only been considered separately,
-and to tackle the verification of large-scale heterogeneous systems.
+and would enable
+the verification of large-scale heterogeneous systems.
 
 In recent work, we proposed
 integrating dual nondeterminism and refinement into game semantics,
@@ -139,134 +142,104 @@ extending it with powerful mechanisms to account for abstraction
 On a more practical level,
 we have developed CompCertO \cite{compcerto},
 a version of CompCert which
-borrows ideas from game semantics and certified abstraction layers
-to provide a correctness theorem for CompCert
+%borrows ideas from game semantics and certified abstraction layers
+provides a correctness theorem for CompCert
 stated in terms of a compositional semantics.
+This work points in the direction of a two-dimensional algebra 
+of systems and abstraction, and
+provides preliminary evidence
+for the thesis outlined above.
+%for the suitability of game semantics for the problem at hand.
 
-On a theoretical level,
-this work points in the direction of a rich, two-dimensional algebra 
-of systems and abstraction
-which could give a unified account
-of a broad range of verification approaches (\S2).
-On a practical level,
-it provides preliminary evidence
-for the suitability of game semantics for the problem at hand.
-However,
-there remains many theoretical and practical challenges
-in bringing this vision to life,
-which the work outlined in this proposal seeks to address.
+\subsection{Challenges}
 
-\subsection{Deficiencies of the CompCert Memory Model}
-\label{ssec:intro-nmm}
-
-[TODO: move some of this to Sec. 3;
-replace this section with a broader discussion of
-the limitations in existing work on CompCertO:
+Nonetheless,
+There remains many theoretical and practical challenges
+in bringing to life
+our vision of end-to-end, heterogeneous verification.
+The situation described in Example~\ref{ex:nicdriver}
+is fairly specific, but it already illustrates many of these challenges:
 \begin{itemize}
-  \item nominal memory model
-  \item multi-threading / CCAL vs. CompCertO
-  \item bridging the gap b/w high-level and transition system models,
-    state encapsulation
-  \item complexity of CompCertO's calling convention
-  \item limitations of CompCertO's $\oplus$]
+  \item the interfaces involved in different parts of the system
+    are very different in nature;
+  \item a system composed of a NIC and CPU
+    is inherently concurrent;
+  \item the NIC carries persistent state
+    which is isolated from the rest of the system;
+  \item it must be possible to reason at different levels of abstraction---%
+    in terms of network connections and C function calls
+    but also ethernet frames device I/O, and
+    ideally all the way down to logic gates and machine code;
+  \item the example relies on general categorical structures for composition $\circ$,
+    rather than ad-hoc composition principles tailored to a particular application;
+  \item it is not only a theoretical but also an engineering problem---%
+    the mathematics involved in solving it must be
+    amenable to mechanization in a proof assistant.
+    %and must integrate with a certified compiler.
 \end{itemize}
+There has of course been
+extensive research
+addressing each of these challenges independently.
+Yet designing a compositional framework tackling all of them
+is not simply a matter of juxtaposing existing solutions.
+For example,
+to support both concurrency and abstraction,
+it is not sufficient to separately borrow
+a theory of concurrent traces and
+another theory to describe
+how interactions at different abstraction levels
+correspond to one another.
+We must also work out how the structures
+of the former
+fit into the latter's methodology.
 
-Memory models are critical components for formalizing the semantics of
-imperative programming languages. They determine an abstraction over
-memory and provide necessary operations for manipulating memory states
-at the corresponding level of abstraction.
+Our interest in game semantics
+stems in part from this fact:
+not only has existing work in the field
+addressed many of the issues above,
+it has done so in a context where games and strategies
+provide a unifying point of articulation
+between these different strands of research.
+This has allowed researchers
+to establish \emph{semantic cubes}
+encompassing certain combinations of features.
 
-Among the memory models developed so far, the most representative one
-is the \emph{block-based memory model}~\cite{leroy08,compcert-mem-v2}
-defined in CompCert.  It provides a medium level of
-abstraction---neither too abstract nor too concrete---by modeling
-memory space as a collection of contiguous memory regions (also called
-\emph{blocks}). Isolation between different memory blocks is simply
-captured by giving each of those memory blocks a unique identifier
-(called its \emph{block id}). Furthermore, pointers are naturally
-defined as pairs of block ids and offsets to memory cells, and
-definitions of pointer operations follow in a straightforward manner.
-The block-based memory model has been highly successful. By uniformly
-applying it to all of CompCert's languages, the developers of CompCert
-were able to verify over 20 compiler passes containing advanced
-optimizations.  It has also been widely adopted in other verification
-projects, including various extensions of CompCert for supporting
-compositionality and concurrency
-(e.g.,~\cite{sevcik13,compcompcert,compcertm,cascompcert,wang2019,compcertelf20,sepcompcert,compcerts})
-and formalization of language semantics for program verification
-(e.g.,~\cite{appel11:vst,dscal15,ccal18}).
-
-Despite its previous success, CompCert's block-based memory model is
-still quite primitive and inflexible, making it difficult to support
-end-to-end and compositional verified compilation: 
-
-\begin{itemize}
-\item 
-\textbf{Inflexibility 1: Fixed Representation of Block IDs.}
-%
-In the block-based memory model, block ids are represented by a fixed
-type, i.e., positive numbers. With this uniform and fixed
-representation, it is impossible to distinguish between memory regions
-playing different roles (such as the stack, heap, and global
-data). Therefore, it is difficult to reason about specific parts of
-memory in isolation.
-
-\item
-\textbf{Inflexibility 2: Sequential Numbering of Valid Blocks.}  
-%
-In any memory state, a special positive number named \nextblock
-provides the next available block id. The global memory space is
-divided by \nextblock into two parts: blocks with ids less than
-\nextblock have already been allocated (called \emph{valid blocks}),
-while the remaining blocks are waiting to be allocated (called
-\emph{invalid blocks}). In any program semantics, the ids of valid
-blocks must be numbered sequentially by $[1,\ldots,\nextblock-1]$.
-This creates unintuitive and unnecessary dependency between valid
-blocks playing different roles.
-
-\item
-\textbf{Inflexibility 3: Global Constraint for Allocation.}
-%
-In any memory state, there is only a single \nextblock for assigning
-new block ids upon allocation. In the setting where multiple open
-programs or concurrent threads work on the same memory state, every
-open program or thread must keep track of how other programs or
-threads modify \nextblock. This global constraint imposes a complex
-dependency between open programs and threads.
-\end{itemize}
-
-Because of the complex dependencies created by the above
-inflexibilities, verification of any compiler transformation must
-treat the memory space \emph{as a whole}. This incurs significant
-difficulties both in verified compilation of whole programs and in
-that of open programs. Specifically, in the former setting, many
-compiler transformations only work on certain sub-regions of memory
-(\eg, transformations on stack frames). However, because of
-\textbf{Inflexibilities 1 and 2}, the reasoning must be lifted to the
-whole memory, therefore becoming significantly more involved and less
-intuitive. In the latter setting, one would like to get a
-compositional approach to verifying open or concurrent
-programs. However, such an approach must be compatible with the
-evolution of \nextblock which is inherently non-compositional by
-\textbf{Inflexibilities 2 and 3}. This problem plagues many projects on
-extending CompCert to support compositionality or concurrency (\eg,
-CASCompCert~\cite{cascompcert} and Thread-Safe
-CompCertX~\cite{ccal18}). To circumscribe it, various ad hoc
-modifications to the block-based memory model were invented, leading to
-verification results that are overly technical and less reusable.
+Likewise,
+our focus on verified compilation
+is not just a matter of the practical utility of compilers
+in the construction of certified systems.
+Certified compilers constitute a nexus where
+many of the challenges above either appear organically
+(for example,
+a compiler's \emph{calling convention} describes an abstraction relationship
+between the operation of input and output programs),
+or must be taken into account
+(a compiler which is correct for sequential code
+does not necessarily remain so in the presence of concurrency).
 
 \subsection{Intellectual Merit}
 \label{ssec:intro-itm}
 
-In addition to these deficiencies, the current CompCert is not end-to-end
-in that it can only produce assembly code but not actual binary
-machine code. There are still no certified linker and loader that can
-work directly with ELF binaries.  CompCert also does not support secure
-compilation: source program that is provably information-flow secure
-can still be compiled into target code that contains information leaks.
-
-In this effort, we propose to develop a novel verified compilation
-toolchain that would address all of these shortcomings. Our
+In this context,
+our proposal seeks to build on existing research
+on the certified compiler CompCert
+to consolidate and extend its capabilities in various directions,
+focusing in particular on the interactions between
+compositionality,
+the management of \emph{state},
+modeling of low-level interfaces and mechanisms, and
+the preservation of information security.
+%
+%In addition to these deficiencies, the current CompCert is not end-to-end
+%in that it can only produce assembly code but not actual binary
+%machine code. There are still no certified linker and loader that can
+%work directly with ELF binaries.  CompCert also does not support secure
+%compilation: source program that is provably information-flow secure
+%can still be compiled into target code that contains information leaks.
+%
+Concretely,
+we propose to develop a novel verified compilation
+toolchain that would tackle these challenges simultaneously. Our
 proposed research consists of the following five components:
 \begin{itemize}
 %%%%%%%%%%%%%%%
