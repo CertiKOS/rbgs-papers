@@ -1,42 +1,27 @@
 \section{Verified Compilation with a Nominal Memory Model}
 \label{sec:nominal}
 
-In this section, we describe the limitations of the block-based
+In this section, we describe the limitations of CompCert's block-based
 memory model and present our new 
 {\em nominal memory model} which removes the global constraints for
 managing memory blocks and enables flexible memory structures for open
 programs and concurrent threads.
 
-\subsection*{Deficiencies of the CompCert Memory Model [formely intro]}
-\label{ssec:intro-nmm}
-
-[TODO: move some of this to Sec. 3;
-replace this section with a broader discussion of
-the limitations in existing work on CompCertO:
-\begin{itemize}
-  \item nominal memory model
-  \item multi-threading / CCAL vs. CompCertO
-  \item bridging the gap b/w high-level and transition system models,
-    state encapsulation
-  \item complexity of CompCertO's calling convention
-  \item limitations of CompCertO's $\oplus$]
-\end{itemize}
-
 Memory models are critical components for formalizing the semantics of
 imperative programming languages. They determine an abstraction over
 memory and provide necessary operations for manipulating memory states
 at the corresponding level of abstraction.
-
-Among the memory models developed so far, the most representative one
-is the \emph{block-based memory model}~\cite{leroy08,compcert-mem-v2}
-defined in CompCert.  It provides a medium level of
+The \emph{block-based} memory model
+used in CompCert~\cite{leroy08,compcert-mem-v2}
+provides a medium level of
 abstraction---neither too abstract nor too concrete---by modeling
 memory space as a collection of contiguous memory regions (also called
-\emph{blocks}). Isolation between different memory blocks is simply
-captured by giving each of those memory blocks a unique identifier
-(called its \emph{block id}). Furthermore, pointers are naturally
-defined as pairs of block ids and offsets to memory cells, and
-definitions of pointer operations follow in a straightforward manner.
+\emph{blocks}).
+% Each block is given a unique identifier
+%(called its \emph{block id}). Furthermore, pointers are naturally
+%defined as pairs of block ids and offsets to memory cells, and
+%definitions of pointer operations follow in a straightforward manner.
+
 The block-based memory model has been highly successful. By uniformly
 applying it to all of CompCert's languages, the developers of CompCert
 were able to verify over 20 compiler passes containing advanced
@@ -47,67 +32,7 @@ compositionality and concurrency
 and formalization of language semantics for program verification
 (e.g.,~\cite{appel11:vst,dscal15,ccal18}).
 
-Despite its previous success, CompCert's block-based memory model is
-still quite primitive and inflexible, making it difficult to support
-end-to-end and compositional verified compilation: 
-
-\begin{itemize}
-\item 
-\textbf{Inflexibility 1: Fixed Representation of Block IDs.}
-%
-In the block-based memory model, block ids are represented by a fixed
-type, i.e., positive numbers. With this uniform and fixed
-representation, it is impossible to distinguish between memory regions
-playing different roles (such as the stack, heap, and global
-data). Therefore, it is difficult to reason about specific parts of
-memory in isolation.
-
-\item
-\textbf{Inflexibility 2: Sequential Numbering of Valid Blocks.}  
-%
-In any memory state, a special positive number named \nextblock
-provides the next available block id. The global memory space is
-divided by \nextblock into two parts: blocks with ids less than
-\nextblock have already been allocated (called \emph{valid blocks}),
-while the remaining blocks are waiting to be allocated (called
-\emph{invalid blocks}). In any program semantics, the ids of valid
-blocks must be numbered sequentially by $[1,\ldots,\nextblock-1]$.
-This creates unintuitive and unnecessary dependency between valid
-blocks playing different roles.
-
-\item
-\textbf{Inflexibility 3: Global Constraint for Allocation.}
-%
-In any memory state, there is only a single \nextblock for assigning
-new block ids upon allocation. In the setting where multiple open
-programs or concurrent threads work on the same memory state, every
-open program or thread must keep track of how other programs or
-threads modify \nextblock. This global constraint imposes a complex
-dependency between open programs and threads.
-\end{itemize}
-
-Because of the complex dependencies created by the above
-inflexibilities, verification of any compiler transformation must
-treat the memory space \emph{as a whole}. This incurs significant
-difficulties both in verified compilation of whole programs and in
-that of open programs. Specifically, in the former setting, many
-compiler transformations only work on certain sub-regions of memory
-(\eg, transformations on stack frames). However, because of
-\textbf{Inflexibilities 1 and 2}, the reasoning must be lifted to the
-whole memory, therefore becoming significantly more involved and less
-intuitive. In the latter setting, one would like to get a
-compositional approach to verifying open or concurrent
-programs. However, such an approach must be compatible with the
-evolution of \nextblock which is inherently non-compositional by
-\textbf{Inflexibilities 2 and 3}. This problem plagues many projects on
-extending CompCert to support compositionality or concurrency (\eg,
-CASCompCert~\cite{cascompcert} and Thread-Safe
-CompCertX~\cite{ccal18}). To circumscribe it, various ad hoc
-modifications to the block-based memory model were invented, leading to
-verification results that are overly technical and less reusable.
-
-
-\subsection{Problems with the Block-Based Memory Model}
+\subsection{The CompCert Memory Model}
 \label{ssec:nominal-bbmm}
 
 In the block-based memory model, the memory space is represented as a
@@ -115,11 +40,14 @@ countably infinite set of blocks where each block is given a unique
 identifier called its \emph{block id} (denoted by $b$, represented
 as postitive numbers). The entire memory space is
 divided into two parts by a special block id called
-\emph{\nextblock}. A block with id less than \nextblock has been
-allocated (called a \emph{valid block}). Otherwise, it has not been
-allocated yet (called an \emph{invalid block}). \nextblock---initially
-with the value $1$---denotes the id of the next block to be allocated
-and will be increased after each allocation. A valid memory block is a
+\nextblock, which
+denotes the id of the next block to be allocated
+and is increased after each allocation.
+A block with id less than \nextblock has been
+allocated and is called a \emph{valid block}.
+Unallocated blocks are called \emph{invalid blocks}.
+
+A valid memory block is a
 finite array of bytes with a lower and upper bound. A \emph{memory
 state} (denoted by $m$) consists of a mapping from addresses to
 \emph{in-memory values} in valid blocks and the value of
@@ -203,7 +131,7 @@ A main task of compilers is to transform abstract data structures
 languages into concrete data structures for the low-level target
 languages. These transformations often operate on certain part of
 memory and have local effects.
-
+%
 CompCert introduces \emph{injections} to capture such changes. An
 injection $j$ is a partial function of type
 \coqe{block -> $\some{\code{block} \times \code{Z}}$}, such that $j(b) =
@@ -212,7 +140,54 @@ $o$ by the transformation. If $j(b) = \none$ (we use $\none$ to
 represent the \coqe{None} constructor), then $b$ is removed from the
 memory after the transformation.
 
-When proving the correctness of these memory-transforming passes, one
+\subsection{Limitations}
+\label{ssec:intro-nmm}
+
+Despite its success, CompCert's block-based memory model is
+still quite primitive and inflexible, making it difficult to support
+end-to-end and compositional verified compilation: 
+
+\begin{itemize}
+\item 
+\textbf{Inflexibility 1: Fixed Representation of Block IDs.}
+%
+The uniform and fixed representation of block ids by positive numbers
+makes it impossible to distinguish between memory regions
+playing different roles (such as the stack, heap, and global
+data). Therefore, it is difficult to reason about specific parts of
+memory in isolation.
+
+\item
+\textbf{Inflexibility 2: Sequential Numbering of Valid Blocks.}  
+%
+The ids of valid
+blocks must be numbered sequentially by $[1,\ldots,\nextblock-1]$.
+This creates unintuitive and unnecessary dependency between valid
+blocks playing different roles.
+
+\item
+\textbf{Inflexibility 3: Global Constraint for Allocation.}
+%
+In any memory state, there is only a single \nextblock for assigning
+new block ids upon allocation. In the setting where multiple open
+programs or concurrent threads work on the same memory state, every
+open program or thread must keep track of how other programs or
+threads modify \nextblock. This global constraint imposes a complex
+dependency between open programs and threads.
+\end{itemize}
+
+Because of the complex dependencies created by the above
+inflexibilities, verification of any compiler transformation must
+treat the memory space \emph{as a whole}. This incurs significant
+difficulties.
+For example, many
+compiler transformations only work on certain sub-regions of memory
+(\eg, transformations on stack frames). However, because of
+\textbf{Inflexibilities 1 and 2}, the reasoning must be lifted to the
+whole memory, therefore becoming significantly more involved and less
+intuitive.
+
+When proving the correctness of memory-transforming passes, one
 would expect that we could exploit the locality of memory
 transformations to construct intuitive proofs. For example, for
 \code{SimplLocals}, \coqe{Cminorgen} and \coqe{Stacking}, one would
@@ -223,100 +198,25 @@ formalize these facts directly because we can neither distinguish
 blocks for global definitions from blocks in stack frames, nor tell
 the differences between blocks in different stack frames: they are all
 indexed by positive numbers. This problem is exactly caused by
-\textbf{Inflexibility 1} introduced in~\S\ref{ssec:intro-nmm}.
+\textbf{Inflexibility 1} introduced above.
 
-
-Verification techniques for open programs are compositional only if
+Moreover,
+verification techniques for open programs are compositional only if
 the semantics of open programs are compatible with each other.
 However, the existence of a global \nextblock makes this compatibility
 very difficult to establish, even when different open programs operate
 on completely separate memory regions.
-\ignore{
-\begin{wrapfigure}[12]{r}{0.5\textwidth}
-  \begin{tikzpicture}[scale=0.6, every node/.style={scale=0.9},auto]
-    \def\bh{0.2cm}
-    \tikzstyle{af}=[draw,minimum width=0.5cm, minimum height=0.5cm, rounded corners=.05cm];
-    
-    \node[af,fill=yellow] (t1f) {$f$};
-    \node[af, below=\bh of t1f, fill=yellow] (t1g) {$g$};
-    \node[af, below=\bh of t1g, pattern = north east lines] (t1i) {};
-    \node[af, below=\bh of t1i, pattern = north east lines] (t1j) {};
-    \node[af, below=\bh of t1j, fill=yellow] (t1h) {$h$};
-    %% \node[draw = none, below left =\bh and -0.1cm of t1h, rotate = 90] (t1end) {$\ldots$};
-    
-    \draw[->,>=stealth] (t1f) -- (t1g);
-    \draw[->,>=stealth] (t1g) -- (t1i);
-    \draw[->,>=stealth] (t1i) -- (t1j);
-    \draw[->,>=stealth] (t1j) -- (t1h);
-    \draw[->,>=stealth] (t1h) -- ($(t1h.south) + (0cm, -0.3cm)$);
-
-    \node[above = 0.1cm of t1f] {Thread $1$};
-
-    \node[af, right = 2cm of t1f, pattern = north east lines] (t2f) {};
-    \node[af, below=0.22cm of t2f, pattern=north east lines] (t2g) {};
-    \node[af, below=\bh of t2g,fill=green] (t2i) {$i$};
-    \node[af, below=\bh of t2i,fill=green] (t2j) {$j$};
-    \node[af, below=\bh of t2j, pattern=north east lines] (t2h) {};
-    %% \node[draw = none, below left =\bh and -0.1cm of t2h, rotate = 90] (t2end) {$\ldots$};
-
-    \draw[->,>=stealth] (t2f) -- (t2g);
-    \draw[->,>=stealth] (t2g) -- (t2i);
-    \draw[->,>=stealth] (t2i) -- (t2j);
-    \draw[->,>=stealth] (t2j) -- (t2h);
-    \draw[->,>=stealth] (t2h) -- ($(t2h.south) + (0cm, -0.3cm)$);
-
-    \node[above = 0.1cm of t2f] (t2txt) {Thread $2$};
-
-    \node[draw=none, right = 1cm of t2i] (comp) {\large\bf $\Longrightarrow$};
-    \node[draw=none, above = 0.1cm of comp] {\small \emph{Thread Linking}};
-
-    \draw[->, dashed, >=stealth] (t1g) -- node [sloped, above] {\small \emph{yield}} (t2i);
-    \draw[->, dashed, >=stealth] (t2j) -- node [sloped, above] {\small \emph{yield}} (t1j);
-
-
-    \node[af, right = 3cm of t2f,fill=yellow] (tf) {$f$};
-    \node[af, below=\bh of tf,fill=yellow] (tg) {$g$};
-    \node[af, below=\bh of tg,fill=green] (ti) {$i$};
-    \node[af, below=\bh of ti,fill=green] (tj) {$j$};
-    \node[af, below=\bh of tj,fill=yellow] (th) {$h$};
-    %% \node[draw = none, below left =\bh and -0.1cm of th, rotate = 90] (tend) {$\ldots$};
-
-    \draw[->,>=stealth] (tf) -- (tg);
-    \draw[->,>=stealth] (tg) -- (ti);
-    \draw[->,>=stealth] (ti) -- (tj);
-    \draw[->,>=stealth] (tj) -- (th);
-    \draw[->,>=stealth] (th) -- ($(th.south) + (0cm, -\bh)$);
-    
-    \node[right = 2cm of t2txt] {Threads $\{1,2\}$};
-    
-
-  \end{tikzpicture}
-  \vspace{-0.2cm}
-  \caption{\scriptsize{}Linking of Multiple Stacks into a Single Stack in CCAL}
-  \vspace{-0.2cm}
-  \label{fig:stack-linking}
-\end{wrapfigure}
-}
-We take the compilation and linking of Certified Concurrent
+Below we take the compilation and linking of Certified Concurrent
 Abstraction Layers (CCAL) as an example to illustrate the above
 problem~\cite{ccal18}.
-\ignore{
-A concurrent certified abstraction layer $L$
-consists of shared and private memory states, abstract states, and a
-set of possibly shared primitive operations (like external
-functions). The semantics of a language (\eg, C or assembly) built on
-top of $L$ forms an abstract machine in which concurrent programs can
-be formally described.
-}
-%
+
 A CCAL object is a formally verified open program built on top of some
 layer $L$. A multi-threaded program is developed by abstracting
 individual threads into CCAL objects. These objects are then
 compiled by an extension of CompCert called Thread-Safe CompCertX into
 assembly code. Finally, CCAL objects need to be linked together to
 form a complete program. 
-
-For the above linking to be possible, the views of memory of CCAL
+For this linking to be possible, the views of memory of CCAL
 objects must be compatible with each other. Achieving this
 compatibility is non-trivial since 
 a new stack block is
@@ -327,41 +227,15 @@ stack blocks and \nextblock, meanwhile preventing one
 thread from accessing the private stack memory of the others.
 %
 %
-\ignore{
-To solve the above problem, the authors of Thread-Safe
-CompCertX~\cite{ccal18} modify the assembly semantics so that when a
-thread yields to its context, a sequence of dummy stack blocks is
-allocated to increase \nextblock in accordance with the actual
-allocation of stack blocks by the context. Moreover, to avoid any
-interference between memory operations on the stacks in different
-threads, the dummy blocks do not carry any read or write
-permission---they are ``dead'' memory cells from the perspective of
-the focused thread. With those devices, it is possible to ``thread''
-the private stack frames of each thread into a single stack. As an
-example, the linking of stacks for two threads is depicted in
-\figref{fig:stack-linking}. Here, the call to the yield primitive from
-thread $1$ to $2$ in the function $g$ allocates two dummy blocks
-(marked with diagonal lines) for the corresponding execution in thread
-$2$. Accesses to these dummy blocks are invalid in thread $1$.
-
-
-The solution above has two problems.
-%
-First, intuitively, each thread should have it own private stack:
-the context should not interfere with operations on this stack.
-Contrary to this assumption, the growth of dummy frames depends
-on how contextual threads change \nextblock. This introduces
-unnecessary complication to verification of compilation.
-%
-Second, in the linked program, stack frames for different threads are
-interleaved with each other. This makes the semantics of
-linked programs much more complex. It is also extremely difficult to
-further verify their compilation to actual machine code where each
-thread should have its own contiguous and private stack.
-%
-}
 These problems are exactly caused by
 \textbf{Inflexibilities 2 and 3} in~\S\ref{ssec:intro-nmm}.
+
+Problems of this kind plagues many projects on
+extending CompCert to support compositionality or concurrency (\eg,
+CASCompCert~\cite{cascompcert} and Thread-Safe
+CompCertX~\cite{ccal18}). To circumscribe it, various ad hoc
+modifications to the block-based memory model were invented, leading to
+verification results that are overly technical and less reusable.
 
 \subsection{The Nominal Memory Model}
 \label{ssec:nominal-nmm}
