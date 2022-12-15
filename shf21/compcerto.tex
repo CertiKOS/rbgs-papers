@@ -812,73 +812,90 @@ as shown in Figure~\ref{fig:simcomp}.
 
 \subsection{Proposed Work}
 
-\paragraph*{Task 1a: Improved management of symbol tables}
+\paragraph*{Task 1a: Formalizing Categorical Structures}
 
-CompCert semantics rely on global environments
-which include a global mapping from program identifiers
-to memory addresses.
-This mapping models the symbol tables used during
-program linking and loading.
-CompCertO's approach to these symbol tables
-is fairly unsophisticated:
-component semantics are parameterized over the global symbol table,
-and simulations properties require that
-the user-provided table includes all of the symbols needed by the component.
-In other words,
-CompCertO retains a \emph{contextual refinement} approach
-for its management of symbol tables,
-even as it seeks to eliminate the restrictions of this approach
-in the other aspects of its semantic model.
+To support mutual recursion,
+the horizontal composition operator
+${\oplus_A} : (A \twoheadrightarrow A) \times (A \twoheadrightarrow A)
+  \rightarrow (A \twoheadrightarrow A)$
+used in CompCertO
+must be restricted to components with homogeneous types.
+To ground our framework in a more solid algebraic foundation,
+we will study the more fundamental operator
+${\odot_{A,B,C}} : (B \twoheadrightarrow C) \times (A \twoheadrightarrow B)
+  \rightarrow (A \twoheadrightarrow C)$,
+which lets its left-hand side argument call into
+the right-hand side over the language interface $B$,
+but does not allow calls in the other direction.
+Under $\odot$,
+transition systems and simulation conventions
+constitute a \emph{double category},
+a well-known structure equipped with a formal string diagram algebra
+\cite{dcsd}.
 
-As explained in our technical report \cite[\S{}A.3]{compcerto21tr},
-this prevented us from supporting the \textsf{Unusedglob} compilation pass
-in CompCertO.
-To overcome this limitation,
-we will adapt the techniques used by CompCertM \cite{compcertm},
-which uses per-component symbol tables as well as a global mapping.
-We will also explore the impact of
-the nominal memory model presented in \S\ref{sec:nominal}
-on the solution space for this problem.
+By formalizing the underlying categorical structures
+of CompCertO's model,
+we hope to facilitate connections with more theoretical work,
+gain reasoning tools such as string diagrams,
+and facilitate the modeling of heterogeneous systems
+as illustrated in Example~\ref{ex:nicdriver}.
 
 \vspace*{-2ex}
-\paragraph*{Task 1b: Better integration with CompCert}
-As it stands, CompCertO exists as a modified version of CompCert,
-incompatible with the original code base.  To keep our development
-current, we would need to update it with each new release of CompCert.
-This creates an unsustainable maintenance burden, and could hinder the
-adoption of CompCertO as a key component in future system verification
-frameworks.
+\paragraph*{Task 1b: Compositional State and State Encapsulation}
 
-Fortunately,
-for most files in our development,
-the changes required in CompCertO
-are extremely minimal,
-and consisted mostly of additions.
-As such,
-it may be possible to redesign CompCertO
-as an \emph{add-on} to CompCert, rather than as a modified version,
-and we will investigate this possibility.
-If a pure add-on is not possible,
-we will use CompCertM's approach of building on
-a version of CompCert with only very minimal changes,
-which could conceivably be adopted by CompCert's developers
-within a reasonable time frame.
-%In either case,
-%our redesign would be carried out
-%based on the most recent version of CompCert
-%(version 3.10 at the time of this writing,
-%compared with version 3.6 upon which CompCertO is based).
+In CompCertO, state exists in two forms:
+\begin{itemize}
+  \item The memory state is global and persistent.
+    It is shared across all components
+    and must be carried along
+    every time a question or answer transfers control
+    between components.
+  \item The states used to define transition systems
+    are local to each component.
+    They can only be observed indirectly,
+    through the component's interaction with the environment.
+\end{itemize}
+Since C does not offer objects, closures or similar abstractions,
+component-local state has a lifetime limited to a particular function activation.
+In the semantics of CompCert languages,
+maintaining persistent local state
+across successive activations of a given component
+would serve no purpose.
+Nevertheless,
+persistent local state is important in many applications,
+and essential to facilitate reasoning about large-scale systems.
+Therefore,
+we will extend CompCertO's semantic model
+with a compositional treatment of state
+as well as state encapsulation primitives.
 
-Allowing the original CompCert semantics and the compositional
-semantics of CompCertO to cohabitate in a single development would
-allow us to establish a formal correspondence between the two: the
-loading process encoded in CompCert's closed semantics could be
-formulated for CompCertO as an operator over its extended open
-semantics.  It would then be possible to show that the semantics used
-in CompCertO, once closed using this operator, would be identical to
-the original CompCert semantics.  Finally, to complete the integration
-with CompCert we will extend CompCertO to support multiple backend
-architectures.
+Specifically, the construction
+$A \otimes B = \langle A^\que \times B^\que, \, A^\ans \times B^\ans \rangle$
+will allows us to decompose
+the questions and answers of language interfaces
+into different fields.
+In particular the language interface component $[U] = \langle U,U \rangle$
+can be used in conjunction with $\otimes$
+to annotate the questions and answers of another language interface
+with a state component of type $U$.
+Building on the categorical framework established by Task~1a, 
+this construction can be extended
+to transition systems and simulation conventions
+to obtain a proper symmetric monoidal structure
+with the trivial language interface $I = \langle \{*\}, \{*\} \rangle$
+serving as its unit.
+This adds a dimension of compositionality to our framework
+and will serve as the basis for our treatment of state.
+
+Introducing persistent local state to the model
+then makes it possible to define
+a state encapsulation primitive $\langle u \rangle : [U] \twoheadrightarrow I$.
+This component maintains an internal state of type $U$.
+Upon its first activation with a trivial question in $I$,
+it uses the initial state $u \in U$
+as an outgoing question.
+The answer $u' \in U$ is then used to update the internal state
+and is again erased from the component's top-level answer.
 
 \vspace*{-2ex}
 \paragraph*{Task 1c: Trace Semantics for Open Components}
@@ -887,38 +904,65 @@ The compiler correctness theorem proved in CompCert
 is expressed as a forward simulation of labeled transition systems.
 This simulation is then used to derive
 a trace containment property.
-While CompCertO successfully adapted forward simulations
-to the compositional setting,
-there are a number of challenges involved with
-formulating a theorem analogous to trace containment.
+CompCertO adapts forward simulations
+to the compositional setting
+but does not establish
+a theorem analogous to trace containment.
 To do so,
 we must incorporate component interactions
-into event traces.
-Traces then become typed in the same way our transition systems are;
-the traces of the source and target programs
-are no longer directly comparable,
-and we must bring simulation conventions into the picture.
-Because simulation conventions inherently introduce
+into event traces,
+which become typed by language interfaces.
+Simulation conventions must then be used to relate
+the traces of the source and target programs,
+but they introduce
 \emph{dual nondeterminism}---%
 both the system and the environment contribute choices
 which determined how C-level behavior is realized at the assembly level---%
-it is no longer possible to use
+and it is no longer possible to use
 a simple trace inclusion (angelic nondeterminism)
 or trace containment property (demonic nondeterminism).
 
-Our prior work on \emph{refinement-based game semantics} \cite{koenig20}
+Our work on \emph{refinement-based game semantics} \cite{koenig20}
 offers a solution,
-in the form of a relatively simple game model
-with full support for both arbitrary angelic and demonic choices.
-We will mechanize this model in the Coq proof assistant
-and demonstrate how the compositional semantics used in CompCertO
-can be interpreted in this setting.
-%
-Crucially, under this representation
-they become much more amenable to uniform algebraic manipulation
-and much easier to interface with different models,
-a crucial capability in the context of large-scale verification
-involving C and assembly components.
+in the form of a simple game model
+with arbitrary angelic and demonic choices.
+We will mechanize this model in the Coq proof assistant,
+embed CompCertO semantics into it,
+and transpose the compositional structures uncovered by Tasks 1a and 1b.
+Because trace semantics
+get rid of unobservable internal states and transitions,
+this representation will be more amenable to uniform algebraic manipulation
+and easier to interface with different models.
 We outline several possibilities building on this task
 in \S\ref{sec:compcertox}.
+
+\vspace*{-2ex}
+\paragraph*{Task 1d: Engineering Improvements}
+
+In addition to the conceptual developments above,
+we will also improve CompCertO from an engineering perspective.
+This will include an improved management of symbol tables,
+addressing the issues which prevented us from
+supporting the \textsf{Unusedglob} compilation pass,
+as explained in our technical report \cite[\S{}A.3]{compcerto21tr},
+as well as a better integration with the original CompCert
+and support for all of its backend architectures.
+
+As it stands, CompCertO exists as a modified version of CompCert,
+incompatible with the original code base.  To keep our development
+current, we must update it with each new release of CompCert.
+This creates an unsustainable maintenance burden, and could hinder the
+adoption of CompCertO as a key component in future system verification
+frameworks.
+But because our changes are extremely minimal,
+it may be possible to redesign CompCertO
+as an \emph{add-on} to CompCert, rather than as a modified version.
+
+This would also
+allow us to establish a formal correspondence between the two: the
+loading process encoded in CompCert's closed semantics could be
+formulated for CompCertO as an operator over its extended open
+semantics.  It would then be possible to show that the semantics used
+in CompCertO, once closed using this operator, are identical to
+the original CompCert semantics.
 
