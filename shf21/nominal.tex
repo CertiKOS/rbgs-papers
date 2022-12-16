@@ -236,13 +236,12 @@ CASCompCert~\cite{cascompcert} and Thread-Safe
 CompCertX~\cite{ccal18}). To circumscribe it, various ad hoc
 modifications to the block-based memory model were invented, leading to
 verification results that are overly technical and less reusable.
+We will solve these problems by getting rid of the inflexibilites of
+the block-based memory model through a generalization based on nominal
+techniques.
 
 \subsection{The Nominal Memory Model}
 \label{ssec:nominal-nmm}
-
-We solve the above problems by getting rid of the inflexibilites of
-the block-based memory model through a generalization based on nominal
-techniques.
 
 Nominal techniques~\cite{pitts-nominal,gabby2002} provide a
 mathematical foundation for managing named resources. 
@@ -269,34 +268,6 @@ relation concrete. A name $a\in \nameset{A}$ is fresh w.r.t. $x$
 (written as $\freshness{a}{x}$) iff $x$ is supported by some finite set $A
 \subseteq \nameset{A}$ and $a \not\in A$.
 
-\begin{figure}[t]
-\begin{coq}
-  Module Type BLOCK.
-    Parameter block : Type.
-    Parameter eq_block : $\forall\app x\app y: \scode{block}, \sumbool{x=y}{x \neq y}$.
-  End BLOCK.
-
-  Module Type SUP.
-    Parameter sup: Type.
-    (** Operations *)
-    Parameter sup_empty : sup.  (* Empty support *)
-    Parameter fresh_block : sup -> block.  (* Generation of fresh blocks *)
-    Parameter sup_incr : sup -> sup.  (* Increment of supports *)
-    Parameter sup_in : block -> sup -> Prop.   (* Check validity of block ids *)
-    (** Properties *)
-    Parameter sup_dec : $\forall\app b\app s, \sumbool{\scode{sup\_in}\app b\app s}{\neg \scode{sup\_in}\app b\app s}$.
-    Parameter empty_in: $\forall\app b, \neg \scode{sup\_in}\app b\app \scode{sup\_empty}$.
-    Parameter freshness : $\forall\app s, \neg \scode{sup\_in}\app (\scode{fresh\_block}\app s)\app s$.
-    Parameter sup_incr_in : $\forall\app a\app s, \scode{sup\_in}\app a\app (\scode{sup\_incr}\app s) 
-    \leftrightarrow a = (\scode{fresh\_block}\app s) \lor \scode{sup\_in}\app a\app s$.
-  End SUP.  
-\end{coq}
-  \vspace{-0.2cm}
-  \caption{Interfaces of the Nominal Memory Model}
-  \label{fig:nm-interface}
-  \vspace{-0.1cm}
-\end{figure}
-
 The above concepts can be used to characterize the block-based
 memory model. By taking memory states as objects containing names, 
 we adopt the following analogies:
@@ -308,106 +279,51 @@ we adopt the following analogies:
 \item Given a memory state $m$, its \nextblock is fresh w.r.t. $m$.
 \end{itemize}
 %
-Note that the set of valid blocks is always finite. To some extent, the
+Note that the set of valid blocks is always finite.
+
+To some extent, the
 existing memory operations in CompCert already exploit the properties
 of atomic names and supports. For example,
 \coqe{alloc} always succeeds because there is always an infinite amount
 of ids outside the set of valid blocks.
-
-However, the block-based memory also makes rigid assumptions
-about names and supports:
 %
-\begin{itemize} \itemsep 0pt
+However, 
+the block-based memory also makes rigid assumptions
+about names and supports.
+These limitations have been outlined in \S\ref{ssec:intro-nmm}
+and can be reframed in the context of nominal sets:
+%
+\begin{enumerate} \itemsep 0pt
 \item Block ids are fixed to positive numbers;
 \item For any memory state $m$ whose \nextblock is $n$, its support
-  must be the fixed set of consecutive numbers $\{1,\ldots,n-1\}$;
+  must be the set $\{1,\ldots,n-1\}$;
 \item For any memory state $m$ whose \nextblock is $n$, its fresh
   block must be assigned with the id $n$.
-\end{itemize}
-%
+\end{enumerate}
 
-We remove these rigid assumptions and generalize the block-based
-model into the nominal memory model by introducing an
-abstraction of block ids and supports as module types, as shown
-in~\figref{fig:nm-interface}.
+Nominal CompCert \cite{wang2022}
+lifts these restrictions
+by generalizing the interface of
+CompCert's memory model.
+The new interface,
+based on nominal sets,
+is formalized as a Coq \emph{module type}.
 %
-By the definition of \coqe{BLOCK}, block ids are names with decidable equality.
-%
-By the definition of \coqe{SUP}, a support type must be accompanied by
-four kinds
-of operations: checking the membership of blocks in supports
-(\coqe{sup_in}), creating an empty support (\coqe{sup_empty}),
-generating fresh blocks (\coqe{fresh_block}) and increasing supports
-with new blocks (\coqe{sup_incr}). Furthermore, those operations must
-satisfy some well-formedness properties. 
+This establishes a clean separation between
+the requirements of language semantics and simulation proofs
+(now expressed in terms of nominal sets)
+and the possible implementations of the memory model.
+While the block-based memory model
+can still serve as a simple implementation of nominal memory,
+is becomes possible to introduce
+more sophisticated models,
+which can then provide additional functionality
+and enable forms of reasoning
+which would be impossible
+or excessively complex in the block-based model.
 
-\begin{figure}
-\begin{coq}
-  Module Block <: BLOCK.
-    Definition block := positive.         Definition eq_block := peq.
-  End Block.
+\subsection{Proposed Work}
 
-  Module Sup <: SUP.
-    Definition sup := list block.         Definition sup_in ($b$: block) ($s$: sup) : Prop := $b \in s$.
-    Definition sup_empty : sup := [].     Definition fresh_block ($s$: sup) := (find_max_pos $s$) + 1.
-    Definition sup_incr ($s$ :sup) := $(\scode{fresh\_block }s) \cons s$.   $\qquad$ ...
-  End Sup.  
-\end{coq}  
-  \vspace{-0.2cm}
-  \caption{Block-based Memory Model as an Instance}
-  \vspace{-0.1cm}
-  \label{fig:bm-instance}
-\end{figure}
-
-We also note that the above generalization does not exactly match with the
-standard definitions in nominal techniques. For example, \coqe{BLOCK} does not
-enforce that block ids are from a countably infinite set. Instead,
-the \coqe{freshness} property guarantees that any block fresh w.r.t a
-support $s$ must not be already in $s$. Together with the totality of
-\coqe{fresh_block}, it implies the existence of an infinite number of
-block ids.
-%
-We also define supports to be any type that has the interface of
-\coqe{SUP}, instead of a finite set of block ids. This generalization
-allows us to instantiate \coqe{sup} with complex data structures for
-formalizing memory space in fine-grained styles. 
-
-To make use of the above interfaces, we instantiate block ids and
-supports as follows:
-%
-\begin{coq}
-  Module Block <: BLOCK. ... End Block.           Module Sup <: SUP. ... End Sup.
-\end{coq}
-%
-Then the original \coqe{block} type is instantiated with
-\coqe{Block.block}. Moreover, the memory state carries a support instead of
-\nextblock:
-%
-\begin{coq}
-  Record mem: Type := { mem_contents: block -> Z -> memval;   support: Sup.sup;}.
-\end{coq}
-%
-The memory operations are adapted accordingly. For example, checking
-of valid blocks is done by using \coqe{sup_in} instead of comparing
-with \nextblock:
-%
-\begin{coq}
-  Definition valid_block ($m$:mem) ($b$:block) := $b$ < $m$.(nextblock).   (* Old *)
-  Definition valid_block ($m$:mem) ($b$:block) := sup_in $b$ $m$.(support).  (* New *)
-\end{coq}
-%
-For another example, \coqe{alloc} now invokes \coqe{fresh_block} to
-allocate a new block instead of consulting \nextblock.
-The properties of all memory operations can be easily reestablished
-because they are already ignorant of particular instantiations of block ids
-and supports. 
-
-Finally, the block-based memory model becomes a special case of the
-nominal memory model, as depicted in~\figref{fig:bm-instance} where
-\coqe{find_max_pos} finds the maximal positive number in a list.
-
-\vspace*{-2ex}
-\paragraph*{Proposed Research.}
 As a preliminary evidence for its effectiveness, we have recently
 successfully applied the nominal memory model to the full compilation
 chain of CompCert to get Nominal CompCert~\cite{wang2022}.  We updated
@@ -445,7 +361,7 @@ regardless of how complicated the memory transformation is for
 internal executions.  However, this seemingly simple task is extremely
 difficult to complete in the original CompCert because it lacks the
 ability to distinguish memory blocks allocated by internal functions
-from those by external ones. With the nominal memory model and its
+from those allocated by external ones. With the nominal memory model and its
 instances, contextual memory can be separated from internal memory and
 be reasoned about via a well-defined interface, leading to simpler and
 more elegant correctness proofs for compiling certain kinds of open
