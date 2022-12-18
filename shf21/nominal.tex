@@ -1,9 +1,9 @@
 \section{Verified Compilation with a Nominal Memory Model}
 \label{sec:nominal}
 
-In this section, we describe the limitations of CompCert's block-based
+In this section, we describe some limitations of CompCert's block-based
 memory model and present our new 
-{\em nominal memory model} which removes the global constraints for
+{\em nominal memory model}, which removes the global constraints for
 managing memory blocks and enables flexible memory structures for open
 programs and concurrent threads.
 
@@ -49,82 +49,75 @@ Unallocated blocks are called \emph{invalid blocks}.
 
 A valid memory block is a
 finite array of bytes with a lower and upper bound. A \emph{memory
-state} (denoted by $m$) consists of a mapping from addresses to
-\emph{in-memory values} in valid blocks and the value of
-\nextblock. Its type \coqe{mem} is defined in~\figref{sfig:memstate}
-where \coqe{block} is the type of block ids, \coqe{Z} is the type of
-integers, \coqe{memval} is the type of in-memory values, and
-\coqe{$m$.(mem_contents) $b$ $o$ = $v$} iff $b$ is a valid block in
-$m$ and $v$ is the in-memory value at the $o$-th memory cell (byte) of
-$b$.
-
-A pointer or a memory address is a pair $(b, o)$ where $b$ is the
-memory block it points to and $o$ is an index to a memory cell in block
-$b$ (also called an offset).
-%
-Pointer arithmetic is represented by adjustments to offsets. For
-example, $(b, o) + n$ is defined as $(b, o+n)$.
-%
-This simple block-based abstraction already provides basic support for
+state} (denoted by $m$) consists of a value for \nextblock,
+as well as a mapping from addresses to \emph{in-memory values}
+for each block id below \nextblock.
+A pointer or a memory address is represented as a pair $(b, o)$ where $b$ is a
+memory block id and $o$ is an index in bytes (also called an offset)
+within the corresponding block.
+Pointer arithmetic operates by adjusting offsets, so that for
+example $(b, o) + n$ is defined as $(b, o+n)$.
+Note that
+this simple block-based abstraction already provides basic support for
 memory isolation, in the sense that given a pointer to block $b_1$ we
 can never reach $b_2$ by performing pointer arithmetic if $b_1 \neq b_2$.
 
-\begin{figure}
-  \begin{subfigure}[b]{.45\textwidth}
-    \begin{coq}
-Definition block : Type := positive.
-Record mem: Type := { 
-  mem_contents: block -> Z -> memval;
-  nextblock: block; }.
-    \end{coq}
-    \caption{Blocks and Memory States}
-    \label{sfig:memstate}
-  \end{subfigure}
-  \begin{subfigure}[b]{.5\textwidth}  
-    \begin{coq}
-alloc : mem -> Z -> Z -> mem \times block
-free  : mem -> block -> Z -> Z -> $\some{\code{mem}}$
-load  : mem -> chunk -> block -> Z -> $\some{\code{val}}$
-store : mem -> chunk -> block -> Z -> val -> $\some{\code{mem}}$
-    \end{coq}
-    \caption{Memory Operations}
-    \label{sfig:memops}
-  \end{subfigure}
-  \caption{Definitions for the Block-Based Memory Model}
-  \label{fig:bbmem}
-%  \vspace{-0.1cm}
-\end{figure}
-
-\figref{sfig:memops} shows the main operations over memory where
-\coqe{val} is the type of \emph{regular values}:
+%\begin{figure}
+%  \begin{subfigure}[b]{.45\textwidth}
+%    \begin{coq}
+%Definition block : Type := positive.
+%Record mem: Type := { 
+%  mem_contents: block -> Z -> memval;
+%  nextblock: block; }.
+%    \end{coq}
+%    \caption{Blocks and Memory States}
+%    \label{sfig:memstate}
+%  \end{subfigure}
+%  \begin{subfigure}[b]{.5\textwidth}  
+%    \begin{coq}
+%alloc : mem -> Z -> Z -> mem \times block
+%free  : mem -> block -> Z -> Z -> $\some{\code{mem}}$
+%load  : mem -> chunk -> block -> Z -> $\some{\code{val}}$
+%store : mem -> chunk -> block -> Z -> val -> $\some{\code{mem}}$
+%    \end{coq}
+%    \caption{Memory Operations}
+%    \label{sfig:memops}
+%  \end{subfigure}
+%  \caption{Definitions for the Block-Based Memory Model}
+%  \label{fig:bbmem}
+%%  \vspace{-0.1cm}
+%\end{figure}
 %
-\begin{coq}
-   Inductive val := Vundef | Vint $i_{32}$ | Vlong $i_{64}$ | Vsingle $f_{32}$ | Vfloat $f_{64}$ | Vptr $(b,o)$.
-\end{coq}
-%
-Here, \coqe{Vundef} represents undefined values, \coqe{Vptr $(b,o)$}
-represents a pointer $(b,o)$, and the remaining forms denote 32- and
-64-bit integer and floating point values.
-%
-\coqe{chunk} is the type of \emph{memory chunks} containing
-information necessary for performing conversion between in-memory
-values and regular values.
-%
-Note that the option type $\lfloor \rfloor$ is used to describe the
-possible failure of some operations.  Given a memory state $m$, a
-lower bound $l$ and a higher bound $h$, \coqe{alloc $m$ $l$ $h$}
-returns a new block whose id is \coqe{$m$.(nextblock)} and whose valid
-offsets are in the range of $[l,h)$. It also returns a new memory state
-  where \nextblock is increased by $1$ and the newly allocated memory
-  cells are initialized with undefined values.
-%
-Note that \coqe{alloc} \emph{always succeeds} because the memory space
-has infinitely many blocks. The \coqe{free} operation frees memory
-cells in a certain range. Given $m$, $k$ $b$ and $o$,
-\coqe{load $m$ $k$ $b$ $o$}
-loads a value starting from the address $(b,o)$ such
-that the size and type of value are determined by $k$.  Conversely,
-\coqe{store} stores a value into a certain location in memory.
+%\figref{sfig:memops} shows the main operations over memory where
+%\coqe{val} is the type of \emph{regular values}:
+%%
+%\begin{coq}
+%   Inductive val := Vundef | Vint $i_{32}$ | Vlong $i_{64}$ | Vsingle $f_{32}$ | Vfloat $f_{64}$ | Vptr $(b,o)$.
+%\end{coq}
+%%
+%Here, \coqe{Vundef} represents undefined values, \coqe{Vptr $(b,o)$}
+%represents a pointer $(b,o)$, and the remaining forms denote 32- and
+%64-bit integer and floating point values.
+%%
+%\coqe{chunk} is the type of \emph{memory chunks} containing
+%information necessary for performing conversion between in-memory
+%values and regular values.
+%%
+%Note that the option type $\lfloor \rfloor$ is used to describe the
+%possible failure of some operations.  Given a memory state $m$, a
+%lower bound $l$ and a higher bound $h$, \coqe{alloc $m$ $l$ $h$}
+%returns a new block whose id is \coqe{$m$.(nextblock)} and whose valid
+%offsets are in the range of $[l,h)$. It also returns a new memory state
+%  where \nextblock is increased by $1$ and the newly allocated memory
+%  cells are initialized with undefined values.
+%%
+%Note that \coqe{alloc} \emph{always succeeds} because the memory space
+%has infinitely many blocks. The \coqe{free} operation frees memory
+%cells in a certain range. Given $m$, $k$ $b$ and $o$,
+%\coqe{load $m$ $k$ $b$ $o$}
+%loads a value starting from the address $(b,o)$ such
+%that the size and type of value are determined by $k$.  Conversely,
+%\coqe{store} stores a value into a certain location in memory.
 
 A main task of compilers is to transform abstract data structures
 (e.g., stacks) for describing the semantics of the high-level source
@@ -134,11 +127,12 @@ memory and have local effects.
 %
 CompCert introduces \emph{injections} to capture such changes. An
 injection $j$ is a partial function of type
-\coqe{block -> $\some{\code{block} \times \code{Z}}$}, such that $j(b) =
-\some{(b',o)}$ iff a block $b$ is inserted into block $b'$ at offset
-$o$ by the transformation. If $j(b) = \none$ (we use $\none$ to
-represent the \coqe{None} constructor), then $b$ is removed from the
-memory after the transformation.
+$\code{block} \rightharpoonup \code{block} \times \mathbb{Z}$.
+When $j(b) = (b',o)$,
+the transformation inserts the source block $b$ into
+the target block $b'$ at offset $o$.
+When $j(b)$ is undefined,
+the transformation removes block $b$ from the memory.
 
 \subsection{Limitations}
 \label{ssec:intro-nmm}
@@ -151,10 +145,10 @@ end-to-end and compositional verified compilation:
 \item 
 \textbf{Inflexibility 1: Fixed Representation of Block IDs.}
 %
-The uniform and fixed representation of block ids by positive numbers
+The fixed representation of block ids by positive numbers
 makes it impossible to distinguish between memory regions
-playing different roles (such as the stack, heap, and global
-data). Therefore, it is difficult to reason about specific parts of
+with different roles (such as the stack, heap, and global
+data), making it difficult to reason about specific parts of
 memory in isolation.
 
 \item
@@ -181,14 +175,14 @@ inflexibilities, verification of any compiler transformation must
 treat the memory space \emph{as a whole}. This incurs significant
 difficulties.
 For example, many
-compiler transformations only work on certain sub-regions of memory
+compiler transformations only operate on certain sub-regions of memory
 (\eg, transformations on stack frames). However, because of
 \textbf{Inflexibilities 1 and 2}, the reasoning must be lifted to the
 whole memory, therefore becoming significantly more involved and less
 intuitive.
 
-When proving the correctness of memory-transforming passes, one
-would expect that we could exploit the locality of memory
+When proving the correctness of memory-transforming passes,
+we would like to exploit the locality of memory
 transformations to construct intuitive proofs. For example, for
 \code{SimplLocals}, \coqe{Cminorgen} and \coqe{Stacking}, one would
 like to exploit the facts that \emph{1)} blocks for global definitions
@@ -216,8 +210,8 @@ individual threads into CCAL objects. These objects are then
 compiled by an extension of CompCert called Thread-Safe CompCertX into
 assembly code. Finally, CCAL objects need to be linked together to
 form a complete program. 
-For this linking to be possible, the views of memory of CCAL
-objects must be compatible with each other. Achieving this
+This requires CCAL object to use compatible views of the memory.
+Achieving this
 compatibility is non-trivial since 
 a new stack block is
 allocated for every function call in CompCert's assembly. To
@@ -230,10 +224,10 @@ thread from accessing the private stack memory of the others.
 These problems are exactly caused by
 \textbf{Inflexibilities 2 and 3} in~\S\ref{ssec:intro-nmm}.
 
-Problems of this kind plagues many projects on
+Problems of this kind plague many projects
 extending CompCert to support compositionality or concurrency (\eg,
 CASCompCert~\cite{cascompcert} and Thread-Safe
-CompCertX~\cite{ccal18}). To circumscribe it, various ad hoc
+CompCertX~\cite{ccal18}). To circumvent them, various ad hoc
 modifications to the block-based memory model were invented, leading to
 verification results that are overly technical and less reusable.
 We will solve these problems by getting rid of the inflexibilites of
@@ -307,7 +301,7 @@ by generalizing the interface of
 CompCert's memory model.
 The new interface,
 based on nominal sets,
-is formalized as a Coq \emph{module type}.
+is formalized as a Coq module type.
 %
 This establishes a clean separation between
 the requirements of language semantics and simulation proofs
@@ -319,15 +313,13 @@ the properties used to define the nominal model,
 we were able to update
 the language semantics and correctness proof of CompCert
 with minimal changes.
-
-Moreover,
-while the block-based memory model
+While the block-based memory model
 can still serve as a simple implementation of nominal memory,
 it becomes possible to introduce
 more sophisticated models,
 which can then provide additional functionality
 and enable forms of reasoning
-which would be impossible
+which are impossible
 or excessively complex in the block-based model.
 
 \subsection{Proposed Work}
