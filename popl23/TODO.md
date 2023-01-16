@@ -8,25 +8,25 @@ We could potentially generalize bijections to lenses, which means given a
 transition system `L : A ↠ B` we can lift it with a lens `f : (get: S → T, set:
 (S × T) → S)` such that `L@f : A@T ↠ B@S`
 
-* ClightP construction (Sec. 5)
+* ~ClightP construction (Sec. 5)~
 
-Mostly done with supporting array and primitive types. Struggling with Ptrofs
-and overflow issues, external call events, etc.
+~Mostly done with supporting array and primitive types. Struggling with Ptrofs
+and overflow issues, external call events, etc.~
 
-* Join operator for memory fragments (Sec. 5)
+* ~Join operator for memory fragments (Sec. 5)~
 
-Implement a wrapper that enforces the active component to have the allocation
+~Implement a wrapper that enforces the active component to have the allocation
 flag. We will also need a special operator to transfer ownership when
-implementing the composition.
+implementing the composition.~
 
-* CompCertO CKLR
+* ~CompCertO CKLR~
 
-    * generalize CKLR to support equality in addition to less-defined
-    * prove the ` - • m` operator is a CKLR (mostly done in a less general way)
+    * ~generalize CKLR to support equality in addition to less-defined~
+    * ~prove the ` - • m` operator is a CKLR (mostly done in a less general way)~
 
-* Encapsulation (Sec. 6)
+* ~Encapsulation (Sec. 6)~
 
-    - retrofit the encapsulation primitive to the current code.
+    - ~retrofit the encapsulation primitive to the current code.~
 
     - symbol table
 
