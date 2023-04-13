@@ -2,6 +2,7 @@
 \settopmatter{printfolios=true,printccs=false,printacmref=false}
 \renewcommand\footnotetextcopyrightpermission[1]{}
 
+% Packages {{{
 \usepackage{booktabs}
 \usepackage{bbm}
 \usepackage{ebproof}
@@ -9,6 +10,7 @@
 \usepackage{tikz-cd}
 \usepackage{subcaption}
 \usetikzlibrary{patterns}
+%}}}
 
 % Parameters {{{
 \setcopyright{acmlicensed}
@@ -28,6 +30,8 @@
 \hyphenation{Comp-CertM}
 \hyphenation{Certi-KOS}
 %}}}
+
+% Macros {{{
 
 % Notations {{{
 \newcommand{\kw}[1]{\ensuremath{ \mathsf{#1} }}
@@ -79,8 +83,12 @@
 \colorlet{penvsdbg}{ACMGreen!50!white}
 % }}}
 
+%}}}
+
 \title{A Framework for Compositional Verification with
   Data Abstraction, Encapsulated State and Certified Compilation}
+
+% Authors {{{
 
 \author{Yu Zhang}
 \orcid{0000-0002-0778-3517}
@@ -116,6 +124,8 @@
   \city{Shanghai}
   \country{China}
 }
+
+%}}}
 
 \begin{document}
 \newtheorem{remark}[theorem]{Remark}
@@ -484,90 +494,241 @@ can be incorporated into our framework as-is.
 
 %}}}
 
-\begin{table} % tbl:roadmap -- Roadmap and notations {{{
-  \caption{
-    A summary of
-    the various kinds of mathematical objects
-    we use to model interfaces,
-    component behaviors,
-    abstraction conventions and
-    refinement properties.
-    For each one,
-    we show the horizontal (H), vertical (V) and state~(S)
-    composition operations they support.
-    Active components are our main focus,
-    but transition systems can only be $@$-composed
-    with simpler, passive components.
-    When we make use of a particular string diagram representation
-    for components of a given kind (\S\ref{sec:overview:mon}),
-    we also list the composition operations which correspond to
-    the horizontal ($\mathbb{H}$) and vertical ($\mathbb{V}$)
-    juxtaposition of diagrams.
-    Note that
-    the two-dimensional structure $\mathbf{TSC}$
-    contains $\mathbf{TS}$ and $\mathbf{SC}$ as its edges,
-    and likewise $\mathbf{LSR}$
-    contains $\mathbf{Lens}$ and $\mathbf{Rel}$.
-} \label{tbl:roadmap}
-  \small
-  \begin{tabular}{
-    lllc
-    c@{\:\:\:}c@{\:\,}c@{\:}c@{}c
-    c@{\hspace{1em}}c@{\:\,}c@{}c
-  }
-    \toprule
-    & Role & Components & Notation &
-      \multicolumn{5}{c}{Compose} & \multicolumn{4}{c}{Diagrams} \\
-    & & & && H & V & S &&& $\mathbb{H}$ & $\mathbb{V}$
-    \\
-    \midrule
-    Active &
-      Interface
-        & Language interfaces & $A, B, C$ && & & $\otimes$
-    \\ &
-      Behavior
-        & Transition systems & $L : A \twoheadrightarrow B \in \mathbf{TS}$ &&
-            $\odot$ & & $\mathbin@$ &&& $\odot$ & $\mathbin@$
-    \\ &
-      Abstraction
-        & Simulation conventions & $\mathbf{R} : A \leftrightarrow B \in \mathbf{SC}$ &&
-            & $\cdot\,$ & $\otimes$ &&& $\otimes$ & $\,\cdot$
-    \\ &
-      Refinement
-        & Simulations &
-          $\hspace{-1em} \pi :
-           L^\sharp \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L^\flat \in \mathbf{TSC}$ &&
-          $\odot$ & $\cdot\,$ & $\mathbin@$ &&& $\odot$ & $\,\cdot$
-    \\
-    \midrule
-    Passive &
-      Interface
-        & Sets & $U, V$ && & & $\times$ \\ &
-      Behavior
-        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}$ &&
-            $\circ$ & & $\times$ &&& $\circ$ & $\times$ \\ &
-      Abstraction
-        & Simulation relations & $R \subseteq U \times V \in \mathbf{Rel}$ &&
-            & $\mathbin;$ & $\times$ &&& $\times$ & $\,\mathbin;\,$ \\ &
-      Refinement
-        & Bisimulations &
-          $\hspace{-1em} \phi : f \lensle_{R \lensarrow S} g \in \mathbf{LSR}$ &&
-          $\circ$ & $\mathbin;$ & $\times$ &&& $\circ$ & $\,\mathbin;\,$ \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-%}}}
-
 \section{Overview of the Framework} %{{{
 
-We begin by providing a high-level overview of our framework.
-Its ingredients are
-shown in \autoref{tbl:roadmap}.
-Note that
-as their dimensionality increases,
-the objects we manipulate
-support increasingly many composition operations.
-Our starting point is the semantic model used in CompCertO.
+Our semantics framework builds on a line of work
+seeking to develop a practical compositional semantics
+for use in CompCert and related tools.
+In the first half of this section,
+we give a brief overview of this work,
+focusing in particular
+on the ways in which
+different kinds of objects and
+different composition principles
+fit with each other.
+Then, in the remainder of the section,
+we use this conceptual apparatus
+to introduce our contributions.
+
+\subsection{Semantics in CompCert} %{{{
+
+CompCert is a \emph{certified} compiler,
+meaning it comes with a formal specification
+and proof of correctness,
+mechanized in a proof assistant.
+To give a specification for a compiler,
+we must first give a syntax and semantics
+for both its source and target languages.
+Indeed,
+the formal development which accompanies
+CompCert's executable code
+includes a formalization for the C dialect Clight
+and assembly languages (Asm) for its various target architectures.
+
+\paragraph{Transition Systems}
+
+In CompCert,
+language semantics are given as transition systems.
+For example,
+given a source program $p$,
+the Clight semantics $\kw{Clight}[p]$
+describes a set $S$ of states, together with:
+\begin{itemize}
+  \item a distinguished subset of \emph{initial} states $I \subseteq S$;
+  \item a transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $F \subseteq S \times \kw{int}$ identifying
+    \emph{final} states along with associated integer outcomes.
+\end{itemize}
+An execution of $p$ starts with an initial state $s_0 \in I$,
+performs a number of transitions,
+and when a final state $s_n$ is reached,
+terminates with the corresponding exit status $x$:
+\begin{equation}
+  \kw{Clight}[p] : \quad
+  I \ni s_0 \rightarrow s_1 \rightarrow \cdots \rightarrow s_n \mathrel{F} x
+  \,.
+  \label{eqn:clightexec}
+\end{equation}
+States with no $\rightarrow$ or $F$ successors
+are said to \emph{go wrong} and denote undefined behaviors.
+
+In the Clight semantics,
+each state encodes the current control stack,
+environments storing the values of various activation-local temporary variables,
+as well as a global memory state.
+The states used by the Asm semantics
+are simpler and consist only of the register and memory states.
+CompCert also defines syntax and semantics for
+various intermediate languages used by the compiler---%
+these are not part of the specification but are used in the construction of the proof.
+
+We should note that the discussion above glosses over important technical details.
+CompCert uses transition labels to model interaction with the operating system,
+uses nondeterminism to capture behaviors underspecified by the C standard,
+and takes special care to handle infinite executions.
+These facilities are also present in our framework,
+but they present no particular challenge and
+are orthogonal to the issues of interest,
+so we will not discuss them further.
+
+\paragraph{Simulations}
+
+Having described the behavior of source and target programs,
+the correctness statement for CompCert must establish a relationship between them.
+In its original and simplest form,
+the correctness theorem of CompCert is stated as
+\begin{equation}
+    \kw{CompCert}(p) = p'
+    \quad\Longrightarrow\quad
+    \kw{Clight}[p] \le \kw{Asm}[p']
+    \,.
+    \label{eqn:ccc-wp}
+\end{equation}
+In other words,
+if CompCert successfully compiles a Clight program $p$
+to an assembly program $p'$,
+then the semantics of this target program must
+\emph{simulate} that of the source program $p$.
+
+Given the transition systems $L_1$ and $L_2$,
+a simulation between them is a relation $\rho \subseteq S_1 \times S_2$
+between the states of the source transition system $L_1$
+and the states of the target transition system $L_2$.
+This relation must satisfy several conditions,
+such that every execution of $L_1$ gives rise
+to a corresponding execution of $L_2$:
+\begin{itemize}
+  \item there is for every source initial state $s_1 \in I_1$
+    a related target initial state $s_1 \mathrel\rho s_2 \in I_2$;
+  \item for related states $s_1 \mathrel\rho s_2$,
+    a source transition sequence $s_1 \rightarrow_1^* s_1'$ must be matched by
+    a target transition sequence $s_2 \rightarrow_2^* s_2'$ such that
+    the resulting states $s_1' \mathrel\rho s_2'$ are again related;
+  \item for related states $s_1 \mathrel\rho s_2$,
+    if $s_1$ is final with outcome $x$,
+    then $s_2$ must be as well.
+\end{itemize}
+We will write $\rho : L_1 \le L_2$ when these conditions are satisfied,
+or just $L_1 \le L_2$ when such a $\rho$ exists.
+
+\paragraph{Vertical Compositionality}
+
+As an industrial-grade C compiler,
+CompCert is a fairly complex piece of software,
+and verifying its correctness was a challenging undertaking.
+The key to that achievement was the compositionality of simulation proofs.
+CompCert consists of a dozen compilation and optimization phases,
+which successively transform $p$ into $p'$:
+\[
+  p = p_0 \longmapsto p_1 \longmapsto \cdots \longmapsto p_n = p'
+\]
+To derive the correctness theorem,
+a simulation proof can be established for each phase:
+\[
+  \kw{Clight}[p] \:=\:
+  \kw{Clight}[p_0] \:\le\: \kw{C\#minor}[p_1] \:\le\: \cdots \:\le\: \kw{Asm}[p_n]
+  \:=\: \kw{Asm}[p']
+\]
+When the target $L_2$ of a simulation relation $\pi : L_1 \le L_2$
+coincides with the source of another $\rho : L_2 \le L_3$,
+then the two can be combined, and the composite $\pi \mathbin; \rho$
+is in turn a simulation relation:
+\[
+  \begin{prooftree}
+    \hypo{\pi : L_1 \le L_2}
+    \hypo{\rho : L_2 \le L_3}
+    \infer2{(\pi \mathbin; \rho) : L_1 \le L_3}
+  \end{prooftree}
+\]
+Using this principle,
+CompCert's per-phase simulation proofs outlined above
+can be combined to obtain the correctness property (\ref{eqn:ccc-wp}).
+
+%}}}
+
+\begin{figure} % fig:pasting {{{
+  \text{(a)}
+  \begin{tikzcd}
+    \kw{Clight}[p] \ar[d, "\rho", Rightarrow] \\
+    \kw{RTL}[p'] \ar[d, "\pi", Rightarrow] \\
+    \kw{Asm}[p'']
+  \end{tikzcd}
+  \quad
+  \text{(b)}
+  \begin{tikzcd}[sep=tiny]
+    \bullet \ar[dd, equal] \ar[rr, "\kw{Clight}(\kw{rb.c})", dash] &&
+    \bullet \ar[dd, equal] \ar[rr, "\kw{Clight}(\kw{bq.c})", dash] &&
+    \bullet \ar[dd, equal]
+    \\
+    & \rho_1 & & \rho_2
+    \\
+    \bullet \ar[dd, equal] \ar[rr, "\kw{Asm}(\kw{rb.s})"', dash] &&
+    \bullet \ar[rr, "\kw{Asm}(\kw{bq.s})"', dash] &&
+    \bullet \ar[dd, equal]
+    \\
+    && \pi
+    \\
+    \bullet \ar[rrrr, "\kw{Asm}(\kw{rb.s} + \kw{bq.s})"', dash] && &&
+    \bullet
+  \end{tikzcd}
+  \caption{%
+    Pasting simulations together.
+    (a) In CompCert,
+    simulation proofs for successive compilation phases
+    can be composed vertically to obtain the overall simulation
+    required for correctness.
+    (b) Compositional CompCert
+    allows the transition systems themselves to compose,
+    so simulations become two-dimensional objects
+    which must compose both horizontally and vertically.
+    However, unlike simulations, transition systems are untyped
+    and can be composed arbitrarily.
+    (c) By contrast,
+    CompCertO introduces a notion of \emph{language interface}.
+    Transition systems connect horizontally across language interfaces;
+    a notion of \emph{simulation convention} connects them vertically.
+    Simulations are now typed by source and target transition systems,
+    as well as outgoing and incoming simulation conventions.
+}
+  \label{fig:pasting}
+\end{figure}
+%}}}
+
+\subsection{Semantics in Compositional CompCert}
+
+One limitation of the original CompCert was that
+its semantics and correctness theorem
+only applied to whole programs.
+However,
+in practice compilers act on individual translation units,
+which are then linked together to produce the final executable program.
+Figure~\ref{fig:code} shows two translation units
+which may be part of a larger program.
+CompCert can be used to compile them
+but the correctness property (\ref{eqn:ccc-wp})
+does not account for this situation and
+cannot be used to derive guarantees about the result.
+
+\paragraph{Transition Systems}
+
+To address this issue,
+Compositional CompCert \cite{compcompcert}
+modifies the semantic model
+used in CompCert's proofs
+to characterize the behavior of individual compilation units.
+In particular,
+this requires modeling function calls across different components.
+To initialize a transition system,
+we must first specify the name $f \in \kw{ident}$
+of the function within the component that we wish to call,
+the values $\vec{v} \in \kw{val}^*$ of its parameters,
+and a memory state $m \in \kw{mem}$ at the time of invocation.
+Likewise,
+when the component terminates,
+instead of a single integer outcome $x \in \kw{int}$ it must provide
+a return value $v' \in \kw{val}$ and an updated memory state $m' \in \kw{mem}$.
+
+[...]
 
 \subsection{Semantics in CompCertO} %{{{
 
@@ -827,6 +988,87 @@ but it makes outgoing calls which may have that effect:
 
 %}}}
 
+%}}}
+
+\subsection{Deficiencies of the CompCertO model}
+
+[The compositional structure is ad-hoc and awkward.
+This is fine for CompCertO, we just need to make things work
+with minimal effort.
+But for a general-purpose framework it is a problem.]
+
+\begin{table} % tbl:roadmap -- Roadmap and notations {{{
+  \caption{
+    A summary of
+    the various kinds of mathematical objects
+    we use to model interfaces,
+    component behaviors,
+    abstraction conventions and
+    refinement properties.
+    For each one,
+    we show the horizontal (H), vertical (V) and state~(S)
+    composition operations they support.
+    Active components are our main focus,
+    but transition systems can only be $@$-composed
+    with simpler, passive components.
+    When we make use of a particular string diagram representation
+    for components of a given kind (\S\ref{sec:overview:mon}),
+    we also list the composition operations which correspond to
+    the horizontal ($\mathbb{H}$) and vertical ($\mathbb{V}$)
+    juxtaposition of diagrams.
+    Note that
+    the two-dimensional structure $\mathbf{TSC}$
+    contains $\mathbf{TS}$ and $\mathbf{SC}$ as its edges,
+    and likewise $\mathbf{LSR}$
+    contains $\mathbf{Lens}$ and $\mathbf{Rel}$.
+} \label{tbl:roadmap}
+  \small
+  \begin{tabular}{
+    lllc
+    c@{\:\:\:}c@{\:\,}c@{\:}c@{}c
+    c@{\hspace{1em}}c@{\:\,}c@{}c
+  }
+    \toprule
+    & Role & Components & Notation &
+      \multicolumn{5}{c}{Compose} & \multicolumn{4}{c}{Diagrams} \\
+    & & & && H & V & S &&& $\mathbb{H}$ & $\mathbb{V}$
+    \\
+    \midrule
+    Active &
+      Interface
+        & Language interfaces & $A, B, C$ && & & $\otimes$
+    \\ &
+      Behavior
+        & Transition systems & $L : A \twoheadrightarrow B \in \mathbf{TS}$ &&
+            $\odot$ & & $\mathbin@$ &&& $\odot$ & $\mathbin@$
+    \\ &
+      Abstraction
+        & Simulation conventions & $\mathbf{R} : A \leftrightarrow B \in \mathbf{SC}$ &&
+            & $\cdot\,$ & $\otimes$ &&& $\otimes$ & $\,\cdot$
+    \\ &
+      Refinement
+        & Simulations &
+          $\hspace{-1em} \pi :
+           L^\sharp \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L^\flat \in \mathbf{TSC}$ &&
+          $\odot$ & $\cdot\,$ & $\mathbin@$ &&& $\odot$ & $\,\cdot$
+    \\
+    \midrule
+    Passive &
+      Interface
+        & Sets & $U, V$ && & & $\times$ \\ &
+      Behavior
+        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}$ &&
+            $\circ$ & & $\times$ &&& $\circ$ & $\times$ \\ &
+      Abstraction
+        & Simulation relations & $R \subseteq U \times V \in \mathbf{Rel}$ &&
+            & $\mathbin;$ & $\times$ &&& $\times$ & $\,\mathbin;\,$ \\ &
+      Refinement
+        & Bisimulations &
+          $\hspace{-1em} \phi : f \lensle_{R \lensarrow S} g \in \mathbf{LSR}$ &&
+          $\circ$ & $\mathbin;$ & $\times$ &&& $\circ$ & $\,\mathbin;\,$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 %}}}
 
 \subsection{Layered Composition} %{{{
@@ -4164,6 +4406,25 @@ which preserves the compositional structure of $\mathbin@$ and $\otimes$.
 %}}}
 
 %}}}
+
+%}}}
+
+\section{Applications} %{{{
+
+\subsection{Ad-hoc Verification}
+
+\subsection{Certified Abstraction Layers}
+
+Things to go over:
+\begin{itemize}
+  \item How to build CAL framework on top
+  \item Tensor product of layers
+\end{itemize}
+
+Explain in particular the difference of state encapsulation here
+vs. the limited version in CAL.
+
+\subsection{Future Work}
 
 %}}}
 
