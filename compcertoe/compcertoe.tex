@@ -494,7 +494,7 @@ can be incorporated into our framework as-is.
 
 %}}}
 
-\section{Overview of the Framework} %{{{
+\section{Overview of the Framework}\label{sec:overview} %{{{
 
 Our semantics framework builds on a line of work
 seeking to develop a practical compositional semantics
@@ -4411,9 +4411,114 @@ which preserves the compositional structure of $\mathbin@$ and $\otimes$.
 
 \section{Applications} %{{{
 
+In this section, we revisit our running example,
+and retrofit it onto the encapsulation framework.
+
 \subsection{Ad-hoc Verification}
 
-\subsection{Certified Abstraction Layers}
+Putting together the scattered pieces in \S\ref{sec:overview},
+the final correctness theorem is established as follows.
+The proof is present in two-fold:
+the first part proves that
+the high level specification $L_\kw{bq}$
+can be refined by
+the program $\kw{bq.c}$
+running on top of the ring buffer specification
+using the witness relation $R$.
+\[
+  \begin{prooftree}
+    \hypo{L_\kw{bq} \le_{\top \twoheadrightarrow [R]} \Sigma_\kw{bq} @ D_\kw{rb} \odot L_\kw{rb}}
+    \infer1{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]} \Sigma_\kw{bq} @ (\kw{m} \times D_\kw{rb}) \odot L_\kw{rb} @ \kw{m}}
+    \hypo{\Sigma_\kw{bq} @ (\kw{m} \times D_\kw{rb}) \le \kw{bq.c} @ D_\kw{rb}}
+    \infer2{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]} \kw{bq.c} @ D_\kw{rb} \odot L_\kw{rb} @ \kw{m}}
+  \end{prooftree}
+\]
+and then the implementation that manipulates $D_\kw{rb}$
+is further refined to the programs
+that operates on the memory,
+witnessed by the relation $S$.
+\[
+  \begin{prooftree}
+    \hypo{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]} \kw{bq.c} @ D_\kw{rb} \odot L_\kw{rb} @ \kw{m}}
+    \hypo{\kw{bq.c} @ D_\kw{rb} \le_{[S] \twoheadrightarrow [S]} \kw{bq.c}}
+    \hypo{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [S]} \kw{rb.c}}
+    \infer3{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]\cdot[S]} \kw{bq.c} \odot \kw{rb.c}}
+  \end{prooftree}
+\]
+
+Observe that the explicitly adjoined state becomes overwhelming.
+In contrast,
+once the abstract states in the specifications
+have been encapsulated
+\[
+  \Gamma_\kw{bq}: \top \rightarrow \mathcal{C} := (\epsilon \in \kw{val}^* \mid L_\kw{bq}) \qquad
+  \Gamma_\kw{rb}: \top \rightarrow \mathcal{C} := ((\bot, 0, 0) \in \kw{val}^N \times \mathbb{N} \times \mathbb{N} \mid L_\kw{rb}),
+\]
+and the static variables in the $\kw{Clight}$ programs are
+converted to private ones
+\[
+  \kw{ClightP} \langle \kw{bq.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem} \qquad
+  \kw{ClightP} \langle \kw{rb.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem},
+\]
+the interfaces across different components are identified
+except for an innocent memory state to be passed through,
+which is almost the ideal version in \S\ref{sec:overview:slift}.
+\[
+  \begin{prooftree}
+    \hypo{\Gamma_\kw{bq} @ \kw{m} \sqsubseteq \Sigma_\kw{bq} @ \kw{m} \circ \Gamma_\kw{rb} @ \kw{m}}
+    \hypo{\Sigma_\kw{bq} @ \kw{m} \sqsubseteq \kw{bq.cp}}
+    \infer2{\Gamma_\kw{bq} @ \kw{m} \sqsubseteq \kw{bq.cp} \circ \Gamma_\kw{rb} @ \kw{m}}
+    \hypo{\Gamma_\kw{rb} @ \kw{m} \sqsubseteq \kw{rb.c}}
+    \infer2{\Gamma_\kw{bq} @ \kw{m} \sqsubseteq \kw{bq.cp} \circ \kw{rb.cp}}
+  \end{prooftree}
+\]
+
+\subsection{Certified Abstraction Layers(CAL)}
+
+In theory,
+the frameworks, such as CAL,
+are capable of handling the boilerplates to produce
+a unified interface across different components.
+However, CAL, although successful on verify CertiKOS,
+suffers from two limitations.
+[explain how abstraction relation works].
+On one hand, the abstraction relations
+are not vertically composible,
+because of the consistency issue.
+On the other,
+there is no horizontal composition.
+As a consequence,
+the abstract state used for verify CertiKOS
+is represented as a huge record
+which contains the states used by all the layers.
+
+With the state encapsulation, however,
+the abstraction relation can be encapsulated
+together with the abstract state.
+\[
+  L^\flat: \top \rightarrow \mathcal{C} \vdash M : L^\sharp:\top \rightarrow \mathcal{C} :\Leftrightarrow L^\sharp @ \kw{mem} \le \kw{ClightP} \langle M \rangle \circ L^\flat @ \kw{mem}
+\]
+and the vertical composition can be proved directly.
+\[
+  \begin{prooftree}
+    \hypo{L^\flat \vdash M : L^\natural}
+    \hypo{L^\natural \vdash N : L^\sharp}
+    \infer2{L^\flat \vdash M + N : L^\sharp}
+  \end{prooftree}
+\]
+Moreover,
+given a proper notion of horizontal composition,
+a version of horizontal composition can be proved
+by exploiting the composition of memory fragments.
+\[
+  \begin{prooftree}
+    \hypo{L_1^\flat \vdash M : L_1^\sharp}
+    \hypo{L_2^\flat \vdash N : L_2^\sharp}
+    \infer2{L_1^\flat \uplus L_2^\flat  \vdash M + N : L_1^\sharp \uplus L_2^\sharp}
+  \end{prooftree}
+\]
+
+
 
 Things to go over:
 \begin{itemize}
