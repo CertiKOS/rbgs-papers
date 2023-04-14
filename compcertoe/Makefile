@@ -25,3 +25,5 @@ clean:
 	rm -f $(patsubst %,$(MAIN).%,aux aux~ log pdf nav out bbl blg toc pyg)
 	rm -rf _minted-$(MAIN)
 
+.PRECIOUS: %.aux %.aux~
+
