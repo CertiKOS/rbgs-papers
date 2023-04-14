@@ -4748,45 +4748,25 @@ which preserves the compositional structure of $\mathbin@$ and $\otimes$.
 
 \section{Applications} %{{{
 
-In this section, we revisit our running example,
-and retrofit it onto the encapsulation framework.
+In this section, we first revisit our running example,
+and refurbish it with the state encapsulation.
+Then we discuss the
+benefits that CompCertO and state encapsulation
+bring to us in the context of
+certified abstraction layers,
+which is a more general setting for verifying complex systems.
 
 \subsection{Ad-hoc Verification}
 
-Putting together the scattered pieces in \S\ref{sec:overview},
-the final correctness theorem is established as follows.
-The proof is present in two-fold:
-the first part proves that
-the high level specification $L_\kw{bq}$
-can be refined by
-the program $\kw{bq.c}$
-running on top of the ring buffer specification
-using the witness relation $R$.
-\[
-  \begin{prooftree}
-    \hypo{L_\kw{bq} \le_{\top \twoheadrightarrow [R]} \Sigma_\kw{bq} @ D_\kw{rb} \odot L_\kw{rb}}
-    \infer1{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]} \Sigma_\kw{bq} @ (\kw{m} \times D_\kw{rb}) \odot L_\kw{rb} @ \kw{m}}
-    \hypo{\Sigma_\kw{bq} @ (\kw{m} \times D_\kw{rb}) \le \kw{bq.c} @ D_\kw{rb}}
-    \infer2{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]} \kw{bq.c} @ D_\kw{rb} \odot L_\kw{rb} @ \kw{m}}
-  \end{prooftree}
-\]
-and then the implementation that manipulates $D_\kw{rb}$
-is further refined to the programs
-that operates on the memory,
-witnessed by the relation $S$.
-\[
-  \begin{prooftree}
-    \hypo{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]} \kw{bq.c} @ D_\kw{rb} \odot L_\kw{rb} @ \kw{m}}
-    \hypo{\kw{bq.c} @ D_\kw{rb} \le_{[S] \twoheadrightarrow [S]} \kw{bq.c}}
-    \hypo{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [S]} \kw{rb.c}}
-    \infer3{L_\kw{bq} @ \kw{m} \le_{\top \twoheadrightarrow [R]\cdot[S]} \kw{bq.c} \odot \kw{rb.c}}
-  \end{prooftree}
-\]
-
-Observe that the explicitly adjoined state becomes overwhelming.
+We have already seen in \S\ref{sec:overview}
+that states have to be explicitly attached to transition systems
+in order to identify the interfaces across different components.
+It immediately becomes overwhelming,
+and great care have to be taken
+in order to put together all the pieces correctly.
 In contrast,
-once the abstract states in the specifications
-have been encapsulated
+once the states in the specifications
+are encapsulated by defining
 \[
   \Gamma_\kw{bq}: \top \rightarrow \mathcal{C} := (\epsilon \in \kw{val}^* \mid L_\kw{bq}) \qquad
   \Gamma_\kw{rb}: \top \rightarrow \mathcal{C} := ((\bot, 0, 0) \in \kw{val}^N \times \mathbb{N} \times \mathbb{N} \mid L_\kw{rb}),
@@ -4798,17 +4778,26 @@ converted to private ones
   \kw{ClightP} \langle \kw{rb.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem},
 \]
 the interfaces across different components are identified
-except for an innocent memory state to be passed through,
-which is almost the ideal version in \S\ref{sec:overview:slift}.
+except for an innocent memory state to be passed through.
+With the individual correctness
+\[
+  \pi_\kw{bq}:\ \Gamma_\kw{bq} \le \Sigma_\kw{bq} \circ \Gamma_\kw{rb} \qquad
+  \pi_\kw{bq'}:\ \Sigma_\kw{bq} @ \kw{m} \le \kw{ClightP}\langle \kw{bq.cp} \rangle \qquad
+  \pi_\kw{rb}:\ \Gamma_\kw{rb} @ \kw{m} \le \kw{ClightP} \langle \kw{rb.cp} \rangle
+\]
+the complete proof can be presented
+as a string diagram in Figure~\ref{fig:application:example}.
 
 \begin{figure}
   \[
     \begin{prooftree}
-      \hypo{\Gamma_\kw{bq} @ \kw{m} \sqsubseteq \Sigma_\kw{bq} @ \kw{m} \circ \Gamma_\kw{rb} @ \kw{m}}
-      \hypo{\Sigma_\kw{bq} @ \kw{m} \sqsubseteq \kw{bq.cp}}
-      \hypo{\Gamma_\kw{rb} @ \kw{m} \sqsubseteq \kw{rb.cp}}
-      \infer3{\Gamma_\kw{bq} @ \kw{m} \sqsubseteq \kw{bq.cp} \circ \Gamma_\kw{rb} @ \kw{m}}
-      \infer1{\Gamma_\kw{bq} @ \kw{m} \sqsubseteq \kw{bq.cp} \circ \kw{rb.cp}}
+      \hypo{\pi_\kw{bq}}
+      \infer1{\Gamma_\kw{bq} @ \kw{m} \le \Sigma_\kw{bq} @ \kw{m} \circ \Gamma_\kw{rb} @ \kw{m}}
+      \hypo{\pi_\kw{bq'}}
+      \hypo{\pi_\kw{rb}}
+      \infer3{\Gamma_\kw{bq} @ \kw{m} \le \kw{bq.cp} \circ \kw{rb.cp}}
+      \hypo{\kw{UnP}(\kw{*.cp}) = \kw{*.c}}
+      \infer2{\Gamma_\kw{bq} @ \kw{m} \le_{\langle m_0 \rangle^\ans_* \twoheadrightarrow [\kw{mem}]^\ans_*} \kw{bq.c} \circ \kw{rb.c}}
     \end{prooftree}
     \qquad
     \begin{tikzpicture}[xscale=0.55,yscale=0.45,baseline=1.24cm]
@@ -4839,13 +4828,14 @@ which is almost the ideal version in \S\ref{sec:overview:slift}.
         -- (2,3) -- (2,2) node[left]{$\kw{bq.cp}$}
         -- (2,0) node[below] (bq) {\footnotesize$\kw{bq.c}$};
         \draw (5,3) -- (7,3) node[right] {$\varnothing$};
+        \draw (0,1) node[left] {$\langle m_0 \rangle^\ans_*$} -- (7,1) node[right] {$[\kw{mem}]^\ans_*$};
         \path (bq) -- (rb) node[midway] {\footnotesize$\circ$};
         \end{scope}
       % Nodes
       \begin{scope}[every node/.style={circle,draw,fill=white},inner sep=1pt]
         \scriptsize
         \node at (3.5,5) {$\pi_\kw{bq}$};
-        \node at (2,3) {$\pi_\kw{rb}'$};
+        \node at (2,3) {$\pi_\kw{bq}'$};
         \node at (5,3) {$\pi_\kw{rb}$};
       \end{scope}
       \begin{scope}
@@ -4859,64 +4849,88 @@ which is almost the ideal version in \S\ref{sec:overview:slift}.
   \label{fig:application:example}
 \end{figure}
 
-\subsection{Certified Abstraction Layers(CAL)}
+\subsection{Certified Abstraction Layers}
 
-In theory,
-the frameworks, such as CAL,
-are capable of handling the boilerplates to produce
-a unified interface across different components.
+Certified abstraction layers (CAL) framework
+provides a theoretical foundation
+for large scale systems verification,
+by allowing
+the high-level abstract specification
+to be progressively refined
+through a series of abstraction layers.
+The correctness of individual components is denoted by
+\[
+  L^\sharp \vdash_R M : L^\flat,
+\]
+which says that
+the behavior of an overlay specification $L^\sharp: \top \twoheadrightarrow \mathcal{C} @ D^\sharp$
+is refined by an implementation $M: \mathcal{C} \twoheadrightarrow \mathcal{C}$
+executed on top of an underlay $L^\flat: \top \twoheadrightarrow \mathcal{C} @ D^\flat$
+witnessed by the abstraction relation $R \subseteq D^\sharp \times D^\flat$.
+Abstraction layers are composed according to the following rule
+\[
+  \begin{prooftree}
+    \hypo{L^\natural \vdash_R M : L^\sharp}
+    \hypo{L^\flat \vdash_S N : L^\natural}
+    \infer2{L^\flat \vdash_{R \circ S} M + N : L^\sharp}
+  \end{prooftree}
+\]
 
-However, CAL, although successful on verifying CertiKOS,
-suffers from two limitations.
-[explain how abstraction relation works].
-On one hand, the abstraction relations
-are not vertically composible,
-because of the consistency issue.
-On the other,
-there is no horizontal composition,
-because of the lack of ability to
-merge memory fragments.
+However, there lacks a satisfying instance of the framework.
+The closest one uses CompCertX with primitives
+to implementation the semantics of the framework,
+where the layer correctness is interpreted as
+(roughly expressed using our notations)
+\[
+  L^\sharp \vdash_R M : L^\flat :\Leftrightarrow L^\sharp @ \kw{mem} \le_{\varnothing \twoheadrightarrow [R]} \kw{ClightX}_{L^\flat @ \kw{mem}} [M],
+\]
+where $\kw{ClightX_L[M]}$ interprets
+a module $M$ of Clight functions
+with external calls being interpreted
+according to the underlay interface $L$,
+and the simulation relation $[R] \subseteq (D^\sharp \times \kw{mem}) \times (D^\flat \times \kw{mem})$
+allows the abstract state to be realized
+by concrete memory state.
+Memory injection is used so that the abstraction layers
+are composible to the CompCertX compiler.
+
+Although it has been applied to verify CertiKOS,
+the above framework has two major limitations.
+On one hand,
+the $\kw{ClightX}$ semantics is not truly open
+in that the behaviors of external calls have to be provided by the underlay.
 As a consequence,
-the abstract state used for verifying CertiKOS
-has to be represented as a huge record
-which contains the states used by all the layers.
+the process of layer construction requires
+the well-formedness of the underlay.
+On the other,
+the composition on abstraction relations
+becomes much complicated
+when it incorporates the memory injection.
 
-With the state encapsulation, however,
-the abstraction relation can be encapsulated
-together with the abstract state.
+By contrast, with CompCertO semantics and the state encapsulation,
+the abstraction relation can be encapsulated,
+which gives a simpler interpretation of the abstraction layers:
 \[
-  L^\flat: \top \rightarrow \mathcal{C} \vdash M : L^\sharp:\top \rightarrow \mathcal{C} :\Leftrightarrow L^\sharp @ \kw{mem} \le \kw{ClightP} \langle M \rangle \circ L^\flat @ \kw{mem}
+  L^\flat \vdash M : L^\sharp :\Leftrightarrow L^\sharp @ \kw{mem} \le \kw{ClightP} \langle M \rangle \circ L^\flat @ \kw{mem}
 \]
-and the vertical composition can be proved directly.
-\[
-  \begin{prooftree}
-    \hypo{L^\flat \vdash M : L^\natural}
-    \hypo{L^\natural \vdash N : L^\sharp}
-    \infer2{L^\flat \vdash M + N : L^\sharp}
-  \end{prooftree}
-\]
+The truly openness of CompCertO semantics
+enables modules to be verified independent of underlay semantics.
+For example, the program $\kw{bq.cp}$ is verified
+with reference to its specification $\Sigma_\kw{bq}$
+without relying on any underlay specifications.
 Moreover,
-given a proper notion of horizontal composition,
-a version of horizontal composition can be proved
-by exploiting the composition of memory fragments.
-\[
-  \begin{prooftree}
-    \hypo{L_1^\flat \vdash M : L_1^\sharp}
-    \hypo{L_2^\flat \vdash N : L_2^\sharp}
-    \infer2{L_1^\flat \uplus L_2^\flat  \vdash M + N : L_1^\sharp \uplus L_2^\sharp}
-  \end{prooftree}
-\]
-
-
-
-Things to go over:
-\begin{itemize}
-  \item How to build CAL framework on top
-  \item Tensor product of layers
-\end{itemize}
-
-Explain in particular the difference of state encapsulation here
-vs. the limited version in CAL.
+since the abstract relation has been encapsulated,
+the vertical composition of certified abstraction layers
+can be established as a corollay of
+the vertical composition of encapsulated semantics.
+Furthermore,
+with the ability of combining memory fragments,
+a form of horizontal composition of
+abstraction layers can be established
+in a straightforward way,
+which would be complicated due to
+the intricacy between the abstraction relation
+and the memory state.
 
 \subsection{Future Work}
 
