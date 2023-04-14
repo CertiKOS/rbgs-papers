@@ -538,6 +538,9 @@ describes a set $S$ of states, together with:
   \item a relation $F \subseteq S \times \kw{int}$ identifying
     \emph{final} states along with associated integer outcomes.
 \end{itemize}
+We use infix notation for the relations $\rightarrow$ and $F$
+and will often write $x \mathrel{R} y \mathrel{S} z$
+to mean $x \mathrel{R} y \mathrel\wedge y \mathrel{S} z$.
 An execution of $p$ starts with an initial state $s_0 \in I$,
 performs a number of transitions,
 and when a final state $s_n$ is reached,
@@ -707,6 +710,198 @@ alongside a boundary of dimension $n$.
 
 %}}}
 
+\begin{figure} % fig:code {{{
+  \centering\footnotesize
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+/* Encapsulated state */
+static int c1, c2;
+static V buf[N];
+
+/* Accessors */
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.38\textwidth}
+\begin{minted}{C}
+/* Underlay signature */
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+/* Layer implementation */
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Running example, consisting of two C components.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
+\end{figure}
+%}}}
+
+\subsection{Semantics in Compositional CompCert} %{{{
+
+A limitation of the framework described above
+is that semantics only characterize the behavior of whole programs.
+However, compilers usually act on individual translation units
+which are only part of a larger program.
+For example,
+Figure~\ref{fig:code} shows two C translation units.
+CompCert can be used to compile them
+but the correctness property (\ref{eqn:ccc-wp})
+does not account for this situation.
+
+\paragraph{Transition Systems} %{{{
+
+To address this issue,
+Compositional CompCert \cite{compcompcert}
+uses an extended definition of transition system
+in order to
+characterize the behavior of individual compilation units:
+\begin{itemize}
+\item
+To initialize a transition system,
+we must now specify the name $f \in \kw{ident}$
+of the function that we wish to invoke,
+values $\vec{v} \in \kw{val}^*$ for its parameters,
+and the state $m \in \kw{mem}$ of the global memory
+at the time of invocation.
+\item
+Likewise,
+when the component terminates,
+instead of a single integer outcome $x \in \kw{int}$ it must provide
+a return value $v' \in \kw{val}$ and an updated memory state $m' \in \kw{mem}$.
+\end{itemize}
+In other words,
+executions now take the form:
+\[
+  f(\vec{v})@m
+  \:\mathrel{I}\:
+  s_0 \:\rightarrow\: s_1 \:\rightarrow\: \cdots \:\rightarrow\: s_n
+  \:\mathrel{F}\:
+  v'@m'
+\]
+In addition,
+we must introduce the possibility for transition systems
+to invoke external functions,
+which may be provided by other translation units in the program.
+This is done by associating to certain \emph{external} states ($X$)
+a description of the external call,
+as well as the possible resumption states ($Y$)
+after the call's outcome is received.
+The components of a transition system are now:
+\begin{equation}
+ \begin{array}{c}
+  I \subseteq (\kw{ident} \times \kw{val}^* \times \kw{mem}) \times S
+  \qquad
+  {\rightarrow} \subseteq S \times S
+  \qquad
+  F \subseteq S \times (\kw{val} \times \kw{mem})
+  \\
+  X \subseteq S \times (\kw{ident} \times \kw{val}^* \times \kw{mem})
+  \qquad
+  Y \subseteq S \times (\kw{val} \times \kw{mem}) \times S
+ \end{array}
+ \label{eqn:compcomp-lts}
+\end{equation}
+We will again use infix notation for $X$,
+and write $v'@m' \mathrel{Y^s} s'$ when $(s, \, v'@m', \, s') \in Y$.
+This means that
+after $s$ triggers an external call ($s \mathrel{X} f(\vec{v})@m$)
+which returns with an answer $v'@m'$,
+the execution resumes with state $s'$.
+In other words,
+executions will take the form
+\[
+  q \mathrel{I} s_0 \rightarrow^*
+  s_1 \mathrel{X} q_1 \leadsto
+  r_1 \mathrel{Y^{s_1}} s_1' \rightarrow^*
+  s_2 \mathrel{\cdots}
+  s_n \mathrel{X} q_n \leadsto
+  r_n \mathrel{Y^{s_n}} s_n' \rightarrow^*
+  s_f \mathrel{F} r
+  \,,
+\]
+corresponding to an interaction trace
+$
+  q \rightarrowtail
+  (q_1 \leadsto r_1) \rightarrowtail
+  \cdots \rightarrowtail
+  (q_n \leadsto r_n) \rightarrowtail
+  r
+$,
+where we use $\rightarrowtail$ to denote internal execution
+and where $\leadsto$ denotes a step where the environment is in control.
+
+%The component is activated by an incoming call,
+%described by a question $q \in B^\que$.
+%%which is used to determine the transition system's initial state.
+%As it executes,
+%the transition system may perform outgoing calls,
+%asking questions
+%$q_1, \ldots, q_n \in A^\que$
+%and receiving corresponding answers
+%$r_1, \ldots, r_n \in A^\ans$.
+%Execution terminates with
+%the top-level answer $r \in B^\ans$.
+
+\begin{example}[Clight semantics] \label{ex:overview:clightsem} %{{{
+Consider the translation unit $\kw{rb.c}$ shown in Fig.~\ref{fig:code}.
+Its semantics is given by 
+the transition system $\kw{Clight}(\kw{rb.c})$,\!%
+\footnote{%
+  Here we use round parentheses to denote
+  the \emph{open} nature of the transition system $\kw{Clight}(-)$
+  as opposed to the closed, whole-program semantics $\kw{Clight}[-]$
+  used in the original CompCert.}
+which admits the following interaction trace:
+\[
+  \kw{Clight}(\kw{rb.c}) \quad \vDash \quad
+  \kw{inc1}()@[\kw{c1} \mapsto 5]
+  \: \rightarrowtail \:
+  5@[\kw{c1} \mapsto 6]
+\]
+Note that the memory is updated to store the new value of the counter $\kw{c1}$.
+By contrast, $\kw{bq.c}$
+does not directly modify the memory,
+but it makes outgoing calls which may have that effect:
+\[
+  \kw{Clight}(\kw{bq.c}) \:\: \vDash \:\:
+  \kw{deq}()@m
+  \rightarrowtail
+  \big( \kw{inc1}()@m \leadsto i@m' \big)
+  \rightarrowtail
+  \big( \kw{get}(i)@m' \leadsto v@m'' \big)
+  \rightarrowtail
+  v@m''
+  \,.
+\]
+\end{example}
+%}}}
+
+%}}}
+
 \begin{figure} % fig:pasting {{{
   \text{(a)}
   \begin{tikzcd}[row sep=3ex]
@@ -798,87 +993,19 @@ alongside a boundary of dimension $n$.
 \end{figure}
 %}}}
 
-\subsection{Semantics in Compositional CompCert} %{{{
-
-A limitation of the framework described above
-is that semantics only characterize the behavior of whole programs.
-However, compilers usually act on individual translation units
-which are only part of a larger program.
-For example,
-Figure~\ref{fig:code} shows two C translation units.
-CompCert can be used to compile them
-but the correctness property (\ref{eqn:ccc-wp})
-does not account for this situation.
-
-\paragraph{Transition Systems} %{{{
-
-To address this issue,
-Compositional CompCert \cite{compcompcert}
-uses an extended definition of transition system
-in order to
-characterize the behavior of individual compilation units:
-\begin{itemize}
-\item
-To initialize a transition system,
-we must now specify the name $f \in \kw{ident}$
-of the function that we wish to invoke,
-values $\vec{v} \in \kw{val}^*$ for its parameters,
-and the state $m \in \kw{mem}$ of the global memory
-at the time of invocation.
-\item
-Likewise,
-when the component terminates,
-instead of a single integer outcome $x \in \kw{int}$ it must provide
-a return value $v' \in \kw{val}$ and an updated memory state $m' \in \kw{mem}$.
-\end{itemize}
-In other words,
-executions now take the form:
-\[
-  f(\vec{v})@m
-  \:\mathrel{I}\:
-  s_0 \:\rightarrow\: s_1 \:\rightarrow\: \cdots \:\rightarrow\: s_n
-  \:\mathrel{F}\:
-  v'@m'
-\]
-In addition,
-we must introduce the possibility for transition systems
-to invoke external functions,
-which may be provided by other translation units in the program.
-This is done by associating to certain \emph{external} states ($X$)
-a description of the external call,
-as well as the possible resumption states ($Y$)
-after the call's outcome is received.
-The components of a transition system are now:
-\begin{equation}
- \begin{array}{c}
-  I \subseteq (\kw{ident} \times \kw{val}^* \times \kw{mem}) \times S
-  \qquad
-  {\rightarrow} \subseteq S \times S
-  \qquad
-  F \subseteq S \times (\kw{val} \times \kw{mem})
-  \\
-  X \subseteq S \times (\kw{ident} \times \kw{val}^* \times \kw{mem})
-  \qquad
-  Y^s \subseteq (\kw{val} \times \kw{mem}) \times S
- \end{array}
- \label{eqn:compcomp-lts}
-\end{equation}
+\paragraph{Horizontal Compositionality} %{{{
 
 Under this new definition of transition system,
 it becomes possible to define a \emph{semantic linking} operator
 to model the interaction between different components.
-Specifically,
-in the transition system $L_1 \oplus L_2$,
-whenever $L_1$ makes an external call
+The transition system $L_1 \oplus L_2$
+generally mirrors the internal executions of $L_1$ and $L_2$,
+but when $L_1$ makes an external call
 to a function provided by $L_2$ (and vice versa),
-a new instance of $L_2$ is instantiated to handle the call.
-$L_2$ executes until it reaches a final state,
-at which point the outcome of its execution is used to resume
+$L_1 \oplus L_2$ instantiates a new copy of $L_2$ to handle the call internally.
+This copy executes until it reaches a final state,
+and the corresponding outcome is used to resume
 the suspended execution of $L_1$.
-
-%}}}
-
-\paragraph{Horizontal Compositionality} %{{{
 
 Compositional CompCert's semantic linking
 is a form of \emph{horizontal} composition,
@@ -889,17 +1016,13 @@ so that for example the overall behavior of the code in Fig.~\ref{fig:code}
 can be described as
 $
   \kw{Clight}(\kw{rb.c}) \oplus \kw{Clight}(\kw{bq.c})
-$.%
-\footnote{%
-  Here we use round parentheses to denote
-  the \emph{open} nature of the transition system $\kw{Clight}(-)$
-  as opposed to the closed, whole-program semantics $\kw{Clight}[-]$
-  used in the original CompCert.}
+$.
 Horizontal composition turns transition systems into 1-dimensional objects.
 However, unlike simulations,
 transition systems are untyped and
 do not need to agree on a common endpoint to be composed.
-We can in fact consider them ``loops'' of type ${\bullet} \rightarrow {\bullet}$
+Equivalently,
+we can consider them ``loops'' of type ${\bullet} \rightarrow {\bullet}$
 over a trivial 0-dimensional endpoint.
 %as in Fig.~\ref{fig:pasting}b.
 
@@ -965,7 +1088,7 @@ a trivial component which does not provide any function.
 
 %}}}
 
-\begin{example} %{{{
+\begin{example} \label{ex:compcomp} %{{{
 Figure~\ref{fig:pasting}b
 illustrates how this compositional algebra can be used.
 A simple transition system $L_\kw{bq}$ serves as specification
@@ -1009,7 +1132,7 @@ can lift to an arbitrary context.
 
 %}}}
 
-\begin{figure}
+\begin{figure} % fig:sd {{{
   \[
     (a) \quad \raisebox{-0.5\height}{\includegraphics[scale=0.1]{pr/phi}}
     \qquad \qquad
@@ -1019,6 +1142,7 @@ can lift to an arbitrary context.
     of string diagrams representing simulation relations.}
   \label{fig:sd}
 \end{figure}
+%}}}
 
 \paragraph{String Diagrams} %{{{
 
@@ -1065,13 +1189,33 @@ used in Fig.~\ref{fig:pasting}.
 
 \subsection{Semantics in CompCertO} %{{{
 
-% Language Interfaces {{{
+Unfortunately,
+updating CompCert's proof to use the
+Compositional CompCert semantics
+proved quite challenging \citep{compcompcert}.
+Functions calls and returns include details
+which are handled very differently by simulation proofs
+for the various phases of CompCert.
+Making them externally observable means that
+it is difficult to define a uniform notion of simulation
+which can capture these different approaches,
+and many proofs had to be rewritten from scratch.
 
-The compositional semantics of CompCertO uses %revolves around
-a notion of open transition system $L : A \twoheadrightarrow B$.
-The type $A \twoheadrightarrow B$ involves
-two \emph{language interfaces} $A$ and $B$,
-which decribe how components interact.
+This was addressed in CompCertO \citep{compcerto}
+by making the semantic model more flexible.
+At the cost of an increase in complexity of the model,
+this made it possible to capture the variations across
+CompCert's correctness proofs and to update and connect them
+with only minor changes.
+
+\paragraph{Transition Systems} %{{{
+
+The transition systems used in CompCertO---%
+and in our work below---%
+are almost identical to the ones used in Compositional CompCert,
+with one key difference:
+the form of function calls and returns is no longer fixed,
+but is instead provided by \emph{language interfaces}.
 
 \begin{definition} \label{def:li} %{{{
 A \emph{language interface} $A = \langle A^\que, A^\ans \rangle$
@@ -1079,57 +1223,236 @@ is a set of questions $A^\que$ and a set of answers $A^\ans$.
 \end{definition}
 %}}}
 
-Two important language interfaces
-are involved in formulating the CompCertO correctness theorem.
-The language interface $\mathcal{C}$
-models interactions between C translation units.
-The language interface $\mathcal{A}$
-is used to describe the behavior of assembly-level components.
+Language interfaces are the 0-dimensional objects of CompCertO's model.
+Transition systems remain 1-dimensional but are now typed
+by language interfaces.
 
-\begin{example}[The $\mathcal{C}$ language interface] \label{ex:langint} %{{{
-When a C component is invoked,
-the environment specifies a function to be called
-and argument values.
-When the function is done executing,
-control switches back to the environment
-and the component specifies a return value.
-This can be described by the language interface $\mathcal{C}$,
-defined as follows:
-\begin{align*}
-  \mathcal{C}^\que &:= \{ f(\vec{v}) \mid f \in \kw{ident}, \vec{v} \in \kw{val}^* \}
-  &
-  \mathcal{C}^\ans &:= \kw{val}
-\end{align*}
-In addition,
-C programs may access and alter the global memory state.
-This means that the current memory state must be attached
-to every function call,
-and an updated state must be communicated back
-alongside the return value.
-To this end, CompCertO uses the following language interface:
-\begin{align*}
-  (\mathcal{C} \mathbin@ \kw{mem})^\que &:=
+\begin{definition} \label{def:lts} %{{{
+A \emph{transition system} $L : A \twoheadrightarrow B$
+is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
+consisting of:
+\begin{itemize}
+  \item a set $S$ of states;
+  \item a transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $I \subseteq B^\que \times S$
+    which assigns possible \emph{initial states}
+    to each question of $B$;
+  \item a relation $F \subseteq S \times B^\ans$
+    which specifies \emph{final states} together with
+    corresponding answers in $B$;
+  \item a relation $X \subseteq S \times A^\que$
+    which identifies \emph{external states} and
+    corresponding questions of $A$;
+  \item a relation $Y \subseteq S \times A^\ans \times S$,
+    which identifies \emph{resumption states}.
+\end{itemize}
+\end{definition}
+%}}}
+
+Under this definition,
+the source and target semantics of CompCertO can be described as
+\[
+  \kw{Clight}(p) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
+  \qquad \text{and} \qquad
+  \kw{Asm}(p') : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m} \,.
+\]
+The language interface
+$\mathcal{C}_\kw{m} = \langle \mathcal{C}_\kw{m}^\que, \mathcal{C}_\kw{m}^\ans \rangle$
+describes the interactions used in Compositional CompCert:
+\[
+  \mathcal{C}_\kw{m}^\que :=
     \{ f(\vec{v})@m \mid f \in \kw{ident}, \vec{v} \in \kw{val}^*, m \in \kw{mem} \}
-  \\
-  (\mathcal{C} \mathbin@ \kw{mem})^\ans &:=
+  \qquad
+  \mathcal{C}_\kw{m}^\ans :=
     \{ v@m \mid v \in \kw{val}, m \in \kw{mem} \}
-  \,.
-\end{align*}
+  \,,
+\]
+so that the transition system $\kw{Clight}(p)$ is essentially identical
+to its Compositional CompCert counterpart.
+By contrast, the language interface
+$\mathcal{A}_\kw{m}$
+describes cross-component interactions at a level of abstraction
+which better matches the mechanics of assembly programs.
+
+%}}}
+
+\paragraph{Simulations} %{{{
+
+The different language interfaces used for
+$\kw{Clight}(p) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}$ and
+$\kw{Asm}(p') : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m}$
+raises the question of the relationship
+between the source-level interactions
+in $\mathcal{C}_\kw{m}$
+and the corresponding target-level interactions
+in $\mathcal{A}_\kw{m}$.
+Indeed,
+compositional compiler correctness only makes sense
+with respect to a particular calling convention.
+%Rather than modeling the calling convention implicitly
+%as part of the assembly semantics,
+CompCertO makes this explicit:
+simulations operate in the context of specified
+\emph{simulation conventions}.
+%which express the relationships between
+%the source and target components'
+%interactions with the environment.
+
+This introduces a form of two-dimensional typing.
+To establish a simulation
+of a transition system $L^\sharp: A^\sharp \twoheadrightarrow B^\sharp$
+by a transition system $L^\flat: A^\flat \twoheadrightarrow B^\flat$,
+we must first specify a simulation convention
+$\mathbf{R}_B : B^\sharp \leftrightarrow B^\flat$
+for their incoming calls,
+and a simulation convention
+$\mathbf{R}_A : A^\sharp \leftrightarrow A^\flat$
+for their outgoing calls.
+We will write
+$\pi : L^\sharp \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L^\flat$
+for a simulation of this kind,
+which can depicted in pasting and string diagrams as:
+\[
+  \begin{tikzcd}[sep=tiny]
+    A^\sharp
+      \ar[rr, twoheadrightarrow, "L^\sharp"]
+      \ar[dd, leftrightarrow, "\mathbf{R}_A"'] &&
+    B^\sharp
+      \ar[dd, leftrightarrow, "\mathbf{R}_B"] \\
+    & \pi & \\
+    A^\flat
+      \ar[rr, twoheadrightarrow, "L^\flat"'] &&
+    B^\flat
+  \end{tikzcd}
+  \qquad \qquad
+  \begin{tikzpicture}[xscale=0.4,yscale=0.35,baseline=(R)]
+    % Background
+    \begin{scope}
+      \fill[ACMYellow!50] (0,2) rectangle (2,4);
+      \fill[ACMRed!50] (0,0) rectangle (2,2);
+      \fill[ACMGreen!50] (2,2) rectangle (4,4);
+      \fill[ACMBlue!50] (2,0) rectangle (4,2);
+    \end{scope}
+    % Region labels
+    \begin{scope}[every node/.style={opacity=0.5}]
+      \scriptsize
+      \node[below right] at (0,4) {$B^\sharp$};
+      \node[above right] at (0,0) {$B^\flat$};
+      \node[below left] at (4,4) {$A^\sharp$};
+      \node[above left] at (4,0) {$A^\flat$};
+    \end{scope}
+    % Strings
+    \begin{scope}
+      \footnotesize
+      \draw (2,4) node[above] {$L^\sharp$}
+         -- (2,0) node[below] {$L^\flat$};
+      \draw (0,2) node[left] (R) {$\mathbf{R}_B$}
+         -- (4,2) node[right] {$\mathbf{R}_A$};
+    \end{scope}
+    % Node
+    \node[draw,fill=white,rounded corners] at (2,2) {$\pi$};
+  \end{tikzpicture}
+\]
+Simulation conventions are relational in nature.
+Given $\mathbf{R} : A \leftrightarrow B$ and
+$\mathbf{R}' : B \leftrightarrow C$,
+we can derive their sequential composition
+$\mathbf{R} \cdot \mathbf{R}' : A \leftrightarrow C$.
+We will write $\epsilon_A : A \leftrightarrow A$
+for the identity simulation convention,
+and call $\mathbf{SC}$ the associated category of
+language interfaces and simulation conventions.
+
+%}}}
+
+\paragraph{Simulation Convention Refinements} %{{{
+
+Simulation conventions are very useful in CompCertO,
+because they can be used to describe the different assumptions and guarantees
+used in the correctness proofs of CompCert's various phases,
+for both incoming and outgoing calls.
+However, for these simulations to compose,
+they must use compatible simulation conventions.
+To reason about simulation convention compatibility,
+CompCertO introduces a rich simulation convention algebra,
+based on a notion of simulation convention \emph{refinement}
+$\mathbf{R} \sqsubseteq \mathbf{S}$.
+Refinements compose horizontally with each other,
+and on either side of a simulation,
+transforming its type:
+\[
+  \begin{prooftree}
+    \hypo{x : \mathbf{R}' \sqsubseteq \mathbf{R}}
+    \hypo{\rho : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
+    \hypo{y : \mathbf{S} \sqsubseteq \mathbf{S}'}
+    \infer3{y \odot \rho \odot x :
+       L_1 \le_{\mathbf{R}' \twoheadrightarrow \mathbf{S}'} L_2}
+  \end{prooftree}
+\]
+
+%}}}
+
+\begin{example} %{{{
+We revisit Example~\ref{ex:compcomp} to illustrate
+the additional structure provided by CompCertO,
+as depicted in Fig.~\ref{fig:pasting}c.
+First, note the type
+$L_\kw{bq} : \mathbf{1} \twoheadrightarrow \mathcal{C}$
+of the specification,
+which makes it clear that the functions it provides
+do not perform outgoing calls beyond the internal interactions
+between $\kw{bq.c}$ and $\kw{rb.c}$.
+To reconcile this with the type of the program's behavior,
+the correctness proof
+\[
+  \phi \::\: L_\kw{bq} \:\le_{\bot \twoheadrightarrow \kw{id}_\mathcal{C}}\:
+    \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
+\]
+uses the outgoing simulation convention $\bot$,
+which simply disallows any calls.
+As in Compositional CompCert,
+CompCertO provides the correctness guarantees
+\[
+  \pi_1 : \kw{Clight}(\kw{rb.c}) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+           \kw{Asm}(\kw{rb.s})
+  \qquad \text{and} \qquad
+  \pi_2 : \kw{Clight}(\kw{bq.c}) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+           \kw{Asm}(\kw{bq.s})
+  \,,
+\]
+which now involve the compiler's calling convention $\mathbb{C}$.
+These simulations compose into:
+\[
+  \phi \mathbin; (\pi_1 \oplus \pi_2) \::\:
+  L_\kw{bq}
+   \:\le_{(\bot \mathbin; \mathbb{C}) \twoheadrightarrow \mathbb{C}}\:
+    \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
+\]
+The result can further be refined using the simulation convention refinement
+$b : \bot \sqsubseteq (\bot\mathbin;\mathbb{C})$
+and the following \emph{linking correctness} property which CompCertO provides:
+\[
+  \ell :
+  \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s}) \sqsubseteq
+  \kw{Asm}(\kw{bq+rb.s})
+\]
+The final result is the composite simulation proof
+$(\phi \mathbin; (\pi_1 \oplus \pi_2) \mathbin; \ell) \odot b \::\:
+ L_\kw{bq} \:\le_{\bot \twoheadrightarrow \mathbb{C}}\:
+ \kw{Asm}(\kw{bq+rb.s})$.
 \end{example}
 %}}}
 
-%Language interfaces specify the information exchanged between
-%a component and its environment
-%when control switches between the two.
-%Questions correspond to function invocations
-%and answers correspond to the function returning.
-%An execution of the component $L : A \twoheadrightarrow B$
-%is initiated with a question $q \in B^\que$
-%and terminates with a corresponding answer $r \in B^\ans$.
-%At any point during the execution,
-%$L$ may ask a question $m \in A^\que$ (an external call),
-%in which case it is suspended until an answer $n \in A^\ans$
-%resumes the execution.
+%}}}
+
+\subsection{Limitations of the CompCertO Model} %{{{
+
+[The compositional structure is ad-hoc and awkward.
+This is fine for CompCertO, we just need to make things work
+with minimal effort.
+But for a general-purpose framework it is a problem.]
+
+%}}}
 
 %}}}
 
@@ -1200,136 +1523,6 @@ To this end, CompCertO uses the following language interface:
     and their composition}  
   \label{fig:overview:ts}
 \end{figure}
-%}}}
-
-\begin{figure} % fig:code {{{
-  \centering\footnotesize
-  \begin{subfigure}{0.45\textwidth}
-\begin{minted}{C}
-/* Encapsulated state */
-static int c1, c2;
-static V buf[N];
-
-/* Accessors */
-int inc1() { int i = c1++; c1 %= N; return i; }
-int inc2() { int i = c2++; c2 %= N; return i; }
-V get(int i) { return buf[i]; }
-void set(int i, V val) { buf[i] = val; }
-\end{minted}
-  \subcaption{The translation unit $\kw{rb.c}$}
-  \label{fig:rb}
-  \end{subfigure}
-  \hspace{4em}
-  \begin{subfigure}{0.38\textwidth}
-\begin{minted}{C}
-/* Underlay signature */
-extern int inc1(void);
-extern int inc2(void);
-extern V get(int i);
-extern void set(int i, V val);
-
-/* Layer implementation */
-void enq(V val) { set(inc2(), val); }
-V deq() { return get(inc1()); }
-\end{minted}
-  \subcaption{The translation unit $\kw{bq.c}$}
-  \label{fig:bq}
-  \end{subfigure}
-  \caption{Running example, consisting of two C components.
-    The component $\kw{rb.c}$
-    implements a ring buffer by encapsulating an array
-    and two counters. It is used by the component
-    $\kw{bq.c}$ to implement a
-    bounded queue.}
-  \label{fig:code}
-%\caption{The state of a ring buffer,
-%  made of two counters and a fixed-size array,
-%  is encapsulated behind a simple interface.}
-%\label{fig:rb}
-%\caption{This component relies on the ring buffer primitives
-%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
-%\label{fig:bq}
-\end{figure}
-%}}}
-
-\paragraph{Transition Systems} %{{{
-
-We describe CompCertO's transition systems in detail in \S\ref{sec:base}.
-For now, it suffices to note that
-a transition system of type $A \twoheadrightarrow B$
-describes a behavior of the shape depicted in \autoref{fig:overview:ts:shape},
-generating interaction traces of the following form:
-\[
-  q \rightarrowtail (q_1 \leadsto r_1)
-    \rightarrowtail \cdots \rightarrowtail (q_n \leadsto r_n)
-    \rightarrowtail r
-\]
-Here, $\rightarrowtail$ denotes internal execution
-and $\leadsto$ denotes a step where the environment is in control:
-The component is activated by an incoming call,
-described by a question $q \in B^\que$.
-%which is used to determine the transition system's initial state.
-As it executes,
-the transition system may perform outgoing calls,
-asking questions
-$q_1, \ldots, q_n \in A^\que$
-and receiving corresponding answers
-$r_1, \ldots, r_n \in A^\ans$.
-Execution terminates with
-the top-level answer $r \in B^\ans$.
-
-\begin{example}[Clight semantics] \label{ex:overview:clightsem} %{{{
-CompCertO defines
-the semantics of a C translation unit $M$
-as:
-\[
-  \kw{Clight}(M) :
-    \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
-    \mathcal{C} \mathbin@ \kw{mem}
-\]
-%Note that both incoming and outgoing call
-%use the same language interface $\mathcal{C}_\kw{m}$.
-%
-Consider the translation unit $\kw{rb.c}$ shown in Fig.~\ref{fig:code}.
-If $\kw{inc1}()$ is invoked
-with a memory state where the variable $\kw{c1}$ has value $5$,
-the transition system $\kw{Clight}(\kw{rb.c})$ will behave as follows:
-\[
-  \kw{Clight}(\kw{rb.c}) \quad \vDash \quad
-  \kw{inc1}()@m[\kw{c1} \mapsto 5]
-  \: \rightarrowtail \:
-  5@m[\kw{c1} \mapsto 6]
-\]
-Note that the memory is updated to store the new value of the counter $\kw{c1}$.
-By contrast, %the function
-$\kw{deq}()$ in $\kw{bq.c}$
-does not directly modify the memory,
-but it makes outgoing calls which may have that effect:
-\[
-  \kw{Clight}(\kw{bq.c}) \:\: \vDash \:\:
-  \kw{deq}()@m
-  \rightarrowtail
-  \big( \kw{inc1}()@m \leadsto i@m' \big)
-  \rightarrowtail
-  \big( \kw{get}(i)@m' \leadsto v@m'' \big)
-  \rightarrowtail
-  v@m''
-  \,.
-\]
-\end{example}
-%}}}
-
-%}}}
-
-%}}}
-
-\subsection{Deficiencies of the CompCertO model}
-
-[The compositional structure is ad-hoc and awkward.
-This is fine for CompCertO, we just need to make things work
-with minimal effort.
-But for a general-purpose framework it is a problem.]
-
 %}}}
 
 \section{Overview of the Framework}\label{sec:overview} %{{{
@@ -1659,129 +1852,6 @@ remain an obstacle when handling other parts of the proof.
 %}}}
 
 \subsection{Simulations} \label{sec:overview:sim} %{{{
-
-% Simulation basics {{{
-
-CompCert establishes compiler correctness
-as a simulation property between closed semantics
-\[
-  \kw{CompCert}(M) = M'
-  \quad\Rightarrow\quad
-  \kw{Clight}[M] \:\le\: \kw{Asm}[M']
-  \,.
-\]
-This means that when $M$ compiles to $M'$,
-the behavior of the source program $M$
-is simulated by the behavior of $M'$.
-The transitivity of simulations enables
-\emph{vertical compositionality}:
-the overall correctness of the compiler
-can be derived from that of
-individual compilation passes.
-
-In CompCertO,
-correctness is formulated at the level of
-individual components.
-When $M$ is compiled to $M'$,
-we must establish a relationship between
-the open transition systems
-\[
-  \kw{Clight}(M) :
-    \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
-    \mathcal{C} \mathbin@ \kw{mem}
-  \qquad \text{and} \qquad
-  \kw{Asm}(M') :
-    \mathcal{A} \mathbin@ \kw{mem} \twoheadrightarrow
-    \mathcal{A} \mathbin@ \kw{mem}
-  \,.
-\]
-This raises the question of the relationship
-between the source-level interactions
-in $\mathcal{C} \mathbin@ \kw{mem}$
-and their corresponding target-level interactions
-in $\mathcal{A} \mathbin@ \kw{mem}$.
-In other words,
-compositional compiler correctness only makes sense
-with respect to a particular calling convention.
-
-%}}}
-
-\paragraph{Simulation Conventions} %{{{
-
-%Rather than modeling the calling convention implicitly
-%as part of the assembly semantics,
-CompCertO makes this explicit:
-simulations operate in the context of specified
-\emph{simulation conventions}.
-%which express the relationships between
-%the source and target components'
-%interactions with the environment.
-%
-This introduces a form of two-dimensional typing.
-To establish a simulation
-of a transition system $L^\sharp: A^\sharp \twoheadrightarrow B^\sharp$
-by a transition system $L^\flat: A^\flat \twoheadrightarrow B^\flat$,
-we must first specify a simulation convention
-$\mathbf{R}_B : B^\sharp \leftrightarrow B^\flat$
-for their incoming calls,
-and a simulation convention
-$\mathbf{R}_A : A^\sharp \leftrightarrow A^\flat$
-for their outgoing calls.
-We can depict this situation
-in the following ways:
-\[
-  \begin{tikzcd}
-    A^\sharp
-      \ar[r, twoheadrightarrow, "L^\sharp"]
-      \ar[d, leftrightarrow, "\mathbf{R}_A"'] &
-    B^\sharp
-      \ar[d, leftrightarrow, "\mathbf{R}_B"] \\
-    A^\flat
-      \ar[r, twoheadrightarrow, "L^\flat"'] &
-    B^\flat
-  \end{tikzcd}
-  \qquad \qquad
-  L^\sharp \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L^\flat
-  \qquad \qquad
-  \begin{tikzpicture}[xscale=0.4,yscale=0.35,baseline=(R)]
-    % Background
-    \begin{scope}
-      \fill[ACMYellow!50] (0,2) rectangle (2,4);
-      \fill[ACMRed!50] (0,0) rectangle (2,2);
-      \fill[ACMGreen!50] (2,2) rectangle (4,4);
-      \fill[ACMBlue!50] (2,0) rectangle (4,2);
-    \end{scope}
-    % Region labels
-    \begin{scope}[every node/.style={opacity=0.5}]
-      \scriptsize
-      \node[below right] at (0,4) {$B^\sharp$};
-      \node[above right] at (0,0) {$B^\flat$};
-      \node[below left] at (4,4) {$A^\sharp$};
-      \node[above left] at (4,0) {$A^\flat$};
-    \end{scope}
-    % Strings
-    \begin{scope}
-      \footnotesize
-      \draw (2,4) node[above] {$L^\sharp$}
-         -- (2,0) node[below] {$L^\flat$};
-      \draw (0,2) node[left] (R) {$\mathbf{R}_B$}
-         -- (4,2) node[right] {$\mathbf{R}_A$};
-    \end{scope}
-    % Node
-    \node[draw,fill=white,rounded corners] at (2,2) {$\le$};
-  \end{tikzpicture}
-\]
-Simulation conventions are relational in nature.
-Given $\mathbf{R} : A \leftrightarrow B$ and
-$\mathbf{R}' : B \leftrightarrow C$,
-we can derive their sequential composition
-$\mathbf{R} \cdot \mathbf{R}' : A \leftrightarrow C$.
-We will write $\epsilon_A : A \leftrightarrow A$
-for the identity simulation convention,
-and call $\mathbf{SC}$ the associated category of
-language interfaces and simulation conventions.
-
-%}}}
 
 \begin{figure} % fig:overview:simcomp %{{{
   \[
@@ -2861,59 +2931,7 @@ we discuss its relationship with the original.
 
 \subsection{Transition Systems} \label{sec:base:ts} %{{{
 
-As in the original CompCert semantics,
-a transition system in CompCertO
-executes by updating an internal state,
-which is not directly observable
-in its interactions with the environment.
-
-\begin{definition} \label{def:lts} %{{{
-A \emph{transition system} $L : A \twoheadrightarrow B$
-is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
-consisting of:
-\begin{itemize}
-  \item a set $S$ of states;
-  \item a transition relation ${\rightarrow} \subseteq S \times S$;
-  \item a relation $I \subseteq B^\que \times S$
-    which assigns possible \emph{initial states}
-    to each question of $B$;
-  \item a relation $F \subseteq S \times B^\ans$
-    which specifies \emph{final states} together with
-    corresponding answers in $B$;
-  \item a relation $X \subseteq S \times A^\que$
-    which identifies \emph{external states} and
-    corresponding questions of $A$;
-  \item a relation $Y \subseteq S \times A^\ans \times S$,
-    which identifies \emph{resumption states}.
-\end{itemize}
-\end{definition}
-%}}}
-
-We use infix notation for the binary relations $I$, $F$, $X$.
-We also write $r \mathrel{Y^s} s'$ when $(s, r, s') \in Y$;
-this means that
-after an external state $s$ triggers a question in $A^\que$ % ($s \mathrel{X} m$),
-and the environment replies with an answer $r \in A^\ans$,
-the execution resumes with state $s'$.
-In other words,
-the trace
-\[
-  q \rightarrowtail
-  (q_1 \leadsto r_1) \rightarrowtail
-  \cdots \rightarrowtail
-  (q_n \leadsto r_n) \rightarrowtail
-  r
-\]
-is generated by a transition sequence
-\[
-  q \mathrel{I} s_0 \rightarrow^*
-  s_1 \mathrel{X} q_1 \leadsto
-  r_1 \mathrel{Y^{s_1}} s_1' \rightarrow^*
-  s_2 \mathrel{\cdots}
-  s_n \mathrel{X} q_n \leadsto
-  r_n \mathrel{Y^{s_n}} s_n' \rightarrow^*
-  s_f \mathrel{F} r
-\]
+%XXXXX
 
 Note that
 when $L : A \twoheadrightarrow B$
