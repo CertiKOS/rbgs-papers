@@ -494,21 +494,20 @@ can be incorporated into our framework as-is.
 
 %}}}
 
-\section{Overview of the Framework}\label{sec:overview} %{{{
+\section{Compositional Structures in CompCert Semantics} %{{{
 
-Our semantics framework builds on a line of work
-seeking to develop a practical compositional semantics
-for use in CompCert and related tools.
-In the first half of this section,
-we give a brief overview of this work,
-focusing in particular
-on the ways in which
-different kinds of objects and
-different composition principles
-fit with each other.
-Then, in the remainder of the section,
-we use this conceptual apparatus
-to introduce our contributions.
+Our semantics framework builds on an existing line of work
+which has developed
+compositional semantics for the certified compiler CompCert.
+Therefore,
+before we introduce our contributions in the following section,
+we begin by a mini-survey of this line of research.
+
+Our goal is twofold:
+in addition to providing the reader with relevant background,
+we place a particular emphasis on the high-level ``shape''
+of the compositional structures present in this work,
+and outline a conceptual framework in which they can be understood.
 
 \subsection{Semantics in CompCert} %{{{
 
@@ -520,9 +519,9 @@ To give a specification for a compiler,
 we must first give a syntax and semantics
 for both its source and target languages.
 Indeed,
-the formal development which accompanies
+the mathematical development which accompanies
 CompCert's executable code
-includes a formalization for the C dialect Clight
+includes a formalization for the source language Clight
 and assembly languages (Asm) for its various target architectures.
 
 \paragraph{Transition Systems}
@@ -560,23 +559,25 @@ The states used by the Asm semantics
 are simpler and consist only of the register and memory states.
 CompCert also defines syntax and semantics for
 various intermediate languages used by the compiler---%
-these are not part of the specification but are used in the construction of the proof.
+these are not part of the specification
+but are used in the construction of the proof.
 
 We should note that the discussion above glosses over important technical details.
 CompCert uses transition labels to model interaction with the operating system,
 uses nondeterminism to capture behaviors underspecified by the C standard,
 and takes special care to handle infinite executions.
-These facilities are also present in our framework,
-but they present no particular challenge and
-are orthogonal to the issues of interest,
+These facilities are retained in subsequent work,
+including our own,
+but they are orthogonal to the issues of interest
+and introduce no new challenges,
 so we will not discuss them further.
 
 \paragraph{Simulations}
 
 Having described the behavior of source and target programs,
-the correctness statement for CompCert must establish a relationship between them.
+we must state their relationship.
 In its original and simplest form,
-the correctness theorem of CompCert is stated as
+the correctness theorem of CompCert is given as
 \begin{equation}
     \kw{CompCert}(p) = p'
     \quad\Longrightarrow\quad
@@ -592,20 +593,21 @@ then the semantics of this target program must
 
 Given the transition systems $L_1$ and $L_2$,
 a simulation between them is a relation $\rho \subseteq S_1 \times S_2$
-between the states of the source transition system $L_1$
-and the states of the target transition system $L_2$.
-This relation must satisfy several conditions,
-such that every execution of $L_1$ gives rise
+between the states of the source $L_1$
+and the states of the target $L_2$.
+This relation must satisfy several conditions
+which ensure that
+every execution of $L_1$ gives rise
 to a corresponding execution of $L_2$:
 \begin{itemize}
   \item there is for every source initial state $s_1 \in I_1$
-    a related target initial state $s_1 \mathrel\rho s_2 \in I_2$;
+    a related target initial state ($s_1 \mathrel\rho s_2 \in I_2$);
   \item for related states $s_1 \mathrel\rho s_2$,
     a source transition sequence $s_1 \rightarrow_1^* s_1'$ must be matched by
     a target transition sequence $s_2 \rightarrow_2^* s_2'$ such that
     the resulting states $s_1' \mathrel\rho s_2'$ are again related;
   \item for related states $s_1 \mathrel\rho s_2$,
-    if $s_1$ is final with outcome $x$,
+    if $s_1$ is final in $L_1$ with outcome $x$,
     then $s_2$ must be as well.
 \end{itemize}
 We will write $\rho : L_1 \le L_2$ when these conditions are satisfied,
@@ -618,20 +620,21 @@ CompCert is a fairly complex piece of software,
 and verifying its correctness was a challenging undertaking.
 The key to that achievement was the compositionality of simulation proofs.
 CompCert consists of a dozen compilation and optimization phases,
-which successively transform $p$ into $p'$:
+which progressively transform $p$ into $p'$:
 \[
   p = p_0 \longmapsto p_1 \longmapsto \cdots \longmapsto p_n = p'
 \]
 To derive the correctness theorem,
 a simulation proof can be established for each phase:
-\[
+\begin{equation}
   \kw{Clight}[p] \:=\:
   \kw{Clight}[p_0] \:\le\: \kw{C\#minor}[p_1] \:\le\: \cdots \:\le\: \kw{Asm}[p_n]
   \:=\: \kw{Asm}[p']
-\]
-When the target $L_2$ of a simulation relation $\pi : L_1 \le L_2$
-coincides with the source of another $\rho : L_2 \le L_3$,
-then the two can be combined, and the composite $\pi \mathbin; \rho$
+  \label{eqn:corrsteps}
+\end{equation}
+When the target $L_2$ of a simulation $\pi : L_1 \le L_2$
+is the source of a simulation $\rho : L_2 \le L_3$,
+the two can be combined, and the composite $\pi \mathbin; \rho$
 is in turn a simulation relation:
 \[
   \begin{prooftree}
@@ -640,20 +643,17 @@ is in turn a simulation relation:
     \infer2{(\pi \mathbin; \rho) : L_1 \le L_3}
   \end{prooftree}
 \]
-Using this principle,
-CompCert's per-phase simulation proofs outlined above
-can be combined to obtain the correctness property (\ref{eqn:ccc-wp}).
+This allows
+the successive simulation proofs in (\ref{eqn:corrsteps})
+to be combined into the correctness property (\ref{eqn:ccc-wp}).
 
 \paragraph{A Geometric Analogy}
 
-The principles outlined above are well-known,
-and the use of the transitivity of $\le$
-may seem so standard that it is barely worth noting.
-However we would like to invite the reader
-to take a moment to consider the high-level
+At this point we invite the reader
+to consider the high-level
 algebra of composition that
 transition systems and simulations conform to.
-In what we have described above:
+In what is described above:
 \begin{itemize}
   \item Transition systems are 0-dimensional objects,
     akin to the vertices of a graph or
@@ -661,12 +661,12 @@ In what we have described above:
     They do not compose
     but provide basic ``types'' for simulations.
   \item Simulations are 1-dimensional objects,
-    in the sense that they can be connected
-    with each other along 0-dimensional boundaries
+    similar to edges or paths,
+    in the sense that they connect
+    and they link with each other along 0-dimensional boundaries
     (their endpoints).
-    They are similar to edges or paths.
 \end{itemize}
-Seen in this way,
+In this interpretation,
 proving CompCert correct
 boils down to constructing a simulation path
 from the source to the target semantics.
@@ -677,42 +677,42 @@ Algebraically speaking,
 we have described a
 \emph{category} of transition systems and simulation relations.
 
-As illustrated in Figure~\ref{fig:pasting},
+As illustrated in Fig.~\ref{fig:pasting},
 as we incorporate more composition principles into the framework,
-the dimensionality of the systems we consider
-and of the correctness proofs we wish to construct
-will increase accordingly.
+the dimensionality of systems and simulation proofs will increase
+(our work will turn simulations into 3-dimensional objects).
 The principle will remain, however,
 that objects of dimension $n+1$ can be connected
 alongside a boundary of dimension $n$.
 
-Ultimately,
-horizontal and spatial composition
-will turn simulation proofs into 3-dimensional objects.
-An important starting point for our work
-will be to provide a rigorous account of the way
-these different composition principles interact,
-and to introduce tools such as string diagrams
-which can help leverage the physical intuitions
-outlined above to deal with the complexity
-of the objects we manipulate.
-\emph{Category theory} provides a systematic study
-of compositional structures of this kind
-\citep{rosetta},
-and our approach draws heavily from it.
-However,
-to the extent possible,
-in our exposition we have tried to avoid
-assuming familiarity with category theory
-on the reader's part.
+%Ultimately,
+%horizontal and spatial composition
+%will turn simulation proofs into 3-dimensional objects.
+%An important starting point for our work
+%will be to provide a rigorous account of the way
+%these different composition principles interact,
+%and to introduce tools such as string diagrams
+%which can help leverage the physical intuitions
+%outlined above to deal with the complexity
+%of the objects we manipulate.
+%\emph{Category theory} provides a systematic study
+%of compositional structures of this kind
+%\citep{rosetta},
+%and our approach draws heavily from it.
+%However,
+%to the extent possible,
+%in our exposition we have tried to avoid
+%assuming familiarity with category theory
+%on the reader's part.
 
 %}}}
 
 \begin{figure} % fig:pasting {{{
   \text{(a)}
-  \begin{tikzcd}
-    \kw{Clight}[p_0] \ar[d, "\rho", Rightarrow] \\
-    \kw{RTL}[p_i] \ar[d, "\pi", Rightarrow] \\
+  \begin{tikzcd}[row sep=3ex]
+    \kw{Clight}[p_0] \ar[d, "\pi_1", Rightarrow] \\
+    \kw{C\#minor}[p_1] \ar[d, "\pi_2", Rightarrow] \\
+    \vdots \ar[d, "\pi_n", Rightarrow] \\
     \kw{Asm}[p_n]
   \end{tikzcd}
   \qquad
@@ -800,27 +800,23 @@ on the reader's part.
 
 \subsection{Semantics in Compositional CompCert}
 
-One limitation of the original CompCert was that
-its semantics and correctness theorem
-only applied to whole programs.
-In practice, compilers act on individual translation units,
-which are then linked together to produce the final executable program.
+A limitation of the framework described above
+is that semantics only characterize the behavior of whole programs.
+However, compilers usually act on individual translation units
+which are only part of a larger program.
 For example,
 Figure~\ref{fig:code} shows two C translation units.
 CompCert can be used to compile them
 but the correctness property (\ref{eqn:ccc-wp})
-does not account for this situation and
-cannot be used to derive guarantees about the result.
+does not account for this situation.
 
 \paragraph{Transition Systems}
 
 To address this issue,
 Compositional CompCert \cite{compcompcert}
-modifies the semantic model
-used in CompCert's proofs.
-Transition systems are redefined so that they
-characterize the behavior of individual compilation units,
-and model function calls across different components:
+uses an extended definition of transition system
+in order to
+characterize the behavior of individual compilation units:
 \begin{itemize}
 \item
 To initialize a transition system,
@@ -869,52 +865,53 @@ The components of a transition system are now:
 \end{equation}
 
 Under this new definition of transition system,
-it becomes possible to define a \emph{semantic linking} operator $\oplus$
+it becomes possible to define a \emph{semantic linking} operator
 to model the interaction between different components.
 Specifically,
 in the transition system $L_1 \oplus L_2$,
 whenever $L_1$ makes an external call
 to a function provided by $L_2$ (and vice versa),
-a new instance of $L_2$ is instantiated to handle the call,
-executes until a final state of $L_2$ is reached,
-at which point the execution's outcome is used to resume
+a new instance of $L_2$ is instantiated to handle the call.
+$L_2$ executes until it reaches a final state,
+at which point the outcome of its execution is used to resume
 the suspended execution of $L_1$.
 
 \paragraph{Horizontal Compositionality}
 
 Compositional CompCert's semantic linking
-is a form of \emph{horizontal} composition
-as understood in the context of compositional compiler correctness:
-it makes it possible to describe the semantics of programs
+is a form of \emph{horizontal} composition,
+as understood in the context of compositional compiler correctness.
+It can model the semantics of programs
 which are constructed from several translation units,
 so that for example the overall behavior of the code in Fig.~\ref{fig:code}
-can be described as:
-\[
+can be described as
+$
   \kw{Clight}(\kw{rb.c}) \oplus \kw{Clight}(\kw{bq.c})
-\]
-Note that we use round parentheses to denote
-the \emph{open} nature of the transition system $\kw{Clight}(-)$
-as opposed to the closed, whole-program semantics $\kw{Clight}[-]$
-used in the original CompCert.
-
+$.%
+\footnote{%
+  Here we use round parentheses to denote
+  the \emph{open} nature of the transition system $\kw{Clight}(-)$
+  as opposed to the closed, whole-program semantics $\kw{Clight}[-]$
+  used in the original CompCert.}
 Horizontal composition turns transition systems into 1-dimensional objects.
-Unlike simulations,
+However, unlike simulations,
 transition systems are untyped and
 do not need to agree on a common endpoint to be composed.
-An equivalent convention (used in Fig.~\ref{fig:pasting}b)
-is to consider them ``loops'' of type ${\bullet} \rightarrow {\bullet}$
-over a trivial 0-dimensional endpoint $\bullet$.
-Simulations now connect 1-dimensional transition systems,
-and therefore they in turn become 2-dimensional objects.
+We can in fact consider them ``loops'' of type ${\bullet} \rightarrow {\bullet}$
+over a trivial 0-dimensional endpoint.
+%as in Fig.~\ref{fig:pasting}b.
+
+Because simulations now connect 1-dimensional transition systems,
+they become 2-dimensional objects.
 As before,
-simulations compose vertically when the target transition system of one
+they compose vertically when the target transition system of one
 matches the source transition system of the other.
 But simulations now compose horizontally as well,
 as established by the following core property
-of the semantic model of Compositional CompCert:
+of the semantic linking operator:
 \[
   \begin{tikzcd}[row sep=tiny, column sep=small]
-    & {} \ar[dd, Rightarrow, "\rho_1"] & & {} \ar[dd, Rightarrow, "\rho_2"] \\
+    & {} \ar[dd, Rightarrow, "\pi_1"] & & {} \ar[dd, Rightarrow, "\pi_2"] \\
     \bullet \ar[rr, bend left=40, "L_1", dash]
             \ar[rr, bend right=40, "L_1'"', dash] & &
     \bullet \ar[rr, bend left=40, "L_2", dash]
@@ -924,13 +921,13 @@ of the semantic model of Compositional CompCert:
   \end{tikzcd}
   \qquad
   \begin{prooftree}
-     \hypo{\rho_1 : L_1 \le L_1'}
-     \hypo{\rho_2 : L_2 \le L_2'}
-     \infer2{\rho_1 \oplus \rho_2 : L_1 \oplus L_2 \le L_1' \oplus L_2'}
+     \hypo{\pi_1 : L_1 \le L_1'}
+     \hypo{\pi_2 : L_2 \le L_2'}
+     \infer2{\pi_1 \oplus \pi_2 : L_1 \oplus L_2 \le L_1' \oplus L_2'}
   \end{prooftree}
   \qquad
   \begin{tikzcd}[row sep=tiny]
-    & {} \ar[dd, Rightarrow, "\rho_1 \oplus \rho_2"] & \\
+    & {} \ar[dd, Rightarrow, "\pi_1 \oplus \pi_2"] & \\
     \bullet
       \ar[rr, bend left, "L_1 \oplus L_2", dash]
       \ar[rr, bend right, "L_1' \oplus L_2'"', dash] & &
@@ -939,20 +936,44 @@ of the semantic model of Compositional CompCert:
     & {} &
   \end{tikzcd}
 \]
+Formally,
+the additional compositional structure present in Compositional CompCert
+can be characterized as a (symmetric) monoidal structure.
+This means $\oplus$ acts on both transition systems and simulation relations,
+and behaves as a \emph{functor} with respect to simulation relations:
+\[
+  \kw{id}_{L_1} \oplus \kw{id}_{L_2} = \kw{id}_{L_1 \oplus L_2}
+  \qquad
+  (\pi_1 \mathbin; \rho_1) \oplus (\pi_2 \mathbin; \rho_2) = 
+  (\pi_1 \oplus \pi_2) \mathbin; (\rho_1 \oplus \rho_2)
+\]
+In addition, there are reversible simulations (ie.~isomorphisms)
+with the following types:
+\[
+  \lambda_L : I \oplus L \cong L
+  \qquad
+  \rho_L : L \oplus I \cong L
+  \qquad
+  \alpha_{L_1,L_2,L_3} :
+    (L_1 \oplus L_2) \oplus L_3 \cong
+    L_1 \oplus (L_2 \oplus L_3) \,,
+\]
+where $I$ is
+a trivial component which does not provide any function.
 
 \begin{example}
-The example given in Fig.~\ref{fig:pasting}b
+Figure~\ref{fig:pasting}b
 illustrates how this compositional algebra can be used.
-To capture the operation of the code in Fig.~\ref{fig:code},
-we can formulate a specification
+A simple transition system $L_\kw{bq}$ serves as specification
 for the bounded queue operations $\kw{enq}$ and $\kw{deq}$
-as a simple transition system $L_\kw{bq}$,
-the show that $\kw{bq.c}$ and $\kw{rb.c}$
-together implement $L_\kw{bq}$ using a simulation
-\[
-  \pi \::\: L_\kw{bq}
-    \:\le\: \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
-\]
+implemented by the code in Fig.~\ref{fig:code}.
+The simulation
+$
+  \pi : L_\kw{bq}
+    \le \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
+$
+shows that the combination of $\kw{bq.c}$ and $\kw{rb.c}$
+implements $L_\kw{bq}$.
 To transfer this correctness guarantee to the compiled code,
 we can obtain from the compiler's correctness proof the simulations
 $\rho_1 : \kw{Clight}(\kw{bq.c}) \le \kw{Asm}(\kw{bq.s})$ and
@@ -968,21 +989,53 @@ we can derive
 Moreover, for any additional component $C$,
 the simulation $\kw{id}_C : C \le C$ can be adjoined
 to obtain
-\[
+\begin{equation}
   \kw{id}_C \oplus (\pi \mathbin; (\rho_1 \oplus \rho_2))
   \::\:
   C \oplus L_\kw{bq}
   \:\le\:
   C \oplus \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
-\]
+  \label{eqn:ccex}
+\end{equation}
 In other words,
-properties such as (\ref{eqn:cex}) induce contextual refinement.
+properties such as (\ref{eqn:cex})
+can lift to an arbitrary context.
 \end{example}
 
-\paragraph{String Diagrams}
+\subsection{String Diagrams}
 
-[This is a symmetric monoidal category.
-Any such admits string diagram notation.]
+As morphisms of a monoidal category,
+simulations in Compositional CompCert
+admit a \emph{string diagram} notation.
+A simulation relation
+$
+  \phi : L_1 \oplus L_2 \oplus \cdots \oplus L_n \le
+        L_1' \oplus L_2' \cdot \cdots \oplus L_m'
+$
+is depicted as:
+\[
+  \includegraphics[scale=0.1]{pr/phi}
+\]
+The diagram above uses the single node $\phi$
+as the entire simulation proof,
+but diagrams with more complex internal structures
+can be used to denote composite simulation relations:
+\begin{itemize}
+\item
+The vertical composition of two simulations diagrams
+can be obtained by connecting the output wires of the first
+to the input wires of the second.
+\item
+Likewise,
+the horizontal juxtaposition of two diagrams
+can be used to denote the horizontal composition
+of the corresponding simulations.
+\end{itemize}
+Using these conventions,
+the simulation relation (\ref{eqn:ccex}) above can be depicted as:
+\[
+  \includegraphics[scale=0.07]{ccex}
+\]
 
 \subsection{Semantics in CompCertO} %{{{
 
@@ -1250,6 +1303,10 @@ but it makes outgoing calls which may have that effect:
 This is fine for CompCertO, we just need to make things work
 with minimal effort.
 But for a general-purpose framework it is a problem.]
+
+%}}}
+
+\section{Overview of the Framework}\label{sec:overview} %{{{
 
 \begin{table} % tbl:roadmap -- Roadmap and notations {{{
   \caption{
