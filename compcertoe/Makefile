@@ -2,7 +2,7 @@ MAIN = compcertoe
 
 $(MAIN).pdf: $(MAIN).bbl
 
-%.bbl:
+%.bbl: ALWAYS
 	pdflatex -shell-escape $*
 	bibtex $*
 
@@ -26,4 +26,5 @@ clean:
 	rm -rf _minted-$(MAIN)
 
 .PRECIOUS: %.aux %.aux~
+ALWAYS:
 
