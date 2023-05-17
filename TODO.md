@@ -14,13 +14,47 @@
 
   - Rewrite Sec. 3
 
+    - Outline
+
+      - Layered composition
+
+        - [ ] Description
+
+        - [ ] Simulations
+
+        - [ ] Double category
+
+        - [ ] String diagrams
+
+        - [ ] Companions and conjoint
+
+      - Spatial composition
+
+        - [ ] Motivation
+
+        - [ ] Adjoining state
+
+        - [ ] Lenses
+
+        - [ ] Simulation conventions
+
+        - [ ] String diagrams
+
+      - [ ] Memory separation
+
+      - [ ] Encapsulation
+
+      - Applications
+
+        - [ ] ClightP
+
+        - [ ] CAL
+
     - [ ] Remove obsolete things
 
     - Add back missing things
 
-      - [ ] Create outline
-
-      - [ ] 
+      - [ ] Explain SD for LTS, SC
 
     - [ ] Tweak/redistribute Sec. 2.4
 
@@ -52,27 +86,29 @@
 
 # Unusedglob
 
-  - Attempt within CompCertO
+  - Attempt with existing CompCertO
 
-    - Something will break
+    - [ ] Figure out what breaks
 
-    - Figure out precisely what
-
-    - Write down document
+    - [ ] Write down document
 
   - New approach to Genv
 
-    - Revert to upstream Globalenv.v
+    - [ ] Revert to upstream Globalenv.v
 
-    - Add new constructor with Senv.t oracle
+    - [ ] Add new constructor with Senv.t oracle
 
-    - Add back whatever else CompCertO needs
+    - [ ] Fix what breaks in common code
+
+    - [ ] Fix a simple pass to validate
 
   - Update Unusedglob proof
 
+    - [ ] Update any needed dependencies (reachability analysis?)
+
     - Simulation convention
 
-      - Can injp/inj be made to fit?
+      - [ ] Can injp/inj be made to fit?
 
-    - Update proof
+    - [ ] Update proof
 
