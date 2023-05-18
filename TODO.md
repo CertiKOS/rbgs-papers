@@ -16,7 +16,7 @@
 
     - Outline
 
-      - Layered composition
+      - Layered composition [5/19]
 
         - [ ] Description
 
@@ -26,7 +26,7 @@
 
         - [ ] String diagrams
 
-        - [ ] Companions and conjoint
+        - [ ] Companions and conjoints
 
       - Spatial composition
 
@@ -50,13 +50,9 @@
 
         - [ ] CAL
 
-    - [ ] Remove obsolete things
-
-    - Add back missing things
-
-      - [ ] Explain SD for LTS, SC
-
     - [ ] Tweak/redistribute Sec. 2.4
+
+    - [ ] Explain (+) as fixpoint, approximated by (.)
 
     - Better treatment of companion / conjoint
 
@@ -86,7 +82,7 @@
 
 # Unusedglob
 
-  - Attempt with existing CompCertO
+  - Attempt with existing CompCertO [5/19]
 
     - [ ] Figure out what breaks
 
