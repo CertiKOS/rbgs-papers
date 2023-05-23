@@ -18,17 +18,17 @@
 
       - Layered composition [5/19]
 
-        - [ ] Description
+        - [x] Description
 
-        - [ ] Simulations
+        - [x] Simulations
 
-        - [ ] Double category
+        - [x] Double category
 
-        - [ ] String diagrams
+        - [x] String diagrams
 
-        - [ ] Companions and conjoints
+        - [x] Companions and conjoints
 
-      - Spatial composition
+      - Spatial composition [5/23]
 
         - [ ] Motivation
 
@@ -50,27 +50,31 @@
 
         - [ ] CAL
 
-    - [ ] Tweak/redistribute Sec. 2.4
+    - Other tasks
 
-    - [ ] Explain (+) as fixpoint, approximated by (.)
+      - [ ] Tweak/redistribute Sec. 2.4
 
-    - Better treatment of companion / conjoint
+      - [ ] Explain (+) as fixpoint, approximated by (.)
 
-      - [ ] Before encapsulation
+      - Better treatment of companion / conjoint
 
-      - [ ] Explain *_mem
+        - [ ] Before encapsulation
 
-    - Add summary of compositional structure
+        - [ ] Explain *_mem
 
-      - [ ] New treatment of active vs. passive
+      - Add summary of compositional structure
 
-      - [ ] 3D string diagram
+        - [ ] 3D string diagram
+
+        - [ ] New treatment of active vs. passive
 
   - ClightP improvements
 
     - [ ] Frame as an application
 
     - [ ] Use the simpler proof Clight(M)@m*
+
+  - [ ] Make sure examples thread nicely / are complete but not redundant
 
   - Discuss more related work
 
