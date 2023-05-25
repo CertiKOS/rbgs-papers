@@ -14,7 +14,7 @@
 
   - Rewrite Sec. 3
 
-    - Outline
+    - Follow this outline [5/26]
 
       - Layered composition [5/19]
 
@@ -30,13 +30,13 @@
 
       - Spatial composition [5/23]
 
-        - [ ] Motivation
+        - [x] Motivation
 
-        - [ ] Adjoining state
+        - [x] Adjoining state
 
-        - [ ] Lenses
+        - [x] Simulation conventions
 
-        - [ ] Simulation conventions
+        - [x] Lenses
 
         - [ ] String diagrams
 
@@ -88,7 +88,7 @@
 
   - Attempt with existing CompCertO [5/19]
 
-    - [ ] Figure out what breaks
+    - [x] Figure out what breaks
 
     - [ ] Write down document
 
