@@ -40,7 +40,7 @@
 
         - [ ] String diagrams
 
-      - [ ] Memory separation
+      - [x] Memory separation
 
       - [ ] Encapsulation
 
