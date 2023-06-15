@@ -10,6 +10,7 @@
 \usepackage{tikz-cd}
 \usepackage{subcaption}
 \usetikzlibrary{patterns}
+\usetikzlibrary{shapes}
 %}}}
 
 % Parameters {{{
@@ -1722,18 +1723,38 @@ enumerated in \S\ref{sec:req}.
 \end{figure}
 %}}}
 
-\section{Our Framework}\label{sec:overview} %{{{
+\section{Compositional Semantics for Verification} \label{sec:overview} %{{{
 
 % Preamble {{{
 
-We now present an overview of our verification framework.
-We first
-augment the semantic model of CompCertO
-with \emph{layered composition} (\S\ref{sec:overview:lcomp})
-as a more fundamental form of horizontal composition.
-Then we
-introduce an additional dimension of \emph{spatial compositionality},
-acting on disjoint components of the state.
+Our goal is to augment CompCertO semantics
+with general-purpose algebraic tools
+for verification.
+We proceed in three steps.
+First,
+introducing layered composition (\S\ref{sec:overview:lcomp})
+equips the CompCertO model with
+a much simpler a more uniform composition algebra.
+
+The second step is to add a new dimension of compositionality:
+spatial composition,
+which allows global state to be decomposed
+into various components (\S\ref{sec:overview:scomp}).
+This makes it possible to express
+abstract specifications and manage
+patterns such as certified abstraction layers.
+At the same time,
+our infrastructure makes it possible to
+reconcile this abstract view of compositional state
+with the concrete CompCert memory model (\S\ref{sec:overview:sepalg}).
+
+Finally,
+our compositional and principled treatment of global state
+makes it fairly easy to construct
+a version of the model supporting encapsulation (\S\ref{sec:overview:encap}).
+As one application,
+we showcase a version of the Clight language
+with support for module-local private variables (\S\ref{sec:overview:app}).
 
 %}}}
 
@@ -1741,30 +1762,30 @@ acting on disjoint components of the state.
 
 % Description {{{
 
-The semantic linking operator
+As discussed in \S\ref{sec:survey:compcerto},
+the restriction of semantic linking
 $
   {\oplus}_A : (A \twoheadrightarrow A) \times (A \twoheadrightarrow A)
   \rightarrow (A \twoheadrightarrow A)
 $
-is limited to \emph{homogeneous} components.
-As discussed in \S\ref{sec:compcerto-limitations},
-this is at odds with
+to \emph{homogeneous} components
+is at odds with
 CompCertO's multiplicity of language interfaces.
 By contrast,
-the more fundamental \emph{layered composition} operator
-introduced in \S\ref{sec:base},
+the \emph{layered composition} operator
+introduced in \S\ref{sec:base}
+is more fundamental and more flexible:
 \[
   {\odot}_{A,B,C} :
     (B \twoheadrightarrow C) \times
     (A \twoheadrightarrow B) \rightarrow
     (A \twoheadrightarrow C)
-  \,,
+  \,.
 \]
-models only interaction over the language interface $B$.
-As depicted in \autoref{fig:overview:ts:comp},
-in $L_1 \odot L_2$
-incoming calls in $C$ activate $L_1$,
-the outgoing calls of $L_1$ in $B$ are handled by $L_2$, and
+The transition system $L_1 \odot L_2$,
+is depicted in \autoref{fig:overview:ts:comp}.
+Incoming calls in $C$ activate $L_1$.
+The outgoing calls of $L_1$ in $B$ are then handled by $L_2$, and
 the outgoing calls of $L_2$ in $A$
 are directed back to the environment.
 The identity $\kw{id}_A : A \twoheadrightarrow A$
@@ -1781,50 +1802,6 @@ simply passes calls through.
 %depicted in \autoref{fig:overview:ts:id},
 %which echoes the incoming question as an outgoing one
 %and propagates the answer back to the caller.
-
-\begin{example} % composing bq.c, rb.c {{{
-XXX fix this later
-
-\begin{color}{gray}
-In Example~\ref{ex:oplus-limitations}
-we noted that the bounded queue code of Fig.~\ref{fig:code}
-could be given a specification of type
-$L_\kw{bq} : \top \twoheadrightarrow \mathcal{C}_\kw{m}$
-to express 
-,
-consider the context code:
-\[
-  C \::=\: \kw{Clight}\big(\text{``}\,
-\begin{minipage}{13em}
-\begin{minted}{C}
-void rot() { enq(deq()); }
-\end{minted}
-\end{minipage}
-  \,\text{''}\big) \::\:
-  \mathcal{C}_\kw{m}
-  \twoheadrightarrow
-  \mathcal{C}_\kw{m}
-\]
-
-The Clight semantics of $\kw{bq.c}$ and $\kw{rb.c}$
-compose as:
-\[
-  \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c})
-  :
-  \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
-  %\mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
-  %\mathcal{C} \mathbin@ \kw{mem}
-\]
-The transition system above generates traces such as
-\[
-  \kw{deq}()@m[\kw{c1}\mapsto 1, \kw{buf}\mapsto\{a,b,c,\ldots\}]
-  \:\rightarrowtail\:
-  b@m[\kw{c1} \mapsto 2, \kw{buf} \mapsto \{a, b, c, \ldots\}]
-  \,.
-\]
-\end{color}
-\end{example}
-%}}}
 
 Because $\odot$ connects transition systems
 alongside one endpoint only
@@ -1940,12 +1917,363 @@ When the corresponding boundaries match,
 diagrams can be connected horizontally or vertically
 in a way that corresponds to (\ref{eqn:hvcomp}).
 
-\begin{example} \label{ex:compcerto-sd}
-\autoref{fig:compcerto}b
-shows a composite simulation proof in string diagram notation.
-[Refer to earlier example and explain]
-\end{example}
+%}}}
 
+\begin{figure} % fig:compcerto {{{
+  \text{(a)}
+  \quad
+  \raisebox{-0.5\height}{\begin{tikzpicture}[xscale=0.2,yscale=0.16]
+    \footnotesize
+    \newcommand{\filltint}{30}
+
+    % Coordinates
+    \path (0,0) coordinate (C)
+      (-3,+5) coordinate (L1c) +(0,+4) coordinate (L1)
+      (-1,+5) coordinate (L2c) +(0,+4) coordinate (L2)
+      (+3,+5) coordinate (Lnc) +(0,+4) coordinate (Ln)
+      (+5, 3) coordinate (S1c) +(+4,0) coordinate (S1)
+      (+5, 1) coordinate (S2c) +(+4,0) coordinate (S2)
+      (+5,-3) coordinate (Snc) +(+4,0) coordinate (Sn)
+      (-3,-5) coordinate (M1c) +(0,-4) coordinate (M1)
+      (-1,-5) coordinate (M2c) +(0,-4) coordinate (M2)
+      (+3,-5) coordinate (Mnc) +(0,-4) coordinate (Mn)
+      (-5, 3) coordinate (R1c) +(-4,0) coordinate (R1)
+      (-5, 1) coordinate (R2c) +(-4,0) coordinate (R2)
+      (-5,-3) coordinate (Rnc) +(-4,0) coordinate (Rn)
+      ;
+
+    % Background regions
+    \fill[ACMBlue!\filltint] (C)
+      [rounded corners] -- (L1c)
+      [sharp corners] -- (L1) -- (L2)
+      [rounded corners] -- (L2c)
+      [sharp corners] -- cycle;
+    \fill[ACMLightBlue!\filltint] (C)
+      [rounded corners] -- (Lnc)
+      [sharp corners] -- (Ln) -| (S1)
+      [rounded corners] -- (S1c)
+      [sharp corners] -- cycle;
+    \fill[ACMGreen!\filltint] (C)
+      [rounded corners] -- (S2c)
+      [sharp corners] -- (S2) -- (S1)
+      [rounded corners] -- (S1c)
+      [sharp corners] -- cycle;
+    \fill[ACMYellow!\filltint] (C)
+      [rounded corners] -- (Mnc)
+      [sharp corners] -- (Mn) -| (Sn)
+      [rounded corners] -- (Snc)
+      [sharp corners] -- cycle;
+    \fill[ACMOrange!\filltint] (C)
+      [rounded corners] -- (M1c)
+      [sharp corners] -- (M1) -- (M2)
+      [rounded corners] -- (M2c)
+      [sharp corners] -- cycle;
+    \fill[ACMRed!\filltint] (C)
+      [rounded corners] -- (M1c)
+      [sharp corners] -- (M1) -| (Rn)
+      [rounded corners] -- (Rnc)
+      [sharp corners] -- cycle;
+    \fill[ACMPurple!\filltint] (C)
+      [rounded corners] -- (R2c)
+      [sharp corners] -- (R2) -- (R1)
+      [rounded corners] -- (R1c)
+      [sharp corners] -- cycle;
+    \fill[ACMDarkBlue!\filltint] (C)
+      [rounded corners] -- (L1c)
+      [sharp corners] -- (L1) -| (R1)
+      [rounded corners] -- (R1c)
+      [sharp corners] -- cycle;
+
+    % Region labels
+    \begin{scope}[opacity=0.66,outer sep=1pt]
+      \tiny
+
+      % Language interfaces
+      \path (R1) |- node[below right] {$Z_0$} (L1);
+      \path (R1) -- node[right] {$Z_1$} (R2);
+      \path (Rn) |- node[above right] {$Z_l$} (M1);
+      \path (M1) -- node[above] {$Y'$} (M2);
+      \path (Mn) -| node[above left] {$A_k$} (Sn);
+      \path (L1) -- node[below] {$Y$} (L2);
+      \path (Ln) -| node[below left] {$A_0$} (S1);
+      \path (S1) -- node[left] {$A_1$} (S2);
+
+      % Dot dot
+      \path (L2) -- node[below,yshift=-2pt] {$\cdots$} (Ln);
+      \path (S2) -- node[left,yshift=3pt,xshift=-2pt] {$\vdots$} (Sn);
+      \path (M2) -- node[above] {$\cdots$} (Mn);
+      \path (R2) -- node[right,yshift=3pt,xshift=2pt]  {$\vdots$} (Rn);
+    \end{scope}
+
+    % Strings
+    \begin{scope}
+      \draw (C)
+        [rounded corners] -- (L1c)
+        [sharp corners] -- (L1) node[above] {$L_1$};
+      \draw (L2) node[above] {$L_2$}
+        [rounded corners] -- (L2c)
+        [sharp corners] -- (C);
+      \draw (C)
+        [rounded corners] -- (Lnc)
+        [sharp corners] -- (Ln) node[above] {$L_n$};
+      \draw (C)
+        [rounded corners] -- (Mnc)
+        [sharp corners] -- (Mn) node[below] {$L'_m$};
+      \draw (M2) node[below] {$L'_2$}
+        [rounded corners] -- (M2c)
+        [sharp corners] -- (C);
+      \draw (C)
+        [rounded corners] -- (M1c)
+        [sharp corners] -- (M1) node[below] {$L'_1$};
+    \end{scope}
+    \begin{scope}%[thick]
+      \draw (S1) node[right] {$\mathbf{R}_1$}
+        [rounded corners] -- (S1c)
+        [sharp corners] -- (C);
+      \draw (C)
+        [rounded corners] -- (S2c)
+        [sharp corners] -- (S2) node[right] {$\mathbf{R}_2$};
+      \draw (Sn) node[right] {$\mathbf{R}_k$}
+        [rounded corners] -- (Snc)
+        [sharp corners] -- (C);
+      \draw (R1) node[left] {$\mathbf{S}_1$}
+        [rounded corners] -- (R1c)
+        [sharp corners] -- (C);
+      \draw (C)
+        [rounded corners] -- (R2c)
+        [sharp corners] -- (R2) node[left] {$\mathbf{S}_2$};
+      \draw (Rn) node[left] {$\mathbf{S}_l$}
+        [rounded corners] -- (Rnc)
+        [sharp corners] -- (C);
+    \end{scope}
+
+    % Node
+    \node[draw,fill=white,circle,inner sep=2pt] at (C) {$\phi$};
+
+  \end{tikzpicture}}
+  \qquad
+  \text{(b)}
+  \quad
+  \raisebox{-0.5\height}{\begin{tikzpicture}[xscale=0.85,yscale=0.5]
+    \footnotesize
+    \newcommand{\filltint}{30}
+
+    % Background regions
+    \fill[ACMBlue!\filltint]
+      (-3, 0)
+      [rounded corners] -- (2,0)
+      [sharp corners] -- (3,1)
+      [rounded corners] -- (2,2)
+      [sharp corners] -- (0,2) -- (0,3) -| cycle;
+    \fill[ACMRed!\filltint]
+      (-3, 0)
+      [rounded corners] -- (2,0)
+      [sharp corners] -- (3,1) -- (4,1) -- (4,-3) -| cycle;
+    \fill[pattern=crosshatch,opacity=0.15]
+      (4,1) -- (3,1)
+      [rounded corners] -- (2,2)
+      [sharp corners] -| (0,3) -| cycle;
+
+    % Region labels
+    \begin{scope}[opacity=0.66,outer sep=1pt]
+      \tiny
+      \node[below right] at (-3,3) {$\mathcal{C}_\kw{m}$};
+      \node[below left] at (4,3) {$\top$};
+      \node[above right] at (-3,-3) {$\mathcal{A}_\kw{m}$};
+      \node[above left] at (4,-3) {$\mathcal{A}_\kw{m}$};
+    \end{scope}
+
+    % Strings
+    \begin{scope}
+      % Transition systems
+      \draw (0,3) node[above] {$L_\kw{bq}$}
+         -- (0,2)
+         [rounded corners]
+         -- (-1, 1) node[left] {\tiny $\kw{Cilght}(\kw{bq.c})$}
+         -- (-1,-1) node[left] {\tiny $\kw{Asm}(\kw{bq.s})$}
+         [sharp corners]
+         -- (0,-2)
+         -- (0,-3) node[below] {$\kw{Asm}(\kw{bq.s} + \kw{rb.s})$};
+      \draw (0,2)
+         [rounded corners]
+         -- (1, 1) node[right] {\tiny $\kw{Cilght}(\kw{rb.c})$}
+         -- (1,-1) node[right] {\tiny $\kw{Asm}(\kw{rb.s})$}
+         [sharp corners]
+         -- (0,-2);
+      % Simulation conventions
+      \draw (-3,0) node[left] {$\mathbb{C}$}
+         [rounded corners] -- (2,0)
+         [sharp corners] -- (3,1) -- (4,1) node[right] {$\varnothing$};
+      \draw (0,2)
+         [rounded corners] -- node[above] {\tiny $\varnothing$} (2,2)
+         [sharp corners] -- (3,1);
+    \end{scope}
+
+    % Nodes
+    \begin{scope}[every node/.style={draw,fill=white,circle,inner sep=2pt}]
+       \node at (0,2) {$\phi$};
+       \node[inner sep=1pt] at (-1,0) {$\pi_\kw{bq}$};
+       \node[inner sep=1pt] at (+1,0) {$\pi_\kw{rb}$};
+       \node at (0,-2) {$\ell$};
+       \node at (3,1) {$z$};
+    \end{scope}
+  \end{tikzpicture}}
+%  \quad
+%  \text{(c)}
+%    \small
+%  \begin{tikzcd}[sep=1ex,row sep=0.5ex]
+%    \top
+%      \ar[rr, equal]
+%      \ar[dddd, leftrightarrow, "\varnothing"']
+%      &&
+%    \top
+%      \ar[dd, leftrightarrow, "\varnothing"']
+%      \ar[rrrr, "L_\kw{bq}"]
+%      &&&&
+%    \mathcal{C}_\kw{m}
+%      \ar[dd, equal]
+%    %  \ar[rr, "C"] &&
+%    %\mathcal{C}_\kw{m}
+%    %  \ar[dddddd, leftrightarrow, "\mathbb{C}"]
+%    \\
+%    &&&& \phi
+%    \\
+%    & z &
+%    \mathcal{C}_\kw{m}
+%      \ar[dd, leftrightarrow, "\mathbb{C}"]
+%      \ar[rr, "\kw{Clight}(\kw{rb.c})"] &&
+%    \mathcal{C}_\kw{m}
+%      \ar[dd, leftrightarrow, "\mathbb{C}"]
+%      \ar[rr, "\kw{Clight}(\kw{bq.c})"] &&
+%    \mathcal{C}_\kw{m}
+%      \ar[dd, leftrightarrow, "\mathbb{C}"]
+%    \\
+%    &&
+%    & \pi_1 & & \pi_2
+%    %&& \pi_C \!\!
+%    \\
+%    \mathcal{A}_\kw{m} \ar[rr, equal] \ar[dd, equal] &&
+%    \mathcal{A}_\kw{m} \ar[dd, equal] \ar[rr, "\kw{Asm}(\kw{rb.s})"'] &&
+%    \mathcal{A}_\kw{m} \ar[rr, "\kw{Asm}(\kw{bq.s})"'] &&
+%    \mathcal{A}_\kw{m} \ar[dd, equal]
+%    \\
+%    &  &&& \ell
+%    \\
+%    \mathcal{A}_\kw{m} \ar[rr, equal] &&
+%    \mathcal{A}_\kw{m} \ar[rrrr, "\kw{Asm}(\kw{rb+bq.s})"'] && &&
+%    \mathcal{A}_\kw{m} %\ar[rr, "C'"'] &&
+%    %\mathcal{A}_\kw{m}
+%  \end{tikzcd}
+  \caption{
+    Equipped with layered composition,
+    the CompCertO model constitutes a \emph{double category}
+    and as such admits a string diagram notation for its simulations.
+    Shown here are (a) the general form of such string diagrams and
+    (b) a string diagram for the simulation described in Example~\ref{ex:compcerto-sd}.}
+  \label{fig:compcerto}
+\end{figure}
+%}}}
+
+\begin{example} \label{ex:compcerto-sd} % composing bq.c, rb.c {{{
+
+Recall that in Example~\ref{ex:compcomp}
+the transition system $L_\kw{bq}$
+served as a specification for the code in Fig.~\ref{fig:code}.
+As a whole, this code
+accepts incoming calls but does not perform external calls.
+This can be reflected by giving the specification
+and correctness proof
+the types,
+shown in Fig.~\ref{fig:compcerto}b,
+\[
+  L_\kw{bq} : \top \twoheadrightarrow \mathcal{C}_\kw{m}
+  \qquad
+  \text{and}
+  \qquad
+  \phi :
+  L_\kw{bq} \le_{\varnothing \twoheadrightarrow \mathcal{C}_\kw{m}}
+    \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c})
+  \,,
+\]
+where $\top = \langle \varnothing, \varnothing \rangle$
+and $\varnothing_{A,B} : A \leftrightarrow B$
+are a trivial language interface and simulation convention
+which disallow any interaction.
+%
+Because our model is a generalization,
+CompCertO semantics and proofs remain available.
+In particular,
+the compiler correctness proof provides the simulations:
+\[
+  \pi_\kw{bq} :
+    \kw{Clight}(\kw{bq.c})
+    \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+    \kw{Asm}(\kw{bq.s})
+  \qquad
+  \pi_\kw{rb} :
+    \kw{Clight}(\kw{rb.c})
+    \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+    \kw{Asm}(\kw{rb.s})
+\]
+which can be combined with the correctness proof.
+Moreover,
+the relationship between $\odot$ and $\oplus$
+can be leveraged to incorporate CompCertO's
+\emph{linking} theorem as:
+\[
+  \ell \::\:
+  \kw{Asm}(\kw{bq.s}) \odot \kw{Asm}(\kw{rb.s}) \:\le\:
+  \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s}) \:\le\:
+  \kw{Asm}(\kw{bq.s + rb.s})
+\]
+With the addition of the trivial convention refinement
+$z : \kw{id}
+     \le_{\varnothing \twoheadrightarrow \varnothing \mathbin; \mathbb{C}}
+     \kw{id}$,
+we can obtain the proof
+\[
+  (\phi \mathbin; (\pi_\kw{bq} \odot \pi_\kw{rb}) \mathbin; \ell) \odot z
+  \::\:
+  L_\kw{bq}
+  \:\le_{\varnothing \twoheadrightarrow \mathbb{C}}\:
+  \kw{Asm}(\kw{bq.s + rb.s})
+  \,,
+\]
+whose type can be read out from the diagram's overall boundary.
+
+%Client code such as
+%\[
+%  C \::=\: \kw{Clight}\big(\text{``}\,
+%\begin{minipage}{17.5em}
+%\begin{minted}{C}
+%void rot() { V x = deq(); enq(x); }
+%\end{minted}
+%\end{minipage}
+%  \,\text{''}\big) \::\:
+%  \mathcal{C}_\kw{m}
+%  \twoheadrightarrow
+%  \mathcal{C}_\kw{m}
+%\]
+%can then be evaluated against 
+%the specification as:
+%$
+%  C \odot L_\kw{bq} :
+%  \top \twoheadrightarrow \mathcal{C}_\kw{m}
+%$,
+%and as before the simulation
+%$\kw{id}_C : C \le_{\mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}} C$
+%can be adjoined to $\phi$ to derive the property:
+%\[
+%  \kw{id}_C \odot \phi \::\L
+%    C \odot L_\kw{bq}
+%    \:\le_{\varnothing \twoheadrightarrow \mathcal{C}_\kw{m}}\:
+%    C \odot \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c})
+%  \,.
+%\]
+%\autoref{fig:compcerto}b
+%shows a composite simulation proof in string diagram notation.
+
+\end{example}
 %}}}
 
 %\begin{figure} % fig:overview:simcomp %{{{
@@ -2078,12 +2406,10 @@ are both one-dimensional objects
 connecting language interfaces,
 they are fairly different in nature.
 However,
-we will see that in some circumstances
-relationships can be established between
-a transition system and
-simulation conventions which in some sense
-represent equivalent behaviors.
-These relationships
+sometimes
+a transition system and a simulation convention
+represent in some sense equivalent behaviors.
+This
 can be formalized using the notions of
 \emph{companion} and \emph{conjoint}
 morphisms in a double category,
@@ -2096,7 +2422,7 @@ We say that a transition system $L : A \twoheadrightarrow B$ has:
   \item a \emph{companion} $L^* : A \leftrightarrow B$ when
     $\kw{id}_A \le_{\kw{id}_A \twoheadrightarrow L^*} L$ and
     $L \le_{L^* \twoheadrightarrow \kw{id}_B} \kw{id}_B$;
-  \item a \emph{conjoint} $L_* : B \leftrightarrow B$ when
+  \item a \emph{conjoint} $L_* : B \leftrightarrow A$ when
     $\kw{id}_B \le_{L_* \twoheadrightarrow \kw{id}_B} L$ and
     $L \le_{\kw{id}_A \twoheadrightarrow L_*} \kw{id}_A$.
 \end{itemize}
@@ -2111,262 +2437,7 @@ outlined below.
 
 %}}}
 
-\begin{figure} % fig:compcerto {{{
-  \text{(a)}
-  \quad
-  \raisebox{-0.5\height}{\begin{tikzpicture}[xscale=0.2,yscale=0.16]
-    \footnotesize
-    \newcommand{\filltint}{30}
-
-    % Coordinates
-    \path (0,0) coordinate (C)
-      (-3,+5) coordinate (L1c) +(0,+4) coordinate (L1)
-      (-1,+5) coordinate (L2c) +(0,+4) coordinate (L2)
-      (+3,+5) coordinate (Lnc) +(0,+4) coordinate (Ln)
-      (+5, 3) coordinate (S1c) +(+4,0) coordinate (S1)
-      (+5, 1) coordinate (S2c) +(+4,0) coordinate (S2)
-      (+5,-3) coordinate (Snc) +(+4,0) coordinate (Sn)
-      (-3,-5) coordinate (M1c) +(0,-4) coordinate (M1)
-      (-1,-5) coordinate (M2c) +(0,-4) coordinate (M2)
-      (+3,-5) coordinate (Mnc) +(0,-4) coordinate (Mn)
-      (-5, 3) coordinate (R1c) +(-4,0) coordinate (R1)
-      (-5, 1) coordinate (R2c) +(-4,0) coordinate (R2)
-      (-5,-3) coordinate (Rnc) +(-4,0) coordinate (Rn)
-      ;
-
-    % Background regions
-    \fill[ACMBlue!\filltint] (C)
-      [rounded corners] -- (L1c)
-      [sharp corners] -- (L1) -- (L2)
-      [rounded corners] -- (L2c)
-      [sharp corners] -- cycle;
-    \fill[ACMLightBlue!\filltint] (C)
-      [rounded corners] -- (Lnc)
-      [sharp corners] -- (Ln) -| (S1)
-      [rounded corners] -- (S1c)
-      [sharp corners] -- cycle;
-    \fill[ACMGreen!\filltint] (C)
-      [rounded corners] -- (S2c)
-      [sharp corners] -- (S2) -- (S1)
-      [rounded corners] -- (S1c)
-      [sharp corners] -- cycle;
-    \fill[ACMYellow!\filltint] (C)
-      [rounded corners] -- (Mnc)
-      [sharp corners] -- (Mn) -| (Sn)
-      [rounded corners] -- (Snc)
-      [sharp corners] -- cycle;
-    \fill[ACMOrange!\filltint] (C)
-      [rounded corners] -- (M1c)
-      [sharp corners] -- (M1) -- (M2)
-      [rounded corners] -- (M2c)
-      [sharp corners] -- cycle;
-    \fill[ACMRed!\filltint] (C)
-      [rounded corners] -- (M1c)
-      [sharp corners] -- (M1) -| (Rn)
-      [rounded corners] -- (Rnc)
-      [sharp corners] -- cycle;
-    \fill[ACMPurple!\filltint] (C)
-      [rounded corners] -- (R2c)
-      [sharp corners] -- (R2) -- (R1)
-      [rounded corners] -- (R1c)
-      [sharp corners] -- cycle;
-    \fill[ACMDarkBlue!\filltint] (C)
-      [rounded corners] -- (L1c)
-      [sharp corners] -- (L1) -| (R1)
-      [rounded corners] -- (R1c)
-      [sharp corners] -- cycle;
-
-    % Region labels
-    \begin{scope}[opacity=0.66,outer sep=1pt]
-      \tiny
-
-      % Language interfaces
-      \path (R1) |- node[below right] {$A_0$} (L1);
-      \path (R1) -- node[right] {$A_1$} (R2);
-      \path (Rn) |- node[above right] {$A_k$} (M1);
-      \path (M1) -- node[above] {$B'$} (M2);
-      \path (Mn) -| node[above left] {$Z_l$} (Sn);
-      \path (L1) -- node[below] {$B$} (L2);
-      \path (Ln) -| node[below left] {$Z_0$} (S1);
-      \path (S1) -- node[left] {$Z_1$} (S2);
-
-      % Dot dot
-      \path (L2) -- node[below,yshift=-2pt] {$\cdots$} (Ln);
-      \path (S2) -- node[left,yshift=3pt,xshift=-2pt] {$\vdots$} (Sn);
-      \path (M2) -- node[above] {$\cdots$} (Mn);
-      \path (R2) -- node[right,yshift=3pt,xshift=2pt]  {$\vdots$} (Rn);
-    \end{scope}
-
-    % Strings
-    \begin{scope}
-      \draw (C)
-        [rounded corners] -- (L1c)
-        [sharp corners] -- (L1) node[above] {$L_1$};
-      \draw (L2) node[above] {$L_2$}
-        [rounded corners] -- (L2c)
-        [sharp corners] -- (C);
-      \draw (C)
-        [rounded corners] -- (Lnc)
-        [sharp corners] -- (Ln) node[above] {$L_n$};
-      \draw (C)
-        [rounded corners] -- (Mnc)
-        [sharp corners] -- (Mn) node[below] {$L'_m$};
-      \draw (M2) node[below] {$L'_2$}
-        [rounded corners] -- (M2c)
-        [sharp corners] -- (C);
-      \draw (C)
-        [rounded corners] -- (M1c)
-        [sharp corners] -- (M1) node[below] {$L'_1$};
-    \end{scope}
-    \begin{scope}%[thick]
-      \draw (S1) node[right] {$\mathbf{S}_1$}
-        [rounded corners] -- (S1c)
-        [sharp corners] -- (C);
-      \draw (C)
-        [rounded corners] -- (S2c)
-        [sharp corners] -- (S2) node[right] {$\mathbf{S}_2$};
-      \draw (Sn) node[right] {$\mathbf{S}_l$}
-        [rounded corners] -- (Snc)
-        [sharp corners] -- (C);
-      \draw (R1) node[left] {$\mathbf{R}_1$}
-        [rounded corners] -- (R1c)
-        [sharp corners] -- (C);
-      \draw (C)
-        [rounded corners] -- (R2c)
-        [sharp corners] -- (R2) node[left] {$\mathbf{R}_2$};
-      \draw (Rn) node[left] {$\mathbf{R}_k$}
-        [rounded corners] -- (Rnc)
-        [sharp corners] -- (C);
-    \end{scope}
-
-    % Node
-    \node[draw,fill=white,circle,inner sep=2pt] at (C) {$\phi$};
-
-  \end{tikzpicture}}
-  \qquad
-  \text{(b)}
-  \quad
-  \raisebox{-0.5\height}{\begin{tikzpicture}[xscale=0.85,yscale=0.5]
-    \footnotesize
-    \newcommand{\filltint}{30}
-
-    % Background regions
-    \fill[ACMBlue!\filltint]
-      (-3, 0)
-      [rounded corners] -- (2,0)
-      [sharp corners] -- (3,1)
-      [rounded corners] -- (2,2)
-      [sharp corners] -- (0,2) -- (0,3) -| cycle;
-    \fill[ACMRed!\filltint]
-      (-3, 0)
-      [rounded corners] -- (2,0)
-      [sharp corners] -- (3,1) -- (4,1) -- (4,-3) -| cycle;
-    \fill[pattern=crosshatch,opacity=0.15]
-      (4,1) -- (3,1)
-      [rounded corners] -- (2,2)
-      [sharp corners] -| (0,3) -| cycle;
-
-    % Region labels
-    \begin{scope}[opacity=0.66,outer sep=1pt]
-      \tiny
-      \node[below right] at (-3,3) {$\mathcal{C}_\kw{m}$};
-      \node[below left] at (4,3) {$\top$};
-      \node[above right] at (-3,-3) {$\mathcal{A}_\kw{m}$};
-      \node[above left] at (4,-3) {$\mathcal{A}_\kw{m}$};
-    \end{scope}
-
-    % Strings
-    \begin{scope}
-      % Transition systems
-      \draw (0,3) node[above] {$L_\kw{bq}$}
-         -- (0,2)
-         [rounded corners]
-         -- (-1, 1) node[left] {\tiny $\kw{Cilght}(\kw{bq.c})$}
-         -- (-1,-1) node[left] {\tiny $\kw{Asm}(\kw{bq.s})$}
-         [sharp corners]
-         -- (0,-2)
-         -- (0,-3) node[below] {$\kw{Asm}(\kw{bq.s} + \kw{rb.s})$};
-      \draw (0,2)
-         [rounded corners]
-         -- (1, 1) node[right] {\tiny $\kw{Cilght}(\kw{rb.c})$}
-         -- (1,-1) node[right] {\tiny $\kw{Asm}(\kw{rb.s})$}
-         [sharp corners]
-         -- (0,-2);
-      % Simulation conventions
-      \draw (-3,0) node[left] {$\mathbb{C}$}
-         [rounded corners] -- (2,0)
-         [sharp corners] -- (3,1) -- (4,1) node[right] {$\varnothing$};
-      \draw (0,2)
-         [rounded corners] -- node[above] {\tiny $\varnothing$} (2,2)
-         [sharp corners] -- (3,1);
-    \end{scope}
-
-    % Nodes
-    \begin{scope}[every node/.style={draw,fill=white,circle,inner sep=2pt}]
-       \node at (0,2) {$\phi$};
-       \node[inner sep=1pt] at (-1,0) {$\pi_\kw{bq}$};
-       \node[inner sep=1pt] at (+1,0) {$\pi_\kw{rb}$};
-       \node at (0,-2) {$\ell$};
-       \node at (3,1) {$z$};
-    \end{scope}
-  \end{tikzpicture}}
-%  \quad
-%  \text{(c)}
-%    \small
-%  \begin{tikzcd}[sep=1ex,row sep=0.5ex]
-%    \top
-%      \ar[rr, equal]
-%      \ar[dddd, leftrightarrow, "\varnothing"']
-%      &&
-%    \top
-%      \ar[dd, leftrightarrow, "\varnothing"']
-%      \ar[rrrr, "L_\kw{bq}"]
-%      &&&&
-%    \mathcal{C}_\kw{m}
-%      \ar[dd, equal]
-%    %  \ar[rr, "C"] &&
-%    %\mathcal{C}_\kw{m}
-%    %  \ar[dddddd, leftrightarrow, "\mathbb{C}"]
-%    \\
-%    &&&& \phi
-%    \\
-%    & z &
-%    \mathcal{C}_\kw{m}
-%      \ar[dd, leftrightarrow, "\mathbb{C}"]
-%      \ar[rr, "\kw{Clight}(\kw{rb.c})"] &&
-%    \mathcal{C}_\kw{m}
-%      \ar[dd, leftrightarrow, "\mathbb{C}"]
-%      \ar[rr, "\kw{Clight}(\kw{bq.c})"] &&
-%    \mathcal{C}_\kw{m}
-%      \ar[dd, leftrightarrow, "\mathbb{C}"]
-%    \\
-%    &&
-%    & \pi_1 & & \pi_2
-%    %&& \pi_C \!\!
-%    \\
-%    \mathcal{A}_\kw{m} \ar[rr, equal] \ar[dd, equal] &&
-%    \mathcal{A}_\kw{m} \ar[dd, equal] \ar[rr, "\kw{Asm}(\kw{rb.s})"'] &&
-%    \mathcal{A}_\kw{m} \ar[rr, "\kw{Asm}(\kw{bq.s})"'] &&
-%    \mathcal{A}_\kw{m} \ar[dd, equal]
-%    \\
-%    &  &&& \ell
-%    \\
-%    \mathcal{A}_\kw{m} \ar[rr, equal] &&
-%    \mathcal{A}_\kw{m} \ar[rrrr, "\kw{Asm}(\kw{rb+bq.s})"'] && &&
-%    \mathcal{A}_\kw{m} %\ar[rr, "C'"'] &&
-%    %\mathcal{A}_\kw{m}
-%  \end{tikzcd}
-  \caption{
-    Equipped with layered composition,
-    the CompCertO model constitutes a \emph{double category}
-    and as such admits a string diagram notation for its simulations.
-    Shown here are (a) the general form of such string diagrams and
-    (b) a string diagram for the simulation described in Example~\ref{ex:compcerto-sd}.}
-  \label{fig:compcerto}
-\end{figure}
-%}}}
-
-\subsection{Spatial Composition} %{{{
+\subsection{Spatial Composition} \label{sec:overview:scomp} %{{{
 
 % Motivation {{{
 
@@ -2403,21 +2474,23 @@ $\mathcal{C} \mathbin@ \kw{mem}$,
 but we can give
 a simpler description of the code in \autoref{fig:code}.
 Using the empty language interface $\top = \langle \varnothing, \varnothing \rangle$
-and describing the queue as $\vec{q} \in D_\kw{bq} := \kw{val}^*$,
-we can give an overall specification
+and describing the queue as
+a sequence
+$\vec{q} \in D_\kw{bq} := \kw{val}^*$,
+we can give the specification
 \[
-  L_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
+  \Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
   \qquad
   \text{such that}
   \qquad
   \begin{array}{l}
-    L_\kw{bq} \:\vDash\:
+    \Gamma_\kw{bq} \:\vDash\:
       \kw{enq}(v) @ \vec{q}
       \:\rightarrowtail\:
       \kw{undef} @ \vec{q}v
       \,,
     \\
-    L_\kw{bq} \:\vDash\:
+    \Gamma_\kw{bq} \:\vDash\:
       \kw{deq}() @ v\vec{q}
       \:\rightarrowtail\:
       v @ \vec{q}
@@ -2430,24 +2503,22 @@ $D_\kw{rb} := \kw{val}^N \times \mathbb{N} \times \mathbb{N}$,
 and define
 $L_\kw{rb} : \top \twoheadrightarrow \mathcal{C}@D_\kw{rb}$
 such that:
-{%\small
 \begin{align*}
-  L_\kw{rb} &\vDash
+  \Gamma_\kw{rb} &\vDash
     \kw{set}(i, v)@(b, c_1, c_2) \rightarrowtail
     \kw{undef}@(b[i := v], c_1, c_2) &
-  L_\kw{rb} &\vDash
+  \Gamma_\kw{rb} &\vDash
     \kw{inc1}()@(b, c_1, c_2) \rightarrowtail
     c_1@(b, c_1\!\!+\!\!1, c_2) \\
-  L_\kw{rb} &\vDash
+  \Gamma_\kw{rb} &\vDash
     \kw{get}(i)@(b, c_1, c_2) \rightarrowtail
     b_i@(b, c_1, c_2) &
-  L_\kw{rb} &\vDash
+  \Gamma_\kw{rb} &\vDash
     \kw{inc2}()@(b, c_1, c_2) \rightarrowtail
     c_2@(b, c_1, c_2\!\!+\!\!1)
 \end{align*}
-}
 Finally,
-note that $\kw{bq.c}$ does not use any state of its own.
+note that $\kw{bq.c}$ does not use any persistent state of its own.
 We can describe it simply as
 \[
   \Sigma_\kw{bq} : \mathcal{C} \twoheadrightarrow \mathcal{C}
@@ -2470,11 +2541,11 @@ Using these specifications,
 we would hope to decompose a correctness proof into
 \[
   \begin{prooftree}
-    \hypo{L_\kw{bq} \sqsubseteq \Sigma_\kw{bq} \odot L_\kw{rb}}
+    \hypo{\Gamma_\kw{bq} \sqsubseteq \Sigma_\kw{bq} \odot \Gamma_\kw{rb}}
     \hypo{\Sigma_\kw{bq} \sqsubseteq \kw{Clight}(\kw{bq.c})}
-    \infer2{L_\kw{bq} \sqsubseteq \kw{Clight}(\kw{bq.c}) \odot L_\kw{rb}}
-    \hypo{L_\kw{rb} \sqsubseteq \kw{Clight}(\kw{rb.c})}
-    \infer2{L_\kw{bq} \sqsubseteq \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c})}
+    \infer2{\Gamma_\kw{bq} \sqsubseteq \kw{Clight}(\kw{bq.c}) \odot \Gamma_\kw{rb}}
+    \hypo{\Gamma_\kw{rb} \sqsubseteq \kw{Clight}(\kw{rb.c})}
+    \infer2{\Gamma_\kw{bq} \sqsubseteq \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c})}
   \end{prooftree}
   \qquad \qquad
   \text{(wrong!)}
@@ -2561,8 +2632,7 @@ $\mathbf{R} \mathbin@ U : A \mathbin@ U \leftrightarrow B \mathbin@ U$.
 The extended convention simply requires that
 source and target interactions
 contain identical state annotations.
-Moreover,
-the construction is \emph{functorial} in the sense that
+The construction is \emph{functorial} in the sense that
 $
   (L_1 \odot L_2) \mathbin@ U \cong
   (L_1 \mathbin@ U) \odot (L_2 \mathbin@ U)
@@ -2570,7 +2640,7 @@ $ and $
   (\mathbf{R} \mathbin; \mathbf{S}) \mathbin@ U \cong
   (\mathbf{R} \mathbin@ U) \mathbin; (\mathbf{S} \mathbin@ U)
 $,
-and it extends to simulations as well:
+and it extends to simulations in the following way:
 \[
   \begin{prooftree}
     \hypo{\pi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
@@ -2587,19 +2657,19 @@ Following up on Example~\ref{ex:abspec},
 this allows us to compose
 $\Sigma_\kw{bq} : \mathcal{C} \twoheadrightarrow \mathcal{C}$
 with
-$L_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}$
+$\Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}$
 into
 $
-  (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot L_\kw{rb} :
+  (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot \Gamma_\kw{rb} :
   \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
 $,
 and to state the simulation property
 $\Sigma_\kw{bq} \mathbin@ \kw{mem} \le \kw{Clight}(\kw{bq.c})$.
 Note however that the different data representations
 used for example
-by $(\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot L_\kw{rb} :
+by $(\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot \Gamma_\kw{rb} :
   \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}$
-and $L_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}$
+and $\Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}$
 remain an obstacle.
 \end{example}
 %}}}
@@ -2682,7 +2752,7 @@ The following example shows how this can be used.
 Building on Example~\ref{ex:abspeclift},
 consider the relationship between
 the overall specification $
-  L_\kw{bq} :
+  \Gamma_\kw{bq} :
     \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
 $
 and its partial refinement
@@ -2692,10 +2762,10 @@ $
 $.
 To establish a simulation between them,
 we use the abstraction relation
-$R \subseteq D_\kw{bq} \times D_\kw{rb}$
+$R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}$
 defined by
 \begin{align*}
-  \vec{q} \mathrel{R} (b, c_1, c_2) \:\Leftrightarrow\: {}
+  \vec{q} \mathrel{R_\kw{bq}} (b, c_1, c_2) \:\Leftrightarrow\: {}
     & (c_1 \le c_2 < N \:\wedge\: \vec{q} = b_{c_1} \cdots b_{c_2-1}) \vee {} \\
     & (c_2 \le c_1 < N \:\wedge\: \vec{q} = b_{c_1} \cdots b_{N-1} b_0 \cdots b_{c_2 - 1})
   \,.
@@ -2704,14 +2774,14 @@ to formulate the correctness property
 $
   \pi_\kw{bq} :
   L_\kw{bq}
-  \:\le_{\top \twoheadrightarrow \mathcal{C} \otimes [R]}\:
+  \:\le_{\top \twoheadrightarrow \mathcal{C} \otimes [R_\kw{bq}]}\:
   (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot
   L_\kw{rb}
 $.
 \end{example}
 %}}}
 
-\paragraph{Passive Components} %{{{
+\paragraph{Composing with Lenses} %{{{
 
 Unfortunately,
 in our framework
@@ -2730,13 +2800,14 @@ arbitrary numbers of questions
 in $A_1$ and $A_2$.
 In general,
 there is no reason to expect that these questions will synchronize
-to be meaningfully combined
+meaningfully to be combined
 into questions of $A_1 \otimes A_2$.
 
 Nevertheless,
 it is possible to generalize the construction $L \mathbin@ U$
 to incorporate a \emph{lens} $f : U \lensarrow V$
-with a more sophisticated action on the state component.
+with a more sophisticated action on the state component
+than a simple pass-through.
 Such a lens provides access to a field of type $U$ within $V$,
 in the form of two functions:
 \[
@@ -2754,12 +2825,25 @@ in the form of two functions:
     \,.
   \end{array}
 \]
+For example,
+we will sometimes use the trivial lens
+$\langle U ] : \mathbbm{1} \leftrightarrows U$
+where
+$\kw{get}_{\langle U ]}(u) = *$ and
+$\kw{set}_{\langle U ]}(u, *) = u$.
+Structural isomorphisms and other bijections
+define lenses as well.
+
 The transition system
 $L \mathbin@ f : A \mathbin@ U \rightarrow B \mathbin@ V$
 can then use $\kw{get}_f$ to extract $u \in U$ from the incoming state in $V$,
 thread that $U$ state component through the external calls of $L$,
 and use $\kw{set}_f$ to update the state component of type $V$
 in the top-level answer of $L$.
+
+%}}}
+
+\paragraph{Active and Passive Components} %{{{
 
 Like language interfaces and transition systems,
 sets and lenses form a category.
@@ -2776,14 +2860,13 @@ will preserve this structure in both arguments.
 Within the passive world,
 spatial composition is easy
 and coincides with the cartesian product $\times$
-of sets, lenses and relations.
-Lenses can simply act in parallel on their own portion of the state.
-By contrast
-active components---%
-which impose their schedule---%
-conflict with one another.
-The can only be spatially composed with passive components,
-with the result being itself active.
+of sets and lenses.
+Lenses and simulation conventions
+can simply act in parallel on their own portion of the state.
+By contrast,
+active components impose their schedule
+and conflict with one another.
+They can only be spatially composed with passive components.
 
 %}}}
 
@@ -2863,9 +2946,6 @@ with the result being itself active.
 
 \paragraph{String Diagrams} %{{{
 
-
-%}}}
-
 \newcommand{\pasv}{%
   \begin{tikzpicture}[baseline=0.1ex,x=1.2ex,y=1.2ex]
     \draw[fill=white] (0,0) rectangle (1,1);
@@ -2881,7 +2961,7 @@ and the associated restrictions on $\mathbin@$-composition
 can nevertheless be formalized in a higher-categorical framework
 by describing:
 \begin{itemize}
-  \item language interfaces as objects of type $A : \actv \curvearrowright \pasv$;
+  \item language (active) interfaces as objects of type $A : \actv \curvearrowright \pasv$;
   \item sets (passive interfaces) as objects of type $U : \pasv \curvearrowright \pasv$.
 \end{itemize}
 Composition of interfaces in general can then be given as
@@ -2899,7 +2979,7 @@ introducing spatial composition increases
 the overall dimensionality of our framework as follows:
 \begin{itemize}
 \item
-the trivial objects
+the trivial ``active/passive tag'' objects
 $\actv$ and $\pasv$ are 0-dimensional,
 \item
 interfaces are now 1-dimensional and compose spatially ($\mathbin@$),
@@ -2915,15 +2995,16 @@ horizontal and vertical composition
 retain their orientation
 while spatial composition
 runs in the complementary direction.
+%
 Finally,
 spatial composition can be incorporated
 as \emph{depth}
 into simulation string diagrams,
 which then become 3-dimensional.
-This is illustrated in Fig.~X,
-discussed in the following example.
+%This is illustrated in Fig.~\ref{fig:3dsd},
+%discussed in the following example.
 
-\begin{figure}
+\begin{figure} % fig:3dsd {{{
   \[
     \text{(a)}
     \quad
@@ -2946,21 +3027,55 @@ discussed in the following example.
     in the simulation proof,
     only the boundary is shown.
   }
+  \label{fig:3dsd}
 \end{figure}
+%}}}
 
-\begin{example}[Certified Abstraction Layers]
+\begin{example}[Spatial composition in string diagrams] %{{{
+[XXX need to update and finalize the figure]
+Per Example~\ref{ex:abspeclift},
+the code specification $\Sigma_\kw{bq}$
+can be interfaced with $\Gamma_\kw{rb}$
+by extending it into $\Sigma_\kw{bq} \mathbin@ D_\kw{rb}$,
+but the outgoing call of its implementation $\kw{Clight}(\kw{bq.c})$
+also carry a memory state component.
+To express the fact that,
+at this level of abstraction,
+$\Gamma_\kw{bq}$ leaves that memory state unchanged,
+we can compose them in the way described by
+Fig.~\ref{fig:3dsd}a:
+\[
+  \kw{Clight}(\kw{bq.c}) \mathbin@ D_\kw{rb}) \odot
+  (\mathcal{C} \mathbin@ \langle \kw{mem} ] \mathbin@ D_\kw{rb}) \odot
+  L_\kw{rb}
+  :
+  \top \twoheadrightarrow
+  \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D_\kw{rb}
+\]
+Moreover,
+since the overall specification $\Gamma_\kw{bq}$
+likewise does not mention the incoming memory state component,
+we can use the simulation convention described by Fig.~\ref{fig:3dsd}b
+to state correctness as:
+\[
+  L_\kw{bq}
+  \:
+  \le_{\top \twoheadrightarrow
+       \mathcal{C} \mathbin@ \langle\kw{mem}]_* \mathbin@ R_\kw{bq}}
+  \:
+  \kw{Clight}(\kw{bq.c}) \mathbin@ D_\kw{rb}) \odot
+  (\mathcal{C} \mathbin@ \langle \kw{mem} ] \mathbin@ D_\kw{rb}) \odot
+  L_\kw{rb}
+\]
+The overall refinement property describe above
+can be depicted by the diagram in Fig.~\ref{fig:3dsd}c.
 \end{example}
+%}}}
 
-\begin{example}[Client code for $L_\kw{rb}$] %{{{
-To compose the semantics
-$\kw{Clight}(\kw{bq.c}) : \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}$
-with the specification
-$L_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}$,
-each must be extended with an additional state component:
-we would like the former to transparently pass through a state of type $D_\kw{rb}$,
-and the latter to accept a memory state (but return it unchanged).
-This can be achieved in the following way:
-\begin{gather*}
+\hrule
+\begin{color}{gray}
+Old diagrams to update and use:
+\[
   \begin{tikzpicture}[xscale=0.35,yscale=0.17]
     % Background
     \fill[tssdbg]
@@ -2985,14 +3100,117 @@ This can be achieved in the following way:
       ( 2,-1) rectangle ( 8,3) node[midway] {$\kw{Clight}(\kw{bq.c})$}
       (12,-1) rectangle (15,3) node[midway] {$L_\kw{rb}$};
   \end{tikzpicture}
-  \\
-     (\kw{Clight}(\kw{bq.c}) \mathbin@ D_\kw{rb}) \odot
-     (\mathcal{C} \mathbin@ \gamma_{\kw{mem}, D_\kw{rb}}) \odot
-     (L_\kw{rb} \mathbin@ *_\kw{mem})
-  :
-  \top \twoheadrightarrow
-  \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D_\kw{rb}
-\end{gather*}
+  \quad
+    \begin{tikzpicture}[
+      xscale=0.8,
+      every node/.style={
+        rounded corners,
+        draw,
+        fill=white,
+        trapezium,
+        trapezium left angle=45,
+        trapezium right angle=-45}]
+      \small
+
+      % Bottom face
+      \fill[tssdbg,opacity=0.5]
+        (-2,-1,-2) -- (-2,-1,+2) -- (+2,-1,+2) -- (+2,-1,-2) -- cycle;
+      \draw[tssdbg] (-2,-1,+2) -- (-2,-1,-2);
+      \draw (-2,-1,-1)
+        [rounded corners] -- (-1,-1,-1)
+        [sharp corners] -- (0,-1,0)
+        [rounded corners] -- (+1,-1,-1)
+        [sharp corners] -- (+2,-1,-1);
+      \draw (-2,-1,+1)
+        [rounded corners] -- (-1,-1,+1)
+        [sharp corners] -- (0,-1,0)
+        [rounded corners] -- (+1,-1,+1)
+        [sharp corners] -- (+2,-1,+1);
+      \fill[pattern=north east lines] (-2,-1,+1)
+        [rounded corners] -- (-1,-1,+1)
+        [sharp corners] -- (0,-1,0)
+        [rounded corners] -- (+1,-1,+1)
+        [sharp corners] -- (+2,-1,+1)
+        -- (+2,-1,+2) -- (-2,-1,+2) -- cycle;
+      \node at (0,-1,0) {$\kw{bq.c}$};
+
+      % Left face
+      \fill[tssdbg,opacity=0.5] (-2,-1,+2) -- (-2,-1,-2)
+        -- (-2,+1,-2) -- (-2,+1,+2) -- cycle;
+      \fill[pattern=north east lines] (-2,-1,+1) -- (-2,-1,+2)
+        -- (-2,+1,+2) -- (-2,+1,+1) -- cycle;
+      \draw (-2,-1,+1) -- (-2,+1,+1);
+      \draw (-2,-1,-1) -- (-2,+1,-1);
+
+      % Top face
+      \fill[tssdbg,opacity=0.5]
+        (-2,+1,-2) -- (-2,+1,+2) -- (+2,+1,+2) -- (+2,+1,-2) -- cycle;
+      \fill[pattern=north east lines] (-2,+1,+1) -- (+2,+1,+1)
+        -- (+2,+1,+2) -- (-2,+1,+2) -- cycle;
+      \draw (-2,+1,-1) -- (+2,+1,-1);
+      \draw (-2,+1,+1) -- (+2,+1,+1);
+      \node at (0,+1,+1) {$\Sigma_\kw{bq}$};
+
+      % Right face
+      \fill[tssdbg,opacity=0.5] (+2,-1,+2) -- (+2,-1,-2)
+        -- (+2,+1,-2) -- (+2,+1,+2) -- cycle;
+      \draw[tssdbg] (+2,+1,+2) -- (+2,+1,-2);
+      \fill[pattern=north east lines] (+2,-1,+1) -- (+2,-1,+2)
+        -- (+2,+1,+2) -- (+2,+1,+1) -- cycle;
+      \draw (+2,-1,+1) -- (+2,+1,+1);
+      \draw (+2,-1,-1) -- (+2,+1,-1);
+
+
+    \end{tikzpicture}
+ \]
+
+%\begin{example}%[Certified abstraction layers]
+%\emph{Certified abstraction layers}
+%are a compositional verification technique.
+%The idea is to divide the code of a large system into layers,
+%and to specify the functionality offered by each layer
+%in self-contained and increasingly abstract terms.
+%
+%As described in \citet{popl15},
+%a \emph{layer interfaces} is
+%a set $D$ of \emph{abstract states}
+%together with a specification $\Gamma$
+%describing the behavior of a number of primitives
+%in terms of this abstract state.
+%A \emph{certified abstraction layer}
+%$\Gamma_1 \vdash_R M : \Gamma_2$
+%consists of an \emph{underlay} interface $\Gamma_1$,
+%an \emph{overlay} interface $\Gamma_2$,
+%and a program module $M$
+%which correctly implements the primitives of $\Gamma_2$
+%in terms of those provided by $\Gamma_1$;
+%the relation $R$ describes
+%how the more abstract view $D_2$ provided by $\Gamma_1$.
+%
+%%To incorporated layer interfaces into CompCert,
+%%the work described by \citet{popl15}
+%%had to alter its language semantics
+%%to incorporate an underlay interface,
+%%resulting in an ad-hoc variant of CompCert named CompCertX.
+%%By contrast,
+%
+%Using our compositional treatment of state,
+%certified abstraction layers can be encoded
+%within the CompCertO model
+%in a straightforward way.
+%For example,
+%$\Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}$
+%defines an overlay interface for the code in Fig.~\ref{fig:code}.
+%It uses abstract states in $D_\kw{bq}$
+%and provides specifications for the primitives $\kw{enq}$ and $\kw{deq}$.
+%
+%$\Gamma : \top \twoheadrightarrow \mathcal{C} \mathbin@ D$,
+%so that for example
+%constitutes a layer interface.
+%A \emph{certified abstraction layer}
+%$\Gamma_1 \vdash_R M : \Gamma'$
+%
+%\end{example}
 
 In the diagram above,
 composition runs from left to right,
@@ -3004,13 +3222,9 @@ to the rest of the diagram
 can be arbitrary language interfaces and transition systems,
 but those in the upper part
 must be sets and lenses.
-We have drawn
-$\gamma_{UV} : U \times V \lensarrow V \times U$
-as a twist
-and
-${*}_U : \mathbbm{1} \lensarrow U$
-as a circle.
-\end{example}
+\end{color}
+\hrule
+
 %}}}
 
 %}}}
@@ -3307,7 +3521,7 @@ $L : A \mathbin@ \kw{mem} \twoheadrightarrow B \mathbin@ \kw{mem}$
 can be described as
 $
   L \mathbin@ \kw{mem}
-  \le_{A \otimes [\bullet] \twoheadrightarrow B \otimes [\bullet]}
+  \le_{A \mathbin@ [\bullet] \twoheadrightarrow B \mathbin@ [\bullet]}
   L
 $.
 
@@ -3607,7 +3821,7 @@ for encapsulated state.
 
 %}}}
 
-\subsection{Applications}
+\subsection{Applications} \label{sec:overview:app}
 
 \paragraph{ClightP} \label{sec:overview:clightp} %{{{
 
