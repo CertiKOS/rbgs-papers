@@ -12,7 +12,7 @@
 
     - [x] Tikz string diagrams
 
-  - Rewrite Sec. 3
+  - Rewrite Sec. 3 [June 3rd]
 
     - Follow this outline [5/26]
 
@@ -38,7 +38,7 @@
 
         - [x] Lenses
 
-        - [ ] String diagrams
+        - [x] String diagrams
 
       - [x] Memory separation
 
@@ -52,21 +52,21 @@
 
     - Other tasks
 
-      - [ ] Tweak/redistribute Sec. 2.4
+      - [x] Tweak/redistribute Sec. 2.4
 
       - [ ] Explain (+) as fixpoint, approximated by (.)
 
       - Better treatment of companion / conjoint
 
-        - [ ] Before encapsulation
+        - [x] Before encapsulation
 
-        - [ ] Explain *_mem
+        - [x] Explain *_mem
 
       - Add summary of compositional structure
 
-        - [ ] 3D string diagram
+        - [x] 3D string diagram
 
-        - [ ] New treatment of active vs. passive
+        - [x] New treatment of active vs. passive
 
   - ClightP improvements
 
@@ -74,7 +74,7 @@
 
     - [ ] Use the simpler proof Clight(M)@m*
 
-  - [ ] Make sure examples thread nicely / are complete but not redundant
+  - [x] Make sure examples thread nicely / are complete but not redundant [June 1st]
 
   - Discuss more related work
 
