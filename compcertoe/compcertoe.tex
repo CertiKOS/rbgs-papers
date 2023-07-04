@@ -25,7 +25,7 @@
 \acmISBN{978-1-4503-XXXX-X/18/06}
 
 \bibliographystyle{ACM-Reference-Format}
-%\citestyle{acmauthoryear}
+\citestyle{acmauthoryear}
 
 \hyphenation{Comp-Cert}
 \hyphenation{Comp-CertX}
@@ -205,7 +205,6 @@ to carrying out actual verification projects,
 and few compositional semantic models
 support the combination of features
 required for large-scale verification tasks.
-
 This paper is concerned with bridging this gap.
 We present a compositional, refinement-based semantics framework for verification,
 which incorporates
@@ -4138,91 +4137,88 @@ and is guaranteed to be left unchanged by $\kw{rb.c}$.
 
 \subsection{Applications} \label{sec:overview:app} %{{{
 
-\paragraph{ClightP} \label{sec:overview:clightp} %{{{
+As we have seen,
+our framework captures
+properties as varied as
+compositional compiler correctness,
+representation independence, and
+the frame rule of separation logic
+under a unified, three-dimensional notion of simulation.
+Properties with compatible boundaries
+can then be assembled like puzzle pieces
+and used to construct complex proofs in a modular way.
+Below and in \S\ref{sec:app},
+we highlight possible applications
+which make use of these capabilities.
 
-To further facilitate the implementation of abstract state,
-we introduce the language
-\[
-  \kw{ClightP}(M) :
-    \mathcal{C} \mathbin@ \kw{mem}
-    \twoheadrightarrow
-    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}
-  \,,
-\]
-a variant of Clight
-where global variables can be declared \emph{private}.
-Private variables cannot be accessed
-from other translation units and are stored
-in a separate
-\emph{private environment} $p \in \kw{penv}$.
-The program $M$ can easily be compiled to a regular
-Clight program $M' := \kw{ClightUnP}(M)$
-by erasing the $\kw{private}$ annotations from all variables.
-We will see in \S\ref{sec:clightp}
-that the techniques presented in \S\ref{sec:overview:sepalg} 
-play a key role in formulating the corresponding correctness property
-for this transformation.
+\paragraph{Ad-hoc Verification} %{{{
 
-\begin{example}[Verifying $\kw{rb.c}$]
-Using ClightP for $\kw{rb.c}$,
-we can declare the variables
-\texttt{c1}, \texttt{c2} and \texttt{buf}
-as private.
-We can then
-define a relation $R_\kw{rb} \subseteq D_\kw{rb} \times \kw{penv}$
-in order to verify
-\[
-  (\mathcal{C} \mathbin@ \gamma_{\kw{mem},D_\kw{rb}}) \odot
-  (L_\kw{rb} \mathbin@ \kw{mem})
-  \:
-  \le_{\varnothing \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ R_\kw{rb}}
-  \:
-  \kw{ClightP}(\kw{rb.c})
-  \,.
-\]
-\end{example}
+Our running example shows how
+various aspects of our framework
+can be use to facilitate ad-hoc verification.
+By this,
+we mean that the verification effort does not have to fit
+a predefined strategy.
+In our example,
+the translation unit $\kw{bq.c}$ does not keep any state,
+whereas $\kw{rb.c}$ is self-contained and
+does not make any outgoing calls,
+so we can use different strategies to specify and verify them
+which take advantage of their specificities.
+Nevertheless,
+our framework is flexible enough to allow us
+to glue the proofs together in the end.
 
-\begin{example}[Encapsulated ClightP]
-We define a version
-$\kw{ClightP}\langle M \rangle :
-    \mathcal{C} \mathbin@ \kw{mem} \rightarrow
-    \mathcal{C} \mathbin@ \kw{mem}$
-of the ClightP semantics
-which encapsulates the private environment, as
-\[
-  \kw{ClightP} \langle M \rangle := \:
-  \begin{tikzpicture}[xscale=0.35,yscale=0.17,baseline=(m.base)]
-    % Background
-    \fill[tssdbg] (1,-2) rectangle (11,6.5);
-    \fill[pattern=north east lines] (1,-2) rectangle (11,0);
-    % Wires
-    \draw (1,0) node[left] {$\mathcal{C}$}
-      -- (11,0) node[right] {$\mathcal{C}$};
-    \draw (1,2) node[left] (m) {$\kw{mem}$}
-      -- (11,2) node[right] {$\kw{mem}$};
-    \draw (3,4)
-        node[circle,inner sep=1pt,draw,fill=white] {}
-        node[left] {$p_0$}
-        -- (4,4);
-    % Boxes
-    \draw[fill=white,rounded corners]
-      ( 4,-1) rectangle (10,5) node[midway] (N) {$\kw{Clight}(M)$};
-  \end{tikzpicture} \: =
-  (\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle) \odot
-    \kw{ClightP}(M)
-  \,,
-\]
-where
-$p_0 := \kw{init\_penv}(M)$
-is the initial state of the private environment.
-Note that the resulting type
-means that ClightP semantics in this form
-can be composed directly.
-\end{example}
+While the lack of structure in ad-hoc verification
+can also be a drawback,
+we believe this kind of flexibility will be necessary
+as we move towards the verification of more heterogeneous systems,
+where forcing all components to fit one methodology may be difficult.
 
 %}}}
 
-\paragraph{Certified Abstraction Layers}
+\paragraph{Certified Abstraction Layers} %{{{
+
+At the same time,
+our framework can also be used as a foundation
+for more structured approaches.
+In \S\ref{sec:cal},
+we outline a theory of certified abstraction layers
+built on the building blocks that the framework provides.
+Unlike
+the implementation of certified abstraction layers
+found in \citep{popl15},
+our approach uses a general-purpose version of CompCert
+and better decouples high-level verification tasks
+from the low-level details of the compiler.
+Yet unlike more recent and abstract theories of CAL
+\cite{rbgs-cal,popl22}
+it is fully implemented in a proof assistant
+and can be interfaced with a certified compiler.
+
+%}}}
+
+\paragraph{ClightP} \label{sec:overview:clightp} %{{{
+
+Finally,
+incorporating state encapsulation
+into CompCert semantics
+opens the door to language features
+making use of that capability.
+As a first step,
+we introduce a version of Clight called ClightP
+(\S\ref{sec:clightp}),
+which supports module-local \emph{private} variables
+which cannot be observed directly by the environment,
+and provide a certified compiler from ClightP to Clight.
+The associated correctness property
+addresses once and for all
+the realization of encapsulated variables
+as concrete global memory.
+This makes it easier to implement specifications such as
+$\Gamma_\kw{rb}'$ which introduce abstract, encapsulated state.
+
+%}}}
 
 %}}}
 
@@ -6081,7 +6077,91 @@ which preserves the compositional structure of $\mathbin@$ and $\otimes$.
 
 %}}}
 
-\section{Applications} %{{{
+\section*{Material cut from \S3 which could be useful below} %{{{
+
+To further facilitate the implementation of abstract state,
+we introduce the language
+\[
+  \kw{ClightP}(M) :
+    \mathcal{C} \mathbin@ \kw{mem}
+    \twoheadrightarrow
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}
+  \,,
+\]
+a variant of Clight
+where global variables can be declared \emph{private}.
+Private variables cannot be accessed
+from other translation units and are stored
+in a separate
+\emph{private environment} $p \in \kw{penv}$.
+The program $M$ can easily be compiled to a regular
+Clight program $M' := \kw{ClightUnP}(M)$
+by erasing the $\kw{private}$ annotations from all variables.
+We will see in \S\ref{sec:clightp}
+that the techniques presented in \S\ref{sec:overview:sepalg} 
+play a key role in formulating the corresponding correctness property
+for this transformation.
+
+\begin{example}[Verifying $\kw{rb.c}$]
+Using ClightP for $\kw{rb.c}$,
+we can declare the variables
+\texttt{c1}, \texttt{c2} and \texttt{buf}
+as private.
+We can then
+define a relation $R_\kw{rb} \subseteq D_\kw{rb} \times \kw{penv}$
+in order to verify
+\[
+  (\mathcal{C} \mathbin@ \gamma_{\kw{mem},D_\kw{rb}}) \odot
+  (L_\kw{rb} \mathbin@ \kw{mem})
+  \:
+  \le_{\varnothing \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ R_\kw{rb}}
+  \:
+  \kw{ClightP}(\kw{rb.c})
+  \,.
+\]
+\end{example}
+
+\begin{example}[Encapsulated ClightP]
+We define a version
+$\kw{ClightP}\langle M \rangle :
+    \mathcal{C} \mathbin@ \kw{mem} \rightarrow
+    \mathcal{C} \mathbin@ \kw{mem}$
+of the ClightP semantics
+which encapsulates the private environment, as
+\[
+  \kw{ClightP} \langle M \rangle := \:
+  \begin{tikzpicture}[xscale=0.35,yscale=0.17,baseline=(m.base)]
+    % Background
+    \fill[tssdbg] (1,-2) rectangle (11,6.5);
+    \fill[pattern=north east lines] (1,-2) rectangle (11,0);
+    % Wires
+    \draw (1,0) node[left] {$\mathcal{C}$}
+      -- (11,0) node[right] {$\mathcal{C}$};
+    \draw (1,2) node[left] (m) {$\kw{mem}$}
+      -- (11,2) node[right] {$\kw{mem}$};
+    \draw (3,4)
+        node[circle,inner sep=1pt,draw,fill=white] {}
+        node[left] {$p_0$}
+        -- (4,4);
+    % Boxes
+    \draw[fill=white,rounded corners]
+      ( 4,-1) rectangle (10,5) node[midway] (N) {$\kw{Clight}(M)$};
+  \end{tikzpicture} \: =
+  (\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle) \odot
+    \kw{ClightP}(M)
+  \,,
+\]
+where
+$p_0 := \kw{init\_penv}(M)$
+is the initial state of the private environment.
+Note that the resulting type
+means that ClightP semantics in this form
+can be composed directly.
+\end{example}
+
+%}}}
+
+\section{Applications} \label{sec:app} %{{{
 
 In this section, we first revisit our running example,
 and refurbish it with the state encapsulation.
