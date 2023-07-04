@@ -226,14 +226,18 @@ requires the ability
 to model and specify those systems compositionally,
 so that verification can be carried out
 on components of a manageable size.
-In addition,
-the verification of large heterogeneous systems---%
-for example,
-computer systems involving combinations of
-hardware, software and network components---%
-will require formal models versatile enough
-to account for the large variety of
-operational paradigms and interfaces involved.
+Moreover,
+we must also be able to reason about
+\emph{data} and \emph{state} along several dimensions.
+
+%In addition,
+%the verification of large heterogeneous systems---%
+%for example,
+%computer systems involving combinations of
+%hardware, software and network components---%
+%will require formal models versatile enough
+%to account for the large variety of
+%operational paradigms and interfaces involved.
 
 %}}}
 
@@ -245,33 +249,31 @@ providing the following features.
 
 \subsubsection{Compositionality} \label{sec:req:comp} %{{{
 
-Complex systems are built by assembling more elementary components.
+Complex systems are built by assembling simpler components.
 In a compositional verification framework,
 correctness properties must be compatible with this process.
-This leads us to favor a \emph{refinement-based} approach,
-where specifications and implementations
+
+Under a \emph{refinement-based} approach,
+specifications and implementations
 are represented by mathematical objects of the same kind.
 The correctness of a composite system $x \circ y \circ z$
 with respect to a specification $\sigma$
 is then stated as the refinement
 $\sigma \sqsubseteq x \circ y \circ z$.
-
-Under this approach,
-compositionality is enabled by two key properties.
-First,
-the monotonicity of composition
+%Compositionality is then enabled by two key properties.
+%First,
+The monotonicity of composition
 with respect to refinement
-makes it possible to replace a specification by its implementation
+means we can replace a specification by its implementation
 in any context.
-Second,
-the transitivity of refinement
+Transitivity
 allows us to carry out verification in steps.
 For example,
 it may be easier to first show
-$\tau \sqsubseteq x \circ y$,
-then reason about $z$ in terms of the specification $\tau$
+$\tau \sqsubseteq y \circ z$,
+then reason about $x$ in terms of $\tau$ %the specification $\tau$
 to derive
-$\sigma \sqsubseteq \tau \circ z \sqsubseteq x \circ y \circ z$.
+$\sigma \sqsubseteq x \circ \tau \sqsubseteq x \circ y \circ z$.
 %In the broader context to which our work belongs,
 %these two properties are known as
 %\emph{horizontal} and \emph{vertical} compositionality.
@@ -366,8 +368,8 @@ CompCertM \cite{compcertm}---%
 which interface with CompCert to yield end-to-end proofs.
 However,
 none of them satisfies all of
-the requirements which we have outlined
-for supporting large-scale verification.
+the requirements which we have outlined.
+%for supporting large-scale verification.
 
 %}}}
 
@@ -550,16 +552,13 @@ can be incorporated into our framework as-is.
 
 % Preamble {{{
 
-Our framework builds on an existing line of work
-which has developed
-compositional semantics for the certified compiler CompCert.
-Therefore,
-before introducing our contributions in the following section,
-we begin with a mini-survey of this line of research.
-
-Our goal is twofold:
-in addition to providing the reader with relevant background,
-we place a particular emphasis on the high-level ``shape''
+Our framework builds on existing
+compositional semantics for the certified compiler CompCert,
+%Therefore,
+%before introducing our contributions in the following section,
+so we begin with a mini-survey of this line of research.
+In addition to providing the reader with relevant background,
+we emphasize the high-level ``shape''
 of the compositional structures present in this work,
 and outline a conceptual framework in which they can be understood
 systematically.
@@ -669,14 +668,14 @@ or just $L_1 \le L_2$ when such a $\rho$ exists.
 
 \paragraph{Vertical Compositionality}
 
-Verifying an industrial-grade C compiler like CompCert
-is a complex task.
-The key to this achievement was the compositionality of simulation proofs.
+Verifying an industrial-grade C compiler %like CompCert
+is challenging.
+The key to this achievement is the compositionality of simulation proofs.
 CompCert consists of a dozen compilation and optimization phases,
-which progressively transform $p$ into $p'$:
-\[
+which progressively transform %$p$ into $p'$:
+$
   p = p_0 \longmapsto p_1 \longmapsto \cdots \longmapsto p_n = p'
-\]
+$.
 To derive the correctness theorem,
 a simulation proof can be established for each phase:
 \begin{equation}
@@ -712,11 +711,13 @@ In what is described above:
     akin to the vertices of a graph or
     the points of a topological space.
     They do not compose
-    but provide ``endpoints'' for simulations types.
+    but provide ``endpoints'' for simulations.
   \item Simulations are 1-dimensional objects,
     similar to edges or paths;
     they connect with each other
-    at their 0-dimensional endpoints.
+    when the 0-dimensional target of one coincides with
+    the 0-dimensional source of another.
+    %at their 0-dimensional endpoints.
 \end{itemize}
 %In this analogy,
 %proving CompCert correct
@@ -725,10 +726,11 @@ In what is described above:
 %This involves using intermediate programs and language semantics
 %to identify ``waypoints'' and reduce the problem
 %to proving more elementary simulations.
-Algebraically speaking,
-we have described a
-\emph{category} of transition systems and simulation relations.
-
+%
+%Algebraically speaking,
+%we have described a
+%\emph{category} of transition systems and simulation relations.
+%
 We will see that
 when we incorporate more composition principles into the framework,
 the dimensionality of transition systems and simulation proofs will increase.
@@ -760,14 +762,64 @@ alongside a common boundary of dimension $n$.
 
 %}}}
 
+\begin{figure} % fig:code {{{
+  \centering\footnotesize
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+/* Encapsulated state */
+static int c1, c2;
+static V buf[N];
+
+/* Accessors */
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.38\textwidth}
+\begin{minted}{C}
+/* Underlay signature */
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+/* Layer implementation */
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Running example, consisting of two C components.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
+\end{figure}
+%}}}
+
 \subsection{Semantics in Compositional CompCert} %{{{
 
 The semantics described above
 characterize the behavior of whole programs.
 However, compilers usually act on individual translation units.
-CompCert can indeed compile
+CompCert can compile
 the files shown in Fig.~\ref{fig:code},
-but since they do not constitute a complete program,
+but since they do not constitute whole programs,
 the correctness property (\ref{eqn:ccc-wp})
 does not apply.
 
@@ -776,8 +828,8 @@ does not apply.
 To address this issue,
 Compositional CompCert \cite{compcompcert}
 uses a notion of \emph{open} transition system
-in order to
-characterize the behavior of individual compilation units:
+which describes
+the behavior of an individual compilation unit:
 \begin{itemize}
 \item
 To initialize a transition system,
@@ -903,56 +955,6 @@ but it makes outgoing calls which may have that effect:
 
 %}}}
 
-\begin{figure} % fig:code {{{
-  \centering\footnotesize
-  \begin{subfigure}{0.45\textwidth}
-\begin{minted}{C}
-/* Encapsulated state */
-static int c1, c2;
-static V buf[N];
-
-/* Accessors */
-int inc1() { int i = c1++; c1 %= N; return i; }
-int inc2() { int i = c2++; c2 %= N; return i; }
-V get(int i) { return buf[i]; }
-void set(int i, V val) { buf[i] = val; }
-\end{minted}
-  \subcaption{The translation unit $\kw{rb.c}$}
-  \label{fig:rb}
-  \end{subfigure}
-  \hspace{4em}
-  \begin{subfigure}{0.38\textwidth}
-\begin{minted}{C}
-/* Underlay signature */
-extern int inc1(void);
-extern int inc2(void);
-extern V get(int i);
-extern void set(int i, V val);
-
-/* Layer implementation */
-void enq(V val) { set(inc2(), val); }
-V deq() { return get(inc1()); }
-\end{minted}
-  \subcaption{The translation unit $\kw{bq.c}$}
-  \label{fig:bq}
-  \end{subfigure}
-  \caption{Running example, consisting of two C components.
-    The component $\kw{rb.c}$
-    implements a ring buffer by encapsulating an array
-    and two counters. It is used by the component
-    $\kw{bq.c}$ to implement a
-    bounded queue.}
-  \label{fig:code}
-%\caption{The state of a ring buffer,
-%  made of two counters and a fixed-size array,
-%  is encapsulated behind a simple interface.}
-%\label{fig:rb}
-%\caption{This component relies on the ring buffer primitives
-%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
-%\label{fig:bq}
-\end{figure}
-%}}}
-
 \paragraph{Horizontal Compositionality} %{{{
 
 Under this new definition of transition system,
@@ -964,7 +966,7 @@ but when $L_1$ makes an external call
 to a function provided by $L_2$ (and vice versa),
 $L_1 \oplus L_2$ instantiates a new copy of $L_2$ to handle the call internally.
 This copy executes until it reaches a final state,
-and the corresponding outcome is used to resume
+at which point its outcome is used to resume
 the suspended execution of $L_1$.
 
 Compositional CompCert's semantic linking
@@ -1058,6 +1060,48 @@ namely:
 %where $\mathbf{I}$ is
 %a trivial component which does not provide any function.
 
+%}}}
+
+\begin{example} \label{ex:compcomp} %{{{
+Figure~\ref{fig:pasting}b
+illustrates how this compositional algebra can be used.
+A simple transition system $L_\kw{bq}$ serves as specification
+for the bounded queue operations $\kw{enq}$ and $\kw{deq}$
+implemented by the code in Fig.~\ref{fig:code}.
+The simulation
+$
+  \phi : L_\kw{bq}
+    \le \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
+$
+shows that the combination of $\kw{bq.c}$ and $\kw{rb.c}$
+implements $L_\kw{bq}$.
+To transfer this correctness guarantee to the compiled code,
+we can obtain from the compiler's correctness proof the simulations
+$\pi_\kw{bq} : \kw{Clight}(\kw{bq.c}) \le \kw{Asm}(\kw{bq.s})$ and
+$\pi_\kw{rb} : \kw{Clight}(\kw{rb.c}) \le \kw{Asm}(\kw{rb.s})$.
+By composing the simulations together,
+we can derive
+\begin{equation}
+  \phi \mathbin; (\pi_1 \oplus \pi_2) \::\:
+  L_\kw{bq} \:\le\:
+  \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
+  \,.
+  \label{eqn:cex}
+\end{equation}
+We can use this property with any context $C$
+by adjoining
+the simulation $\kw{id}_C : C \le C$
+to obtain
+\begin{equation}
+  \kw{id}_C \oplus (\phi \mathbin; (\pi_1 \oplus \pi_2))
+  \::\:
+  C \oplus L_\kw{bq}
+  \:\le\:
+  C \oplus \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
+  \,.
+  \label{eqn:ccex}
+\end{equation}
+\end{example}
 %}}}
 
 \begin{figure} % fig:pasting {{{
@@ -1154,49 +1198,6 @@ namely:
 \end{figure}
 %}}}
 
-
-\begin{example} \label{ex:compcomp} %{{{
-Figure~\ref{fig:pasting}b
-illustrates how this compositional algebra can be used.
-A simple transition system $L_\kw{bq}$ serves as specification
-for the bounded queue operations $\kw{enq}$ and $\kw{deq}$
-implemented by the code in Fig.~\ref{fig:code}.
-The simulation
-$
-  \phi : L_\kw{bq}
-    \le \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
-$
-shows that the combination of $\kw{bq.c}$ and $\kw{rb.c}$
-implements $L_\kw{bq}$.
-To transfer this correctness guarantee to the compiled code,
-we can obtain from the compiler's correctness proof the simulations
-$\pi_\kw{bq} : \kw{Clight}(\kw{bq.c}) \le \kw{Asm}(\kw{bq.s})$ and
-$\pi_\kw{rb} : \kw{Clight}(\kw{rb.c}) \le \kw{Asm}(\kw{rb.s})$.
-By composing the simulations together,
-we can derive
-\begin{equation}
-  \phi \mathbin; (\pi_1 \oplus \pi_2) \::\:
-  L_\kw{bq} \:\le\:
-  \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
-  \,.
-  \label{eqn:cex}
-\end{equation}
-We can use this property with any context $C$
-by adjoining
-the simulation $\kw{id}_C : C \le C$
-to obtain
-\begin{equation}
-  \kw{id}_C \oplus (\phi \mathbin; (\pi_1 \oplus \pi_2))
-  \::\:
-  C \oplus L_\kw{bq}
-  \:\le\:
-  C \oplus \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
-  \,.
-  \label{eqn:ccex}
-\end{equation}
-\end{example}
-%}}}
-
 \paragraph{String Diagrams} %{{{
 
 As morphisms of a monoidal category,
@@ -1232,13 +1233,13 @@ does not have to be represented as an explicit node.
 
 String diagrams can be devised for a variety of 
 two-dimensional structures;
-we use three different kinds in our exposition below.
+we use many different kinds in our exposition below.
 Their geometry
 captures the compositional structure and properties
 of the underlying objects,
 more comprehensively %compactly and accurately
-than the pasting diagrams
-we used in Fig.~\ref{fig:pasting}.
+than the pasting diagram
+we used in Fig.~\ref{fig:pasting}b.
 
 %}}}
 
@@ -1275,10 +1276,11 @@ turn out to be quite general,
 and we believe they prefigure structures which
 would be found in any successful semantic framework
 aimed at building large-scale certified systems.
-This will be useful to keep in mind
-as we examine how the follow-up work on CompCertO
-incorporated data abstraction (\S\ref{sec:req:abs})
-into this model.
+%This will be useful to keep in mind
+%as we examine how %the follow-up work on
+%CompCertO
+%incorporated data abstraction (\S\ref{sec:req:abs})
+%into this model.
 
 %}}}
 
@@ -1292,7 +1294,7 @@ for the various phases of CompCert.
 When these details become observable,
 it is difficult to define a uniform notion of simulation
 which can capture these different approaches.
-
+%
 CompCertO \citep{compcerto} addresses
 this fundamental difficulty in Compositional CompCert
 by making the semantic model more flexible,
@@ -1501,72 +1503,78 @@ with respect to a single simulation convention:
   \end{prooftree}
 \end{equation}
 To work around this restriction,
-CompCertO introduces a second kind of two-dimensional object.
+CompCertO introduces a rich algebra of simulation convention \emph{refinements}.
+Such refinements play the role of a second kind of two-dimensional object.
+They can compose with each other,
+or to the left or right of simulations to modify their types.
+In CompCertO,
+they are used together with sophisticated techniques
+to construct a ``harness'' around
+per-phase correctness proofs with varied and asymmetric
+simulation conventions,
+so that in the end a compiler correctness theorem can be derived
+which satisfies the restrictions in (\ref{eqn:hcomp}).
 
 %}}}
 
-\paragraph{Simulation Convention Refinements} %{{{
-
-%To glue heterogeneous parts into a compositional correctness theorem,
-%CompCertO makes extensive use of simulation convention \emph{refinements}.
-A simulation convention refinement $x : \mathbf{R} \sqsubseteq \mathbf{S}$
-expresses the idea that calls performed according to the convention $\mathbf{S}$
-also satisfy the expectations of the convention $\mathbf{R}$.
-Such refinements compose vertically, horizontally,
-and to the left or right of simulations:
-\[
-  \small
-  \begin{prooftree}
-    \hypo{x : \mathbf{R} \sqsubseteq \mathbf{R'}}
-    \hypo{y : \mathbf{S} \sqsubseteq \mathbf{S'}}
-    \infer2{x \mathbin; y \::\:
-      \mathbf{R} \mathbin; \mathbf{S} \:\sqsubseteq\:
-      \mathbf{R'} \mathbin; \mathbf{S'}}
-  \end{prooftree}
-  \quad
-  \begin{prooftree}
-    \hypo{x : \mathbf{R}_1 \sqsubseteq \mathbf{R}_2}
-    \hypo{y : \mathbf{R}_2 \sqsubseteq \mathbf{R}_3}
-    \infer2{y \odot x : \mathbf{R}_1 \sqsubseteq \mathbf{R}_3}
-  \end{prooftree}
-  \quad
-  \begin{prooftree}
-    \hypo{x : \mathbf{R}' \sqsubseteq \mathbf{R}}
-    \hypo{\phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
-    \hypo{y : \mathbf{S} \sqsubseteq \mathbf{S}'}
-    \infer3{y \odot \phi \odot x :
-       L_1 \le_{\mathbf{R}' \twoheadrightarrow \mathbf{S}'} L_2}
-  \end{prooftree}
-\]
-CompCertO uses a rich algebra based on $\sqsubseteq$
-to combine all compilation phases and
-establish a compiler correctness theorem
-compatible with (\ref{eqn:hcomp}).
-
-%}}}
+%\paragraph{Simulation Convention Refinements} %{{{
+%
+%%To glue heterogeneous parts into a compositional correctness theorem,
+%%CompCertO makes extensive use of simulation convention \emph{refinements}.
+%A simulation convention refinement $x : \mathbf{R} \sqsubseteq \mathbf{S}$
+%expresses the idea that calls performed according to the convention $\mathbf{S}$
+%also satisfy the expectations of the convention $\mathbf{R}$.
+%Such refinements compose vertically, horizontally,
+%and to the left or right of simulations:
+%\[
+%  \small
+%  \begin{prooftree}
+%    \hypo{x : \mathbf{R} \sqsubseteq \mathbf{R'}}
+%    \hypo{y : \mathbf{S} \sqsubseteq \mathbf{S'}}
+%    \infer2{x \mathbin; y \::\:
+%      \mathbf{R} \mathbin; \mathbf{S} \:\sqsubseteq\:
+%      \mathbf{R'} \mathbin; \mathbf{S'}}
+%  \end{prooftree}
+%  \quad
+%  \begin{prooftree}
+%    \hypo{x : \mathbf{R}_1 \sqsubseteq \mathbf{R}_2}
+%    \hypo{y : \mathbf{R}_2 \sqsubseteq \mathbf{R}_3}
+%    \infer2{y \odot x : \mathbf{R}_1 \sqsubseteq \mathbf{R}_3}
+%  \end{prooftree}
+%  \quad
+%  \begin{prooftree}
+%    \hypo{x : \mathbf{R}' \sqsubseteq \mathbf{R}}
+%    \hypo{\phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
+%    \hypo{y : \mathbf{S} \sqsubseteq \mathbf{S}'}
+%    \infer3{y \odot \phi \odot x :
+%       L_1 \le_{\mathbf{R}' \twoheadrightarrow \mathbf{S}'} L_2}
+%  \end{prooftree}
+%\]
+%CompCertO uses a rich algebra based on $\sqsubseteq$
+%to combine all compilation phases and
+%establish a compiler correctness theorem
+%compatible with (\ref{eqn:hcomp}).
+%
+%%}}}
 
 \paragraph{Evaluation} %{{{
 
 The language interfaces and simulation conventions of CompCertO
 generalize the Compositional CompCert model,
 and introduce an explicit treatment of abstraction (\S\ref{sec:req:abs}).
-Yet in other aspects,
-the model remains quite specialized to CompCert.
-
-For one thing,
+%Yet in other aspects,
+%the model remains quite specialized to CompCert.
+However,
+as described above,
 CompCertO's high-level compositional algebra
 is not as well-behaved as
-it was in Compositional CompCert,
-owing to
-the restrictions of horizontal composition (\ref{eqn:hcomp})
-and their workaround
-in the form of simulation convention refinements.
-As a result,
-while we were able to give a fairly simple,
-geometric account of the Compositional CompCert model,
-in CompCertO this is no longer possible
-with the same degree of rigor and accuracy.
-
+it was in Compositional CompCert.
+%As a result,
+%while we were able to give a fairly simple,
+%geometric account of the Compositional CompCert model,
+%in CompCertO this is no longer possible
+%with the same degree of rigor and accuracy.
+%
 Moreover,
 CompCertO still does not account for
 component-local, encapsulated state (\S\ref{sec:req:encap}).
@@ -1777,31 +1785,31 @@ enumerated in \S\ref{sec:req}.
 Our goal is to augment CompCertO semantics
 with general-purpose algebraic tools
 for verification.
-We proceed in three steps.
-First,
-introducing layered composition (\S\ref{sec:overview:lcomp})
-equips the CompCertO model with
-a much simpler a more uniform composition algebra.
-
-The second step is to add a new dimension of compositionality:
-spatial composition,
-which allows global state to be decomposed
-into various components (\S\ref{sec:overview:scomp}).
-This makes it possible to express
-abstract specifications and manage
-patterns such as certified abstraction layers.
-At the same time,
-our infrastructure makes it possible to
-reconcile this abstract view of compositional state
-with the concrete CompCert memory model (\S\ref{sec:overview:sepalg}).
-
-Finally,
-our compositional and principled treatment of global state
-makes it fairly easy to construct
-a version of the model supporting encapsulation (\S\ref{sec:overview:encap}).
-As one application,
-we showcase a version of the Clight language
-with support for module-local private variables (\S\ref{sec:overview:app}).
+%We proceed in three steps.
+%First,
+%introducing layered composition (\S\ref{sec:overview:lcomp})
+%equips the CompCertO model with
+%a much simpler a more uniform composition algebra.
+%
+%The second step is to add a new dimension of compositionality:
+%spatial composition,
+%which allows global state to be decomposed
+%into various components (\S\ref{sec:overview:scomp}).
+%This makes it possible to express
+%abstract specifications and manage
+%patterns such as certified abstraction layers.
+%At the same time,
+%our infrastructure makes it possible to
+%reconcile this abstract view of compositional state
+%with the concrete CompCert memory model (\S\ref{sec:overview:sepalg}).
+%
+%Finally,
+%our compositional and principled treatment of global state
+%makes it fairly easy to construct
+%a version of the model supporting encapsulation (\S\ref{sec:overview:encap}).
+%As one application,
+%we showcase a version of the Clight language
+%with support for module-local private variables (\S\ref{sec:overview:app}).
 
 %}}}
 
@@ -1871,16 +1879,16 @@ are slight generalizations of the ones found in CompCertO.
 All CompCertO simulations remain valid in our model,
 so that in particular the compiler correctness theorem
 can be reused as-is.
-In addition,
-whereas CompCertO simulation conventions
-describe relationships between
-individual source- and target-level calls in isolation,
-our simulation conventions are capable of characterizing
-relationships between \emph{sequences} of calls,
-so that the constraints placed on a particular pair of calls
-may depend on prior history
-(this will become important in the context of
-our treatment of state).
+%In addition,
+%whereas CompCertO simulation conventions
+%describe relationships between
+%individual source- and target-level calls in isolation,
+%our simulation conventions are capable of characterizing
+%relationships between \emph{sequences} of calls,
+%so that the constraints placed on a particular pair of calls
+%may depend on prior history
+%(this will become important in the context of
+%our treatment of state).
 
 Importantly,
 simulations are compatible with $\odot$,
@@ -1907,16 +1915,6 @@ when the corresponding boundary matches:
 \end{equation}
 This equips the model
 with the structure of a \emph{double category}.
-Moreover,
-in this framework
-a simulation convention refinement
-$\mathbf{R} \sqsubseteq \mathbf{S} : A \leftrightarrow B$
-can be expressed as a simulation
-$
-  \kw{id}_A \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} \kw{id}_B
-$,
-and applying it to a simulation
-becomes a simple instance of horizontal composition.
 
 %}}}
 
@@ -2607,7 +2605,7 @@ Recall from \S\ref{sec:survey:compcerto}
 that in the language interfaces $\mathcal{C}_\kw{m}$ and $\mathcal{A}_\kw{m}$,
 %used in CompCertO for the semantics of source and target programs,
 every question and answer is annotated with a global memory state $m \in \kw{mem}$.
-Taking a cue from \citet{rbgs-cal},
+Following \citet{rbgs-cal},
 %for a language interface $A$ and a set of global states $U$,
 this can be expressed using the construction
 $
@@ -2659,11 +2657,11 @@ we can give the specification
       \,.
   \end{array}
 \]
-Likewise, we can specify $\kw{rb.c}$ in isolation
-with an abstract state of type
+To specify $\kw{rb.c}$ alone,
+we can use
 $D_\kw{rb} := \kw{val}^N \times \mathbb{N} \times \mathbb{N}$,
 and define
-$\Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C}@D_\kw{rb}$
+$\Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}$
 such that:
 \begin{align*}
   \Gamma_\kw{rb} &\vDash
@@ -2771,14 +2769,13 @@ we would hope to decompose the correctness proof $\phi$ into
       \node at (+1,2) {$\phi_3$};
     \end{scope}
   \end{tikzpicture}
-  \qquad \qquad
-  \text{(wrong!)}
+  %\qquad \qquad
+  %\text{(wrong!)}
   %\hspace{-4em}
 \]
 However, the different types of states
-used by the various components
-prevents them from being composed or compared directly,
-so that many of the statements in this derivation are invalid.
+prevent the components
+from being composed directly.
 %Below, we show how to extend transition systems
 %to operate with an additional state component,
 %so that we
@@ -5094,8 +5091,9 @@ Having defined a proper categorical structure for $\mathbf{TS}$,
 in our setting
 it will be possible to encode simulation convention refinement as:
 \[
-  \mathbf{R} \sqsubseteq \mathbf{S} \quad :\Leftrightarrow \quad
-    \kw{id} \le_{\mathbf{R} \rightarrow \mathbf{S}} \kw{id}
+  \mathbf{R} \sqsubseteq \mathbf{S} : A \leftrightarrow B
+  \quad :\Leftrightarrow \quad
+    \kw{id}_A \le_{\mathbf{R} \rightarrow \mathbf{S}} \kw{id}_B
 \]
 The interaction of $\sqsubseteq$ with simulations properties
 is then just an instance of horizontal composition.
