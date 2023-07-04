@@ -79,6 +79,7 @@
 %}}}
 
 % String diagrams {{{
+\colorlet{sdbg}{lightgray!50!white}
 \colorlet{scsdbg}{lightgray!50!white}
 \colorlet{tssdbg}{lightgray!50!white}
 \colorlet{memsdbg}{ACMLightBlue!50!white}
@@ -812,7 +813,7 @@ V deq() { return get(inc1()); }
 \end{figure}
 %}}}
 
-\subsection{Semantics in Compositional CompCert} %{{{
+\subsection{Semantics in Compositional CompCert} \label{sec:survey:compcomp} %{{{
 
 The semantics described above
 characterize the behavior of whole programs.
@@ -2891,76 +2892,194 @@ remain an obstacle.
 
 \paragraph{Transforming State} %{{{
 
+%Unfortunately,
+%in our framework
+%it is not possible in general
+%to form the tensor product of transition systems.
+%To see why, consider a hypothetical
+%$
+%  L_1 \otimes L_2 : A_1 \otimes A_2 \twoheadrightarrow B_1 \otimes B_2
+%$.
+%When a question is received in $B_1 \otimes B_2$,
+%its $B_1$ and $B_2$ components can be used to activate
+%the underlying transition systems $L_1$ and $L_2$.
+%However, during their executions,
+%$L_1$ and $L_2$ can ask
+%arbitrary numbers of questions
+%in $A_1$ and $A_2$.
+%In general,
+%there is no reason to expect that these questions will synchronize
+%meaningfully to be combined
+%into questions of $A_1 \otimes A_2$.
+
 As illustrated by
 Example~\ref{ex:abspeclift},
 extending components to ``pass through''
 additional state fields can be useful,
 but in some cases we need the ability
 to transform those fields as well.
-That is,
-we would like to generalize ${-} \mathbin@ U$
-along the following lines.
+To this end,
+it is possible to generalize the construction $L \mathbin@ U$
+to incorporate a \emph{lens} $f : U \lensarrow V$
+with a more sophisticated action on the state component
+than a simple pass-through.
+Such a lens provides access to a field of type $U$ within $V$,
+in the form of two functions:
+\[
+  \begin{array}{c}
+    \kw{get}_f : V \rightarrow U \\[1ex]
+    \kw{set}_f : V \times U \rightarrow V
+  \end{array}
+  \qquad
+  \text{such that}
+  \qquad
+  \begin{array}{r@{\:}l}
+    \kw{get}(\kw{set}(v, u)) &= u \\
+    \kw{set}(v, \kw{get}(v)) &= v \\
+    \kw{set}(\kw{set}(v, u_1), u_2) &= \kw{set}(v, u_2)
+    \,.
+  \end{array}
+\]
+The transition system
+$L \mathbin@ f : A \mathbin@ U \twoheadrightarrow B \mathbin@ V$
+can then use $\kw{get}_f$ to extract $u \in U$ from the incoming state in $V$,
+thread that $U$ state component through the external calls of $L$,
+and use $\kw{set}_f$ to update the state component of type $V$
+in the top-level answer of $L$.
 
-\begin{definition}[Composite language interfaces] \label{def:litens} %{{{
-Given two language interfaces $A$ and $B$,
-the language interface $A \otimes B$ is defined as
-$
-  A \otimes B :=
-    \langle A^\que \times B^\que, \,
-            A^\ans \times B^\ans \rangle
-$.
-The language interface
-$\mathbf{I} = \langle \mathbbm{1}, \mathbbm{1} \rangle$
-is a unit for $\otimes$.
-In addition, for a set $U$
-we define the language interface
-$[U] := \langle U, U \rangle$.
-\end{definition}
+In practice,
+we will especially use two kinds of lens.
+First,
+every bijection is a lens,
+and this can be used to define structural isomorphisms
+such as $\gamma_{A,B} : A \times B \cong B \times A$.
+Secondly, the trivial lens
+$\langle U ] : \mathbbm{1} \leftrightarrows U$
+where
+$\kw{get}_{\langle U ]}(u) = *$ and
+$\kw{set}_{\langle U ]}(u, *) = u$
+can act as a ``terminator'',
+which does not propagate any part of the state in $U$
+but instead returns it unchanged to the caller.
+
 %}}}
 
-%Note that $\otimes$ is %(in essence)
-%associative and commutative,
-%and that:
-%\[
-%  [U \times V] = [U] \otimes [V]
-%  \,,
-%  \qquad
-%  [\mathbbm{1}] = \mathbf{I}
-%  \,,
-%  \qquad
-%  [\varnothing] = \top
-%  \,.
-%\]
-%
-%These operations on language interfaces
-%are mirrored at the level of simulation conventions.
+\paragraph{State Abstraction and Simulation} %{{{
 
-Note that
-we can recover $A \mathbin@ U := A \otimes [U]$
-as a special case.
-Moreover,
-the action of $\otimes$ on simulation conventions is straightforward:
-$\mathbf{R} : A_1 \leftrightarrow A_2$ and
-$\mathbf{S} : B_1 \leftrightarrow B_2$
-can be combined into
-$
-  \mathbf{R} \otimes \mathbf{S} :
-  A_1 \otimes B_1 \leftrightarrow
-  A_2 \otimes B_2
-$,
-%(Def.~\ref{def:sctens})
-which requires the $A$ and $B$ components
-of questions and answers
-to be related independently by $\mathbf{R}$ and $\mathbf{S}$.
-A relation $R \subseteq U_1 \times U_2$
-can also be promoted to a simulation convention
-$
-  [R] : [U_1] \leftrightarrow [U_2]
-$
-which uses $R$ as the underlying relation for both
-questions and answers;
-we will often use $[-]$ implicitly.
-The following example shows how this can be used.
+The remaining right-hand side components of $\mathbin@$-composition
+can be obtained in the following way.
+A set $U$ can be promoted to a language interface
+$[U] := \langle U, U \rangle$.
+In turn a lens $f : U \lensarrow V$ can be promoted to a transition system
+$[f] := \kw{id}_{[\mathbbm{1}]} \mathbin@ f : [U] \twoheadrightarrow [V]$.
+Then simulation conventions and simulations
+can then appear on the right of $\mathbin@$
+as follows:
+\[
+  \begin{prooftree}
+    \hypo{\mathbf{R} : A \leftrightarrow B}
+    \hypo{\mathbf{S} : [U] \leftrightarrow [V]}
+    \infer2{\mathbf{R} \mathbin@ \mathbf{S}
+      : A \mathbin@ U \leftrightarrow B \mathbin@ V}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{\pi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R'}} L_2}
+    \hypo{\phi : [f] \le_{\mathbf{S} \twoheadrightarrow \mathbf{S'}} [g]}
+    \infer2{\pi \mathbin@ \phi \: : \:
+      L_1 \mathbin@ f \:
+      \le_{\mathbf{R} \mathbin@ \mathbf{S} \twoheadrightarrow
+           \mathbf{R'} \mathbin@ \mathbf{S'}} \:
+      L_2 \mathbin@ g}
+  \end{prooftree}
+\]
+The composite simulation convention $\mathbf{R} \mathbin@ \mathbf{S}$
+simply requires that the two fields within the questions and answers
+of the composite language interfaces
+be independently related by the corresponding simulation conventions.
+Proving the simulation property is then straightforward.
+
+Note that a relation $R \subseteq U \times V$
+can be promoted to a simulation convention
+$[R] : [U] \leftrightarrow [V]$,
+and we can introduce a simpler relationship
+$\phi : f \equiv_{R \lensarrow S} g$
+which then entails
+$[\phi] : [f] \le_{[R] \twoheadrightarrow [S]} [g]$.
+However,
+in some cases the more powerful machinery of simulation conventions
+will be useful in the context of lenses as well as transition systems.
+The following property is an example.
+
+\begin{theorem}
+Every lens $f : U \lensarrow V$
+has a companion $f^* : U \leftrightarrow V$
+and a conjoint $f_* : U \leftrightarrow V$.
+\end{theorem}
+
+Above we have left $[-]$ implicit,
+as we often will in the remainder of the paper.
+
+%\begin{definition}[Composite language interfaces] \label{def:litens} %{{{
+%Given two language interfaces $A$ and $B$,
+%the language interface $A \otimes B$ is defined as
+%$
+%  A \otimes B :=
+%    \langle A^\que \times B^\que, \,
+%            A^\ans \times B^\ans \rangle
+%$.
+%The language interface
+%$\mathbf{I} = \langle \mathbbm{1}, \mathbbm{1} \rangle$
+%is a unit for $\otimes$.
+%In addition, for a set $U$
+%we define the language interface
+%$[U] := \langle U, U \rangle$.
+%\end{definition}
+%%}}}
+%
+%%Note that $\otimes$ is %(in essence)
+%%associative and commutative,
+%%and that:
+%%\[
+%%  [U \times V] = [U] \otimes [V]
+%%  \,,
+%%  \qquad
+%%  [\mathbbm{1}] = \mathbf{I}
+%%  \,,
+%%  \qquad
+%%  [\varnothing] = \top
+%%  \,.
+%%\]
+%%
+%%These operations on language interfaces
+%%are mirrored at the level of simulation conventions.
+%
+%Note that
+%we can recover $A \mathbin@ U := A \otimes [U]$
+%as a special case.
+%Moreover,
+%the action of $\otimes$ on simulation conventions is straightforward:
+%$\mathbf{R} : A_1 \leftrightarrow A_2$ and
+%$\mathbf{S} : B_1 \leftrightarrow B_2$
+%can be combined into
+%$
+%  \mathbf{R} \otimes \mathbf{S} :
+%  A_1 \otimes B_1 \leftrightarrow
+%  A_2 \otimes B_2
+%$,
+%%(Def.~\ref{def:sctens})
+%which requires the $A$ and $B$ components
+%of questions and answers
+%to be related independently by $\mathbf{R}$ and $\mathbf{S}$.
+%A relation $R \subseteq U_1 \times U_2$
+%can also be promoted to a simulation convention
+%$
+%  [R] : [U_1] \leftrightarrow [U_2]
+%$
+%which uses $R$ as the underlying relation for both
+%questions and answers;
+%we will often use $[-]$ implicitly.
+%The following example shows how this can be used.
 
 %}}}
 
@@ -2990,99 +3109,28 @@ The refinement property can then be formulated as
 $
   \phi_1 :
   \Gamma_\kw{bq}
-  \:\le_{\top \twoheadrightarrow \mathcal{C} \otimes R_\kw{bq}}\:
+  \:\le_{\top \twoheadrightarrow \mathcal{C} \mathbin@ R_\kw{bq}}\:
   (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot
   \Gamma_\kw{rb}
 $.
 \end{example}
 %}}}
 
-\paragraph{Composing with Lenses} %{{{
-
-Unfortunately,
-in our framework
-it is not possible in general
-to form the tensor product of transition systems.
-To see why, consider a hypothetical
-$
-  L_1 \otimes L_2 : A_1 \otimes A_2 \twoheadrightarrow B_1 \otimes B_2
-$.
-When a question is received in $B_1 \otimes B_2$,
-its $B_1$ and $B_2$ components can be used to activate
-the underlying transition systems $L_1$ and $L_2$.
-However, during their executions,
-$L_1$ and $L_2$ can ask
-arbitrary numbers of questions
-in $A_1$ and $A_2$.
-In general,
-there is no reason to expect that these questions will synchronize
-meaningfully to be combined
-into questions of $A_1 \otimes A_2$.
-
-Nevertheless,
-it is possible to generalize the construction $L \mathbin@ U$
-to incorporate a \emph{lens} $f : U \lensarrow V$
-with a more sophisticated action on the state component
-than a simple pass-through.
-Such a lens provides access to a field of type $U$ within $V$,
-in the form of two functions:
-\[
-  \begin{array}{c}
-    \kw{get}_f : V \rightarrow U \\[1ex]
-    \kw{set}_f : V \times U \rightarrow V
-  \end{array}
-  \qquad
-  \text{such that}
-  \qquad
-  \begin{array}{r@{\:}l}
-    \kw{get}(\kw{set}(v, u)) &= u \\
-    \kw{set}(v, \kw{get}(v)) &= v \\
-    \kw{set}(\kw{set}(v, u_1), u_2) &= \kw{set}(v, u_2)
-    \,.
-  \end{array}
-\]
-For example,
-we will sometimes use the trivial lens
-$\langle U ] : \mathbbm{1} \leftrightarrows U$
-where
-$\kw{get}_{\langle U ]}(u) = *$ and
-$\kw{set}_{\langle U ]}(u, *) = u$.
-Structural isomorphisms and other bijections
-define lenses as well.
-
-The transition system
-$L \mathbin@ f : A \mathbin@ U \rightarrow B \mathbin@ V$
-can then use $\kw{get}_f$ to extract $u \in U$ from the incoming state in $V$,
-thread that $U$ state component through the external calls of $L$,
-and use $\kw{set}_f$ to update the state component of type $V$
-in the top-level answer of $L$.
-
-%}}}
-
 \paragraph{Active and Passive Components} %{{{
 
-Like language interfaces and transition systems,
-sets and lenses form a category.
-In fact,
-as summarized in Table~\ref{tbl:roadmap},
-parallel to our base model of \emph{active} components,
-we build a \emph{passive} version of the framework,
-where lenses play the role of horizontal morphisms,
-but which otherwise provides the same double category structure and
-composition principles.
-The $\mathbin@$ operation we have described above
-will preserve this structure in both arguments.
-
+The different kinds of objects we have described
+are summarized in Table~\ref{tbl:roadmap}.
+We call \emph{active} components which are more complex,
+and which in the case of transition systems
+impose their schedule onto the \emph{passive} components
+such as lenses which are adjoined to them.
 Within the passive world,
 spatial composition is easy
 and coincides with the cartesian product $\times$
-of sets and lenses.
-Lenses and simulation conventions
-can simply act in parallel on their own portion of the state.
+of sets, lenses and relations.
 By contrast,
-active components impose their schedule
-and conflict with one another.
-They can only be spatially composed with passive components.
+transition systems can only be composed with lenses,
+in a way which is more complex to describe.
 
 %}}}
 
@@ -3101,7 +3149,7 @@ They can only be spatially composed with passive components.
     but transition systems can only be $@$-composed
     with simpler, passive components.
     When we make use of a particular string diagram representation
-    for components of a given kind (\S\ref{sec:overview:mon}),
+    for components of a given kind,
     we also list the composition operations which correspond to
     the horizontal ($\mathbb{H}$) and vertical ($\mathbb{V}$)
     juxtaposition of diagrams.
@@ -3109,9 +3157,9 @@ They can only be spatially composed with passive components.
     the two-dimensional structure $\mathbf{TSC}$
     contains $\mathbf{TS}$ and $\mathbf{SC}$ as its edges,
     and likewise $\mathbf{LSR}$
-    contains $\mathbf{Lens}$ and $\mathbf{Rel}$.
+    contains $\mathbf{Lens}^\kw{op}$ and $\mathbf{Rel}$.
 } \label{tbl:roadmap}
-  \small
+  %\small
   \begin{tabular}{
     lllc
     c@{\:\:\:}c@{\:\,}c@{\:}c@{}c
@@ -3146,7 +3194,7 @@ They can only be spatially composed with passive components.
       Interface
         & Sets & $U, V$ && & & $\times$ \\ &
       Behavior
-        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}$ &&
+        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}^\kw{op}$ &&
             $\circ$ & & $\times$ &&& $\circ$ & $\times$ \\ &
       Abstraction
         & Simulation relations & $R \subseteq U \times V \in \mathbf{Rel}$ &&
@@ -3160,24 +3208,49 @@ They can only be spatially composed with passive components.
 \end{table}
 %}}}
 
-\paragraph{String Diagrams} %{{{
+\paragraph{Higher-dimensional Structure} %{{{
 
 \newcommand{\pasv}{%
   \begin{tikzpicture}[baseline=0.1ex,x=1.2ex,y=1.2ex]
-    \draw[fill=white] (0,0) rectangle (1,1);
+    %\fill[sdbg] (0,0) rectangle (1,1);
+    \draw (0,0) rectangle (1,1);
   \end{tikzpicture}}
 \newcommand{\actv}{%
   \begin{tikzpicture}[baseline=0.1ex,x=1.2ex,y=1.2ex]
-    \draw[fill,pattern=north east lines] (0,0) rectangle (1,1);
+    %\fill[sdbg] (0,0) rectangle (1,1);
+    \fill[pattern=north west lines] (0,0) rectangle (1,1);
+    \draw (0,0) rectangle (1,1);
   \end{tikzpicture}}
 
-While somewhat peculiar,
-the distinction between active and passive components
-and the associated restrictions on $\mathbin@$-composition
-can nevertheless be formalized in a higher-categorical framework
-by describing:
+As shown in \autoref{tbl:roadmap},
+by introducing spatial composition,
+we have once again increased the dimensionality
+of all of our objects by one:
 \begin{itemize}
-  \item language (active) interfaces as objects of type $A : \actv \curvearrowright \pasv$;
+\item
+interfaces are now 1-dimensional and compose spatially ($\mathbin@$),
+\item
+behaviors ($\mathbin@$, $\odot$) and abstraction relationships ($\mathbin@$, $\,\mathbin;\,$) are 2-dimensional,
+and \item simulations are 3-dimensional ($\mathbin@$, $\odot$, $\,\mathbin;\,$).
+\end{itemize}
+To tie everything together,
+it remains to describe the 0-dimensional objects which
+serve as endpoints for sets and language interfaces.
+
+Structurally speaking,
+$\mathbin@$ is closest to Compositional CompCert's
+semantic linking operator (\S\ref{sec:survey:compcomp}).
+Recall that in that context,
+we considered $\oplus$ as operating on objects of trivial type
+${\bullet} \rightarrow {\bullet}$.
+The situation with $\mathbin@$ is fairly similar,
+but to encode its asymmetric shape
+we instead introduce \emph{two} 0-dimensional
+``active/passive tag'' objects called
+$\actv$ and $\pasv$.
+Then we can describe
+\begin{itemize}
+  \item language (active) interfaces as objects of type $A : \actv \curvearrowright \pasv$, and
   \item sets (passive interfaces) as objects of type $U : \pasv \curvearrowright \pasv$.
 \end{itemize}
 Composition of interfaces in general can then be given as
@@ -3190,19 +3263,11 @@ $,
 with the understanding that
 $\mathbin@_{\actv\,,\,\pasv\,,\,\pasv}$ corresponds to the operation we have described, and
 $\mathbin@_{\pasv\,,\,\pasv\,,\,\pasv}$ corresponds to the cartesian product of sets.
-To sum up,
-introducing spatial composition increases
-the overall dimensionality of our framework as follows:
-\begin{itemize}
-\item
-the trivial ``active/passive tag'' objects
-$\actv$ and $\pasv$ are 0-dimensional,
-\item
-interfaces are now 1-dimensional and compose spatially ($\mathbin@$),
-\item
-behaviors ($\mathbin@$, $\odot$) and abstraction relationships ($\mathbin@$, $\,\mathbin;\,$) are 2-dimensional,
-and \item simulations are 3-dimensional ($\mathbin@$, $\odot$, $\,\mathbin;\,$).
-\end{itemize}
+
+%}}}
+
+\paragraph{String Diagrams} %{{{
+
 The ways in which $\mathbin@$ interacts with layered composition
 can be captured with a string diagram notation for (now 2-dimensional) transition systems.
 A similar situation holds for simulation conventions.
@@ -3257,7 +3322,7 @@ For $\kw{bq.c}$ we get:
     % Background
     \fill[tssdbg]
       (1,-2) rectangle (14,7);
-    \fill[pattern=north east lines]
+    \fill[act]
       (1,-2) rectangle (14,0);
     % Wires
     \draw (1,0) node[left] {$\mathcal{C}$}
@@ -3290,9 +3355,9 @@ As a result we can state the correctness of $\kw{bq.c}$ as:
   \quad \text{where} \quad
   \mathbf{R}_\kw{bq} :=
   \mathcal{C} \mathbin@ \langle \kw{mem} ]_* \mathbin@ R_\kw{bq} = \:
-  \begin{tikzpicture}[xscale=0.5,yscale=0.6,baseline=(R.base)]
+  \begin{tikzpicture}[xscale=0.5,yscale=0.5,baseline=(R.base)]
     \fill[scsdbg] (0,0) rectangle (6.4,2);
-    \fill[pattern=north east lines] (0,0) rectangle (1,2);
+    \fill[act] (0,0) rectangle (1,2);
     \draw (1,2) node[above] {$\mathcal{C}$}
       -- (1,0) node[below] {$\mathcal{C}$};
     \draw (3,1) node[circle,draw,fill=white,inner sep=1pt] {}
