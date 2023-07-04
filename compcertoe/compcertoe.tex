@@ -688,7 +688,7 @@ a simulation proof can be established for each phase:
 When the target $L_2$ of a simulation $\pi : L_1 \le L_2$
 is the source of a simulation $\rho : L_2 \le L_3$,
 the two can be combined, and the composite $\pi \mathbin; \rho$
-is in turn a simulation relation:
+is in turn a simulation:
 \[
   \begin{prooftree}
     \hypo{\pi : L_1 \le L_2}
@@ -5429,332 +5429,6 @@ $[-] : \mathbf{LSR} \hookrightarrow \mathbf{TSC}$.
 
 %}}}
 
-\section{Clight with module-local state} \label{sec:clightp} %{{{
-
-We have briefly introduced in \S\ref{sec:overview:clightp}
-the language ClightP which allows \emph{private} variables
-to be stored in a separate environment.
-We now discuss the correctness of
-the transformation $\kw{ClightUnP}$
-which converts private variables into regular variables
-stored in the global memory state.
-The corresponding correctness property is
-formulated using the techniques outlined in \S\ref{sec:overview:sepalg}.
-
-\subsection{Correctness Property}
-
-Given a simulation convention $\mathbf{R} : A \leftrightarrow \kw{mem}$,
-we write $\mathbf{R}^\bullet :=
-(\kw{mem} \otimes \mathbf{R}) \mathbin; [\bullet] :
- \kw{mem} \otimes A \leftrightarrow \kw{mem}$
-for the simulation convention
-which merges the target memory share of $\mathbf{R}$
-into another memory component.
-In addition,
-the simulation convention $[U]_* : \mathbf{I} \leftrightarrow U$
-allows the caller to use an arbitrary target question $u$
-but requires the callee to return it unchanged.
-The correctness of $\kw{ClightUnP}$
-can then be stated as:
-\[
-  \begin{tikzpicture}[xscale=0.35,yscale=0.4,baseline=2em]
-     \footnotesize
-     % Background
-     \fill[scsdbg] (-1,0) rectangle (5.3,4);
-     % Content
-     \draw (0,4)
-        -- (0,0) coordinate (C2);
-     \draw[rounded corners]
-          (2,4) node[above,xshift=1ex,overlay] (m1)
-            {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}$}
-       -- (2,2) -- (3,1);
-     \draw[rounded corners] (4,4)
-       -- (4,2.8) node[draw,fill=white] {$R_\kw{P}$}
-       -- (4,2) -- (3,1);
-     \draw (3,1) node {$\bullet$}
-       -- (3,0) coordinate (m2);
-     \path (C2) -- (m2) node[midway,below,xshift=0.5ex]
-       {$\mathcal{C}\:\:\,\mathbin@\:\:\,\kw{mem}$};
-  \end{tikzpicture}
-  \begin{tikzpicture}[xscale=0.75,yscale=0.4,baseline=2em]
-     % Background
-     \fill[memsdbg] (0,0) rectangle (6,4);
-     \fill[penvsdbg] (0,2) rectangle (3,4);
-     %\fill[pattern=crosshatch dots,opacity=0.2] (0,2) rectangle (3,4);
-     \node[below right,opacity=0.5,inner sep=2pt] at (0,4)
-       {\scriptsize $C \mathbin@ \kw{mem} \mathbin@ \kw{penv}$};
-     \node[above right,opacity=0.5,inner sep=2pt] at (0,0)
-       {\scriptsize $C \mathbin@ \kw{mem}$};
-     \node[below left,opacity=0.5,inner sep=2pt] at (6,4)
-       {\scriptsize $C \mathbin@ \kw{mem}$};
-     \node[above left,opacity=0.5,inner sep=2pt] at (6,0)
-       {\scriptsize $C \mathbin@ \kw{mem}$};
-     % 
-     \footnotesize
-     \draw (0,2) node[left] {${} = \mathcal{C} \otimes [R_\kw{P}]^\bullet$}
-        -- (6,2) node[right] {$\mathcal{C} \otimes [\kw{mem}]_*^\bullet = {}$};
-     \draw (3,4) node[above] {$\kw{ClightP}(M)$}
-        -- (3,0) node[below] {$\kw{Clight}(M')$};
-     \node[draw,rounded corners,fill=white] at (3,2)
-       {\normalsize $\kw{ClightUnP}$};
-  \end{tikzpicture}
-  \begin{tikzpicture}[xscale=0.35,yscale=0.4,baseline=2em]
-     \footnotesize
-     % Background
-     \fill[scsdbg] (-0.5,0) rectangle (6,4);
-     % Edges
-     \draw (0.5,4) coordinate (C1)
-        -- (0.5,0) coordinate (C2);
-     \draw[rounded corners]
-          (2,4) coordinate (m1)
-       -- (2,2) -- (3,1);
-     \draw[rounded corners]
-          (4,3) node[draw,fill=white] {$[\kw{mem}]_*$}
-       -- (4,2) -- (3,1);
-     \draw (3,1) node {$\bullet$}
-       -- (3,0) coordinate (m2);
-     \path (C1) -- (m1) node[midway,above,xshift=1ex]
-       {$\mathcal{C} {\mathbin@} \kw{mem}$};
-     \path (C2) -- (m2) node[midway,below,xshift=0.75ex]
-       {$\mathcal{C} \: \mathbin@ \: \kw{mem}$};
-  \end{tikzpicture}
-\]
-The Clight program
-stores formerly private variables in the main memory.
-For incoming calls,
-the private environment is refined
-into a memory share according to a relation $R_\kw{P}$,
-which is then incorporated into the main memory.
-For outgoing calls,
-the private environment is not included in the source question,
-but the corresponding variables are part of the target memory.
-The use of $[\kw{mem}]_*^\bullet$
-requires the callee to return
-this region of the memory unchanged.
-
-\subsection{Encapsulating Private Environments}
-
-In order to give the semantics
-a more tractable type,
-we can encapsulate the private environment:
-\[
-  \kw{ClightP} \langle M \rangle :=
-    (C \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle) \odot
-    \kw{ClightP}(M)
-    :
-    \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
-    \mathcal{C} \mathbin@ \kw{mem}
-\]
-Here $p_0 := \kw{init\_penv}(M)$ is the initial private environment for $M$.
-The facilities discussed in \S\ref{sec:overview:encap}
-can then be used to
-derive a correctness property
-stated in terms of the encapsulated semantics:
-\[
-  \begin{tikzpicture}[xscale=0.60,yscale=0.3]
-    % Background
-    \fill[memsdbg] (0,11) -- (2,11)
-      [rounded corners] -- (2,6)
-      [sharp corners] -| cycle;
-    \fill[penvsdbg] (2,11) rectangle (6,8);
-    \fill[memsdbg] (6,11) rectangle (9,8);
-    \fill[mmemsdbg] (0,6)
-      [rounded corners] -- (2,6)
-      [sharp corners] |- (9,8) -- (9,3) -| cycle;
-    \fill[memsdbg] (0,3) rectangle (9,0);
-    % Region labels
-    \begin{scope}[opacity=0.5,inner sep=2pt]
-      \scriptsize
-      \node[below right,xshift=-1pt] at (0,11) {$\mathcal{C} \mathbin@ \kw{mem}$};
-      \node[above right] at (0,0) {$\mathcal{C} \mathbin@ \kw{mem}$};
-      \node[below left] at (9,11) {$\mathcal{C} \mathbin@ \kw{mem}$};
-      \node[above left] at (9,0) {$\mathcal{C} \mathbin@ \kw{mem}$};
-      \node[below] at (4,11) {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}$};
-      \node[right] at (0,4.5) {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{mem}$};
-    \end{scope}
-    % Wires
-    \begin{scope}
-      \footnotesize
-      \draw (2,11)
-        node[above] (x) {$(\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle)$}
-        [rounded corners] -- (2,6) [sharp corners] -- (0,6)
-        node[left] {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle_*$};
-      \draw (6,11) node[above] (y) {$\kw{ClightP}(M)$}
-        -- (6,0) node[below] {$\kw{Clight}(M')$};
-      \draw (2,8) -- (9,8) node[right]
-        {$\mathcal{C} \mathbin@ \kw{mem} \otimes [\kw{mem}]_*$};
-      \draw (0,3) node[left] {$\mathcal{C} \mathbin@ {\bullet}$}
-        -- (9,3) node[right] {$\mathcal{C} \mathbin@ {\bullet}$};
-      \path (x) -- (y) node[midway] {$\odot$};
-    \end{scope}
-    % Components
-    \node[draw,fill=white,rounded corners] at (2,8) {$p_0 \mathrel{R_\kw{P}} m_0$};
-    \draw[fill=white,rounded corners] (4,2) rectangle (8,9)
-      node[midway] {$\kw{ClightUnP}$};
-  \end{tikzpicture}
-\]
-Here, $m_0 := \kw{init\_mem} \big(M'_\kw{priv}\big)$
-is the initial memory fragment associated with
-the global variable definitions introduced in $M'$
-in order to implement the private variables of $M$.
-Note that private environments
-no longer appear in the type of the ClightP semantics
-or in the correctness property.
-
-\subsection{Composition}
-
-One challenge is that the correctness property depicted above
-is not compositional,
-because the incoming and outgoing simulation conventions are different:
-\[
-    \kw{ClightP}\langle M \rangle
-      \le_{\mathcal{C} \otimes [\kw{mem}]_*^\bullet
-           \twoheadrightarrow
-           \mathcal{C} \otimes \langle m_0 \rangle_*^\bullet}
-      \kw{Clight}(M')
-\]
-Two ClightP modules
-$
-  \kw{ClightP} \langle M_1 \rangle \odot \kw{ClightP}\langle M_2 \rangle
-$
-can be composed,
-but the associated $\kw{ClightUnP}$ correctness properties
-do not directly compose alongside them.
-We will use the following strategy:
-\[
-  \begin{tikzpicture}[xscale=0.7,yscale=0.6]
-    \fill[memsdbg] (0,0) rectangle (11,4);
-    % Region label
-    \begin{scope}[opacity=0.5,inner sep=2pt]
-      \scriptsize
-      \node at (5.5,2) {$\mathcal{C} \mathbin@ \kw{mem}$};
-    \end{scope}
-    % Strings
-    \begin{scope}
-      \footnotesize
-      \draw (4,4) node[above] (S1) {$\kw{ClightP}\langle M_1 \rangle$}
-         -- (4,0) node[below] (T1) {$\kw{Clight}(M_1')$};
-      \draw (7,4) node[above] (S2) {$\kw{ClightP}\langle M_2 \rangle$}
-         -- (7,0) node[below] (T2) {$\kw{Clight}(M_2')$};
-      \path (S1) -- (S2) node[midway] {$\odot$};
-      \path (T1) -- (T2) node[midway] {$\odot$};
-      \draw (0,2) node[left] {$\langle m_0^1 \bullet m_0^2 \rangle^\bullet_*$}
-        -- (1,2)
-        [rounded corners] -- (2,3)
-        node[above left,inner sep=0pt]
-          {\scriptsize $\langle m_0^1 \rangle_*^\bullet$} 
-        -- (9,3)
-        node[above right,inner sep=0pt]
-          {\scriptsize $[\kw{mem}]_*^\bullet$} 
-        [sharp corners] -- (10,2)
-        -- (11,2) node[right] {$[\kw{mem}]_*^\bullet$};
-      \draw (1,2)
-        [rounded corners] -- (2,1)
-        node[below left,inner sep=0pt]
-          {\scriptsize $\langle m_0^2 \rangle_*^\bullet$} 
-        -- (9,1)
-        node[below right,inner sep=0pt]
-          {\scriptsize $[\kw{mem}]_*^\bullet$} 
-        [sharp corners] -- (10,2);
-    \end{scope}
-    % Numbered nodes
-    \begin{scope}[every node/.style={draw,circle,fill=white,inner sep=2pt}]
-      \small
-      \node at (1,2) {3};
-      \node at (4,1) {2};
-      \node at (7,3) {1};
-      \node at (10,2) {4};
-    \end{scope}
-    % ClightUnP nodes
-    \begin{scope}[every node/.style={draw,rounded corners,fill=white}]
-      \small
-      \node at (4,3) {$\kw{ClightUnP}$};
-      \node at (7,1) {$\kw{ClightUnP}$};
-    \end{scope}
-  \end{tikzpicture}
-\]
-First,
-we will establish self-simulation properties
-for $\kw{ClightP}$ (1) and $\kw{Clight}$ (2)
-which show that they are compatible with
-the simulation conventions
-$[\kw{mem}]_*^\bullet$
-and $\langle m \rangle_*^\bullet$.
-These properties follow mainly from the frame rule
-of our memory separation primitives.
-Second,
-we show that the incoming (3) and outgoing (4)
-simulation conventions compose with themselves.
-
-First,
-the property
-$
-  \kw{Clight}(M)
-  \le_{\langle m \rangle_*^\bullet \twoheadrightarrow \langle m \rangle_*^\bullet}
-  \kw{Clight}(M)
-$,
-stems from the fact that
-\[
-L \odot (A \mathbin@ \langle u \rangle) = L \mathbin@ \langle u \rangle =
- (B \mathbin@ \langle u \rangle) \odot (L \mathbin@  U)
-  \quad\text{for any}  \quad L : A \twoheadrightarrow B
-  \,.
-\]
-This can be combined with the frame rule and properties of $\langle m_0 \rangle_*$ to show:
-\[
-  \begin{tikzpicture}[xscale=0.5,yscale=0.3]
-    % Background
-    \begin{scope}
-      \fill[memsdbg] (0,10) -- (0,4)
-        [rounded corners] -- (2,4) -- (2,5) -- (4,7) -- (4,8)
-        [sharp corners] -- (6,8) |- cycle;
-      \fill[mmemsdbg] (0,2) -- (0,4)
-        [rounded corners] -- (2,4) -- (2,5) -- (4,7) -- (4,8)
-        [sharp corners] -- (6,8) |- cycle;
-      \fill[memsdbg] (0,0) rectangle (6,2);
-    \end{scope}
-    % Region labels
-    \begin{scope}[opacity=0.5,inner sep=2pt]
-      \tiny
-      \node[below right] at (0,4)
-        {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{mem}$};
-      \node[below left] at (6,10)
-        {$\mathcal{C} \mathbin@ \kw{mem}$};
-      \node[above right] at (0,0)
-        {$\mathcal{C} \mathbin@ \kw{mem}$};
-    \end{scope}
-    % Strings
-    \begin{scope}
-      \footnotesize
-      \draw (2,10) node[above] {$\kw{Clight}(M)$}
-        [rounded corners] -- (2,7) -- (4,5)
-        node[below right] {\tiny $\kw{Clight}(M) \mathbin@ \kw{mem}$}
-        [sharp corners] -- (4,0)
-        node[below] {$\kw{Clight}(M)$};
-      \draw (0,4) node[left]
-          {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle_*$}
-        [rounded corners] -- (2,4) -- (2,5) -- (4,7) -- (4,8)
-        [sharp corners] -- (6,8) node[right]
-          {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle_*$};
-      \draw (0,2) node[left] {$\mathcal{C} \mathbin@ {\bullet}$}
-        -- (6,2) node[right] {$\mathcal{C} \mathbin@ {\bullet}$};
-    \end{scope}
-    % Nodes
-    \begin{scope}[every node/.style={draw,fill=white}]
-      \node[circle,inner sep=2pt] at (3,6) {$=$};
-      \node[rounded corners] at (4,2) {$\kw{Frame}$};
-    \end{scope}
-  \end{tikzpicture}
-\]
-A similar argument can be used to show
-the analogous property of ClightP.
-
-Second,
-the self-composition of the simulation conventions involved
-follows mostly from properties of the partial commutative monoid.
-
-%}}}
-
 \section{Encapsulated State} \label{sec:encap} %{{{
 
 % Preamble {{{
@@ -6140,7 +5814,82 @@ which preserves the compositional structure of $\mathbin@$ and $\otimes$.
 
 %}}}
 
-\section*{Material cut from \S3 which could be useful below} %{{{
+\section{Applications} \label{sec:app} %{{{
+
+In this section,
+we give a more detailed characterization
+of the ClightP language(\S\ref{sec:application:clightp}),
+and put together a complete proof
+for our running example (\S\ref{sec:application:ad-hoc}),
+and demonstrate how our framework
+can be used to enhance
+the certified abstraction layers(\S\ref{sec:application:cal}).
+
+\subsection{Ad-hoc Verification} \label{sec:application:ad-hoc}
+
+As we have seen in \S\ref{sec:overview:encap},
+with the state composition and encapsulation
+the verification of the bounded queue is decomposed
+as following:
+\[
+\begin{array}{c}
+  \phi_1' \: : \:
+  \Gamma'_\kw{bq} \: \le \: \Sigma_\kw{bq} \odot \Gamma'_\kw{rb}
+  \\[1ex]
+  \phi_2 \: : \: \Sigma_\kw{bq} \mathbin@ \kw{mem}
+    \le
+    \kw{Clight} (\kw{bq.c})
+  \\[1ex]
+  \phi_3' \: : \: \Gamma'_\kw{rb}
+    \le_{\varnothing \twoheadrightarrow
+      \mathcal{C} \mathbin@
+        (\langle \kw{mem} ]^* \mathbin@ [m_0\rangle_*) \mathbin; {\bullet}}
+    \kw{Clight}(\kw{rb.c})
+\end{array}
+\]
+
+To put together, we weaken $\phi_2$ to
+\[
+  \phi'_2 \: : \: \Sigma_\kw{bq}
+  \le_{
+    \mathcal{C} \mathbin@
+    (\langle \kw{mem} ]^* \mathbin@ [m_0\rangle_*) \mathbin; {\bullet}
+    \twoheadrightarrow
+    \mathcal{C} \mathbin@
+    (\langle \kw{mem} ]^* \mathbin@ [m_0\rangle_*) \mathbin; {\bullet}
+    }
+    \kw{Clight} (\kw{bq.c})
+\]
+
+by composing it with $todo$.
+Then the complete proof can be simply composed as:
+\[
+\phi_\kw{bq} \: : \:
+\Gamma'_\kw{bq} \le_{\varnothing \twoheadrightarrow
+      \mathcal{C} \mathbin@
+      (\langle \kw{mem} ]^* \mathbin@ [m_0\rangle_*) \mathbin; {\bullet}}
+    \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c})
+    \: := \:
+    \phi'_1 ; (\phi'_2 \odot \phi'_3)
+\]
+
+However, it is noticable that
+the simulation convention for $\phi'_3$
+is unwieldy because the program $\kw{rb.c}$
+implements the state $S_\kw{rb}$ using its memory state.
+Moreover, it is requied to prove a relation $R\_kw{rb}$
+hold between the abstract state and the memory state
+in order to verify the correctness of $\kw{rb.c}$.
+As the state grows larger,
+the relation becomes more complicated and hard to maintain.
+To solve these two issues,
+we introduce ClightP.
+
+\subsection{Clight with module-local state} \label{sec:application:clightp} %{{{
+
+We have briefly introduced in \S\ref{sec:overview:clightp}
+the language ClightP which allows \emph{private} variables
+to be stored in a separate environment.
 
 To further facilitate the implementation of abstract state,
 we introduce the language
@@ -6160,31 +5909,7 @@ in a separate
 The program $M$ can easily be compiled to a regular
 Clight program $M' := \kw{ClightUnP}(M)$
 by erasing the $\kw{private}$ annotations from all variables.
-We will see in \S\ref{sec:clightp}
-that the techniques presented in \S\ref{sec:overview:sepalg} 
-play a key role in formulating the corresponding correctness property
-for this transformation.
 
-\begin{example}[Verifying $\kw{rb.c}$]
-Using ClightP for $\kw{rb.c}$,
-we can declare the variables
-\texttt{c1}, \texttt{c2} and \texttt{buf}
-as private.
-We can then
-define a relation $R_\kw{rb} \subseteq D_\kw{rb} \times \kw{penv}$
-in order to verify
-\[
-  (\mathcal{C} \mathbin@ \gamma_{\kw{mem},D_\kw{rb}}) \odot
-  (L_\kw{rb} \mathbin@ \kw{mem})
-  \:
-  \le_{\varnothing \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ R_\kw{rb}}
-  \:
-  \kw{ClightP}(\kw{rb.c})
-  \,.
-\]
-\end{example}
-
-\begin{example}[Encapsulated ClightP]
 We define a version
 $\kw{ClightP}\langle M \rangle :
     \mathcal{C} \mathbin@ \kw{mem} \rightarrow
@@ -6208,9 +5933,9 @@ which encapsulates the private environment, as
         -- (4,4);
     % Boxes
     \draw[fill=white,rounded corners]
-      ( 4,-1) rectangle (10,5) node[midway] (N) {$\kw{Clight}(M)$};
+      ( 4,-1) rectangle (10,5) node[midway] (N) {$\kw{ClightP}(M)$};
   \end{tikzpicture} \: =
-  (\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle) \odot
+  (\mathcal{C} \mathbin@ \kw{mem} \mathbin@ [ p_0 \rangle) \odot
     \kw{ClightP}(M)
   \,,
 \]
@@ -6220,109 +5945,80 @@ is the initial state of the private environment.
 Note that the resulting type
 means that ClightP semantics in this form
 can be composed directly.
+
+\begin{example}[Verifying $\kw{rb.c}$]
+Using ClightP for $\kw{rb.c}$,
+we can declare the variables
+\texttt{c1}, \texttt{c2} and \texttt{buf}
+as private.
+\[
+  \psi_\kw{rb} \: : \: \Gamma'_\kw{rb}
+    \le_{\varnothing \twoheadrightarrow
+      \mathcal{C} \mathbin@ \langle \kw{mem} ]^*}
+    \kw{ClightP}\langle \kw{rb.c} \rangle
+\]
+Note that the relation
+$R_\kw{rb} \subseteq D_\kw{rb} \times \kw{penv}$,
+though hidded,
+is agnostic to the CompCert memory.
+The compilation phase,
+as we will see shortly,
+takes care of the step that
+translates the $\kw{penv}$ further down to the memory.
+
+Again,
+by composing the individual proofs together
+\[
+\psi_\kw{bq} \: : \:
+\Gamma'_\kw{bq} \le_{\varnothing \twoheadrightarrow
+      \mathcal{C} \mathbin@ \langle \kw{mem} ]^*}
+    \kw{ClightP}(\kw{bq.c}) \odot \kw{ClightP}(\kw{rb.c})
+    \: := \:
+    todo
+\]
+
 \end{example}
 
-%}}}
+\paragraph{Correctness Property}
+We now discuss the correctness of
+the transformation $\kw{ClightUnP}$
+which converts private variables into regular variables
+stored in the global memory state.
+The corresponding correctness property is
+formulated using the techniques outlined in \S\ref{sec:overview:sepalg}.
 
-\section{Applications} \label{sec:app} %{{{
-
-In this section, we first revisit our running example,
-and refurbish it with the state encapsulation.
-Then we discuss the
-benefits that CompCertO and state encapsulation
-bring to us in the context of
-certified abstraction layers,
-which is a more general setting for verifying complex systems.
-
-\subsection{Ad-hoc Verification}
-
-We have already seen in \S\ref{sec:overview}
-that states have to be explicitly attached to transition systems
-in order to identify the interfaces across different components.
-It immediately becomes overwhelming,
-and great care have to be taken
-in order to put together all the pieces correctly.
-In contrast,
-once the states in the specifications
-are encapsulated by defining
+The correctness of compilation
+from $\kw{ClightP}$ to $\kw{Clight}$
+is formulated as
 \[
-  \Gamma_\kw{bq}: \top \rightarrow \mathcal{C} := (\epsilon \in \kw{val}^* \mid L_\kw{bq}) \qquad
-  \Gamma_\kw{rb}: \top \rightarrow \mathcal{C} := ((\bot, 0, 0) \in \kw{val}^N \times \mathbb{N} \times \mathbb{N} \mid L_\kw{rb}),
+\kw{ClightP}\langle M \rangle \le_{\mathcal{C}@(\kw{mem} @ \langle \kw{mem} ]_*;\bullet) \twoheadrightarrow \mathcal{C}@(\kw{mem} @ [ \kw{m_0} \rangle_*;\bullet)} \kw{Clight}(M')
 \]
-and the static variables in the $\kw{Clight}$ programs are
-converted to private ones
-\[
-  \kw{ClightP} \langle \kw{bq.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem} \qquad
-  \kw{ClightP} \langle \kw{rb.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem},
-\]
-the interfaces across different components are identified
-except for an innocent memory state to be passed through.
-With the individual correctness
-\[
-  \pi_\kw{bq}:\ \Gamma_\kw{bq} \le \Sigma_\kw{bq} \circ \Gamma_\kw{rb} \qquad
-  \pi_\kw{bq'}:\ \Sigma_\kw{bq} @ \kw{m} \le \kw{ClightP}\langle \kw{bq.cp} \rangle \qquad
-  \pi_\kw{rb}:\ \Gamma_\kw{rb} @ \kw{m} \le \kw{ClightP} \langle \kw{rb.cp} \rangle
-\]
-the complete proof can be presented
-as a string diagram in Figure~\ref{fig:application:example}.
+The proof can be decomposed as Figure~\ref{fig:clightp-correct},
+where the relation $R_p \subseteq \kw{penv} \times \kw{mem}$
+connects the private environment and the memory.
 
 \begin{figure}
   \[
-    \begin{tikzpicture}[xscale=0.55,yscale=0.45,baseline=1.24cm]
-      % Background
-      \fill[ACMLightBlue!50] (0,0) -- (0,7)
-      -- (3.5,7) -- (3.5,6) [rounded corners]
-      -- (4.5,5) -- (5,4) [sharp corners] -- (7,4) |- cycle;
-      \fill[ACMGreen!30]
-      (3.5,7) -- (3.5,6) [rounded corners]
-      -- (4.5,5) -- (5,4) [sharp corners] -- (7,4) |- cycle;
-      % Region labels
-      \begin{scope}[opacity=0.5]
-        \tiny
-        \node[above right] at (0,0) {$\mathcal{C}@\kw{mem}$};
-        \node[below left] at (7,7) {$\top$};
-      \end{scope}
-      % Strings
-      \begin{scope}
-        \scriptsize
-        \draw (3.5,7) node[above] {$\Gamma_\kw{bq} @ \kw{mem}$}
-        -- (3.5,6) [rounded corners]
-        -- (4.5,5) node[above right] {$\Gamma_\kw{rb} @ \kw{mem}$}
-        -- (5,4) -- (4.5,3) node[right]{$\kw{rb.cp}$} -- (3.5,2);
-        \draw (3.5,2) [rounded corners] -- (4.5,1)
-        -- (5,0) node[below] (rb) {\footnotesize$\kw{rb.c}$};
-        \draw (3.5,6) [rounded corners]
-        -- (2.5,5) node[above left] {$\Sigma_\kw{bq} @ \kw{mem}$}
-        -- (2,4) -- (2.5,3) node[left]{$\kw{bq.cp}$} -- (3.5,2);
-        \draw (3.5, 2) [rounded corners] -- (2.5,1)
-        -- (2,0) node[below] (bq) {\footnotesize$\kw{bq.c}$};
-        \draw (5,4) -- (7,4) node[right] {$\varnothing$};
-        \draw (0,2) node[left] {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle^\ans_*$} --
-        (7,2) node[right] {$\mathcal{C} \mathbin@ \kw{mem} \otimes [\kw{mem}]^\ans_*$};
-        \path (bq) -- (rb) node[midway] {\footnotesize$\circ$};
-        \end{scope}
-      % Nodes
-      \begin{scope}[every node/.style={circle,draw,fill=white},inner sep=1pt]
-        \scriptsize
-        \node at (3.5,6) {$\pi_\kw{bq}$};
-        \node at (2,4) {$\pi_\kw{bq}'$};
-        \node at (5,4) {$\pi_\kw{rb}$};
-      \end{scope}
-      \begin{scope}
-        \scriptsize
-        \node[draw,fill=white,rounded corners] at (3.5,2) {$\kw{UnP}$};
-      \end{scope}
-    \end{tikzpicture}
+    \text{(a)}
+    \qquad
+    \raisebox{-0.5\height}{\includegraphics[scale=0.09]{./pr/clightp.jpg}}
+    \qquad
+    \text{(b)}
+    \qquad
+    \raisebox{-0.5\height}{\includegraphics[scale=0.09]{./pr/clightp-rel.jpg}}
   \]
-  \caption{A complete proof for the running example}
-  \label{fig:application:example}
+  \caption{todo}
+  \label{fig:clightp-correct}
 \end{figure}
 
-\subsection{Certified Abstraction Layers}
+\paragraph{Composition}
+todo
+
+\subsection{Certified Abstraction Layers} \label{sec:application:cal}
 
 Certified abstraction layers (CAL) framework
 provides a theoretical foundation
-for large scale systems verification,
+for large scale system verification,
 by allowing
 the high-level abstract specification
 to be progressively refined
@@ -6333,109 +6029,518 @@ The correctness of individual components is denoted by
 \]
 which says that
 the behavior of an overlay specification $L^\sharp: \top \twoheadrightarrow \mathcal{C} @ D^\sharp$
-is refined by an implementation $M: \mathcal{C} \twoheadrightarrow \mathcal{C}$
+is refined by an implementation $M: \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}$
 executed on top of an underlay $L^\flat: \top \twoheadrightarrow \mathcal{C} @ D^\flat$
-witnessed by the abstraction relation $R \subseteq D^\sharp \times D^\flat$.
-Abstraction layers are composed according to the following rule
+witnessed by the abstraction relation $R \subseteq D^\sharp \times (\kw{mem} \times D^\flat)$.
+
+With the state encapsulation,
+we can define encapsulated layer interfaces:
 \[
-  \begin{prooftree}
-    \hypo{L^\natural \vdash_R M : L^\sharp}
-    \hypo{L^\flat \vdash_S N : L^\natural}
-    \infer2{L^\flat \vdash_{R \circ S} M + N : L^\sharp}
-  \end{prooftree}
+  \Gamma^\sharp := (\mathcal{C} \mathbin@ [ d^\sharp_0 \rangle ) \odot L^\sharp : \top \twoheadrightarrow \mathcal{C} \qquad
+  \Gamma^\flat := (\mathcal{C} \mathbin@ [ d^\flat_0 \rangle ) \odot L^\flat : \top \twoheadrightarrow \mathcal{C}
+\]
+and use the $\kw{ClightP}$ semantics
+to interpret the abstraction layers:
+\[
+  L^\sharp \vdash M : L^\flat \: \Leftrightarrow \: \Gamma^\sharp \mathbin@ \kw{mem} \le \kw{ClightP}\langle M \rangle \odot (\Gamma^\flat \mathbin@ \kw{mem})
 \]
 
-However, there lacks a satisfying instance of the framework.
-The closest one uses CompCertX with primitives
-to implementation the semantics of the framework,
-where the layer correctness is interpreted as
-(roughly expressed using our notations)
-\[
-  L^\sharp \vdash_R M : L^\flat :\Leftrightarrow L^\sharp @ \kw{mem} \le_{\varnothing \twoheadrightarrow [R]} \kw{ClightX}_{L^\flat @ \kw{mem}} [M],
-\]
-where $\kw{ClightX_L[M]}$ interprets
-a module $M$ of Clight functions
-with external calls being interpreted
-according to the underlay interface $L$,
-and the simulation relation $[R] \subseteq (D^\sharp \times \kw{mem}) \times (D^\flat \times \kw{mem})$
-allows the abstract state to be realized
-by concrete memory state.
-Memory injection is used so that the abstraction layers
-are composible to the CompCertX compiler.
+as shown in Figure~\ref{fig:cal}.
+Note that the abstraction relation
+$R \subseteq D^\sharp \times (\kw{penv} \times D^\flat)$ is hidden,
+and abstraction layers compose naturally.
 
-Although it has been applied to verify CertiKOS,
-the above framework has two major limitations.
-On one hand,
-the $\kw{ClightX}$ semantics is not truly open
-in that the behaviors of external calls have to be provided by the underlay.
-As a consequence,
-the process of layer construction requires
-the well-formedness of the underlay.
-On the other,
-the composition on abstraction relations
-becomes much complicated
-when it incorporates the memory injection.
+\begin{figure}
+  \[
+    \raisebox{-0.5\height}{\includegraphics[scale=0.09]{./pr/cal.png}}
+  \]
+  \caption{todo}
+  \label{fig:cal}
+\end{figure}
 
-By contrast, with CompCertO semantics and the state encapsulation,
-the abstraction relation can be encapsulated,
-which gives a simpler interpretation of the abstraction layers:
-\[
-  L^\flat \vdash M : L^\sharp :\Leftrightarrow L^\sharp @ \kw{mem} \le \kw{ClightP} \langle M \rangle \circ L^\flat @ \kw{mem}
-\]
-The truly openness of CompCertO semantics
-enables modules to be verified independent of underlay semantics.
-For example, the program $\kw{bq.cp}$ is verified
-with reference to its specification $\Sigma_\kw{bq}$
-without relying on any underlay specifications.
-Moreover,
-since the abstract relation has been encapsulated,
-the vertical composition of certified abstraction layers
-can be established as a corollary of
-the vertical composition of encapsulated semantics.
-Furthermore,
-with the ability of combining memory fragments,
-a form of horizontal composition of
-abstraction layers can be established
-in a straightforward way,
-which would be complicated due to
-the intricacy between the abstraction relation
-and the memory state.
 
-\subsection{Future Work}
+% {
+% \color{gray}
 
-Talk about mixing C and assembly semantics
-using the notions of companion/conjoint
-for the compiler's simulation convention.
-Assuming a demonic interpretation for CompCert's transition systems,
-by adapting
-the techniques used for CompCertM's \emph{repaired interaction semantics} of assembly,
-it might be possible to define
-\[
-  \mathcal{CA} : \mathcal{A} \twoheadrightarrow \mathcal{C}
-  \qquad \text{and} \qquad
-  \mathcal{AC} : \mathcal{C} \twoheadrightarrow \mathcal{A}
-  \,,
-\]
-so that repaired interaction semantics boil down to:
-\[
-  \kw{Asm}_\mathcal{C}(M) := \mathcal{CA} \odot \kw{Asm}(M) \odot \mathcal{AC}
-    : \mathcal{C} \twoheadrightarrow \mathcal{C}
-  \,.
-\]
-We could then try to establish properties like:
-\[
-  \kw{id}_\mathcal{C}
-  \le_{\mathbb{C} \twoheadrightarrow \mathcal{C}}
-  \mathcal{CA} 
-  \le_{\mathcal{A} \twoheadrightarrow \mathbb{C}}
-  \kw{id}_\mathcal{A}
-  \qquad
-  \kw{id}_\mathcal{C}
-  \le_{\mathcal{C} \twoheadrightarrow \mathbb{C}}
-  \mathcal{AC}
-  \le_{\mathbb{C} \twoheadrightarrow \mathcal{A}}
-  \kw{id}_\mathcal{A}
-\]
+% \subsection{Clight with module-local state} \label{sec:application:clightp} %{{{
+
+% We have briefly introduced in \S\ref{sec:overview:clightp}
+% the language ClightP which allows \emph{private} variables
+% to be stored in a separate environment.
+% We now discuss the correctness of
+% the transformation $\kw{ClightUnP}$
+% which converts private variables into regular variables
+% stored in the global memory state.
+% The corresponding correctness property is
+% formulated using the techniques outlined in \S\ref{sec:overview:sepalg}.
+
+% \paragraph{Correctness Property}
+
+% Given a simulation convention $\mathbf{R} : A \leftrightarrow \kw{mem}$,
+% we write $\mathbf{R}^\bullet :=
+% (\kw{mem} \otimes \mathbf{R}) \mathbin; [\bullet] :
+%  \kw{mem} \otimes A \leftrightarrow \kw{mem}$
+% for the simulation convention
+% which merges the target memory share of $\mathbf{R}$
+% into another memory component.
+% In addition,
+% the simulation convention $[U]_* : \mathbf{I} \leftrightarrow U$
+% allows the caller to use an arbitrary target question $u$
+% but requires the callee to return it unchanged.
+% The correctness of $\kw{ClightUnP}$
+% can then be stated as:
+% \[
+%   \begin{tikzpicture}[xscale=0.35,yscale=0.4,baseline=2em]
+%      \footnotesize
+%      % Background
+%      \fill[scsdbg] (-1,0) rectangle (5.3,4);
+%      % Content
+%      \draw (0,4)
+%         -- (0,0) coordinate (C2);
+%      \draw[rounded corners]
+%           (2,4) node[above,xshift=1ex,overlay] (m1)
+%             {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}$}
+%        -- (2,2) -- (3,1);
+%      \draw[rounded corners] (4,4)
+%        -- (4,2.8) node[draw,fill=white] {$R_\kw{P}$}
+%        -- (4,2) -- (3,1);
+%      \draw (3,1) node {$\bullet$}
+%        -- (3,0) coordinate (m2);
+%      \path (C2) -- (m2) node[midway,below,xshift=0.5ex]
+%        {$\mathcal{C}\:\:\,\mathbin@\:\:\,\kw{mem}$};
+%   \end{tikzpicture}
+%   \begin{tikzpicture}[xscale=0.75,yscale=0.4,baseline=2em]
+%      % Background
+%      \fill[memsdbg] (0,0) rectangle (6,4);
+%      \fill[penvsdbg] (0,2) rectangle (3,4);
+%      %\fill[pattern=crosshatch dots,opacity=0.2] (0,2) rectangle (3,4);
+%      \node[below right,opacity=0.5,inner sep=2pt] at (0,4)
+%        {\scriptsize $C \mathbin@ \kw{mem} \mathbin@ \kw{penv}$};
+%      \node[above right,opacity=0.5,inner sep=2pt] at (0,0)
+%        {\scriptsize $C \mathbin@ \kw{mem}$};
+%      \node[below left,opacity=0.5,inner sep=2pt] at (6,4)
+%        {\scriptsize $C \mathbin@ \kw{mem}$};
+%      \node[above left,opacity=0.5,inner sep=2pt] at (6,0)
+%        {\scriptsize $C \mathbin@ \kw{mem}$};
+%      %
+%      \footnotesize
+%      \draw (0,2) node[left] {${} = \mathcal{C} \otimes [R_\kw{P}]^\bullet$}
+%         -- (6,2) node[right] {$\mathcal{C} \otimes [\kw{mem}]_*^\bullet = {}$};
+%      \draw (3,4) node[above] {$\kw{ClightP}(M)$}
+%         -- (3,0) node[below] {$\kw{Clight}(M')$};
+%      \node[draw,rounded corners,fill=white] at (3,2)
+%        {\normalsize $\kw{ClightUnP}$};
+%   \end{tikzpicture}
+%   \begin{tikzpicture}[xscale=0.35,yscale=0.4,baseline=2em]
+%      \footnotesize
+%      % Background
+%      \fill[scsdbg] (-0.5,0) rectangle (6,4);
+%      % Edges
+%      \draw (0.5,4) coordinate (C1)
+%         -- (0.5,0) coordinate (C2);
+%      \draw[rounded corners]
+%           (2,4) coordinate (m1)
+%        -- (2,2) -- (3,1);
+%      \draw[rounded corners]
+%           (4,3) node[draw,fill=white] {$[\kw{mem}]_*$}
+%        -- (4,2) -- (3,1);
+%      \draw (3,1) node {$\bullet$}
+%        -- (3,0) coordinate (m2);
+%      \path (C1) -- (m1) node[midway,above,xshift=1ex]
+%        {$\mathcal{C} {\mathbin@} \kw{mem}$};
+%      \path (C2) -- (m2) node[midway,below,xshift=0.75ex]
+%        {$\mathcal{C} \: \mathbin@ \: \kw{mem}$};
+%   \end{tikzpicture}
+% \]
+% The Clight program
+% stores formerly private variables in the main memory.
+% For incoming calls,
+% the private environment is refined
+% into a memory share according to a relation $R_\kw{P}$,
+% which is then incorporated into the main memory.
+% For outgoing calls,
+% the private environment is not included in the source question,
+% but the corresponding variables are part of the target memory.
+% The use of $[\kw{mem}]_*^\bullet$
+% requires the callee to return
+% this region of the memory unchanged.
+
+% \paragraph{Encapsulating Private Environments}
+
+% In order to give the semantics
+% a more tractable type,
+% we can encapsulate the private environment:
+% \[
+%   \kw{ClightP} \langle M \rangle :=
+%     (C \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle) \odot
+%     \kw{ClightP}(M)
+%     :
+%     \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow
+%     \mathcal{C} \mathbin@ \kw{mem}
+% \]
+% Here $p_0 := \kw{init\_penv}(M)$ is the initial private environment for $M$.
+% The facilities discussed in \S\ref{sec:overview:encap}
+% can then be used to
+% derive a correctness property
+% stated in terms of the encapsulated semantics:
+% \[
+%   \begin{tikzpicture}[xscale=0.60,yscale=0.3]
+%     % Background
+%     \fill[memsdbg] (0,11) -- (2,11)
+%       [rounded corners] -- (2,6)
+%       [sharp corners] -| cycle;
+%     \fill[penvsdbg] (2,11) rectangle (6,8);
+%     \fill[memsdbg] (6,11) rectangle (9,8);
+%     \fill[mmemsdbg] (0,6)
+%       [rounded corners] -- (2,6)
+%       [sharp corners] |- (9,8) -- (9,3) -| cycle;
+%     \fill[memsdbg] (0,3) rectangle (9,0);
+%     % Region labels
+%     \begin{scope}[opacity=0.5,inner sep=2pt]
+%       \scriptsize
+%       \node[below right,xshift=-1pt] at (0,11) {$\mathcal{C} \mathbin@ \kw{mem}$};
+%       \node[above right] at (0,0) {$\mathcal{C} \mathbin@ \kw{mem}$};
+%       \node[below left] at (9,11) {$\mathcal{C} \mathbin@ \kw{mem}$};
+%       \node[above left] at (9,0) {$\mathcal{C} \mathbin@ \kw{mem}$};
+%       \node[below] at (4,11) {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{penv}$};
+%       \node[right] at (0,4.5) {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{mem}$};
+%     \end{scope}
+%     % Wires
+%     \begin{scope}
+%       \footnotesize
+%       \draw (2,11)
+%         node[above] (x) {$(\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \langle p_0 \rangle)$}
+%         [rounded corners] -- (2,6) [sharp corners] -- (0,6)
+%         node[left] {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle_*$};
+%       \draw (6,11) node[above] (y) {$\kw{ClightP}(M)$}
+%         -- (6,0) node[below] {$\kw{Clight}(M')$};
+%       \draw (2,8) -- (9,8) node[right]
+%         {$\mathcal{C} \mathbin@ \kw{mem} \otimes [\kw{mem}]_*$};
+%       \draw (0,3) node[left] {$\mathcal{C} \mathbin@ {\bullet}$}
+%         -- (9,3) node[right] {$\mathcal{C} \mathbin@ {\bullet}$};
+%       \path (x) -- (y) node[midway] {$\odot$};
+%     \end{scope}
+%     % Components
+%     \node[draw,fill=white,rounded corners] at (2,8) {$p_0 \mathrel{R_\kw{P}} m_0$};
+%     \draw[fill=white,rounded corners] (4,2) rectangle (8,9)
+%       node[midway] {$\kw{ClightUnP}$};
+%   \end{tikzpicture}
+% \]
+% Here, $m_0 := \kw{init\_mem} \big(M'_\kw{priv}\big)$
+% is the initial memory fragment associated with
+% the global variable definitions introduced in $M'$
+% in order to implement the private variables of $M$.
+% Note that private environments
+% no longer appear in the type of the ClightP semantics
+% or in the correctness property.
+
+% \paragraph{Composition}
+
+% One challenge is that the correctness property depicted above
+% is not compositional,
+% because the incoming and outgoing simulation conventions are different:
+% \[
+%     \kw{ClightP}\langle M \rangle
+%       \le_{\mathcal{C} \otimes [\kw{mem}]_*^\bullet
+%            \twoheadrightarrow
+%            \mathcal{C} \otimes \langle m_0 \rangle_*^\bullet}
+%       \kw{Clight}(M')
+% \]
+% Two ClightP modules
+% $
+%   \kw{ClightP} \langle M_1 \rangle \odot \kw{ClightP}\langle M_2 \rangle
+% $
+% can be composed,
+% but the associated $\kw{ClightUnP}$ correctness properties
+% do not directly compose alongside them.
+% We will use the following strategy:
+% \[
+%   \begin{tikzpicture}[xscale=0.7,yscale=0.6]
+%     \fill[memsdbg] (0,0) rectangle (11,4);
+%     % Region label
+%     \begin{scope}[opacity=0.5,inner sep=2pt]
+%       \scriptsize
+%       \node at (5.5,2) {$\mathcal{C} \mathbin@ \kw{mem}$};
+%     \end{scope}
+%     % Strings
+%     \begin{scope}
+%       \footnotesize
+%       \draw (4,4) node[above] (S1) {$\kw{ClightP}\langle M_1 \rangle$}
+%          -- (4,0) node[below] (T1) {$\kw{Clight}(M_1')$};
+%       \draw (7,4) node[above] (S2) {$\kw{ClightP}\langle M_2 \rangle$}
+%          -- (7,0) node[below] (T2) {$\kw{Clight}(M_2')$};
+%       \path (S1) -- (S2) node[midway] {$\odot$};
+%       \path (T1) -- (T2) node[midway] {$\odot$};
+%       \draw (0,2) node[left] {$\langle m_0^1 \bullet m_0^2 \rangle^\bullet_*$}
+%         -- (1,2)
+%         [rounded corners] -- (2,3)
+%         node[above left,inner sep=0pt]
+%           {\scriptsize $\langle m_0^1 \rangle_*^\bullet$}
+%         -- (9,3)
+%         node[above right,inner sep=0pt]
+%           {\scriptsize $[\kw{mem}]_*^\bullet$}
+%         [sharp corners] -- (10,2)
+%         -- (11,2) node[right] {$[\kw{mem}]_*^\bullet$};
+%       \draw (1,2)
+%         [rounded corners] -- (2,1)
+%         node[below left,inner sep=0pt]
+%           {\scriptsize $\langle m_0^2 \rangle_*^\bullet$}
+%         -- (9,1)
+%         node[below right,inner sep=0pt]
+%           {\scriptsize $[\kw{mem}]_*^\bullet$}
+%         [sharp corners] -- (10,2);
+%     \end{scope}
+%     % Numbered nodes
+%     \begin{scope}[every node/.style={draw,circle,fill=white,inner sep=2pt}]
+%       \small
+%       \node at (1,2) {3};
+%       \node at (4,1) {2};
+%       \node at (7,3) {1};
+%       \node at (10,2) {4};
+%     \end{scope}
+%     % ClightUnP nodes
+%     \begin{scope}[every node/.style={draw,rounded corners,fill=white}]
+%       \small
+%       \node at (4,3) {$\kw{ClightUnP}$};
+%       \node at (7,1) {$\kw{ClightUnP}$};
+%     \end{scope}
+%   \end{tikzpicture}
+% \]
+% First,
+% we will establish self-simulation properties
+% for $\kw{ClightP}$ (1) and $\kw{Clight}$ (2)
+% which show that they are compatible with
+% the simulation conventions
+% $[\kw{mem}]_*^\bullet$
+% and $\langle m \rangle_*^\bullet$.
+% These properties follow mainly from the frame rule
+% of our memory separation primitives.
+% Second,
+% we show that the incoming (3) and outgoing (4)
+% simulation conventions compose with themselves.
+
+% First,
+% the property
+% $
+%   \kw{Clight}(M)
+%   \le_{\langle m \rangle_*^\bullet \twoheadrightarrow \langle m \rangle_*^\bullet}
+%   \kw{Clight}(M)
+% $,
+% stems from the fact that
+% \[
+% L \odot (A \mathbin@ \langle u \rangle) = L \mathbin@ \langle u \rangle =
+%  (B \mathbin@ \langle u \rangle) \odot (L \mathbin@  U)
+%   \quad\text{for any}  \quad L : A \twoheadrightarrow B
+%   \,.
+% \]
+% This can be combined with the frame rule and properties of $\langle m_0 \rangle_*$ to show:
+% \[
+%   \begin{tikzpicture}[xscale=0.5,yscale=0.3]
+%     % Background
+%     \begin{scope}
+%       \fill[memsdbg] (0,10) -- (0,4)
+%         [rounded corners] -- (2,4) -- (2,5) -- (4,7) -- (4,8)
+%         [sharp corners] -- (6,8) |- cycle;
+%       \fill[mmemsdbg] (0,2) -- (0,4)
+%         [rounded corners] -- (2,4) -- (2,5) -- (4,7) -- (4,8)
+%         [sharp corners] -- (6,8) |- cycle;
+%       \fill[memsdbg] (0,0) rectangle (6,2);
+%     \end{scope}
+%     % Region labels
+%     \begin{scope}[opacity=0.5,inner sep=2pt]
+%       \tiny
+%       \node[below right] at (0,4)
+%         {$\mathcal{C} \mathbin@ \kw{mem} \mathbin@ \kw{mem}$};
+%       \node[below left] at (6,10)
+%         {$\mathcal{C} \mathbin@ \kw{mem}$};
+%       \node[above right] at (0,0)
+%         {$\mathcal{C} \mathbin@ \kw{mem}$};
+%     \end{scope}
+%     % Strings
+%     \begin{scope}
+%       \footnotesize
+%       \draw (2,10) node[above] {$\kw{Clight}(M)$}
+%         [rounded corners] -- (2,7) -- (4,5)
+%         node[below right] {\tiny $\kw{Clight}(M) \mathbin@ \kw{mem}$}
+%         [sharp corners] -- (4,0)
+%         node[below] {$\kw{Clight}(M)$};
+%       \draw (0,4) node[left]
+%           {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle_*$}
+%         [rounded corners] -- (2,4) -- (2,5) -- (4,7) -- (4,8)
+%         [sharp corners] -- (6,8) node[right]
+%           {$\mathcal{C} \mathbin@ \kw{mem} \otimes \langle m_0 \rangle_*$};
+%       \draw (0,2) node[left] {$\mathcal{C} \mathbin@ {\bullet}$}
+%         -- (6,2) node[right] {$\mathcal{C} \mathbin@ {\bullet}$};
+%     \end{scope}
+%     % Nodes
+%     \begin{scope}[every node/.style={draw,fill=white}]
+%       \node[circle,inner sep=2pt] at (3,6) {$=$};
+%       \node[rounded corners] at (4,2) {$\kw{Frame}$};
+%     \end{scope}
+%   \end{tikzpicture}
+% \]
+% A similar argument can be used to show
+% the analogous property of ClightP.
+
+% Second,
+% the self-composition of the simulation conventions involved
+% follows mostly from properties of the partial commutative monoid.
+
+% %}}}
+
+% \subsection{Ad-hoc Verification} \label{sec:application:ad-hoc}
+
+% We have already seen in \S\ref{sec:overview}
+% that states have to be explicitly attached to transition systems
+% in order to identify the interfaces across different components.
+% It immediately becomes overwhelming,
+% and great care have to be taken
+% in order to put together all the pieces correctly.
+% In contrast,
+% once the states in the specifications
+% are encapsulated by defining
+% \[
+%   \Gamma_\kw{bq}: \top \rightarrow \mathcal{C} := (\epsilon \in \kw{val}^* \mid L_\kw{bq}) \qquad
+%   \Gamma_\kw{rb}: \top \rightarrow \mathcal{C} := ((\bot, 0, 0) \in \kw{val}^N \times \mathbb{N} \times \mathbb{N} \mid L_\kw{rb}),
+% \]
+% and the static variables in the $\kw{Clight}$ programs are
+% converted to private ones
+% \[
+%   \kw{ClightP} \langle \kw{bq.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem} \qquad
+%   \kw{ClightP} \langle \kw{rb.cp} \rangle : \mathcal{C} @ \kw{mem} \rightarrow \mathcal{C} @ \kw{mem},
+% \]
+% the interfaces across different components are identified
+% except for an innocent memory state to be passed through.
+% With the individual correctness
+% \[
+%   \pi_\kw{bq}:\ \Gamma_\kw{bq} \le \Sigma_\kw{bq} \circ \Gamma_\kw{rb} \qquad
+%   \pi_\kw{bq'}:\ \Sigma_\kw{bq} @ \kw{m} \le \kw{ClightP}\langle \kw{bq.cp} \rangle \qquad
+%   \pi_\kw{rb}:\ \Gamma_\kw{rb} @ \kw{m} \le \kw{ClightP} \langle \kw{rb.cp} \rangle
+% \]
+% the complete proof can be presented
+% as a string diagram in Figure~\ref{fig:application:example}.
+
+
+% \subsection{Certified Abstraction Layers} \label{sec:application:cal}
+
+% Certified abstraction layers (CAL) framework
+% provides a theoretical foundation
+% for large scale systems verification,
+% by allowing
+% the high-level abstract specification
+% to be progressively refined
+% through a series of abstraction layers.
+% The correctness of individual components is denoted by
+% \[
+%   L^\sharp \vdash_R M : L^\flat,
+% \]
+% which says that
+% the behavior of an overlay specification $L^\sharp: \top \twoheadrightarrow \mathcal{C} @ D^\sharp$
+% is refined by an implementation $M: \mathcal{C} \twoheadrightarrow \mathcal{C}$
+% executed on top of an underlay $L^\flat: \top \twoheadrightarrow \mathcal{C} @ D^\flat$
+% witnessed by the abstraction relation $R \subseteq D^\sharp \times D^\flat$.
+% Abstraction layers are composed according to the following rule
+% \[
+%   \begin{prooftree}
+%     \hypo{L^\natural \vdash_R M : L^\sharp}
+%     \hypo{L^\flat \vdash_S N : L^\natural}
+%     \infer2{L^\flat \vdash_{R \circ S} M + N : L^\sharp}
+%   \end{prooftree}
+% \]
+
+% However, there lacks a satisfying instance of the framework.
+% The closest one uses CompCertX with primitives
+% to implementation the semantics of the framework,
+% where the layer correctness is interpreted as
+% (roughly expressed using our notations)
+% \[
+%   L^\sharp \vdash_R M : L^\flat :\Leftrightarrow L^\sharp @ \kw{mem} \le_{\varnothing \twoheadrightarrow [R]} \kw{ClightX}_{L^\flat @ \kw{mem}} [M],
+% \]
+% where $\kw{ClightX_L[M]}$ interprets
+% a module $M$ of Clight functions
+% with external calls being interpreted
+% according to the underlay interface $L$,
+% and the simulation relation $[R] \subseteq (D^\sharp \times \kw{mem}) \times (D^\flat \times \kw{mem})$
+% allows the abstract state to be realized
+% by concrete memory state.
+% Memory injection is used so that the abstraction layers
+% are composible to the CompCertX compiler.
+
+% Although it has been applied to verify CertiKOS,
+% the above framework has two major limitations.
+% On one hand,
+% the $\kw{ClightX}$ semantics is not truly open
+% in that the behaviors of external calls have to be provided by the underlay.
+% As a consequence,
+% the process of layer construction requires
+% the well-formedness of the underlay.
+% On the other,
+% the composition on abstraction relations
+% becomes much complicated
+% when it incorporates the memory injection.
+
+% By contrast, with CompCertO semantics and the state encapsulation,
+% the abstraction relation can be encapsulated,
+% which gives a simpler interpretation of the abstraction layers:
+% \[
+%   L^\flat \vdash M : L^\sharp :\Leftrightarrow L^\sharp @ \kw{mem} \le \kw{ClightP} \langle M \rangle \circ L^\flat @ \kw{mem}
+% \]
+% The truly openness of CompCertO semantics
+% enables modules to be verified independent of underlay semantics.
+% For example, the program $\kw{bq.cp}$ is verified
+% with reference to its specification $\Sigma_\kw{bq}$
+% without relying on any underlay specifications.
+% Moreover,
+% since the abstract relation has been encapsulated,
+% the vertical composition of certified abstraction layers
+% can be established as a corollary of
+% the vertical composition of encapsulated semantics.
+% Furthermore,
+% with the ability of combining memory fragments,
+% a form of horizontal composition of
+% abstraction layers can be established
+% in a straightforward way,
+% which would be complicated due to
+% the intricacy between the abstraction relation
+% and the memory state.
+
+% \subsection{Future Work}
+
+% Talk about mixing C and assembly semantics
+% using the notions of companion/conjoint
+% for the compiler's simulation convention.
+% Assuming a demonic interpretation for CompCert's transition systems,
+% by adapting
+% the techniques used for CompCertM's \emph{repaired interaction semantics} of assembly,
+% it might be possible to define
+% \[
+%   \mathcal{CA} : \mathcal{A} \twoheadrightarrow \mathcal{C}
+%   \qquad \text{and} \qquad
+%   \mathcal{AC} : \mathcal{C} \twoheadrightarrow \mathcal{A}
+%   \,,
+% \]
+% so that repaired interaction semantics boil down to:
+% \[
+%   \kw{Asm}_\mathcal{C}(M) := \mathcal{CA} \odot \kw{Asm}(M) \odot \mathcal{AC}
+%     : \mathcal{C} \twoheadrightarrow \mathcal{C}
+%   \,.
+% \]
+% We could then try to establish properties like:
+% \[
+%   \kw{id}_\mathcal{C}
+%   \le_{\mathbb{C} \twoheadrightarrow \mathcal{C}}
+%   \mathcal{CA}
+%   \le_{\mathcal{A} \twoheadrightarrow \mathbb{C}}
+%   \kw{id}_\mathcal{A}
+%   \qquad
+%   \kw{id}_\mathcal{C}
+%   \le_{\mathcal{C} \twoheadrightarrow \mathbb{C}}
+%   \mathcal{AC}
+%   \le_{\mathbb{C} \twoheadrightarrow \mathcal{A}}
+%   \kw{id}_\mathcal{A}
+% \]
+
+% }
 
 %}}}
 
