@@ -186,18 +186,26 @@ from off-the-shelf certified components~\cite{deepspec}.
 In principle,
 compositional semantics
 could play a key role in enabling this.
-In practice, simple but monolithic operational models
+In practice, simple %but monolithic
+operational models
 have proven more amenable
 to carrying out actual verification projects,
 and few compositional semantic models
 support the combination of features
 required for large-scale verification tasks.
+
 This paper is concerned with bridging this gap.
-We present a compositional, refinement-based semantics framework for verification,
-which incorporates
-\emph{data abstraction},
-\emph{state encapsulation} and
-\emph{certified compilation}.
+We present a compositional, refinement-based semantics framework
+designed with complex program verification tasks in mind.
+Our framework can be used to decompose verification tasks
+across program modules,
+levels of abstraction, and
+components of the global state,
+and provides a three-dimensional algebra
+\ldots
+%\emph{data abstraction},
+%\emph{state encapsulation} and
+%\emph{certified compilation}.
 \end{abstract}
 
 %}}}
@@ -283,8 +291,8 @@ this means that the truth table $\sigma$
 and the circuit $x \circ y \circ z$
 can no longer be directly compared.
 The correctness property $\sigma \sqsubseteq_R x \circ y \circ z$
-is now contingent on a convention $R$
-which explains the relationship between
+must now involve a convention $R$
+which codifies the relationship between
 the logical and electrical views of the system.
 To support this kind of abstraction,
 a verification framework must provide a way to express
@@ -585,7 +593,6 @@ performs a number of transitions,
 and when a final state $s_n$ is reached,
 terminates with the corresponding exit status $x$:
 \begin{equation}
-  \kw{Clight}[p] \: \vDash \quad
   I \ni s_0 \rightarrow s_1 \rightarrow \cdots \rightarrow s_n \mathrel{F} x
   \,.
   \label{eqn:clightexec}
@@ -641,16 +648,17 @@ every execution of $L_1$ gives rise
 to a corresponding execution of $L_2$:
 \begin{itemize}
   \item there is for every source initial state $s_1 \in I_1$
-    a related target initial state ($s_1 \mathrel\rho s_2 \in I_2$);
+    a related target initial state
+    ($\exists s_2 \mathbin. s_1 \mathrel\rho s_2 \in I_2$);
   \item for related states $s_1 \mathrel\rho s_2$,
     a source transition sequence $s_1 \rightarrow_1^* s_1'$ must be matched by
     a target transition sequence $s_2 \rightarrow_2^* s_2'$ such that
     the resulting states $s_1' \mathrel\rho s_2'$ are again related;
   \item for related states $s_1 \mathrel\rho s_2$,
     if $s_1$ is final in $L_1$ with an outcome $x$,
-    then $s_2 \mathrel{F} x$ as well.
+    then $s_2 \mathrel{F_2} x$ as well.
 \end{itemize}
-We will write $\rho : L_1 \le L_2$ when these conditions are satisfied,
+We write $\rho : L_1 \le L_2$ when these conditions are satisfied,
 or just $L_1 \le L_2$ when such a $\rho$ exists.
 
 \paragraph{Vertical Compositionality}
@@ -801,14 +809,26 @@ V deq() { return get(inc1()); }
 
 \subsection{Semantics in Compositional CompCert} \label{sec:survey:compcomp} %{{{
 
-The semantics described above
-characterize the behavior of whole programs.
-However, compilers usually act on individual translation units.
-CompCert can compile
-the files shown in Fig.~\ref{fig:code},
-but since they do not constitute whole programs,
-the correctness property (\ref{eqn:ccc-wp})
-does not apply.
+A serious limitation of CompCert
+is that its semantics
+only describe the behavior of whole programs.
+
+Consider the code shown in Fig.~\ref{fig:code},
+which we use as a running example.
+The translation unit $\kw{rb.c}$
+provides basic operations for a ring buffer data structure,
+which are used by $\kw{bq.c}$
+to implement a bounded queue.
+Neither file provides a $\kw{main}()$ function
+nor do they constitute a whole program,
+and as a result their Clight semantics are undefined.
+This situation is completely standard
+for C programs of even a moderate size,
+and indeed CompCert can compile
+the files shown in Fig.~\ref{fig:code}.
+However,
+and the correctness property (\ref{eqn:ccc-wp})
+does not provide any guarantees.
 
 \paragraph{Transition Systems} %{{{
 
@@ -893,6 +913,9 @@ $
 $.
 Here we use $\rightarrowtail$ to denote internal execution
 and $\leadsto$ to denote a step where the environment is in control.
+We will write $L \vDash t$
+to mean that the transition system $L$
+admits the interaction trace $t$.
 
 %The component is activated by an incoming call,
 %described by a question $q \in B^\que$.
@@ -945,7 +968,7 @@ but it makes outgoing calls which may have that effect:
 \paragraph{Horizontal Compositionality} %{{{
 
 Under this new definition of transition system,
-it becomes possible to define a \emph{semantic linking} operator
+it becomes possible to define a \emph{semantic linking} operator $\oplus$
 to model the interaction between different components.
 The transition system $L_1 \oplus L_2$
 generally mirrors the internal executions of $L_1$ and $L_2$,
@@ -1153,17 +1176,19 @@ to obtain
   \raisebox{-0.5\height}{
     \begin{tikzpicture}[xscale=0.7,yscale=0.35]
       \small
-      \fill[color=ACMBlue!20] (-3,+2) rectangle (+2.5,-4);
+      \fill[color=ACMBlue!20] (-3,+2) rectangle (+2.2,-4);
       \begin{scope}[rounded corners]
         \draw (-2.5,+2) node[above] {$C$}
            -- (-2.5,-4) node[below] {$C$};
         \draw (0,2) node[above] {$L_\kw{bq}$} -- (0,0);
-        \draw (0,0) -- node[left] {\tiny $\kw{Clight}(\kw{bq.c})$} (-1,-1)
-                    -- (-1,-4) node[below] {$\kw{Asm}(\kw{bq.s})\:$};
-        \draw (0,0) -- node[right] {\tiny $\kw{Clight}(\kw{rb.c})$} (+1,-1)
-                    -- (+1,-4) node[below] {$\:\kw{Asm}(\kw{rb.s})$};
+        \draw (0,0)
+          -- (-1,-1) node[left,inner sep=1pt] {\footnotesize $\kw{bq.c}$}
+          -- (-1,-4) node[below] {$\kw{Asm}(\kw{bq.s})\:$};
+        \draw (0,0)
+          -- (+1,-1) node[right,inner sep=1pt] {\footnotesize $\kw{rb.c}$}
+          -- (+1,-4) node[below] {$\:\kw{Asm}(\kw{rb.s})$};
       \end{scope}
-      \begin{scope}[every node/.style={inner sep=1pt,circle,draw,fill=white,inner sep=1pt}]
+      \begin{scope}[every node/.style={circle,draw,fill=white,inner sep=1pt}]
         \node at (0,0) {$\phi$};
         \node at (-1,-2.5) {\scriptsize $\pi_\kw{bq}$};
         \node at (+1,-2.5) {\scriptsize $\pi_\kw{rb}$};
@@ -1179,7 +1204,11 @@ to obtain
     introduces (horizontal) composition of transition systems,
     so simulations become two-dimensional objects
     which compose in two directions.
-    (c,d) We use string diagram representations for simulations.
+    (c,d) We use string diagram representations for simulations;
+    the abbreviations $\kw{bq.c}$ and $\kw{rb.c}$
+    denote the semantics
+    $\kw{Clight}(\kw{bq.c})$ and $\kw{Clight}(\kw{rb.c})$
+    of the corresponding files.
   }
   \label{fig:pasting}
 \end{figure}
@@ -1388,11 +1417,12 @@ The simulation can then be stated as
   \,.
   \qquad
   \qquad
-  \begin{tikzcd}
-    A_1 \ar[d, leftrightarrow, "\mathbf{R}_A"']
-        \ar[r, twoheadrightarrow, "L_1"] &
-    B_1 \ar[d, leftrightarrow, "\mathbf{R}_B"] \\
-    A_2 \ar[r, twoheadrightarrow, "L_2"'] &
+  \begin{tikzcd}[sep=0.5ex]
+    A_1 \ar[dd, leftrightarrow, "\mathbf{R}_A"']
+        \ar[rr, twoheadrightarrow, "L_1"] &&
+    B_1 \ar[dd, leftrightarrow, "\mathbf{R}_B"] \\
+    & \pi & \\
+    A_2 \ar[rr, twoheadrightarrow, "L_2"'] &&
     B_2
   \end{tikzcd}
 \end{equation}
@@ -2234,9 +2264,14 @@ are a trivial language interface and simulation convention
 which disallow any interaction.
 %
 Because our model is a generalization,
-CompCertO semantics and proofs remain available.
+CompCertO's
+language semantics and proofs
+remain available.
 In particular,
-the compiler correctness proof provides the simulations:
+the compiler's \emph{semantics presservation} theorem,
+stated in terms of the calling convention
+$\mathbb{C} : \mathcal{C}_\kw{m} \leftrightarrow \mathcal{A}_\kw{m}$,
+provides the simulations:
 \[
   \pi_\kw{bq} :
     \kw{Clight}(\kw{bq.c})
@@ -2431,157 +2466,6 @@ whose type can be read out from the diagram's overall boundary.
 %\end{figure}
 %%}}}
 
-\paragraph{Conjoints and Companions} %{{{
-
-Although
-transition systems and simulation conventions
-are both one-dimensional objects
-connecting language interfaces,
-they are fairly different in nature.
-However,
-sometimes
-a transition system and a simulation convention
-represent in some sense equivalent behaviors.
-This
-can be formalized using the notions of
-\emph{companion} and \emph{conjoint}
-morphisms in a double category,
-which in our setting
-concretize as follows.
-
-\begin{definition}
-We say that a transition system $L : A \twoheadrightarrow B$ has:
-\begin{itemize}
-  \item a \emph{companion} $L_* : A \leftrightarrow B$ when
-    $\kw{id}_A \le_{\kw{id}_A \twoheadrightarrow L_*} L$ and
-    $L \le_{L_* \twoheadrightarrow \kw{id}_B} \kw{id}_B$;
-  \item a \emph{conjoint} $L^* : B \leftrightarrow A$ when
-    $\kw{id}_B \le_{L^* \twoheadrightarrow \kw{id}_B} L$ and
-    $L \le_{\kw{id}_A \twoheadrightarrow L^*} \kw{id}_A$.
-\end{itemize}
-\end{definition}
-
-These notions
-are especially useful in
-our treatment of state,
-outlined below.
-
-%\begin{equation} \label{eqn:compconj}
-%  \begin{array}{r@{}l}
-%    \begin{tikzpicture}[scale=0.4,baseline] %{{{
-%      % Background
-%      \begin{scope}
-%        \fill[ACMBlue!50] (1,2)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (2,1) |- cycle;
-%        \fill[pattern=crosshatch dots,opacity=0.2] (0,2) -- (1,2)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (2,1) -- (2,0) -| cycle;
-%      \end{scope}
-%      % Region labels
-%      \begin{scope}[opacity=0.5]
-%        \tiny
-%        %\node[above right] at (0,0) {$\mathbf{I}$};
-%        \node[below left] at (2,2) {$U$};
-%      \end{scope}
-%      % Strings
-%      \begin{scope}
-%        \footnotesize
-%        \draw (1,2) node[above] {$\langle u \rangle$}
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (2,1)
-%          node[right] {$\langle u \rangle^*$};
-%      \end{scope}
-%    \end{tikzpicture}
-%    %}}}
-%    &
-%    \begin{tikzpicture}[scale=0.4,baseline] %{{{
-%      % Background
-%      \begin{scope}
-%        \fill[ACMBlue!50] (0,2) -- (0,1)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (1,0) -- (2,0) |- cycle;
-%        \fill[pattern=crosshatch dots,opacity=0.2] (0,1)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (1,0) -| cycle;
-%      \end{scope}
-%      % Region labels
-%      \begin{scope}[opacity=0.5]
-%        \tiny
-%        %\node[above right] at (0,0) {$\mathbf{I}$};
-%        \node[below left] at (2,2) {$U$};
-%      \end{scope}
-%      % Strings
-%      \begin{scope}
-%        \footnotesize
-%        \draw (0,1) %node[left] {$\langle u \rangle^*$}
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (1,0)
-%          node[below] {$\langle u \rangle$};
-%      \end{scope}
-%    \end{tikzpicture}
-%    %}}}
-%    \\
-%    \begin{tikzpicture}[scale=0.4,baseline] %{{{
-%      % Background
-%      \begin{scope}
-%        \fill[ACMBlue!50] (1,0)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (2,1) |- cycle;
-%        \fill[pattern=crosshatch dots,opacity=0.2] (0,0) -- (1,0)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (2,1) -- (2,2) -| cycle;
-%      \end{scope}
-%      % Region labels
-%      \begin{scope}[opacity=0.5]
-%        \tiny
-%        %\node[above right] at (0,0) {$\mathbf{I}$};
-%        \node[above left] at (2,0) {$U$};
-%      \end{scope}
-%      % Strings
-%      \begin{scope}
-%        \footnotesize
-%        \draw (1,0) node[below] {$\langle u \rangle$}
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (2,1)
-%          node[right] {$\langle u \rangle_*$};
-%      \end{scope}
-%    \end{tikzpicture}
-%    %}}}
-%    &
-%    \begin{tikzpicture}[scale=0.4,baseline] %{{{
-%      % Background
-%      \begin{scope}
-%        \fill[ACMBlue!50] (2,2) -- (1,2)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (0,1) -- (0,0) -| cycle;
-%        \fill[pattern=crosshatch dots,opacity=0.2] (1,2)
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (0,1) |- cycle;
-%      \end{scope}
-%      % Region labels
-%      \begin{scope}[opacity=0.5]
-%        \tiny
-%        %\node[above right] at (0,0) {$\mathbf{I}$};
-%        \node[above left] at (2,0) {$U$};
-%      \end{scope}
-%      % Strings
-%      \begin{scope}
-%        \footnotesize
-%        \draw (1,2) %node[above] {$\langle u \rangle$}
-%          [rounded corners] -- (1,1)
-%          [sharp corners] -- (0,1)
-%          ; %node[left] {$\langle u \rangle_*$};
-%      \end{scope}
-%    \end{tikzpicture}
-%    %}}}
-%  \end{array}
-%  \qquad\qquad
-%  u \mathrel{R} v \Rightarrow
-%\end{equation}
-
-%}}}
-
 %}}}
 
 \subsection{Spatial Composition} \label{sec:overview:scomp} %{{{
@@ -2685,7 +2569,9 @@ We can describe it simply as
   \end{array}
 \]
 Using these intermediate specifications,
-we would hope to decompose the correctness proof $\phi$ into
+we would hope to decompose %the correctness proof
+$\phi$
+along the following lines:
 \[
   \begin{array}{c}
     \phi_1 : \Gamma_\kw{bq}
@@ -2701,7 +2587,7 @@ we would hope to decompose the correctness proof $\phi$ into
       \kw{Clight}(\kw{rb.c})
   \end{array}
   \qquad \qquad
-  \begin{tikzpicture}[yscale=0.5,xscale=1.1,baseline=(z.base)]
+  \begin{tikzpicture}[yscale=0.45,xscale=1.1,baseline=(z.base)]
     \newcommand{\filltint}{30}
     \small
 
@@ -2887,17 +2773,36 @@ and it extends to simulations in the following way:
 %}}}
 
 \begin{example} \label{ex:abspeclift} % How that helps, a bit. {{{
-Applying the construction ${-} \mathbin@ U$
-to the component $\Sigma_\kw{bq}$ of Example~\ref{ex:abspec}
-allows us to state
+In Example~\ref{ex:abspec},
+we were unable to state the relationship
+between the code specification
+$\Sigma_\kw{bq} : \mathcal{C} \twoheadrightarrow \mathcal{C}$
+and the corresponding implementation
+$\kw{Clight}(\kw{bq.c}) : \mathcal{C} \mathbin@ \kw{mem}
+ \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}$
+due to their difference in type.
+We can now formulate the requirement
+$
+  \phi_2 : \Sigma_\kw{bq} \mathbin@ \kw{mem} \le \kw{Clight}(\kw{bq.c})
+$,
+which expresses that $\kw{bq.c}$
+makes the outgoing calls prescribed by $\Sigma_\kw{bq}$
+but does not modify the global memory state.
+Likewise,
+the $@$ construction allows us to interface $\Sigma_\kw{bq}$
+with the abstract specification
+$\Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}$,
+computing the resulting behavior as
 $
   (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot \Gamma_\kw{rb} :
   \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
-$ and $
-  \phi_2 : \Sigma_\kw{bq} \mathbin@ \kw{mem} \le \kw{Clight}(\kw{bq.c})
-$.
-Note however that the different data representations
-across the various components
+$,
+where $\Sigma_\kw{bq} \mathbin@ D_\kw{rb}$
+``passes through'' the abstract data component $D_\kw{rb}$
+on which $\Gamma_\kw{rb}$ operates.
+Note that
+the different data representations
+among the remaining components
 remain an obstacle.
 \end{example}
 %}}}
@@ -2924,14 +2829,14 @@ remain an obstacle.
 %meaningfully to be combined
 %into questions of $A_1 \otimes A_2$.
 
-As illustrated by
-Example~\ref{ex:abspeclift},
-extending components to ``pass through''
-additional state fields can be useful,
-but in some cases we need the ability
-to transform those fields as well.
-To this end,
-it is possible to generalize the construction $L \mathbin@ U$
+%As illustrated by
+%Example~\ref{ex:abspeclift},
+%extending components to ``pass through''
+%additional state fields can be useful,
+%but in some cases we need the ability
+%to transform those fields as well.
+%To this end,
+It is possible to generalize the construction $L \mathbin@ U$
 to incorporate a \emph{lens} $f : U \lensarrow V$
 with a more sophisticated action on the state component
 than a simple pass-through.
@@ -3072,17 +2977,213 @@ of the composite language interfaces
 be independently related by the corresponding simulation conventions.
 Proving the simulation property is then straightforward.
 
-Note that a relation $R \subseteq U \times V$
-can be promoted to a simulation convention
-$[R] : [U] \leftrightarrow [V]$,
-and we can introduce a simpler relationship
-$\phi : f \equiv_{R \lensarrow S} g$
-which then entails
-$[\phi] : [f] \le_{[R] \twoheadrightarrow [S]} [g]$.
-However,
-in some cases the more powerful machinery of simulation conventions
-will be useful in the context of lenses as well as transition systems.
-The following property is an example.
+In addition to sets and lenses,
+which can be promoted to language interfaces and transition systems,
+a relation $R \subseteq U \times V$ can also be promoted to
+a simulation convention $[R] : [U] \leftrightarrow [V]$.
+We will often leave the promotion operator $[-]$ implicit,
+and state for example $f \le_{R \twoheadrightarrow S} g$
+even though $f, g$ are lenses and
+$R, S$ are mere relations on sets.
+
+%}}}
+
+\begin{example} \label{ex:bqcorrect} %{{{
+Building on Example~\ref{ex:abspeclift},
+consider the relationship between
+the overall specification $
+  \Gamma_\kw{bq} :
+    \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
+$
+and its partial refinement
+$
+  (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot \Gamma_\kw{rb} :
+    \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
+$.
+To establish a simulation between them,
+we use the abstraction relation
+$R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}$
+defined by
+\begin{align*}
+  \vec{q} \mathrel{R_\kw{bq}} (b, c_1, c_2) \:\Leftrightarrow\: {}
+    & (c_1 \le c_2 < N \:\wedge\: \vec{q} = b_{c_1} \cdots b_{c_2-1}) \vee {} \\
+    & (c_2 \le c_1 < N \:\wedge\: \vec{q} = b_{c_1} \cdots b_{N-1} b_0 \cdots b_{c_2 - 1})
+  \,.
+\end{align*}
+The refinement property can then be formulated as
+$
+  \phi_1 :
+  \Gamma_\kw{bq}
+  \:\le_{\top \twoheadrightarrow \mathcal{C} \mathbin@ R_\kw{bq}}\:
+  (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot
+  \Gamma_\kw{rb}
+$.
+\end{example}
+%}}}
+
+\subsection{Companions and Conjoints} %{{{
+
+Transition systems and simulation conventions
+are both one-dimensional objects
+connecting language interfaces.
+Although
+they are fairly different in nature,
+sometimes
+a transition system and a simulation convention
+represent in some sense equivalent behaviors.
+This
+can be formalized using the notions of
+\emph{companion} and \emph{conjoint}
+morphisms in a double category.
+
+\begin{definition} %{{{
+We say that a transition system $L : A \twoheadrightarrow B$ has:
+\begin{itemize}
+  \item a \emph{companion} $L_* : A \leftrightarrow B$ when
+    $L_\circlearrowright : \kw{id}_A \le_{\kw{id}_A \twoheadrightarrow L_*} L$
+    and
+    $L_\circlearrowleft : L \le_{L_* \twoheadrightarrow \kw{id}_B} \kw{id}_B$;
+  \item a \emph{conjoint} $L^* : B \leftrightarrow A$ when
+    $L^\circlearrowleft : \kw{id}_B \le_{L^* \twoheadrightarrow \kw{id}_B} L$
+    and
+    $L^\circlearrowright : L \le_{\kw{id}_A \twoheadrightarrow L^*} \kw{id}_A$.
+\end{itemize}
+\end{definition}
+%}}}
+
+The simulation properties can be depicted as bends: %{{{
+\[
+    L_\circlearrowright :
+    \begin{tikzpicture}[scale=0.4,baseline=0.25cm] %{{{
+      % Background
+      \begin{scope}
+        \fill[ACMBlue!50] (0,2) -- (0,1)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (1,0) -- (2,0) |- cycle;
+        \fill[ACMLightBlue!50] (0,1)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (1,0) -| cycle;
+      \end{scope}
+      % Region labels
+      \begin{scope}[opacity=0.5]
+        \tiny
+        \node[above right] at (0,0) {$B$};
+        \node[below left] at (2,2) {$A$};
+      \end{scope}
+      % Strings
+      \begin{scope}
+        \footnotesize
+        \draw (0,1) node[left] {$L_*$}
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (1,0)
+          node[below] {$L$};
+      \end{scope}
+    \end{tikzpicture}
+    %}}}
+    \qquad
+    L_\circlearrowleft : \:
+    \begin{tikzpicture}[scale=0.4,baseline=0.25cm] %{{{
+      % Background
+      \begin{scope}
+        \fill[ACMBlue!50] (1,2)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (2,1) |- cycle;
+        \fill[ACMLightBlue!50] (0,2) -- (1,2)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (2,1) -- (2,0) -| cycle;
+      \end{scope}
+      % Region labels
+      \begin{scope}[opacity=0.5]
+        \tiny
+        \node[above right] at (0,0) {$B$};
+        \node[below left] at (2,2) {$A$};
+      \end{scope}
+      % Strings
+      \begin{scope}
+        \footnotesize
+        \draw (1,2) node[above] {$L$}
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (2,1)
+          node[right] {$L_*$};
+      \end{scope}
+    \end{tikzpicture}
+    %}}}
+    \qquad
+    \qquad
+    L^\circlearrowleft : \:
+    \begin{tikzpicture}[scale=0.4,baseline=0.25cm] %{{{
+      % Background
+      \begin{scope}
+        \fill[ACMBlue!50] (1,0)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (2,1) |- cycle;
+        \fill[ACMLightBlue!50] (0,0) -- (1,0)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (2,1) -- (2,2) -| cycle;
+      \end{scope}
+      % Region labels
+      \begin{scope}[opacity=0.5]
+        \tiny
+        \node[below right] at (0,2) {$B$};
+        \node[above left] at (2,0) {$A$};
+      \end{scope}
+      % Strings
+      \begin{scope}
+        \footnotesize
+        \draw (1,0) node[below] {$L$}
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (2,1)
+          node[right] {$L^*$};
+      \end{scope}
+    \end{tikzpicture}
+    %}}}
+    \:\quad
+    L^\circlearrowright :
+    \begin{tikzpicture}[scale=0.4,baseline=0.25cm] %{{{
+      % Background
+      \begin{scope}
+        \fill[ACMBlue!50] (2,2) -- (1,2)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (0,1) -- (0,0) -| cycle;
+        \fill[ACMLightBlue!50] (1,2)
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (0,1) |- cycle;
+      \end{scope}
+      % Region labels
+      \begin{scope}[opacity=0.5]
+        \tiny
+        \node[below right] at (0,2) {$B$};
+        \node[above left] at (2,0) {$A$};
+      \end{scope}
+      % Strings
+      \begin{scope}
+        \footnotesize
+        \draw (1,2) node[above] {$L$}
+          [rounded corners] -- (1,1)
+          [sharp corners] -- (0,1)
+          node[left] {$L^*$};
+      \end{scope}
+    \end{tikzpicture}
+    %}}}
+\]
+%}}}
+
+Concretely,
+these properties mean that for certain simulation statements,
+we can choose
+whether a certain component
+should appear as part of one of the transition system,
+or equivalently as part of one of the simulation convention.
+This can make it possible to decompose proofs
+along boundaries that would not otherwise be expressible,
+and generally affords us more flexibility.
+
+In practice,
+companions and conjoints
+are especially useful for small, ``administrative'' components
+which are represented using lenses.
+The following property
+makes this particularly easy.
 
 \begin{theorem}
 Every lens $f : U \lensarrow V$
@@ -3090,8 +3191,31 @@ has a companion $f^* : U \leftrightarrow V$
 and a conjoint $f_* : U \leftrightarrow V$.
 \end{theorem}
 
-Above we have left $[-]$ implicit,
-as we often will in the remainder of the paper.
+More sophisticated
+companions and conjoints could also be useful
+for multi-language semantics.
+
+\begin{example}
+To relate
+$L_1 : \top \twoheadrightarrow \mathcal{C} \mathbin@ U \mathbin@ V$ and
+$L_2 : \top \twoheadrightarrow \mathcal{C} \mathbin@ V \mathbin@ U$,
+which use state components listed in opposite orders,
+we can use the lens
+$\gamma : V \times U \lensarrow U \times V$
+and write either:
+\[
+  L_1
+    \le
+    (\mathcal{C} \mathbin@ \gamma) \odot L_2
+  \quad\iff\quad
+  L_1
+    \le_{\top \twoheadrightarrow \mathcal{C} \mathbin@ \gamma^*}
+    L_2
+  \,.
+\]
+\end{example}
+
+%}}}
 
 %\begin{definition}[Composite language interfaces] \label{def:litens} %{{{
 %Given two language interfaces $A$ and $B$,
@@ -3154,39 +3278,6 @@ as we often will in the remainder of the paper.
 %we will often use $[-]$ implicitly.
 %The following example shows how this can be used.
 
-%}}}
-
-\begin{example} \label{ex:bqcorrect} %{{{
-Building on Example~\ref{ex:abspeclift},
-consider the relationship between
-the overall specification $
-  \Gamma_\kw{bq} :
-    \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
-$
-and its partial refinement
-$
-  (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot \Gamma_\kw{rb} :
-    \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
-$.
-To establish a simulation between them,
-we use the abstraction relation
-$R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}$
-defined by
-\begin{align*}
-  \vec{q} \mathrel{R_\kw{bq}} (b, c_1, c_2) \:\Leftrightarrow\: {}
-    & (c_1 \le c_2 < N \:\wedge\: \vec{q} = b_{c_1} \cdots b_{c_2-1}) \vee {} \\
-    & (c_2 \le c_1 < N \:\wedge\: \vec{q} = b_{c_1} \cdots b_{N-1} b_0 \cdots b_{c_2 - 1})
-  \,.
-\end{align*}
-The refinement property can then be formulated as
-$
-  \phi_1 :
-  \Gamma_\kw{bq}
-  \:\le_{\top \twoheadrightarrow \mathcal{C} \mathbin@ R_\kw{bq}}\:
-  (\Sigma_\kw{bq} \mathbin@ D_\kw{rb}) \odot
-  \Gamma_\kw{rb}
-$.
-\end{example}
 %}}}
 
 \paragraph{Active and Passive Components} %{{{
