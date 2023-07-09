@@ -56,7 +56,7 @@
 \newcommand{\callee}[1]{[ #1 \rangle}
 \newcommand{\lensarrow}{\leftrightarrows}
 \newcommand{\lensle}{\equiv}
-\newcommand{\idsc}{\kw{id}} % identity simulation convention
+\newcommand{\idsc}{\mathbf{id}} % identity simulation convention
 \newcommand{\jr}{\mathsf{Y}}
 %}}}
 
@@ -5281,98 +5281,112 @@ to obtain guarantees about the linked assembly program.
 In the previous section
 we have equipped CompCertO semantics
 with the two-dimensional structure of a double category.
-In this section,
-we add one more dimension to our compositional infrastructure,
-spanning different components of a system's state.
+We now add another dimension,
+spanning different parts of a system's state.
 
-%building on the outline given in \S\ref{sec:overview:mon},
-%We formalize these structures for
-%transition systems (\S\ref{sec:base:tsmon}),
-%and for simulations (\S\ref{sec:base:scmon}).
-%
-%We have mentioned in \S\ref{sec:base:compcerto}
-%CompCertO's approach to \emph{state}:
-%the internal states of transition systems
-%cannot be observed across components and
-%persist only for the duration of a function activation;
-%therefore,
-%every question and answer must be annotated with
-%the current state of the global memory
-%at the time of a function's invocation or return,
-%as shown in the language interface $\mathcal{C}@\kw{mem}$
-%discussed in Example~\ref{ex:langint}.
-%
-%In this section,
-%we show how this overall approach to persistent state
-%can be generalized,
-%and we introduce constructions
-%which can be used to manage
-%this kind of global state.
+\subsection{Two Double Categories of Lenses} %{{{
 
-\subsection{Lenses and Relations} %{{{
+Since spatial composition extends a transition system with lenses,
+we define it as a double functor
+\[
+  {\mathbin@} : \mathbf{TSC} \times \mathbf{LSC} \rightarrow \mathbf{TSC}
+  \,,
+\]
+where $\mathbf{LSC}$ is a double category of
+sets, lenses, simulation conventions and simulations.
+The horizontal part of $\mathbf{LSC}$
+is the well-known category $\mathbf{Lens}^\kw{op}$ of sets and lenses,
+and the vertical part is the full subcategory of $\mathbf{SC}$
+which retains only language interfaces of the form $[U] = \langle U, U \rangle$.
 
-As we have noted in \S\ref{sec:overview:mon},
-transition systems acting on independent components
-of language interfaces
-cannot in general be composed directly.
-However,
-transition systems can be extended to handle
-an additional state component
-and apply a lens to it between incoming and outgoing interactions.
-As a matter of fact,
-sets, lenses and relations
-form their own double category,
-which embeds into $\mathbf{TSC}$.
-The associated simulation property
-is defined as follows.
+To give a proper definition for $\mathbf{LSC}$,
+it remains only to elucidate its notion of simulation square.
+We do this by interpreting lenses as transition systems.
 
 \begin{definition}
-Given two lenses
-$f : U^\sharp \lensarrow V^\sharp$ and
-$g : U^\flat \lensarrow V^\flat$,
-we say that there is a simulation of $f$ by $g$
-with respect to
-$R_U \subseteq U^\sharp \times U^\flat$ and 
-$R_V \subseteq V^\sharp \times V^\flat$
-when:
+For a lens $f : U \lensarrow V$,
+the transition system $[f] : [U] \twoheadrightarrow [V]$
+is defined as:
 \[
-  \kw{get}_f \ifr{R_V \rightarrow R_U} \kw{get}_g
-  \qquad \qquad
-  \kw{set}_f \ifr{R_V \times R_U \rightarrow R_V} \kw{set}_g
+  [f] := \big\langle
+    V + V, \: \varnothing, \:
+    \iota_1, \: X, \: Y, \: \iota_2^{-1}
+  \big\rangle
+  \qquad \text{with} \qquad
+  \begin{prooftree}
+    \hypo{\kw{get}_f(v) = u}
+    \infer1{\iota_1(v) \mathrel{X} u}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{\kw{set}_f(v, u') = v'}
+    \infer1{u' \mathrel{Y^{\iota_1(v)}} \iota_2(v')}
+  \end{prooftree}
+  \quad.
 \]
-We will write $f \lensle_{R_U \lensarrow R_V} g$.
+Then the double category $\mathbf{LSC}$ has
+sets as objects,
+lenses as horizontal morphisms,
+simulation conventions of type $\mathbf{R} : [U] \leftrightarrow [V]$
+as vertical morphisms from $U$ to $V$,
+and simulations of the form
+$\phi : [f] \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} [g]$
+as 2-cells between the corresponding morphisms.
 \end{definition}
 
+Using $\mathbf{LSC}$ allows us the full power of simulation conventions
+on the right of $\mathbin@$,
+however when a relation $R \subseteq U \times V$ suffices,
+we can also use the construction
+$[R] := \langle \mathbbm{1}, *, \top, \top, R, R \rangle :
+ [U] \leftrightarrow [V]$.
+In this case, simulations can be simplified as well.
+
+\begin{definition}[Lens simulation]
+The lens
+$f_1 : U_1 \lensarrow V_1$
+is simulated by
+$f_2 : U_2 \lensarrow V_2$
+with respect to
+$R_U \subseteq U_1 \times U_2$ and 
+$R_V \subseteq V_1 \times V_2$
+when the following property holds: 
+\[
+  f \lensle_{R_U \lensarrow R_V} g
+  \quad :\Leftrightarrow \quad
+  \kw{get}_f \ifr{R_V \rightarrow R_U} \kw{get}_g
+  \:\wedge\:
+  \kw{set}_f \ifr{R_V \times R_U \rightarrow R_V} \kw{set}_g
+\]
 Simulations of this kind compose
 both horizontally and vertically
-so that sets, lenses and simulation relations,
-under their usual composition algebras,
-constitute a thin double category
-$\mathbf{LSR}$.
-We will see that there is a double functor
-$[-] : \mathbf{LSR} \hookrightarrow \mathbf{TSC}$
-identifying $\mathbf{LSR}$ as a subcategory of $\mathbf{TSC}$.
+and we call $\mathbf{LSR}$ the corresponding double category of
+sets, lenses, relations and lens simulations.
+The property above implies
+the transition system simulation
+$[f] \le_{[R_U] \twoheadrightarrow [R_V]} [g]$
+and there is a double functor from $\mathbf{LSR}$ to $\mathbf{LSC}$.
+\end{definition}
 
 %}}}
 
-\subsection{Transition Systems} \label{sec:scomp:tr} %{{{
+\subsection{Spatial Composition} \label{sec:scomp:tr} \label{sec:scomp:sc} %{{{
 
-As explained in \S\ref{sec:overview:slift},
-transition systems can be extended
-to pass along an extra state component.
-In addition,
-a lens can be applied to
-this extra state between incoming and outgoing calls.
+We now proceed to define the double bifunctor $\mathbin@$.
+Recall that at the level of language interfaces and sets,
+we have $A \mathbin@ U := \langle A^\que \times U, A^\ans \times V \rangle$.
+The horizontal and vertical parts of $\mathbin@$ are as follows.
 
-\begin{definition}[Transition system extension] \label{def:lift} %{{{
+\begin{definition}[Spatial composition] \label{def:lift} \label{def:sctens} %{{{
 For a transition system
 $L = \langle S, {\rightarrow}, I, X, Y, F \rangle : A \twoheadrightarrow B$
 and a lens $f : U \rightarrow V$,
-the transition system
-$L \mathbin@ f : A \mathbin@ U \twoheadrightarrow B \mathbin@ V$
-is defined as:
+we define
+$L \mathbin@ f :=
+ \langle S \times V, {\rightarrow_f}, I_f, X_f, Y_f, F_f \rangle
+ : A \mathbin@ U \twoheadrightarrow B \mathbin@ V$
+where:
 \begin{gather*}
-  L \mathbin@ f := \langle S \times V, {\rightarrow_f}, I_f, X_f, Y_f, F_f \rangle \\
  {\begin{prooftree}
     \hypo{q \mathrel{I} s}
     \infer1{q@v \mathrel{I_f} s@ v}
@@ -5400,175 +5414,119 @@ is defined as:
     \infer2{n@u' \mathrel{Y^{s@v}_f} s'@v'}
   \end{prooftree}}
 \end{gather*}
+In addition,
+given $\mathbf{R}_1 : A \leftrightarrow B$
+and $\mathbf{R}_2 : U \leftrightarrow V$,
+we define
+$\mathbf{R}_1 \mathbin@ \mathbf{S}_2 :
+ A \mathbin@ U \leftrightarrow B \mathbin@ V$
+as
+\[
+  \mathbf{R}_1 \mathbin@ \mathbf{R}_2 \: := \:
+    \big\langle
+      W_1 \times W_2, \:
+      (\intl{w}_1, \intl{w}_2), \:
+      {\mapsto_1} \times {\mapsto_2}, \:
+      {\leadsto_1} \times {\leadsto_2}, \:
+      R_1^\que \times R_2^\que, \:
+      R_1^\ans \times R_2^\ans
+    \big\rangle
+  \,.
+\]
 \end{definition}
 %}}}
+
+The functoriality of these constructions ensure that
+chains of morphisms which are spatially composed side-by-side
+can freely ``slide'' past each other,
+as captured in the string diagram notations:
+\begin{align*}
+  (L_1 \odot L_2) \mathbin@ (f \circ g) &\equiv
+    (L_1 \mathbin@ f) \odot (L_2 \mathbin@ g)
+  &
+  \kw{id}_A \mathbin@ \kw{id}_U &\equiv \kw{id}_{A \mathbin@ U}
+  \\
+  (\mathbf{R}_1 \mathbin; \mathbf{R}_2) \mathbin@
+  (\mathbf{S}_1 \mathbin; \mathbf{S}_2) &\equiv
+  (\mathbf{R}_1 \mathbin@ \mathbf{S}_1) \mathbin;
+  (\mathbf{R}_2 \mathbin@ \mathbf{S}_2)
+  &
+  \idsc_A \mathbin@ \idsc_U &\equiv \idsc_{A \mathbin@ U}
+\end{align*}
+Together with spatial composition of simulations,
+%\[
+%  \begin{prooftree}
+%    \hypo{\pi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R'}} L_2}
+%    \hypo{\phi : f \le_{\mathbf{S} \twoheadrightarrow \mathbf{S'}} g}
+%    \infer2{\pi \mathbin@ \phi \: : \:
+%      L_1 \mathbin@ f \:
+%      \le_{\mathbf{R} \mathbin@ \mathbf{S} \twoheadrightarrow
+%           \mathbf{R'} \mathbin@ \mathbf{S'}} \:
+%      L_2 \mathbin@ g}
+%  \end{prooftree}
+%\]
+these properties can be summarized as follows.
 
 \begin{theorem} %{{{
-The operation defined above satisfies
-defines a functor
-${@} : \mathbf{TS} \times \mathbf{Lens} \rightarrow \mathbf{TS}$
-since
-\[
-  (L_1 \odot L_2) \mathbin@ (f \circ g) \equiv
-    (L_1 \mathbin@ f) \odot (L_2 \mathbin@ g)
-  \,,
-  \qquad
-  \kw{id}_A \mathbin@ \kw{id}_U \equiv \kw{id}_{A \mathbin@ U}
-  \,.
-\]
-This functor can be specialized to
-$[-] : \mathbf{Lens} \rightarrow \mathbf{TS}$
-by defining
-$[f] := \lambda \odot (\kw{id}_\mathbf{I} \mathbin@ f) \odot \lambda^{-1}$.
+We have defined a double bifunctor
+${\mathbin@} : \mathbf{TSC} \times \mathbf{LSC} \rightarrow \mathbf{TSC}$.
 \end{theorem}
 %}}}
 
 %}}}
 
-\subsection{Simulation Conventions} \label{sec:scomp:sc} %{{{
+\subsection{Encapsulated State} %{{{
 
-Compared with transition systems,
-simulation conventions compose more easily.
-They admit a fine-grained
-composition structure
-which follows the constructions introduced in Def.~\ref{def:litens}.
-
-\begin{definition}[Tensor product of simulation conventions] \label{def:sctens}
-Given $R_A : A^\sharp \leftrightarrow A^\flat$
-and $R_B : B^\sharp \leftrightarrow B^\flat$,
-we can define the simulation convention
-$R_A \otimes R_B : A^\sharp \otimes B^\sharp
-  \leftrightarrow
-  A^\flat \otimes B^\flat$
-as follows:
-\[
-  R_A \otimes R_B \: := \:
-    \big\langle
-      W_A \times W_B, \:
-      {\mapsto_A} \times {\mapsto_B}, \:
-      {\leadsto_A} \times {\leadsto_B}, \:
-      R_A^\que \times R_B^\que, \:
-      R_A^\ans \times R_B^\ans
-    \big\rangle
-\]
-In addition,
-given a relation $R \subseteq U \times V$,
-the simulation convention $[R] : [U] \leftrightarrow [V]$
-is defined as
-\[
-  [R] := \langle \mathbbm{1}, \top, \top, R, R \rangle
-  \,.
-\]
-We will also write $\mathbf{R} \mathbin@ R := \mathbf{R} \otimes [R]$.
-\end{definition}
-
-%As outlined in \S\ref{sec:overview:mon},
-%these constructions satisfy many pleasant properties,
-%which can be summarized as follows.
-
-\begin{theorem}
-The constructions above constitute \emph{functors}
-${\otimes} : \mathbf{SC} \times \mathbf{SC} \rightarrow \mathbf{SC}$
-and
-$[-] : \mathbf{Rel} \rightarrow \mathbf{SC}$.
-$\mathbf{SC}$ under $\otimes$ is a symmetric monoidal category,
-and $[-]$ is a monoidal functor
-from $\langle \mathbf{Rel}, {\times} \rangle$ to
-$\langle \mathbf{SC}, {\otimes} \rangle$.
-\end{theorem}
-
-%}}}
-
-\subsection{Simulations} \label{sec:scomp:sim} %{{{
-
-Finally,
-the compositional structures we have introduced above
-are compatible with simulations:
-\[
-  \begin{prooftree}
-    \hypo{L^\sharp \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L^\flat}
-    \hypo{f \lensle_{R \lensarrow S} g}
-    \infer2{
-      L^\sharp \mathbin@ f
-      \:\le_{\mathbf{R}\mathbin@R \rightarrow \mathbf{S}\mathbin@S}\:
-      L^\flat \mathbin@ g
-    }
-  \end{prooftree}
-\]
-This can be stated as follows.
-
-\begin{theorem}
-The constructions in this section
-define a double functor
-${@} : \mathbf{TSC} \times \mathbf{LSR} \rightarrow \mathbf{TSC}$
-and a double functor
-$[-] : \mathbf{LSR} \hookrightarrow \mathbf{TSC}$.
-\end{theorem}
-
-%}}}
-
-%}}}
-
-\section{Encapsulated State} \label{sec:encap} %{{{
-
-% Preamble {{{
-We now construct the version of our model
-which allows part of the state to be encapsulated.
-The underlying transition system model is unchanged,
-and encapsulated state
-is communicated from one activation to the next
-in the same way global state would be.
-However,
-encapsulated state
-is removed from a component's type,
-preventing the environment from accessing it.
-%}}}
-
-%XXXXX
-
-Note that
-when $L : A \twoheadrightarrow B$
+When a transition system $L : A \twoheadrightarrow B$
 performs an outgoing call in $A$,
 the internal state $s$ is preserved
-until an answer resumes the execution.
-By contrast, in $B$
-no state is preserved across invocations of $L$.
+until an answer resumes the execution,
+but no state is preserved across incoming calls in~$B$.
 Each question $q \in B^\que$ initializes a fresh state $s$
 such that $q \mathrel{I} s$
 regardless of any previous calls. % made into $L$.
 
-\subsection{Components} %{{{
+To allow a component to retain state across calls,
+we could modify the definition of transition systems
+to include a persistent state $K$ with an initial value $k_0$.
+The initial and final state predicates
+\begin{equation} \label{eqn:psts}
+  \intl{k} \in K
+  \qquad
+  I \subseteq K \times B^\que \times S
+  \qquad
+  F \subseteq S \times B^\ans \times K
+\end{equation}
+could then access and update this persistent state,
+with the understanding that on the first activation,
+$I$ would be passed the persistent state $\intl{k}$,
+and that the updated value produced by $F$
+in the context of one activation
+would be used to initialize the next one.
 
-In the compositional treatment of state
-presented in \S\ref{sec:scomp},
-a component $L_1 : B \twoheadrightarrow C \in \mathbf{TS}$
-can interact with %a component
-$L_2 : A \twoheadrightarrow B \mathbin@ U$
-as the composite $(L_1 \mathbin@ U) \odot L_2 : A \twoheadrightarrow C \mathbin@ U$.
-This situation guarantees by construction that
-$L_1$ cannot interfere with the state component of type $U$
-used by $L_2$.
-Our approach to state encapsulation
-is to force the environment to
-interact with components in this manner.
+\paragraph{Components} %{{{
 
-In the extended model,
-a component $L : A \rightarrow B \in \mathbf{TS}^\dagger$
-is defined using an underlying transition system
-of type $A \twoheadrightarrow B \mathbin@ U \in \mathbf{TS}$,
-where we have specified an
-additional state component $U \in \mathbf{Lens}$
-for the encapsulated states of $L$.
+Luckily,
+the situation we have described above
+can already be encoded in our model with minimal effort
+by using our definition of transition system
+together with the language interface $B \mathbin@ K$.
+Our approach will be to define
+a component with persistent state as a tuple
+$(\intl{k} \in K \mid L)$
+involving a transition system of type
+$L : A \twoheadrightarrow B \mathbin@ K$,
+and similarly for lenses.
 
-\begin{definition} \label{def:slts}
+\begin{definition} \label{def:slts} %{{{
 Consider a category $\mathbf{C}$
-equipped with a functor
-${\star} : \mathbf{C} \times \mathbf{Lens} \rightarrow \mathbf{C}$ and
-families of isomorphisms
+and a (spatial composition) functor
+${\star} : \mathbf{C} \times \mathbf{Lens}^\kw{op} \rightarrow \mathbf{C}$
+such that
 $
-  \alpha_{A,U,V} : A \star (U \times V) \cong A \star U \star V
+  A \star (U \times V) \cong A \star U \star V
 $ and $
-  \lambda_A : A \star \mathbbm{1} \cong A
+  A \star \mathbbm{1} \cong A
 $.
 We define a category $\mathbf{C}^\dagger$
 with the same objects,
@@ -5582,38 +5540,42 @@ consists of:
 \end{itemize}
 Composition in $\mathbf{C}^\dagger$ is defined as:
 \[
-  (u \in U \mid L_1) \,\circ\, (v \in V \mid L_2) \::=\:
+  \kw{id}^\dagger := (* \in \mathbbm{1} \mid \kw{id})
+  \qquad
+  (u \in U \mid L_1) \,\circ^\dagger\, (v \in V \mid L_2) \::=\:
   \big( (u, v) \in U \times V \mid
-        \alpha^{-1} \circ (L_1 \star V) \circ L_2 \big)
+        (L_1 \star V) \circ L_2 \big)
 \]
-An embedding of $\mathbf{C}$ into $\mathbf{C}^\dagger$
-is defined by $L \mapsto (* \in \mathbbm{1} \mid \lambda^{-1} \circ L)$.
+A functorial embedding of $\mathbf{C}$ into $\mathbf{C}^\dagger$
+is defined by $L \mapsto (* \in \mathbbm{1} \mid L)$.
 \end{definition}
+%}}}
 
 The construction above can be applied both to
-the active components in $\mathbf{TS}$ (with ${\star} := {\mathbin@}$) and
-the passive components in $\mathbf{Lens}$ (with ${\star} := {\otimes}$).
-The first time a component
-$(u \in U \mid L) : A \rightarrow B \in \mathbf{TS}^\dagger$
-is activated by a question $q \in B^\que$,
-%the state $u$ is adjoined to $q$ and
-the transition system $L$ is initialized using %the question
-$q@u \in (B \mathbin@ U)^\que$.
-When $L$ terminates with an answer $r@u' \in (B \mathbin@ U)^\ans$,
-the component passes $r \in B^\ans$ on to the environment and
-the new state $u'$ is set aside to be used with the next activation.
-
+$\mathbf{TS}$ (with ${\star} := {\mathbin@}$) and to
+$\mathbf{Lens}^\kw{op}$ (with ${\star} := {\times}$).
+%The first time
+%$(u \in U \mid L) : A \rightarrow B \in \mathbf{TS}^\dagger$
+%is activated by a question $q \in B^\que$,
+%%the state $u$ is adjoined to $q$ and
+%the underlying component $L$ is initialized using %the question
+%$q@u \in (B \mathbin@ U)^\que$.
+%When $L$ terminates with an answer $r@u' \in (B \mathbin@ U)^\ans$,
+%the component passes $r \in B^\ans$ on to the environment and
+%the new state $u'$ is set aside to be used with the next activation.
+%
 Like composition,
 the functor ${\star} : \mathbf{C} \times \mathbf{Lens} \rightarrow \mathbf{C}$
 can also be extended to
 ${\star} : \mathbf{C}^\dagger \times \mathbf{Lens}^\dagger \rightarrow \mathbf{C}^\dagger$.
 This can be shown using string diagrams of the following form:
+\vspace{-2ex}
 \[
   (u \mid L_1) \odot (v \mid L_2) = \:
   \begin{tikzpicture}[xscale=0.35,yscale=0.17,baseline=(u.base)]
     % Background
     \fill[tssdbg] (0,-2) rectangle (10,6.5);
-    \fill[pattern=north east lines] (0,-2) rectangle (10,0);
+    \fill[act] (0,-2) rectangle (10,0);
     % Wires
     \draw (0,0) node[left] {$C$}
       -- (10,0) node[right] {$A$};
@@ -5634,14 +5596,14 @@ This can be shown using string diagrams of the following form:
   \end{tikzpicture}
   \quad
   (u \mid L) \star (v \mid f) = \:
-  \begin{tikzpicture}[xscale=0.35,yscale=0.17,baseline=(u.base)]
+  \begin{tikzpicture}[xscale=0.35,yscale=0.17,baseline=3mm]
     % Background
     \fill[tssdbg] (0,-2) rectangle (8.5,8.5);
-    \fill[pattern=north east lines] (0,-2) rectangle (8.5,0);
+    \fill[act] (0,-2) rectangle (8.5,0);
     % Wires
     \draw (0,0) node[left] {$B$}
         -- (8.5,0) node[right] {$A$};
-    \draw (0,2) node[left] {$Y$}
+    \draw (0,2) node[left] (Y) {$Y$}
         -- (3,2)
         .. controls +(1,0) and +(-1,0) .. ++(2,2.5)
         -- (8.5,4.5) node[right] {$X$};
@@ -5667,13 +5629,14 @@ represent the encapsulated state components.
 This representation stems from the fact that
 any morphism in $\mathbf{C}^\dagger$
 can be defined using the embedded morphisms of $\mathbf{C}$
-together with the following state encapsulation primitive:
+together with the following state encapsulation primitive,
+which can then be drawn as above:
 \[
-  \langle u \in U \rangle : U \rightarrow \mathbbm{1} \in \mathbf{Lens}^\dagger
-  \qquad \qquad
-  \langle u \in U \rangle  :=  (u \in U \mid \kw{id}_U)
-    = \quad u \circ \!\!-
+  [ u \rangle  :=  (u \in U \mid \kw{id}_U)
+  : U \rightarrow \mathbbm{1} \in \mathbf{Lens}^\dagger
 \]
+
+%}}}
 
 %Once private state has been encapsulated,
 %in principle it can only be observed by the environment
@@ -5817,42 +5780,61 @@ together with the following state encapsulation primitive:
 %
 %%}}}
 
-\subsection{Simulations} %{{{
+%\paragraph{Components} %{{{
+%
+%A component $L_1 : B \twoheadrightarrow C \in \mathbf{TS}$
+%can interact with %a component
+%$L_2 : A \twoheadrightarrow B \mathbin@ U$
+%as the composite $(L_1 \mathbin@ U) \odot L_2 : A \twoheadrightarrow C \mathbin@ U$.
+%This situation guarantees by construction that
+%$L_1$ cannot interfere with the state component of type $U$
+%used by $L_2$.
+%Our approach to state encapsulation
+%is to force the environment to
+%interact with components in this manner.
+%
+%In the extended model,
+%a component $L : A \rightarrow B \in \mathbf{TS}^\dagger$
+%is defined using an underlying transition system
+%of type $A \twoheadrightarrow B \mathbin@ U \in \mathbf{TS}$,
+%where we have specified an
+%additional state component $U \in \mathbf{Lens}$
+%for the encapsulated states of $L$.
+%
+%}}}
 
-We must now extend the double category structure of $\mathbf{TSC}$
+\paragraph{Simulations} %{{{
+
+We now extend the double category structure of $\mathbf{TSC}$
 to the encapsulated state model.
 The same notion of simulation convention can be reused as-is.
 In addition,
 the simulation property
-$L^\sharp \le_{\mathbf{R} \rightarrow \mathbf{S}} L^\flat \in \mathbf{TSC}^\dagger$
+$L_1 \le_{\mathbf{R} \rightarrow \mathbf{S}} L_2 \in \mathbf{TSC}^\dagger$
 can be defined using a simulation
 in the original model $\mathbf{TSC}$
 between the underlying transition systems.
 However,
 to take into account the components' encapsulated states,
-we must first incorporate those states into
+we must first incorporate them into
 the incoming simulation convention $\mathbf{S}$.
-To this end,
-we will use the elementary simulation conventions
-$\langle u \rangle^*$ and $\langle u \rangle_*$
-mentioned in \S\ref{sec:overview:encap}.
 
 \begin{definition}
 For $u \in U$,
 the simulation conventions
-$\langle u \rangle^*$ and
-$\langle u \rangle_*$ are defined as:
+$[ u \rangle^*$ and
+$[ u \rangle_*$ are defined as:
 \[
-  \langle u \rangle^* :=
+  [ u \rangle^* :=
     \big\langle U,\, u,\, {=},\, \top,\, \Gamma_U,\, \Gamma_U \big\rangle
-    : U \leftrightarrow \mathbf{I}
+    : U \leftrightarrow \mathbbm{1}
   \qquad \qquad
-  \langle u \rangle_* :=
+  [ u \rangle_* :=
     \big\langle U,\, u,\, {=},\, \top,\, \Gamma_U^\kw{op},\, \Gamma_U^\kw{op} \big\rangle
-    : \mathbf{I} \leftrightarrow U
+    : \mathbbm{1} \leftrightarrow U
 \]
-where $\Gamma_U \in \mathcal{R}(U, \mathbbm{1})$
-is the smallest Kripke relation containing $u \Vdash u \mathrel{\Gamma_U} *$ for all $u \in U$.
+where $\Gamma_X \in \mathcal{R}_X(X, \mathbbm{1})$
+is the smallest Kripke relation containing $x \Vdash x \mathrel{\Gamma_X} *$ for all $x \in X$.
 \end{definition}
 
 These elementary simulation conventions
@@ -5863,26 +5845,25 @@ on the first call, the source (resp. target) component
 must be passed the initial state $u \in U$.
 The component may then modify the state,
 performing a callee world transition
-in $\langle u \rangle^*$ (resp. $\langle u \rangle_*$).
+in $[ u \rangle^*$ (resp. $[ u \rangle_*$).
 However,
 between successive calls,
 the caller may not update the world.
 With the ability to express these constraints,
-we can define our notion of simulation
-for components with encapsulated states.
+the following definition is straightforward.
 
 \begin{definition} \label{def:ssim} %{{{
 Simulations of components with encapsulated state are defined by
 \[
-  (u \in U \mid L^\sharp)
+  (u \in U \mid L_1)
   \le_{\mathbf{R} \rightarrow \mathbf{S}}
-  (v \in V \mid L^\flat)
+  (v \in V \mid L_2)
   \in \mathbf{TSC}^\dagger
   \quad:\Leftrightarrow\quad
-  L^\sharp
+  L_1
   \le_{\mathbf{R} \rightarrow
-       \mathbf{S} \otimes (\langle u \rangle^* \mathbin; \langle v \rangle_*)}
-  L^\flat
+       \mathbf{S} \mathbin@ ([ u \rangle^* \mathbin; [ v \rangle_*)}
+  L_2
   \in
   \mathbf{TSC}
   \,.
@@ -5899,7 +5880,7 @@ Language interfaces, encapsulated transition systems, simulation conventions
 and simulations in the sense of Def.~\ref{def:ssim}
 constitute a double category $\mathbf{TSC}^\dagger$.
 There is an embedding double functor $\mathbf{TSC} \hookrightarrow \mathbf{TSC}^\dagger$
-which preserves the compositional structure of $\mathbin@$ and $\otimes$.
+which preserves the compositional structure of $\mathbin@$.
 \end{theorem}
 %}}}
 
