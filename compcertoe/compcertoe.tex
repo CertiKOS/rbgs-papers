@@ -5976,62 +5976,7 @@ which preserves the compositional structure of $\mathbin@$.
 
 %}}}
 
-\section{Applications} \label{sec:app} %{{{
-
-We have applied the techniques
-to an ad-hoc example in previous sections.
-In this section,
-we show that these techniques are also applicable
-to provide a general verification framework
-based on certified abstraction layers(\S\ref{sec:application:cal}).
-We will also introduce
-a new variant of $\kw{Clight}$
-for further facilitate
-the verification which contains a refinement
-from abstract data to CompCert memory(\S\ref{sec:application:clightp}).
-
-\subsection*{Text we can reuse} \label{sec:overview:app} %{{{
-
-As we have seen,
-our framework captures
-properties as varied as
-correctness,
-certified compilation,
-representation independence, and
-the frame rule of separation logic
-under a unified, three-dimensional notion of simulation.
-Properties with compatible boundaries
-can then be assembled like puzzle pieces
-to construct complex proofs in a modular way.
-Below and in \S\ref{sec:app},
-we highlight possible applications
-which make use of these capabilities.
-
-\paragraph{Ad-hoc Verification} %{{{
-
-Our running example shows how
-various aspects of our framework
-can be use to facilitate ad-hoc verification.
-By this,
-we mean that the verification effort does not have to fit
-a predefined strategy.
-In our example,
-the translation unit $\kw{bq.c}$ does not keep any state,
-whereas $\kw{rb.c}$ is self-contained and
-does not make any outgoing calls,
-so we can use different strategies to specify and verify them
-which take advantage of these specificities.
-Nevertheless,
-our framework is flexible enough to allow us
-to glue the proofs together in the end.
-
-While the lack of structure in ad-hoc verification
-can also be a drawback,
-we believe this kind of flexibility will be necessary
-as we move towards the verification of more heterogeneous systems,
-where forcing all components to fit a single methodology may be difficult.
-
-%}}}
+\section*{Text we can reuse} \label{sec:overview:app} %{{{
 
 \paragraph{Certified Abstraction Layers} %{{{
 
@@ -6077,188 +6022,103 @@ $\Gamma_\kw{rb}'$ which introduce abstract, encapsulated state.
 
 %}}}
 
+\newpage
+
+\section{Applications and Evaluation} \label{sec:app} %{{{
+
+We will now showcase further applications of our framework,
+discuss its implementation and some of its limitations,
+and touch on avenues for future research.
 
 \subsection{Certified Abstraction Layers} \label{sec:application:cal} %{{{
 
-\hrule
+The verification of
+the bounded queue example in \S\ref{sec:overview} was ad-hoc
+and relied on our framework as a versatile glue.
+However, in many contexts a more structured methodology is preferable.
 
-\paragraph{Old text what we can reuse}
-
-\emph{Certified abstraction layers}
-are a compositional verification technique.
-The idea is to divide the code of a large system into layers,
-and to specify the functionality offered by each layer
+The methodology of
+\emph{certified abstraction layers}
+divide the code of a large system into layers
+to specify the functionality offered by each layer
 in self-contained and increasingly abstract terms.
-
-As described in \citet{popl15},
-a \emph{layer interfaces} is
+Under the approach described in \citet{popl15},
+when code is verified,
+its functionality is captured in a
+\emph{layer interface}.
+Within the terms of our formalism,
+a layer interface is
 a set $D$ of \emph{abstract states}
-together with a specification $\Gamma$
-describing the behavior of a number of primitives
-in terms of this abstract state.
-A \emph{certified abstraction layer}
-$\Gamma_1 \vdash_R M : \Gamma_2$
-consists of an \emph{underlay} interface $\Gamma_1$,
-an \emph{overlay} interface $\Gamma_2$,
-and a program module $M$
-which correctly implements the primitives of $\Gamma_2$
-in terms of those provided by $\Gamma_1$;
-the relation $R$ describes
-how the more abstract view $D_2$ provided by $\Gamma_1$.
-
-To incorporated layer interfaces into CompCert,
-the work described by \citet{popl15}
-had to alter its language semantics
-to incorporate an underlay interface,
-resulting in an ad-hoc variant of CompCert named CompCertX.
-
-Using our compositional treatment of state,
-certified abstraction layers can be encoded
-within the CompCertO model
-in a straightforward way.
-For example,
-$\Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}$
-defines an overlay interface for the code in Fig.~\ref{fig:code}.
-It uses abstract states in $D_\kw{bq}$
-and provides specifications for the primitives $\kw{enq}$ and $\kw{deq}$.
-
-$\Gamma : \top \twoheadrightarrow \mathcal{C} \mathbin@ D$,
-so that for example
-constitutes a layer interface.
-A \emph{certified abstraction layer}
-$\Gamma_1 \vdash_R M : \Gamma'$
-
-\hrule
-
-% intro to cal
-\paragraph{Introduction}
-Certified abstraction layers (CAL) framework
-provides a theoretical foundation
-for large scale system verification,
-by allowing
-the high-level abstract specification
-to be progressively refined
-through a series of abstraction layers.
-
-% explain layer interface
-A certified abstraction layer consists of
-a \emph{layer implementation}
-and two \emph{layer interfaces},
-where
-the behaviors specified by the \emph{overlay}
-is implemented
-by the implementation executed on top of the \emph{underlay}.
-An \emph{abstraction relation} is used
-when the layer interfaces
-operates on different abstraction level.
-Given a certified abstraction layer,
-new layers can be built on top of the overlay interface
-without even knowing about how it is implemented.
-
-% compcertx implementation
-\paragraph{CompCertX implementation}
-CAL was originally implemented by CompCertX \cite{popl15}
-to verify the certified operating system CertiKOS.
-A layer interface $\Gamma$ has three components:
-a set of abstract state $D$,
-an initial state $d$,
-and a set of specifications
-for the primitives provided by this layer.
-Layers are implemented by the $\kw{ClightX}$ modules,
-a variant of $\kw{Clight}$ in CompCertX,
-and the semantic model can be summarized as
-\[
-  \forall D \in \mathbf{Set}
-  \: \mathbin. \:
+together with a specification
+$\Gamma : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D$
+and an initial state $d \in D$.
+The semantics of client code then takes
+this \emph{underlay} interface as a parameter:
+\begin{equation} \label{eqn:layersem}
+  %\forall D \in \mathbf{Set}
+  %\: \mathbin. \:
   \Gamma :
     \top \twoheadrightarrow
     \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
-  \: \vdash \:
-  \kw{ClightX}_{\Gamma}[M] :
+  \quad \vdash \quad
+  \kw{Clight}_{\Gamma}[M] :
     \top \twoheadrightarrow
     \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
   \,.
-\]
-The goal is to implement an overlay interface $\Gamma_2$,
-on top of an underlay $\Gamma_1$
-in a way which allows an abstraction relation
-$R \subseteq D_2 \times (\kw{mem} \times D_1)$
-to refine and augment the abstract data component:
+\end{equation}
+A \emph{certified abstraction layer}
+consists of an \emph{underlay} interface $\Gamma_1$,
+an \emph{overlay} interface $\Gamma_2$,
+a program module $M$
+and an abstraction relation $R \subseteq D_2 \times (D_1 \times \kw{mem})$
+which satisfy a refinement property:
 \[
-  \Gamma_1 \vdash_R M : \Gamma_2 :\Leftrightarrow
-  \Gamma_2 \le_{\top \twoheadrightarrow \mathcal{C}@\hat{R}}
+  \Gamma_1 \vdash_R M : \Gamma_2
+  \quad :\Leftrightarrow \quad
+  \Gamma_2 \: \le_{\top \twoheadrightarrow \mathcal{C} \mathbin@ \hat{R}} \:
     \kw{Clight}_{\Gamma_1}[M]
+  \,,
 \]
-where $\hat{R} \subseteq (\kw{mem} \times D_2) \times (\kw{mem} \times D_1)$
-is derived from $R$ in a way that
-the target memory contains both
-part of the source memory blocks and
-the blocks that refines the abstract state.
+where
+$\hat{R} \subseteq (\kw{mem} \times D_2) \times (\kw{mem} \times D_1)$
+extends $R$ to a relationship between
+the entire states of the source and target programs.
+The main challenge is then to prove the vertical composition property
+\begin{equation} \label{eqn:calvcomp}
+  \begin{prooftree}
+    \hypo{\psi_{12} \: : \: L_1 \vdash_R M : L_2}
+    \hypo{\psi_{23} \: : \: L_2 \vdash_S N : L_3}
+    \infer2{\psi_{13} \: : \: L_1 \vdash_{R \cdot S} M + N : L_3}
+  \end{prooftree}
+\end{equation}
 
-% we want the layers to compose vertically
-% main challenge: vertically compose the R
-% other challenge: lack of frame rule
-The certified abstraction layers are only
-useful if they can be vertically composed together.
-However,
-the vertical composition poses serious challenges.
-On one hand,
-there is no obvious way of
-how to compose the abstraction relations
-due to the lack of memory separation.
-Moreover,
-lifting to $\hat{R}$ adds another layer of complexity,
-because the composition may not commute with the $\hat{}$ operator.
-To make things worse,
-the program semantics, layer specifications,
-and abstract states are all entangled together
-because every object in the framework
-has type $\top \twoheadrightarrow C\mathbin@ \kw{mem} \mathbin@ D$.
-As a consequence,
-it is hard to prove a simple fact without having
-the entire $\kw{ClightX}$ semantics involved.
+\paragraph{Implementing Layers}
 
-% simulated by compcerto
-\paragraph{CompCertO implementation}
+To implement this methodology,
+\citet{popl15} introduces \emph{CompCertX},
+a~modified version of CompCert which must alter
+every language semantics and correctness proof
+to take into the abstract state and underlay interface.
+The formulation of layer correctness
+defines $\hat{R}$ using a complex \emph{memory injection}
+to express the embedding of the source memory into the target,
+alongside the concretized abstract state of the overlay.
+Finally, vertical compositionality
+involves a complex and largely monolithic proof,
+involving aspects of
+our frame property,
+CompCertO's linking theorem, and more,
+and requires thousands of lines of Coq code.
+
 By contrast,
-with the fine-grained treatment of the elementary components
-in our framework,
-the CAL can be implemented much simpler.
-We first derive
-the simulation convention
-$\mathbf{R}: \mathcal{C} \mathbin@\kw{mem} \mathbin@ D_2 \leftrightarrow \mathcal{C}\mathbin@ \kw{mem} \mathbin@ D_1$
-and the layer implementation
-$L_1 : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D_1$,
-which are the counterparts of
-$\hat{R}$ and $\kw{ClightX}_{\Gamma_1}(M)$ respectively,
-as follows:
+the fine-grained and flexible ingredients provided by our framework
+make it quite straightforward to formulate a comparable theory
+of certified abstraction layers.
+A layer-aware semantics can be defined as:
+\vspace{-1ex}
 \[
-  \mathbf{R}: \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D_2
-  \leftrightarrow \mathcal{C}\mathbin@ \kw{mem} \mathbin@ D_1 :=
-  \begin{tikzpicture}[xscale=0.35,yscale=0.3,baseline=1em]
-    \footnotesize
-    \coordinate (C-bottom) at (0.5,0);
-    \coordinate (C-top) at (0.5,4);
-    \coordinate (join) at (2.5,1);
-    \coordinate (d2) at (4.5,4);
-    \coordinate (d1) at (5.5,0);
-    \coordinate (mem-bottom) at (2.5,0);
-    \coordinate (mem-top) at (1.5,4);
-    \coordinate (R) at (4.5,3);
-    % Background
-    \fill[scsdbg] (0,0) rectangle (6,4);
-    % Edges
-    \draw (C-top) node[above] {$\mathcal{C}$} -- (C-bottom) node[below] {$\mathcal{C}$};
-    \draw (R) [rounded corners] -- (5.5,2.5) -- (d1) node[below] {$D_1$};
-    \draw (R) .. controls +(-1,-0.5) .. (3.5,2);
-    \draw (join) node {$\bullet$} .. controls +(1,0.5) .. (3.5,2);
-    \draw (d2) node[above] {$D_2$} -- (R) node[draw,fill=white,rounded corners] {$R$};
-    \draw (mem-top) node[above] {$\;\;\kw{mem}$}
-    [rounded corners] -- (1.5,1.5) -- (join);
-    \draw (join) -- (2.5,0) node[below]{\kw{mem}};
-  \end{tikzpicture}
-  \qquad
-  L_1 :=
+  \kw{Clight}_\Gamma[M] := (\kw{Clight}(M) \mathbin@ D) \odot \Gamma
+    =
   {\begin{tikzpicture}[xscale=0.25,yscale=0.12,baseline=(mem.base)]
     % Background
     \fill[tssdbg]
@@ -6275,7 +6135,7 @@ as follows:
     %    node[right] {$\kw{mem}$};
     \draw (1,2) node[left] (mem) {\small$\kw{mem}$}
       -- (9,2) .. controls +(1,0) and +(-1,0) .. (10.5,1) -- (12,1);
-    \draw (1,4.5) node[left] {\small$D_1$}
+    \draw (1,4.5) node[left] {\small$D$}
       -- (9,4.5) .. controls +(1,0) and +(-1,0) .. (10.5,2)
       -- (11,2);
     %\node[above,inner sep=1pt] at (10,0)
@@ -6283,220 +6143,35 @@ as follows:
     % Boxes
     \draw[fill=white,rounded corners]
       ( 2,-1) rectangle ( 8,3) node[midway] {\small$\kw{Clight}(M)$}
-      (11,-1) rectangle (13,3) node[midway] {\small$\Gamma_1$};
+      (11,-1) rectangle (13,3) node[midway] {\small$\Gamma$};
   \end{tikzpicture}}
 \]
-We then interpret the abstraction layers as
+and does not require any compiler change.
+Our memory join relation can be leveraged to define:
 \[
-  \Gamma_1 \vdash_R M : \Gamma_2 \: :\Leftrightarrow \: \Gamma_2 \le_{\varnothing \twoheadrightarrow \mathbf{R} } L_1
+  \hat{R} := 
+    (\kw{mem} \mathbin@ R) \odot (\jr \mathbin@ D_1)
+  \qquad
+  R \cdot S :=
+    S \mathbin; (\kw{mem} \mathbin@ R) \mathbin; (\jr \mathbin@ D_1)
 \]
-
-% example
-\begin{example}
-  Recall the example of bounded queue
-  from Section~\ref{sec:overview:high-dimension}.
-  Using the CAL framework,
-  we can define the layer interfaces
-  for the ring buffer and bounded queue as
-  $(D_\kw{rb}, d_0, \Gamma_\kw{rb}\mathbin@ \kw{mem})$ and
-  $(D_\kw{bq}, \epsilon, \Gamma_\kw{bq}\mathbin@ \kw{mem})$ respectively.
-  Then the layer correctness:
-  \[
-    \Gamma_\kw{rb} \vdash_{R_\kw{bq}} \kw{bq.c} : \Gamma_\kw{bq}
-  \]
-  is just $\phi_\kw{bq}$[xxx].
-  Note that the abstraction relation
-  $R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}$
-  is a special case of the general form
-  because the overlay abstract state
-  is not realized
-  by the memory in the bounded queue program.
-\end{example}
-
-\paragraph{Composition}
-% major challenge is to show the vertical composition
-% start with the conclusion:
-% thousands of lines; coupled with ClightX semantics
-% give the two-line proof term
-% and explain the proof term
-Because of the challenges
-we have aforementioned,
-the original implementation of CAL takes
-thousands of lines of Coq proof
-to prove the vertical composition.
-By contrast,
-our framework benefits from the flexibility
-of various compositional properties.
-
-Given abstraction layers
-$\pi_M: \Gamma_1 \vdash_R M : \Gamma_2$
-and
-$\pi_N: \Gamma_2 \vdash_S N : \Gamma_3$,
-we define the composite abstraction relation
-$T \subseteq D_3 \times (\kw{mem} \times D_1) := S \mathbin; (\kw{mem} \times R) \mathbin; (\jr \times D_1) $,
-and prove the composite layer correctness:
+such that the composition property
+$\alpha : (\hat{S} \mathbin; \hat{R}) \cong \widehat{R \cdot S}$
+holds by associativity of the join operation $\bullet$.
+Finally,
+the vertical composition property (\ref{eqn:calvcomp})
+can be established with the single-line proof term:
 \[
-  \Gamma_1 \vdash_T M, N : \Gamma_3 := \phi_1 \odot (\pi_N \mathbin; (\phi_2 \odot \pi_M))
+  \psi_{13} \: := \:
+    \alpha \odot \big(
+    \psi_{23} \mathbin;
+    \big( (\kw{Clight}(N) \mathbin@ R) \mathbin;
+          (\kw{FP}(N) \mathbin@ D_1) \big) \odot \psi_{12} \big)
+  \,.
 \]
-where programs $M, N$ is interpreted as
-$\kw{Clight}(M) \odot \kw{Clight}(N)$,
-with the following auxiliary definitions:
-\[
-  \begin{array}{c}
-    \phi_0: \kw{mem} \bullet \jr \sqsubseteq \jr \bullet \kw{mem}
-    \qquad \phi_1: \mathbf{S} \mathbin; \mathbf{R} \sqsubseteq \mathbf{T}
-    := \mathcal{C} \mathbin@ (\kw{mem} \times (S \mathbin; (\kw{mem} \times R))\mathbin; (\phi_0 \times D_1) )
-    \\
-    \phi_2: \kw{Clight}(N) \mathbin@ D_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}}
-    \kw{Clight}(N) \mathbin@ D_1
-    := \kw{Clight}(N) \mathbin@ R \mathbin; \kw{FP}(N) \mathbin@ D_1
-  \end{array}
-\]
-
-\paragraph{Remark}
-
-The original implementation of CAL
-uses $\kw{ClightX}_L(M)$
-to interprets a Clight program $M$
-on top of a layer interface $L$,
-where the interactions
-between the program and the underlying specifications
-are baked into the $\kw{ClightX}$ semantics.
-As a consequence,
-the program semantics, the specifications,
-and abstract states
-are tightly coupled together.
-The semantics for a program
-is not well-defined
-without the primitives that interprets its function calls.
-In particular,
-one cannot prove the property
-$ \phi_\kw{bq}: \Sigma_\kw{bq}@\kw{mem} \le \kw{ClightP}(\kw{bq.c})$
-in the original settings.
-By contrast,
-the implementation based on CompCertO
-and its layered composition allows more flexibility.
-
-In the original implementation of CAL,
-memory injections are entangled with abstraction relation
-in order to
-combine the program verification with compiler correctness.
-This leads to complexity in composing
-the abstraction relations.
-By contrast,
-our framework benefits from
-state composition and encapsulation
-so that
-the simulation relations are composed
-in a straightforward way.
-
-That said,
-the original framework
-supports mixing Clight and assembly modules,
-while our framework does not.
-We left it as future work how to
-systematically compose modules
-on different abstraction levels.
-And also something on horizontal composition.
-Moreover,
-a form of horizontal composition of layers
-is provided in the original CAL.
-Nevertheless,
-such composition can be simulated
-by the vertical composition
-where the underlay and overlay do not interact
-and the underlay interfaces are passed through.
+We provide additional details in Appendix~\ref{app:cal}.
 
 %}}}
-
-\begin{figure}
-
-  \raisebox{-0.5\height}{\begin{tikzpicture}[sdp]
-
-    \coordinate (pm) at (5,6,3);
-    \coordinate (m) at (4,0,3);
-    \coordinate (join-l) at (0,1.5,4.5);
-    \coordinate (m0) at (0,2.5,5.5);
-    \coordinate (p0) at (2,6,4);
-    \coordinate (join-r) at (8,1.5,4.5);
-    \coordinate (mt) at (8,3,5.5);
-
-    \coordinate (rp) at (2,4.5,4);
-
-    %% Left and bottom faces
-
-    % Background area
-    \fill[tssdbg] (0,0,0) -- (0,6,0) -- (0,6,6)
-               -- (0,0,6) -- (8,0,6) -- (8,0,0) -- cycle;
-    \draw[thin,dotted] (0,0,0) -- (0,0,6);
-    % \fill[act] (0,0,0) -- (0,6,0)
-    %   -- (0,6,2) -- (0,0,2)
-    %   [rounded corners] -- (1,0,2)
-    %   [sharp corners] -- (2,0,3)
-    %   [rounded corners] -- (3,0,2) -- (5,0,2)
-    %   [sharp corners] -- (6,0,4) -- (8,0,4)
-    %   -- (8,0,0) -- cycle;
-
-    % Strings
-    % C
-    \draw (0,6,1.5) -- (0,0,1.5)
-    [rounded corners] -- (1,0,1.5) -- (m)
-    -- (7,0,1.5) -- (8,0,1.5);
-    % mem after join
-    \draw (join-l) -- (0,0,4.5)
-    [rounded corners] -- (1,0,4.5) -- (m)
-    -- (7,0,4.5) -- (8,0,4.5);
-    % mem before join
-    \draw (0,6,3)
-    [rounded corners] -- (0,3,3) -- (join-l);
-    \draw (m0)
-    [rounded corners] -- (0,2,5.5) -- (join-l);
-
-    % Nodes
-    \node[tsn] at (m) {\footnotesize$\kw{Clight(M')}$};
-    \node[sct] at (join-l) {$\bullet$};
-    \node[sct,bln] at (m0) {};
-
-    %% Internals
-    \draw[dashed, thin] (p0) [rounded corners] -- (2,3,4) -- (m0);
-    \node[scn] at (rp) {\scriptsize$R_p$};
-
-    %% Top and right
-
-    % Background
-    \fill[tssdbg,opacity=0.6]
-      (0,6,0) -- (8,6,0) -- (8,0,0) -- (8,0,6) -- (8,6,6) -- (0,6,6) -- cycle;
-    \draw[thin,dotted] (8,6,0) -- (8,6,6);
-
-    % Strings
-    % C
-    \draw (0,6,1.5)
-    [rounded corners] -- (1,6,1.5)
-    -- (pm) -- (7.5,6,1.5)
-    [sharp corners] -- (8,6,1.5) -- (8,0,1.5);
-    % mem before join
-    \draw (0,6,3) -- (8,6,3)
-    [rounded corners] -- (8,3,3) -- (join-r);
-    \draw (mt)
-    [rounded corners] -- (8,2,5.5) -- (join-r);
-    % mem after join
-    \draw (join-r) -- (8,0,4.5);
-    % penv
-    \draw (p0)
-    [rounded corners] -- (2.5,6,4) -- (pm);
-
-    % Nodes
-    \node[tsn] at (pm) {\footnotesize$\kw{ClightP(M)}$};
-    \node[tsn,bln] at (p0) {};
-    \node[sct] at (join-r) {$\bullet$};
-    \node[sct,bln] at (mt) {};
-
-
-  \end{tikzpicture} }
-
-  \caption{xxx}
-  \label{fig:clightp}
-\end{figure}
 
 \subsection{Clight with module-local state} \label{sec:application:clightp} %{{{
 
@@ -6662,7 +6337,6 @@ the auxiliary property:
 \end{example}
 % }}}
 
-
 \subsection{Mixing Semantics} %{{{
 
 Talk about mixing C and assembly semantics
@@ -6700,6 +6374,8 @@ We could then try to establish properties like:
 \]
 
 %}}}
+
+
 
 % \subsection{Ad-hoc Verification} \label{sec:application:ad-hoc}
 
@@ -7415,6 +7091,307 @@ This yields the following property.
 
 %}}}
 
+\section{Certified Abstraction Layers} \label{app:cal} %{{{
+
+% we want the layers to compose vertically
+% main challenge: vertically compose the R
+% other challenge: lack of frame rule
+On one hand,
+there is no obvious way of
+how to compose the abstraction relations
+due to the lack of memory separation.
+Moreover,
+lifting to $\hat{R}$ adds another layer of complexity,
+because the composition may not commute with the $\hat{}$ operator.
+To make things worse,
+the program semantics, layer specifications,
+and abstract states are all entangled together
+because every object in the framework
+has type $\top \twoheadrightarrow C\mathbin@ \kw{mem} \mathbin@ D$.
+As a consequence,
+it is hard to prove a simple fact without having
+the entire $\kw{ClightX}$ semantics involved.
+
+% simulated by compcerto
+\paragraph{CompCertO implementation}
+By contrast,
+with the fine-grained treatment of the elementary components
+in our framework,
+the CAL can be implemented much simpler.
+We first derive
+the simulation convention
+$\mathbf{R}: \mathcal{C} \mathbin@\kw{mem} \mathbin@ D_2 \leftrightarrow \mathcal{C}\mathbin@ \kw{mem} \mathbin@ D_1$
+and the layer implementation
+$L_1 : \top \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D_1$,
+which are the counterparts of
+$\hat{R}$ and $\kw{ClightX}_{\Gamma_1}(M)$ respectively,
+as follows:
+\[
+  \mathbf{R}: \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D_2
+  \leftrightarrow \mathcal{C}\mathbin@ \kw{mem} \mathbin@ D_1 :=
+  \begin{tikzpicture}[xscale=0.35,yscale=0.3,baseline=1em]
+    \footnotesize
+    \coordinate (C-bottom) at (0.5,0);
+    \coordinate (C-top) at (0.5,4);
+    \coordinate (join) at (2.5,1);
+    \coordinate (d2) at (4.5,4);
+    \coordinate (d1) at (5.5,0);
+    \coordinate (mem-bottom) at (2.5,0);
+    \coordinate (mem-top) at (1.5,4);
+    \coordinate (R) at (4.5,3);
+    % Background
+    \fill[scsdbg] (0,0) rectangle (6,4);
+    % Edges
+    \draw (C-top) node[above] {$\mathcal{C}$} -- (C-bottom) node[below] {$\mathcal{C}$};
+    \draw (R) [rounded corners] -- (5.5,2.5) -- (d1) node[below] {$D_1$};
+    \draw (R) .. controls +(-1,-0.5) .. (3.5,2);
+    \draw (join) node {$\bullet$} .. controls +(1,0.5) .. (3.5,2);
+    \draw (d2) node[above] {$D_2$} -- (R) node[draw,fill=white,rounded corners] {$R$};
+    \draw (mem-top) node[above] {$\;\;\kw{mem}$}
+    [rounded corners] -- (1.5,1.5) -- (join);
+    \draw (join) -- (2.5,0) node[below]{\kw{mem}};
+  \end{tikzpicture}
+  \qquad
+  L_1 :=
+  {\begin{tikzpicture}[xscale=0.25,yscale=0.12,baseline=(mem.base)]
+    % Background
+    \fill[tssdbg]
+      (1,-2) rectangle (14,7);
+    \fill[act]
+      (1,-2) rectangle (14,0);
+    % Wires
+    \draw (1,0) node[left] {\small$\mathcal{C}$}
+      -- (14,0) node[right] {\small$\top\,,$};
+    %\draw (0,2) node[left] {$\kw{mem}$}
+    %  -- (9,2) .. controls +(1,0) and +(-1,0) .. (11,5)
+    %  -- (13,5)
+    %    node[circle,inner sep=1pt,draw,fill=white] {}
+    %    node[right] {$\kw{mem}$};
+    \draw (1,2) node[left] (mem) {\small$\kw{mem}$}
+      -- (9,2) .. controls +(1,0) and +(-1,0) .. (10.5,1) -- (12,1);
+    \draw (1,4.5) node[left] {\small$D_1$}
+      -- (9,4.5) .. controls +(1,0) and +(-1,0) .. (10.5,2)
+      -- (11,2);
+    %\node[above,inner sep=1pt] at (10,0)
+    %  {\footnotesize $\mathcal{C}$};
+    % Boxes
+    \draw[fill=white,rounded corners]
+      ( 2,-1) rectangle ( 8,3) node[midway] {\small$\kw{Clight}(M)$}
+      (11,-1) rectangle (13,3) node[midway] {\small$\Gamma_1$};
+  \end{tikzpicture}}
+\]
+We then interpret the abstraction layers as
+\[
+  \Gamma_1 \vdash_R M : \Gamma_2 \: :\Leftrightarrow \: \Gamma_2 \le_{\varnothing \twoheadrightarrow \mathbf{R} } L_1
+\]
+
+% example
+\begin{example}
+  Recall the example of bounded queue
+  from Section~\ref{sec:overview:high-dimension}.
+  Using the CAL framework,
+  we can define the layer interfaces
+  for the ring buffer and bounded queue as
+  $(D_\kw{rb}, d_0, \Gamma_\kw{rb}\mathbin@ \kw{mem})$ and
+  $(D_\kw{bq}, \epsilon, \Gamma_\kw{bq}\mathbin@ \kw{mem})$ respectively.
+  Then the layer correctness:
+  \[
+    \Gamma_\kw{rb} \vdash_{R_\kw{bq}} \kw{bq.c} : \Gamma_\kw{bq}
+  \]
+  is just $\phi_\kw{bq}$[xxx].
+  Note that the abstraction relation
+  $R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}$
+  is a special case of the general form
+  because the overlay abstract state
+  is not realized
+  by the memory in the bounded queue program.
+\end{example}
+
+\paragraph{Composition}
+% major challenge is to show the vertical composition
+% start with the conclusion:
+% thousands of lines; coupled with ClightX semantics
+% give the two-line proof term
+% and explain the proof term
+Because of the challenges
+we have aforementioned,
+the original implementation of CAL takes
+thousands of lines of Coq proof
+to prove the vertical composition.
+By contrast,
+our framework benefits from the flexibility
+of various compositional properties.
+
+Given abstraction layers
+$\pi_M: \Gamma_1 \vdash_R M : \Gamma_2$
+and
+$\pi_N: \Gamma_2 \vdash_S N : \Gamma_3$,
+we define the composite abstraction relation
+$T \subseteq D_3 \times (\kw{mem} \times D_1) := S \mathbin; (\kw{mem} \times R) \mathbin; (\jr \times D_1) $,
+and prove the composite layer correctness:
+\[
+  \Gamma_1 \vdash_T M, N : \Gamma_3 := \phi_1 \odot (\pi_N \mathbin; (\phi_2 \odot \pi_M))
+\]
+where programs $M, N$ is interpreted as
+$\kw{Clight}(M) \odot \kw{Clight}(N)$,
+with the following auxiliary definitions:
+\[
+  \begin{array}{c}
+    \phi_0: \kw{mem} \bullet \jr \sqsubseteq \jr \bullet \kw{mem}
+    \qquad \phi_1: \mathbf{S} \mathbin; \mathbf{R} \sqsubseteq \mathbf{T}
+    := \mathcal{C} \mathbin@ (\kw{mem} \times (S \mathbin; (\kw{mem} \times R))\mathbin; (\phi_0 \times D_1) )
+    \\
+    \phi_2: \kw{Clight}(N) \mathbin@ D_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}}
+    \kw{Clight}(N) \mathbin@ D_1
+    := \kw{Clight}(N) \mathbin@ R \mathbin; \kw{FP}(N) \mathbin@ D_1
+  \end{array}
+\]
+
+\paragraph{Remark}
+
+The original implementation of CAL
+uses $\kw{ClightX}_L(M)$
+to interprets a Clight program $M$
+on top of a layer interface $L$,
+where the interactions
+between the program and the underlying specifications
+are baked into the $\kw{ClightX}$ semantics.
+As a consequence,
+the program semantics, the specifications,
+and abstract states
+are tightly coupled together.
+The semantics for a program
+is not well-defined
+without the primitives that interprets its function calls.
+In particular,
+one cannot prove the property
+$ \phi_\kw{bq}: \Sigma_\kw{bq}@\kw{mem} \le \kw{ClightP}(\kw{bq.c})$
+in the original settings.
+By contrast,
+the implementation based on CompCertO
+and its layered composition allows more flexibility.
+
+In the original implementation of CAL,
+memory injections are entangled with abstraction relation
+in order to
+combine the program verification with compiler correctness.
+This leads to complexity in composing
+the abstraction relations.
+By contrast,
+our framework benefits from
+state composition and encapsulation
+so that
+the simulation relations are composed
+in a straightforward way.
+
+That said,
+the original framework
+supports mixing Clight and assembly modules,
+while our framework does not.
+We left it as future work how to
+systematically compose modules
+on different abstraction levels.
+And also something on horizontal composition.
+Moreover,
+a form of horizontal composition of layers
+is provided in the original CAL.
+Nevertheless,
+such composition can be simulated
+by the vertical composition
+where the underlay and overlay do not interact
+and the underlay interfaces are passed through.
+
+\begin{figure}
+
+  \raisebox{-0.5\height}{\begin{tikzpicture}[sdp]
+
+    \coordinate (pm) at (5,6,3);
+    \coordinate (m) at (4,0,3);
+    \coordinate (join-l) at (0,1.5,4.5);
+    \coordinate (m0) at (0,2.5,5.5);
+    \coordinate (p0) at (2,6,4);
+    \coordinate (join-r) at (8,1.5,4.5);
+    \coordinate (mt) at (8,3,5.5);
+
+    \coordinate (rp) at (2,4.5,4);
+
+    %% Left and bottom faces
+
+    % Background area
+    \fill[tssdbg] (0,0,0) -- (0,6,0) -- (0,6,6)
+               -- (0,0,6) -- (8,0,6) -- (8,0,0) -- cycle;
+    \draw[thin,dotted] (0,0,0) -- (0,0,6);
+    % \fill[act] (0,0,0) -- (0,6,0)
+    %   -- (0,6,2) -- (0,0,2)
+    %   [rounded corners] -- (1,0,2)
+    %   [sharp corners] -- (2,0,3)
+    %   [rounded corners] -- (3,0,2) -- (5,0,2)
+    %   [sharp corners] -- (6,0,4) -- (8,0,4)
+    %   -- (8,0,0) -- cycle;
+
+    % Strings
+    % C
+    \draw (0,6,1.5) -- (0,0,1.5)
+    [rounded corners] -- (1,0,1.5) -- (m)
+    -- (7,0,1.5) -- (8,0,1.5);
+    % mem after join
+    \draw (join-l) -- (0,0,4.5)
+    [rounded corners] -- (1,0,4.5) -- (m)
+    -- (7,0,4.5) -- (8,0,4.5);
+    % mem before join
+    \draw (0,6,3)
+    [rounded corners] -- (0,3,3) -- (join-l);
+    \draw (m0)
+    [rounded corners] -- (0,2,5.5) -- (join-l);
+
+    % Nodes
+    \node[tsn] at (m) {\footnotesize$\kw{Clight(M')}$};
+    \node[sct] at (join-l) {$\bullet$};
+    \node[sct,bln] at (m0) {};
+
+    %% Internals
+    \draw[dashed, thin] (p0) [rounded corners] -- (2,3,4) -- (m0);
+    \node[scn] at (rp) {\scriptsize$R_p$};
+
+    %% Top and right
+
+    % Background
+    \fill[tssdbg,opacity=0.6]
+      (0,6,0) -- (8,6,0) -- (8,0,0) -- (8,0,6) -- (8,6,6) -- (0,6,6) -- cycle;
+    \draw[thin,dotted] (8,6,0) -- (8,6,6);
+
+    % Strings
+    % C
+    \draw (0,6,1.5)
+    [rounded corners] -- (1,6,1.5)
+    -- (pm) -- (7.5,6,1.5)
+    [sharp corners] -- (8,6,1.5) -- (8,0,1.5);
+    % mem before join
+    \draw (0,6,3) -- (8,6,3)
+    [rounded corners] -- (8,3,3) -- (join-r);
+    \draw (mt)
+    [rounded corners] -- (8,2,5.5) -- (join-r);
+    % mem after join
+    \draw (join-r) -- (8,0,4.5);
+    % penv
+    \draw (p0)
+    [rounded corners] -- (2.5,6,4) -- (pm);
+
+    % Nodes
+    \node[tsn] at (pm) {\footnotesize$\kw{ClightP(M)}$};
+    \node[tsn,bln] at (p0) {};
+    \node[sct] at (join-r) {$\bullet$};
+    \node[sct,bln] at (mt) {};
+
+
+  \end{tikzpicture} }
+
+  \caption{xxx}
+  \label{fig:clightp}
+\end{figure}
+
+%}}}
+
 \section{Clight with module-local state} \label{sec:appendix:clightp} %{{{
 
 We have briefly introduced in \S\ref{sec:overview:clightp}
@@ -7740,7 +7717,6 @@ the self-composition of the simulation conventions involved
 follows mostly from properties of the partial commutative monoid.
 
 %}}}
-
 
 \end{document}
 \endinput
