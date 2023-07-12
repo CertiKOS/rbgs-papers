@@ -1,6 +1,7 @@
 MAIN = compcertoe
 
 $(MAIN).pdf: $(MAIN).bbl
+compcertoe-with-appendix.pdf: compcertoe-with-appendix.bbl
 
 %.bbl: ALWAYS
 	pdflatex -shell-escape $*
