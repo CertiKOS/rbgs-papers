@@ -968,10 +968,215 @@ to be overly tailored to that application.
 
 \subsection{Overview of our Solution}
 
-[TODO: Bring some of the contents from below to give a big-picture preview
-of our approach]
+To tackle the challenges outlined in the previous section,
+we will investigate several extensions to CompCertO's model:
+we will streamline the notion of horizontal composition used in CompCertO;
+we will then introduce a notion of \emph{spatial} composition
+to serve as a basis for our treatment of state.
+We will then demonstrate how high-level resoning principles
+such as state encapsulation or the frame rule of separation logic
+can be captures as refinement properties within this framework.
 
-[TODO: Should discuss separation algebra ahead of task 2b]
+\paragraph{Spatial Composition}
+
+As described in \S\ref{sec:mainideas:compcerto},
+CompCertO supports a notion of vertical composition ($\cdot$)
+for simulation conventions and simulation properties.
+Likewise, as a compositional compiler,
+it supports a notion of horizontal composition of program modules ($\oplus$),
+which is compatible with simulation properties as well.
+
+The key to our approach will be the introduction of a third dimension of compositionality
+in the form of of a \emph{spatial} composition principle ($\otimes$)
+operating at the level of language interfaces.
+Specifically, the construction
+\[ A \otimes B = \langle A^\que \times B^\que, \, A^\ans \times B^\ans \rangle \]
+will allow us to decompose
+the questions and answers of language interfaces
+into different fields.
+In particular the language interface component $[U] = \langle U,U \rangle$
+can be used in conjunction with $\otimes$
+to annotate the questions and answers of another language interface
+with a state component of type $U$;
+for example,
+the language interface used for C programs in CompCertO
+can be described as $\mathcal{C} := \tilde{\mathcal{C}} \otimes [\kw{mem}]$.
+In the context of certified abstraction layers,
+We can also use $\otimes$ to extend a language interface with abstract data.
+
+%Building on the categorical framework established by Task~1a, 
+%this construction can be extended
+%to transition systems and simulation conventions
+%to obtain a \emph{symmetric monoidal} structure \cite{rosetta},
+%with the trivial language interface $I = \langle \{*\}, \{*\} \rangle$
+%as its unit.
+%This adds a dimension of compositionality to our framework
+%and will serve as the basis for our treatment of state.
+
+Importantly,
+although $\otimes$ acts primarily on language interfaces,
+it is compatible with transition systems, simulation conventions, and
+simulations, so that for example the following constructions can be defined:
+\[
+  \AxiomC{$L : A \twoheadrightarrow B$}
+    \UnaryInfC{$L \otimes [U] : A \otimes [U] \twoheadrightarrow B \otimes [U]$}
+    \DisplayProof
+  \quad
+  \AxiomC{$\mathbb{R} : A \Leftrightarrow B$}
+    \AxiomC{$R \subseteq U \times V$}
+    \BinaryInfC{$\mathbb{R} \otimes [R] : A \otimes [U] \Leftrightarrow B \otimes [V]$}
+    \DisplayProof
+  \quad
+  \AxiomC{$L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$}
+    \UnaryInfC{$L_1 \otimes [U]
+      \le_{\mathbb{R} \otimes [U] \twoheadrightarrow \mathbb{S} \otimes [U]}
+      L_2 \otimes [U]$}
+    \DisplayProof
+\]
+Here, $L \otimes [U]$ is a transition system which acts like $L$
+but accepts and passes through an additional state component taken in the set $U$.
+The simulation convention $\mathbb{R} \otimes [R]$
+relates the original questions and answers according to $\mathbb{R}$, and
+the state annotations according to the relation $R \subseteq U \times V$.
+The third rule illustrates one way in which
+simulation properties are compatible with spatial composition:
+extending the transition systems $L_1$ and $L_2$
+to pass through a state component of type $U$ 
+preserves a simulation between them,
+where the simulation convention $\mathbb{R} \otimes [U]$
+expects the source and target state annotations in $U$ to be equal.
+
+\paragraph{Memory Separation and Abstraction}
+
+Spatial composition will allow
+various high-level reasoning techniques
+to be formulated in terms of refinement.
+For example,
+it is no longer necessary to modify language semantics
+to support certified abstraction layers.
+Instead,
+the C semantics of a translation unit $M$ can be extended to
+$\kw{Clight}(M) \otimes [D] :
+ \mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes [D] \twoheadrightarrow
+ \mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes [D]$,
+so that it maintains an abstract state of type $D$
+in addition to CompCert's global memory state of type $\kw{mem}$.
+The result can then be composed
+with a specification $\Sigma$ of abstract primitives
+expressed in terms of $D$.
+
+This raises the question of the relationship between $\Sigma$ and its implementation $N$,
+and the ways in which the corresponding correctness property
+extends to the program context $M$.
+In particular,
+as we implement $\Sigma$ the abstract state of type $D$ will be replaced by
+a concrete memory state of type $\kw{mem}$.
+This will be reflected at the level of the context $M$
+by a move from $\mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes D$
+to $\mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes [\kw{mem}]$.
+How can we relate this intermediate result
+to the semantics of the linked program
+$\kw{Clight}(M + N) :
+ \mathcal{\tilde{C}} \otimes [\kw{mem}]
+ \twoheadrightarrow
+ \mathcal{\tilde{C}} \otimes [\kw{mem}]$?
+
+Once again,
+our spatial composition infrastructure
+will allow us to incorporate
+verification techniques from separation logic into our framework.
+Separation algebras \cite{sepalg}
+provide a useful tool to formalize the ways in which
+memory states of various kinds can be
+split and recombined into \emph{shares}.
+Within our framework,
+a separation algebra on the CompCert memory model
+would allow us to define
+a simulation convention
+$\kw{Y} : [\kw{mem}] \otimes [\kw{mem}] \Leftrightarrow [\kw{mem}]$
+allowing state components,
+once refined into concrete memory shares,
+to be merged together.
+Going further,
+a local action property (or \emph{frame rule})
+for the Clight semantics can be expressed as:
+\[
+  \kw{Clight}(M) \otimes [\kw{mem}]
+  \:
+  \le_{\mathcal{\tilde{C}} \otimes [\kw{Y}] \twoheadrightarrow
+       \mathcal{\tilde{C}} \otimes [\kw{Y}]}
+  \:
+  \kw{Clight}(M)
+  \,.
+\]
+Here the left-hand side component executes the program $M$,
+but in addition carries around an extra $\kw{mem}$ fragment
+originally provided by the environment.
+The use of $\kw{Y}$ ensures that in the right-hand side,
+this memory share has been merged into the global memory state
+used by the Clight semantics.
+The simulation ensures that
+any Clight execution can always be extended with an additional memory share,
+and that furthermore if the original execution is safe,
+this additional share will not be modified.
+
+We will address defining a separation algebra
+for the CompCert memory model in \S\ref{sec:nominal}.
+
+\paragraph{State Encapsulation}
+
+Another important high-level reasoning technique
+which can be formulated in terms of spatial composition and refinement
+is \emph{state encapsulation}.
+CompCertO's transition system model can be extended
+to incorporate a notion of persistent local state.
+This functionality can then be exposed in terms of
+a state encapsulation primitive $[ u \rangle : [U] \twoheadrightarrow I$,
+where $I := \langle \{*\}, \{*\} \rangle$ is a trivial language interface.
+
+The component $[u\rangle$ maintains an internal state of type $U$.
+Upon its first activation with a trivial question in $I$,
+it uses the initial state $u \in U$
+as an outgoing question.
+The answer $u' \in U$ is then used to update the internal state
+and is again erased from the component's top-level answer.
+By pre-composing $[u\rangle$ onto a transition system
+$L : A \twoheadrightarrow B \otimes [U]$,
+it becomes possible to \emph{hide} from the environment
+the explicit state component of type $U$ expected by $L$.
+Moreover,
+the property
+\[
+  u \mathrel{R} v
+  \quad \Rightarrow \quad
+  [u\rangle \le_{[R] \twoheadrightarrow I} [v\rangle
+\]
+can be used as a simple but powerful way
+to reason about representation independence.
+Indeed,
+given a simulation of type
+$L_1 \le_{\mathbb{R} \otimes [R] \twoheadrightarrow \mathbb{S}} L_2$
+which accounts for explicit state
+using a simulation relation $R$,
+we can pre-compose the property above to obtain a simulation
+$[u\rangle \odot L_1
+ \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}}
+ [v\rangle \odot L_2$
+between the encapsulated components
+(see \textbf{Task~1a} below for a description of the horizontal composition operator $\odot$).
+
+%In conjunction with
+%the composition operator $\odot$ and
+%the monoidal structure $\otimes$,
+%this primitive can then be used to selectively hide
+%a field of type $U$ from the language interface exposed
+%by another component.
+
+\paragraph{Three-Dimensional Refinement Algebra}
+
+When all is said and done,
+our work will provide a three-dimensional algebra of refinement:
+correctness properties and high-level reasoning principles
 
 \subsection{Proposed Work}
 
@@ -1006,71 +1211,33 @@ of the kind illustrated by Example~\ref{ex:nicdriver}.
 \vspace*{-2ex}
 \paragraph*{Task 1b: Compositional State and State Encapsulation}
 
-In CompCertO, state exists in two forms:
-\begin{itemize}
-  \item The memory state is global and persistent.
-    It is shared across all components
-    and must be carried along
-    every time a question or answer transfers control
-    between components.
-  \item The states used to define transition systems
-    are local to each component.
-    They can only be observed indirectly,
-    through the component's interaction with the environment.
-\end{itemize}
-Because C does not support objects, closures or similar abstractions,
-component-local state has a lifetime limited to a particular function activation.
-In the semantics of CompCert languages,
-maintaining persistent local state
-across successive activations of a given component
-would serve no purpose.
-Nevertheless,
-persistent local state is important in many applications,
-and essential to facilitate reasoning about large-scale systems.
-Therefore,
-we will extend CompCertO's semantic model
-with a compositional treatment of state
-as well as a state encapsulation primitive.
+Placing horizontal and vertical composition principles
+on a stronger footing will make it easier to incorporate
+spatial composition ($\otimes$) into the framework as well.
+While $\otimes$-composition of
+language interfaces and simulation conventions is very straightforward,
+the main difficulty is that
+the composition $L_1 \otimes L_2$ of transition systems
+cannot be defined in general.
+This is because there is no way to guarantee that
+the external interactions of $L_1$ and $L_2$
+will synchronize in a meaningful way.
+However,
+we have found in preliminary work that
+it is possible to restrict components appearing on the right of $\otimes$
+to avoid issues of this kind,
+while retaining a powerful compositional structure
+for the management of state.
 
-Specifically, the construction
-$A \otimes B = \langle A^\que \times B^\que, \, A^\ans \times B^\ans \rangle$
-will allow us to decompose
-the questions and answers of language interfaces
-into different fields.
-In particular the language interface component $[U] = \langle U,U \rangle$
-can be used in conjunction with $\otimes$
-to annotate the questions and answers of another language interface
-with a state component of type $U$;
-for example,
-the language interface used for C programs in CompCertO
-can be described as $\mathcal{C} := \tilde{\mathcal{C}} \otimes [\kw{mem}]$.
-Building on the categorical framework established by Task~1a, 
-this construction can be extended
-to transition systems and simulation conventions
-to obtain a \emph{symmetric monoidal} structure \cite{rosetta},
-with the trivial language interface $I = \langle \{*\}, \{*\} \rangle$
-as its unit.
-This adds a dimension of compositionality to our framework
-and will serve as the basis for our treatment of state.
-
-Introducing persistent local state to the model
-then makes it possible to define
-a state encapsulation primitive $\langle u \rangle : [U] \twoheadrightarrow I$.
-This component maintains an internal state of type $U$.
-Upon its first activation with a trivial question in $I$,
-it uses the initial state $u \in U$
-as an outgoing question.
-The answer $u' \in U$ is then used to update the internal state
-and is again erased from the component's top-level answer.
-In conjunction with
-the composition operator $\odot$ and
-the monoidal structure $\otimes$,
-this primitive can then be used to selectively hide
-a field of type $U$ from the language interface exposed
-by another component.
-
-[TODO: describe our solution in more detail,
-possibly in its own subsection earlier]
+With this framework in place,
+it will become possible to incorporate state encapsulation
+into the CompCertO semantic model in the way that we have outlined above.
+While this will require changes to the underlying definitions of
+transition system, simulation convention and simulation proofs,
+these changes will remain backward-compatible,
+so that the existing
+language semantics and correctness properties provided by CompCertO
+will remain immediately available within the new framework.
 
 \vspace*{-2ex}
 \paragraph*{Task 1c: Trace Semantics for Open Components}
