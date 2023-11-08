@@ -33,6 +33,8 @@
 \hyphenation{Comp-CertO}
 \hyphenation{Comp-CertM}
 \hyphenation{Certi-KOS}
+
+\ebproofset{right label template=\scriptsize\inserttext}
 %}}}
 
 % Macros {{{
@@ -381,7 +383,7 @@ For example,
 over the span of a decade
 many different approaches have been proposed
 to make the CompCert correctness theorem compositional
-\cite{compcompcert,sepcompcert,compcertm,compcerto,nominal},
+\cite{compcompcert,sepcompcert,compcertm,compcerto,nominalcompcert},
 and this problem alone still constitutes
 an active area of research.
 In order to verify the operating system kernel CertiKOS,
@@ -591,24 +593,14 @@ and discuss related work in \S\ref{sec:rw}.
 
 %}}}
 
-\section{Compositional Structures in CompCert Semantics} \label{sec:compcert} %{{{
+\section{Background and Challenges} %{{{
 
-% Preamble {{{
+We start by summarizing existing work on CompCert semantics
+and outlining some of the difficulties in
+interfacing this work with high-level verification techniques,
+with \emph{certified abstraction layers} (CAL) as our main case study.
 
-Our framework builds on existing
-compositional semantics for the certified compiler CompCert,
-%Therefore,
-%before introducing our contributions in the following section,
-so we begin with a mini-survey of this line of research.
-In addition to providing relevant background,
-we seek to emphasize the high-level ``shape''
-of the compositional structures present in this work,
-and outline a conceptual framework in which these structures can be understood
-systematically.
-
-%}}}
-
-\subsection{Semantics in CompCert} %{{{
+\subsection{Whole-Program Semantics in CompCert} %{{{
 
 As a \emph{certified} compiler,
 CompCert comes with a specification
@@ -619,7 +611,7 @@ the mathematical development which accompanies
 CompCert
 includes a formalization of the source (Clight) and target (Asm) languages.
 
-\paragraph{Transition Systems}
+\paragraph{Transition Systems} %{{{
 
 CompCert uses transition systems
 to define language semantics.
@@ -667,7 +659,9 @@ terminates with the corresponding exit status $x$:%
 %not part of the specification
 %but are used in the construction of the proof.
 
-\paragraph{Simulations}
+%}}}
+
+\paragraph{Simulations} %{{{
 
 Once we have described
 the behavior of source and target programs,
@@ -711,7 +705,9 @@ to a corresponding execution of $L_2$:
 We write $\rho : L_1 \le L_2$ when these conditions are satisfied,
 or just $L_1 \le L_2$ when such a $\rho$ exists.
 
-\paragraph{Vertical Compositionality}
+%}}}
+
+\paragraph{Vertical Compositionality} %{{{
 
 Verifying an industrial-grade C compiler %like CompCert
 is difficult.
@@ -733,16 +729,59 @@ When the target $L_2$ of a simulation $\pi : L_1 \le L_2$
 is the source of a simulation $\rho : L_2 \le L_3$,
 the two can be combined, and the composite $\pi \mathbin; \rho$
 is in turn a simulation:
-\[
+\begin{equation} \label{eqn:vcomp-sim}
   \begin{prooftree}
     \hypo{\pi : L_1 \le L_2}
     \hypo{\rho : L_2 \le L_3}
     \infer2{(\pi \mathbin; \rho) : L_1 \le L_3}
   \end{prooftree}
-\]
+\end{equation}
 This allows
 the successive simulation proofs in (\ref{eqn:corrsteps})
 to be combined into the correctness property (\ref{eqn:ccc-wp}).
+
+%}}}
+
+\paragraph{Horizontal Compositionality} %{{{
+
+A serious limitation of CompCert
+is that its semantics
+only describe the behavior of whole programs.
+Consider the code shown in Fig.~\ref{fig:code},
+which we use as a running example.
+The translation unit $\kw{rb.c}$
+provides basic operations for a ring buffer data structure,
+which are used by $\kw{bq.c}$
+to implement a bounded queue.
+Neither file provides a $\kw{main}()$ function,
+and as a result their Clight semantics are undefined.
+Although CompCert can compile $\kw{rb.c}$ and $\kw{bq.c}$,
+strictly speaking in this situation
+the correctness property (\ref{eqn:ccc-wp})
+does not provide any guarantees.
+
+To account for this situation
+at the semantic level,
+we need to assign a behavior $\kw{Clight}(\kw{rb.c})$
+to individual translation units such as $\kw{rb.c}$
+and introduce an operator $\oplus$ to model the \emph{linking} process
+which must happen before $\kw{rb.c}$
+is run as part of a larger program.
+This operator should be compatible with simulations,
+so that a correctness property for the whole program
+may be derived from correctness properties of its constituents:
+\begin{equation} \label{eqn:hcomp-sim}
+  \begin{prooftree}
+    \hypo{\pi : L_1 \le L_1'}
+    \hypo{\rho : L_2 \le L_2'}
+    \infer2{(\pi \oplus \rho) : L_1 \oplus L_2 \le L_1' \oplus L_2'}
+  \end{prooftree}
+\end{equation}
+Unfortunately,
+achieving this in the context of CompCert
+is far from straightforward.
+
+%}}}
 
 %}}}
 
@@ -792,41 +831,34 @@ V deq() { return get(inc1()); }
 \end{figure}
 %}}}
 
-\subsection{Semantics in Compositional CompCert} \label{sec:survey:compcomp} %{{{
+\subsection{Compositional Semantics in CompCertO} %{{{
 
-A serious limitation of CompCert
-is that its semantics
-only describe the behavior of whole programs.
+The problem of achieving horizontal compositionality in CompCert
+is a surprisingly complex task and
+has been an active area of research for the past decade.
+Below we explain the solution retained in CompCertO
+\cite{compcerto},
+which is the starting point for our extended model.
 
-Consider the code shown in Fig.~\ref{fig:code},
-which we use as a running example.
-The translation unit $\kw{rb.c}$
-provides basic operations for a ring buffer data structure,
-which are used by $\kw{bq.c}$
-to implement a bounded queue.
-Neither file provides a $\kw{main}()$ function,
-and as a result their Clight semantics are undefined.
-Although CompCert can compile $\kw{rb.c}$ and $\kw{bq.c}$,
-strictly speaking in this situation
-the correctness property (\ref{eqn:ccc-wp})
-does not provide any guarantees.
+\paragraph{Open Semantics} %{{{
 
-\paragraph{Transition Systems} %{{{
-
-To address this issue,
-Compositional CompCert \cite{compcompcert}
-uses a notion of \emph{open} transition system
-which describes
-the behavior of an individual compilation unit:
+To model translation units and linking,
+we must describe interactions across component boundaries%
+---namely, function calls and returns.
+To this end,
+CompCertO
+uses a notion of \emph{open} transition system.
+As an example,
+consider the case of a C translation unit such as \kw{rb.c}:
 \begin{itemize}
 \item
-To initialize a transition system,
+To initialize a transition system ($I$),
 we must give the name $f \in \kw{ident}$
 of a function being invoked,
 actual parameters $\vec{v} \in \kw{val}^*$,
 and the current state $m \in \kw{mem}$ of the global memory.
 \item
-When the component terminates,
+When the component terminates ($F$),
 instead of a single integer outcome $x \in \kw{int}$ it must provide
 a return value $v' \in \kw{val}$ and an updated memory state $m' \in \kw{mem}$.
 \end{itemize}
@@ -868,7 +900,7 @@ for function call specifications,
 and write $r \mathrel{Y^s} s'$ when $(s, \, r, \, s') \in Y$.
 This means that
 after $s$ triggers an external call ($s \mathrel{X} q$)
-which returns with an answer $r = v'@m'$,
+which returns an answer $r = v'@m' \in \kw{val} \times \kw{mem}$,
 the execution resumes with state~$s'$.
 %In other words,
 %executions will take the form
@@ -943,27 +975,282 @@ but it makes outgoing calls which may have that effect:
 \end{example}
 %}}}
 
+The model we have described so far
+makes sense for C programs,
+but cross-component interactions take different forms
+in the case of other languages.
+For example,
+assembly-level interactions are formulated in terms of
+low-level register state and code addresses.
+To deal with this diversity,
+CompCertO introduces a rudimentary form of typing for transition systems,
+where the form taken by \emph{outgoing} and \emph{incoming} interactions
+are specified by a notion of language interface.
+
+\begin{definition} \label{def:li} \label{def:lts} %{{{
+A \emph{language interface} $A = \langle A^\que, A^\ans \rangle$
+is a set of questions $A^\que$ and a set of answers $A^\ans$.
+Then a \emph{transition system} $L : A \twoheadrightarrow B$
+is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
+consisting of:
+\begin{itemize}
+  \item a set $S$ of states and
+    a transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $I \subseteq B^\que \times S$
+    which assigns possible \emph{initial states}
+    to each question of $B$;
+  \item a relation $F \subseteq S \times B^\ans$
+    which specifies \emph{final states} together with
+    corresponding answers in $B$;
+  \item a relation $X \subseteq S \times A^\que$
+    which identifies \emph{external states} and
+    corresponding questions of $A$;
+  \item a relation $Y \subseteq S \times A^\ans \times S$,
+    which identifies \emph{resumption states}.
+\end{itemize}
+\end{definition}
 %}}}
 
-\paragraph{Horizontal Compositionality} %{{{
+Under this definition,
+the source and target semantics of CompCertO can be described as
+\[
+  \kw{Clight}(p) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
+  \qquad \text{and} \qquad
+  \kw{Asm}(p') : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m} \,.
+\]
+The language interface
+$\mathcal{C}_\kw{m} = \langle \mathcal{C}_\kw{m}^\que, \mathcal{C}_\kw{m}^\ans \rangle$
+describes the interactions used in Compositional CompCert:
+\[
+  \mathcal{C}_\kw{m}^\que :=
+    \{ f(\vec{v})@m \mid f \in \kw{ident}, \vec{v} \in \kw{val}^*, m \in \kw{mem} \}
+  \qquad
+  \mathcal{C}_\kw{m}^\ans :=
+    \{ v@m \mid v \in \kw{val}, m \in \kw{mem} \}
+  \,,
+\]
+so that the transition system $\kw{Clight}(p)$ is essentially identical
+to its Compositional CompCert counterpart.
+By contrast, the language interface
+$\mathcal{A}_\kw{m}$
+describes cross-component interactions at a level of abstraction
+which better matches the mechanics of assembly programs.
 
-Under this new definition of transition system,
-it becomes possible to define a \emph{semantic linking} operator $\oplus$
-to model the interaction between different components.
-The transition system $L_1 \oplus L_2$
-generally mirrors the internal executions of $L_1$ and $L_2$,
-but when $L_1$ makes an external call
-to a function provided by $L_2$ (and vice versa),
-$L_1 \oplus L_2$ instantiates a new copy of $L_2$ to handle the call internally.
-This copy executes until it reaches a final state,
-at which point its outcome is used to resume
-the suspended execution of $L_1$.
+%}}}
 
-Compositional CompCert's semantic linking
-is a form of \emph{horizontal} composition,
-as understood in the context of compositional compiler correctness.
-It can model the semantics of programs
-which are constructed from several translation units,
+\paragraph{Simulations} %{{{
+
+The types of
+$\kw{Clight}(p) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}$ and
+$\kw{Asm}(p') : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m}$
+raise the question of the relationship
+between source-level interactions
+in $\mathcal{C}_\kw{m}$
+and corresponding target-level interactions
+in $\mathcal{A}_\kw{m}$.
+Compositional compiler correctness only makes sense
+with respect to a particular calling convention.
+%Rather than modeling the calling convention implicitly
+%as part of the assembly semantics,
+%
+CompCertO makes this explicit:
+simulations operate in the context of specified
+\emph{simulation conventions},
+%which express the relationships between
+%the source and target components'
+%interactions with the environment.
+which introduce a form of two-dimensional typing for simulations.
+
+To establish a simulation
+of a transition system $L_1: A_1 \twoheadrightarrow B_1$
+by a transition system $L_2: A_2 \twoheadrightarrow B_2$,
+we must first specify a simulation convention
+$\mathbf{R}_B : B_1 \leftrightarrow B_2$
+for their incoming calls,
+and a simulation convention
+$\mathbf{R}_A : A_1 \leftrightarrow A_2$
+for their outgoing calls.
+The simulation can then be stated as
+\begin{equation} \label{eqn:compcerto-sim}
+  \pi : L_1 \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L_2
+  \,.
+  \qquad
+  \qquad
+  \begin{tikzcd}[sep=0.5ex]
+    A_1 \ar[dd, leftrightarrow, "\mathbf{R}_A"']
+        \ar[rr, twoheadrightarrow, "L_1"] &&
+    B_1 \ar[dd, leftrightarrow, "\mathbf{R}_B"] \\
+    & \pi & \\
+    A_2 \ar[rr, twoheadrightarrow, "L_2"'] &&
+    B_2
+  \end{tikzcd}
+\end{equation}
+There is an identity simulation convention $\idsc_A : A \leftrightarrow A$
+for every language interface $A$;
+given $L_1, L_2 : A \twoheadrightarrow B$,
+we will often write
+a simulation of type $L_1 \le_{\idsc_A \twoheadrightarrow \idsc_B} L_2$
+simply as $L_1 \le L_2$.
+%
+Finally, compiler correctness
+is expressed in terms of a convention
+$\mathbb{C} : \mathcal{C}_\kw{m} \leftrightarrow \mathcal{A}_\kw{m}$
+and can be stated as
+\[
+  \kw{CompCert}(p) = p'
+  \quad \Rightarrow \quad
+  \kw{Clight}(p)
+  \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
+  \kw{Asm}(p')
+  \:.
+\]
+
+%We will write
+%for a simulation of this kind,
+%which can depicted in pasting and string diagrams as:
+%\[
+%  \begin{tikzcd}[sep=tiny]
+%    A^\sharp
+%      \ar[rr, twoheadrightarrow, "L^\sharp"]
+%      \ar[dd, leftrightarrow, "\mathbf{R}_A"'] &&
+%    B^\sharp
+%      \ar[dd, leftrightarrow, "\mathbf{R}_B"] \\
+%    & \pi & \\
+%    A^\flat
+%      \ar[rr, twoheadrightarrow, "L^\flat"'] &&
+%    B^\flat
+%  \end{tikzcd}
+%  \qquad \qquad
+%  \begin{tikzpicture}[xscale=0.4,yscale=0.35,baseline=(R)]
+%    % Background
+%    \begin{scope}
+%      \fill[ACMYellow!50] (0,2) rectangle (2,4);
+%      \fill[ACMRed!50] (0,0) rectangle (2,2);
+%      \fill[ACMGreen!50] (2,2) rectangle (4,4);
+%      \fill[ACMBlue!50] (2,0) rectangle (4,2);
+%    \end{scope}
+%    % Region labels
+%    \begin{scope}[every node/.style={opacity=0.5}]
+%      \scriptsize
+%      \node[below right] at (0,4) {$B^\sharp$};
+%      \node[above right] at (0,0) {$B^\flat$};
+%      \node[below left] at (4,4) {$A^\sharp$};
+%      \node[above left] at (4,0) {$A^\flat$};
+%    \end{scope}
+%    % Strings
+%    \begin{scope}
+%      \footnotesize
+%      \draw (2,4) node[above] {$L^\sharp$}
+%         -- (2,0) node[below] {$L^\flat$};
+%      \draw (0,2) node[left] (R) {$\mathbf{R}_B$}
+%         -- (4,2) node[right] {$\mathbf{R}_A$};
+%    \end{scope}
+%    % Node
+%    \node[draw,fill=white,rounded corners] at (2,2) {$\pi$};
+%  \end{tikzpicture}
+%\]
+%Simulation conventions are relational in nature.
+
+%}}}
+
+\begin{figure} % fig:compcerto -- Composition rules in CompCertO {{{
+  \begin{tabular}{
+    llc
+    c@{\:\:\:\:}c@{\:\:\:\:}c@{}c
+  }
+    \toprule
+    Role & Components & Notation & \multicolumn{4}{c}{Compose} \\
+    & & && H & V
+    \\
+    \midrule
+      Interface
+        & Language interfaces & $A, B, C$ && &
+    \\
+      Behavior
+        & Transition systems & $L : A \twoheadrightarrow B \in \mathbf{TS}$ &&
+            $\oplus$ &
+    \\
+      Abstraction
+        & Simulation conventions & $\mathbf{R} : A \leftrightarrow B \in \mathbf{SC}$ &&
+            & $\mathbin;\,$
+    \\
+      Refinement
+        & Simulations &
+          $\pi :
+           L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2
+             \in \mathbf{TSC}$ &&
+          $\oplus$ & $\mathbin;\,$
+    \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+  \begin{gather*}
+    \begin{prooftree}
+      \hypo{L_1 : A \twoheadrightarrow A}
+      \hypo{L_2 : A \twoheadrightarrow A}
+      \infer2[\kw{ts}-$\oplus$]{L_1 \oplus L_2 : A \twoheadrightarrow A}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\phi: L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}} L_1'}
+      \hypo{\psi: L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}} L_2'}
+      \infer2[\kw{sim}-$\oplus$]{\phi \oplus \psi :
+	L_1 \oplus L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}} L_1' \oplus L_2'}
+    \end{prooftree}
+    \\[1em]
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A \leftrightarrow B}
+      \hypo{\mathbf{R}' : B \leftrightarrow C}
+      \infer2[\kw{sc}-$\mathbin;$]{(\mathbf{R} \mathbin; \mathbf{R}') : A \leftrightarrow C}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
+      \hypo{\psi : L_2 \le_{\mathbf{R'} \twoheadrightarrow \mathbf{S'}} L_3}
+      \infer2[\kw{sim}-$\mathbin;$]{(\phi \mathbin; \psi) : L_1 \le_{\mathbf{R} \mathbin; \mathbf{R'} \twoheadrightarrow
+	\mathbf{S} \mathbin; \mathbf{S'}} L_3}
+    \end{prooftree}
+  \end{gather*}
+  \caption{Composition principles $\oplus$ and $\mathbin;$ in the CompCertO semantic model}
+  \label{fig:compcerto}
+\end{figure}
+%}}}
+
+\paragraph{Compositional Structure} %{{{
+
+Figure~\ref{fig:compcerto}
+summarizes the compositional structure of the framework.
+The simulation conventions $\mathbf{R} : A \leftrightarrow B$ and
+$\mathbf{R}' : B \leftrightarrow C$
+compose into
+$\mathbf{R} \mathbin; \mathbf{R}' : A \leftrightarrow C$.
+This is used by the vertical composition principle \kw{sim}-$\mathbin;$ for simulations,
+which allows them to be pasted vertically.
+%\[
+%  \begin{prooftree}
+%    \hypo{\mathbf{R} : A \leftrightarrow B}
+%    \hypo{\mathbf{R}' : B \leftrightarrow C}
+%    \infer2{(\mathbf{R} \mathbin; \mathbf{R}') : A \leftrightarrow C}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{\phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
+%    \hypo{\psi : L_2 \le_{\mathbf{R'} \twoheadrightarrow \mathbf{S'}} L_3}
+%    \infer2{(\phi \mathbin; \psi) : L_1 \le_{\mathbf{R} \mathbin; \mathbf{R'} \twoheadrightarrow
+%      \mathbf{S} \mathbin; \mathbf{S'}} L_3}
+%  \end{prooftree}
+%\]
+Moreover,
+the \emph{semantic linking} operator $\oplus$
+models the interaction between different program components,
+%The transition system $L_1 \oplus L_2$
+%generally mirrors the execution of $L_1$ or $L_2$,
+%but when $L_1$ makes an external call
+%to a function provided by $L_2$ (and vice versa),
+%$L_1 \oplus L_2$ instantiates a new copy of $L_2$ to handle the call internally.
+%This copy executes until it reaches a final state,
+%at which point its outcome is used to resume
+%the suspended execution of $L_1$.
 so that for example the overall behavior of the code in Fig.~\ref{fig:code}
 can be described as
 $
@@ -976,6 +1263,141 @@ which admits the trace
   v_2@[\kw{c1} \mapsto 3, \kw{buf} \mapsto \{v_0, v_1, v_2, v_3\}]
   \,.
 \]
+
+Unfortunately,
+despite what the shape of the diagram above (\ref{eqn:compcerto-sim}) may suggest,
+simulations cannot in general be pasted horizontally
+along boundaries of the kind $\mathbf{R} : A \leftrightarrow B$.
+This is due to the symmetric nature of semantic linking,
+which lets $L_1$ and $L_2$ interact in a mutually recursive way.
+For $\oplus$ composition to be possible,
+the transition systems must operate
+over a single language interface,
+and likewise simulations must operate
+with respect to a single simulation convention.
+
+To work around this restriction,
+CompCertO introduces a rich algebra of \emph{simulation convention refinements},
+which play the role of a second kind of two-dimensional object.
+These refinements can compose
+with simulations to modify their types,
+and are used to massage per-phase
+simulation proofs with varied conventions into
+an overall compiler correctness theorem
+which fits \kw{sim}-$\oplus$.
+
+%}}}
+
+%}}}
+
+\subsection{CompCertO Semantics as a Refinement-based Verification Framework} %{{{
+
+In the framework outlined above,
+the semantics of the source program serve as a specification
+and those of the target program serve as the implementation,
+while simulations establish a form of refinement
+of the former by the latter.
+As such,
+this framework can already be used as a rudimentary
+refinement-based verification framework,
+as illustrated by the example below.
+
+\begin{example} \label{ex:compcomp} %{{{
+We can provide a specification for the code in Fig.~\ref{fig:code}
+as a simple transition system
+$L_\kw{bq} : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}$
+which spells out the expected behaviors
+for the bounded queue operations $\kw{enq}$ and $\kw{deq}$.
+Then a simulation
+$
+  \phi : L_\kw{bq}
+    \le \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
+$
+shows that the combination of $\kw{bq.c}$ and $\kw{rb.c}$
+implements $L_\kw{bq}$.
+To transfer this correctness guarantee to the compiled code,
+we can obtain from the compiler's correctness proof the simulations
+$\pi_\kw{bq} : \kw{Clight}(\kw{bq.c})
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\kw{bq.s})$ and
+$\pi_\kw{rb} : \kw{Clight}(\kw{rb.c})
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\kw{rb.s})$.
+By composing the simulations together,
+we can derive
+\begin{equation}
+  \phi \mathbin; (\pi_\kw{bq} \oplus \pi_\kw{rb}) \::\:
+  L_\kw{bq} \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
+  \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
+  \,.
+  \label{eqn:cex}
+\end{equation}
+%We can use this property with any context $C$
+%by adjoining
+%the simulation $\kw{id}_C : C \le C$
+%to obtain
+%\begin{equation}
+%  \kw{id}_C \oplus (\phi \mathbin; (\pi_\kw{bq} \oplus \pi_\kw{rb}))
+%  \::\:
+%  C \oplus L_\kw{bq}
+%  \:\le\:
+%  C \oplus \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
+%  \,.
+%  \label{eqn:ccex}
+%\end{equation}
+[TODO: could add a step with an intermediate $L_\kw{rb}$
+and refresh pasting diagram.]
+\end{example}
+%}}}
+
+To the extent that Compositional CompCert \cite{compcompcert},
+CompCertM \cite{compcertm} and CompCertO \cite{compcerto}
+constitute verification frameworks,
+this is the kind of approach that is referred to.
+However,
+as we articulate below,
+as they stand these frameworks are not
+expressive enough to conveniently capture
+more advanced forms of reasoning.
+
+[Points to make below:
+\begin{itemize}
+\item $L_\kw{bq}$ should use abstract state
+\item $\Sigma_\kw{rb}$ should use \emph{no} state
+\item Even $\vec{q}$ should in fact be hidden from the client
+  (state encapsulation)
+\item Ad-hoc simulation convention and proof for
+  the way $\vec{q}$ is realized as concrete memory
+  is not a satisfactory approach.
+\item Horizontal composition forces uniform language interface and simulation convention,
+  not appropriate for heterogeneous systems
+  (incl. het in terms of ab state)]
+\end{itemize}
+
+\paragraph{Data Abstraction}
+
+In Example~\ref{ex:compcomp},
+the specification $L_\kw{bq}$
+fails to hide the queue's implementation details:
+because no abstraction occurs,
+the specification would describe
+the low-level effects of invoking $\kw{enq}$ and $\kw{deq}$
+on the variables $\kw{c1}$, $\kw{c2}$ and $\kw{buf}$.
+
+We would like instead to abstract away this low-level state
+and replace with a high-level description
+such as a sequence $\vec{q} \in \kw{val}^*$
+representing the contents of the queue.
+The operations $\kw{enq}$ and $\kw{deq}$
+would then be 
+
+\paragraph{State Encapsulation}
+
+\paragraph{Compositional State}
+
+%}}}
+
+%}}}
+
+\section*{XXX FROM BEFORE: Compositional Structures in CompCert Semantics} \label{sec:compcert} %{{{
 
 Horizontal composition turns transition systems into 1-dimensional objects.
 However, unlike simulations,
@@ -1050,48 +1472,6 @@ namely:
 %where $\mathbf{I}$ is
 %a trivial component which does not provide any function.
 
-%}}}
-
-\begin{example} \label{ex:compcomp} %{{{
-Figure~\ref{fig:pasting}b
-illustrates how this compositional algebra can be used.
-A simple transition system $L_\kw{bq}$ serves as specification
-for the bounded queue operations $\kw{enq}$ and $\kw{deq}$
-implemented by the code in Fig.~\ref{fig:code}.
-The simulation
-$
-  \phi : L_\kw{bq}
-    \le \kw{Clight}(\kw{bq.c}) \oplus \kw{Clight}(\kw{rb.c})
-$
-shows that the combination of $\kw{bq.c}$ and $\kw{rb.c}$
-implements $L_\kw{bq}$.
-To transfer this correctness guarantee to the compiled code,
-we can obtain from the compiler's correctness proof the simulations
-$\pi_\kw{bq} : \kw{Clight}(\kw{bq.c}) \le \kw{Asm}(\kw{bq.s})$ and
-$\pi_\kw{rb} : \kw{Clight}(\kw{rb.c}) \le \kw{Asm}(\kw{rb.s})$.
-By composing the simulations together,
-we can derive
-\begin{equation}
-  \phi \mathbin; (\pi_\kw{bq} \oplus \pi_\kw{rb}) \::\:
-  L_\kw{bq} \:\le\:
-  \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
-  \,.
-  \label{eqn:cex}
-\end{equation}
-We can use this property with any context $C$
-by adjoining
-the simulation $\kw{id}_C : C \le C$
-to obtain
-\begin{equation}
-  \kw{id}_C \oplus (\phi \mathbin; (\pi_\kw{bq} \oplus \pi_\kw{rb}))
-  \::\:
-  C \oplus L_\kw{bq}
-  \:\le\:
-  C \oplus \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
-  \,.
-  \label{eqn:ccex}
-\end{equation}
-\end{example}
 %}}}
 
 \begin{figure} % fig:pasting {{{
@@ -1212,207 +1592,6 @@ but is instead provided by \emph{language interfaces}.
 Language interfaces are the 0-dimensional objects of CompCertO's model.
 Transition systems remain 1-dimensional but are now typed
 by language interfaces.
-
-\begin{definition} \label{def:li} \label{def:lts} %{{{
-A \emph{language interface} $A = \langle A^\que, A^\ans \rangle$
-is a set of questions $A^\que$ and a set of answers $A^\ans$.
-Then a \emph{transition system} $L : A \twoheadrightarrow B$
-is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
-consisting of:
-\begin{itemize}
-  \item a set $S$ of states and
-    a transition relation ${\rightarrow} \subseteq S \times S$;
-  \item a relation $I \subseteq B^\que \times S$
-    which assigns possible \emph{initial states}
-    to each question of $B$;
-  \item a relation $F \subseteq S \times B^\ans$
-    which specifies \emph{final states} together with
-    corresponding answers in $B$;
-  \item a relation $X \subseteq S \times A^\que$
-    which identifies \emph{external states} and
-    corresponding questions of $A$;
-  \item a relation $Y \subseteq S \times A^\ans \times S$,
-    which identifies \emph{resumption states}.
-\end{itemize}
-\end{definition}
-%}}}
-
-Under this definition,
-the source and target semantics of CompCertO can be described as
-\[
-  \kw{Clight}(p) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}
-  \qquad \text{and} \qquad
-  \kw{Asm}(p') : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m} \,.
-\]
-The language interface
-$\mathcal{C}_\kw{m} = \langle \mathcal{C}_\kw{m}^\que, \mathcal{C}_\kw{m}^\ans \rangle$
-describes the interactions used in Compositional CompCert:
-\[
-  \mathcal{C}_\kw{m}^\que :=
-    \{ f(\vec{v})@m \mid f \in \kw{ident}, \vec{v} \in \kw{val}^*, m \in \kw{mem} \}
-  \qquad
-  \mathcal{C}_\kw{m}^\ans :=
-    \{ v@m \mid v \in \kw{val}, m \in \kw{mem} \}
-  \,,
-\]
-so that the transition system $\kw{Clight}(p)$ is essentially identical
-to its Compositional CompCert counterpart.
-By contrast, the language interface
-$\mathcal{A}_\kw{m}$
-describes cross-component interactions at a level of abstraction
-which better matches the mechanics of assembly programs.
-
-%}}}
-
-\paragraph{Simulations} %{{{
-
-The types of
-$\kw{Clight}(p) : \mathcal{C}_\kw{m} \twoheadrightarrow \mathcal{C}_\kw{m}$ and
-$\kw{Asm}(p') : \mathcal{A}_\kw{m} \twoheadrightarrow \mathcal{A}_\kw{m}$
-raise the question of the relationship
-between source-level interactions
-in $\mathcal{C}_\kw{m}$
-and corresponding target-level interactions
-in $\mathcal{A}_\kw{m}$.
-Compositional compiler correctness only makes sense
-with respect to a particular calling convention.
-%Rather than modeling the calling convention implicitly
-%as part of the assembly semantics,
-%
-CompCertO makes this explicit:
-simulations operate in the context of specified
-\emph{simulation conventions},
-%which express the relationships between
-%the source and target components'
-%interactions with the environment.
-which introduce a form of two-dimensional typing for simulations.
-
-To establish a simulation
-of a transition system $L_1: A_1 \twoheadrightarrow B_1$
-by a transition system $L_2: A_2 \twoheadrightarrow B_2$,
-we must first specify a simulation convention
-$\mathbf{R}_B : B_1 \leftrightarrow B_2$
-for their incoming calls,
-and a simulation convention
-$\mathbf{R}_A : A_1 \leftrightarrow A_2$
-for their outgoing calls.
-The simulation can then be stated as
-\begin{equation} \label{eqn:compcerto-sim}
-  \pi : L_1 \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L_2
-  \,.
-  \qquad
-  \qquad
-  \begin{tikzcd}[sep=0.5ex]
-    A_1 \ar[dd, leftrightarrow, "\mathbf{R}_A"']
-        \ar[rr, twoheadrightarrow, "L_1"] &&
-    B_1 \ar[dd, leftrightarrow, "\mathbf{R}_B"] \\
-    & \pi & \\
-    A_2 \ar[rr, twoheadrightarrow, "L_2"'] &&
-    B_2
-  \end{tikzcd}
-\end{equation}
-%
-%We will write
-%for a simulation of this kind,
-%which can depicted in pasting and string diagrams as:
-%\[
-%  \begin{tikzcd}[sep=tiny]
-%    A^\sharp
-%      \ar[rr, twoheadrightarrow, "L^\sharp"]
-%      \ar[dd, leftrightarrow, "\mathbf{R}_A"'] &&
-%    B^\sharp
-%      \ar[dd, leftrightarrow, "\mathbf{R}_B"] \\
-%    & \pi & \\
-%    A^\flat
-%      \ar[rr, twoheadrightarrow, "L^\flat"'] &&
-%    B^\flat
-%  \end{tikzcd}
-%  \qquad \qquad
-%  \begin{tikzpicture}[xscale=0.4,yscale=0.35,baseline=(R)]
-%    % Background
-%    \begin{scope}
-%      \fill[ACMYellow!50] (0,2) rectangle (2,4);
-%      \fill[ACMRed!50] (0,0) rectangle (2,2);
-%      \fill[ACMGreen!50] (2,2) rectangle (4,4);
-%      \fill[ACMBlue!50] (2,0) rectangle (4,2);
-%    \end{scope}
-%    % Region labels
-%    \begin{scope}[every node/.style={opacity=0.5}]
-%      \scriptsize
-%      \node[below right] at (0,4) {$B^\sharp$};
-%      \node[above right] at (0,0) {$B^\flat$};
-%      \node[below left] at (4,4) {$A^\sharp$};
-%      \node[above left] at (4,0) {$A^\flat$};
-%    \end{scope}
-%    % Strings
-%    \begin{scope}
-%      \footnotesize
-%      \draw (2,4) node[above] {$L^\sharp$}
-%         -- (2,0) node[below] {$L^\flat$};
-%      \draw (0,2) node[left] (R) {$\mathbf{R}_B$}
-%         -- (4,2) node[right] {$\mathbf{R}_A$};
-%    \end{scope}
-%    % Node
-%    \node[draw,fill=white,rounded corners] at (2,2) {$\pi$};
-%  \end{tikzpicture}
-%\]
-%Simulation conventions are relational in nature.
-
-The simulation conventions $\mathbf{R} : A \leftrightarrow B$ and
-$\mathbf{R}' : B \leftrightarrow C$
-compose into
-$\mathbf{R} \mathbin; \mathbf{R}' : A \leftrightarrow C$.
-This is used by the vertical composition principle for simulations,
-which allows them to be pasted vertically:
-\[
-  \begin{prooftree}
-    \hypo{\mathbf{R} : A \leftrightarrow B}
-    \hypo{\mathbf{R}' : B \leftrightarrow C}
-    \infer2{(\mathbf{R} \mathbin; \mathbf{R}') : A \leftrightarrow C}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{\phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
-    \hypo{\psi : L_2 \le_{\mathbf{R'} \twoheadrightarrow \mathbf{S'}} L_3}
-    \infer2{(\phi \mathbin; \psi) : L_1 \le_{\mathbf{R} \mathbin; \mathbf{R'} \twoheadrightarrow
-      \mathbf{S} \mathbin; \mathbf{S'}} L_3}
-  \end{prooftree}
-\]
-Unfortunately,
-despite what the shape of the diagram above (\ref{eqn:compcerto-sim}) may suggest,
-simulations cannot in general be pasted horizontally
-along boundaries of the kind $\mathbf{R} : A \leftrightarrow B$.
-This is due to the symmetric nature of semantic linking,
-which lets $L_1$ and $L_2$ interact in a mutually recursive way.
-
-For $\oplus$ composition to be possible,
-the transition systems must operate
-over a single language interface,
-and likewise simulations must operate
-with respect to a single simulation convention:
-\begin{equation} \label{eqn:hcomp}
-  \begin{prooftree}
-    \hypo{L_1 : A \twoheadrightarrow A}
-    \hypo{L_2 : A \twoheadrightarrow A}
-    \infer2{L_1 \oplus L_2 : A \twoheadrightarrow A}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{\phi: L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}} L_1'}
-    \hypo{\psi: L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}} L_2'}
-    \infer2{\phi \oplus \psi :
-      L_1 \oplus L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{R}} L_1' \oplus L_2'}
-  \end{prooftree}
-\end{equation}
-To work around this restriction,
-CompCertO introduces a rich algebra of \emph{simulation convention refinements},
-which play the role of a second kind of two-dimensional object.
-These refinements can compose
-with simulations to modify their types,
-and are used to massage per-phase
-simulation proofs with varied conventions into
-an overall compiler correctness theorem
-which fits (\ref{eqn:hcomp}).
 
 %}}}
 
@@ -2745,6 +2924,127 @@ Stated differently,
 \end{example}
 %}}}
 
+%}}}
+
+\begin{table} % tbl:roadmap -- Roadmap and notations {{{
+  \caption{
+    A summary of
+    the various kinds of mathematical objects
+    we use to model interfaces,
+    component behaviors,
+    abstraction conventions and
+    refinement properties.
+    For each one,
+    we show the horizontal (H), vertical (V) and spatial~(S)
+    composition operations they support.
+    When we use string diagrams
+    for components of a given kind,
+    we also list the composition operations which correspond to
+    the horizontal ($\mathbb{H}$) and vertical~($\mathbb{V}$)
+    juxtaposition of diagrams.
+    Note that the structure $\mathbf{TSC}$
+    contains $\mathbf{TS}$ and $\mathbf{SC}$ as its edges.
+} \label{tbl:roadmap}
+  \small
+  \begin{tabular}{
+    llc
+    c@{\:\:\:}c@{\:\,}c@{\:}c@{}c
+    c@{\hspace{1em}}c@{\:\,}c@{}c
+  }
+    \toprule
+    Role & Components & Notation &
+      \multicolumn{5}{c}{Compose} & \multicolumn{4}{c}{Diagrams} \\
+    & & && H & V & S &&& $\mathbb{H}$ & $\mathbb{V}$
+    \\
+    \midrule
+      Interface
+        & Language interfaces & $A, B, C$ && & & $\mathbin@$
+    \\
+        & Sets & $U, V$ && & & $\times$
+    \\[1ex]
+      Behavior
+        & Transition systems & $L : A \twoheadrightarrow B \in \mathbf{TS}$ &&
+            $\odot$ & & $\mathbin@$ &&& $\odot$ & $\mathbin@$
+    \\
+        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}^\kw{op}$ &&
+            $\circ$ & & $\times$ &&& $\circ$ & $\times$
+    \\[1ex]
+      Abstraction
+        & Simulation conventions & $\mathbf{R} : A \leftrightarrow B \in \mathbf{SC}$ &&
+            & $\mathbin;\,$ & $\mathbin@$ &&& $\mathbin@$ & $\,\mathbin;$
+    \\
+        & Relations & $R \subseteq U \times V \in \mathbf{Rel}$ &&
+            & $\mathbin;\,$ & $\times$ &&& $\times$ & $\,\mathbin;$
+    \\[1ex]
+      Refinement
+        & Simulations &
+          $\pi :
+           L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2
+             \in \mathbf{TSC}$ &&
+          $\odot$ & $\mathbin;\,$ & $\mathbin@$ &&& $\odot$ & $\,\mathbin;$
+    \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+%}}}
+
+\begin{figure} %{{{
+  \begin{gather*}
+    \begin{prooftree}
+      \hypo{L_1 : B \twoheadrightarrow C}
+      \hypo{L_2 : A \twoheadrightarrow B}
+      \infer2[\kw{ts}-$\odot$]{L_1 \odot L_2 : A \twoheadrightarrow C}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\phi: L_1 \le_{\mathbf{S} \twoheadrightarrow \mathbf{T}} L_1'}
+      \hypo{\psi: L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2'}
+      \infer2[\kw{sim}-$\odot$]{\phi \odot \psi :
+	L_1 \odot L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{T}} L_1' \odot L_2'}
+    \end{prooftree}
+    \\[1em]
+    \begin{prooftree}
+      \hypo{L : A \twoheadrightarrow B}
+      \hypo{f : U \lensarrow V}
+      \infer2[\kw{ts}-$\mathbin@$]{
+        L \mathbin@ f : A \mathbin@ U \twoheadrightarrow B \mathbin@ V
+      }
+    \end{prooftree}
+    \qquad
+    \begin{array}{r@{}l}
+      (L_1 \odot L_2) \mathbin@ (f \circ g) & {} \equiv
+      (L_1 \mathbin@ f) \odot (L_2 \mathbin@ g) \\
+      \kw{id}_A \mathbin@ \kw{id}_U & {} \equiv \kw{id}_{A \mathbin@ U}
+    \end{array}
+    \\[1em]
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A \leftrightarrow B}
+      \hypo{\mathbf{S} : U \leftrightarrow V}
+      \infer2[\kw{sc}-$\mathbin@$]{
+        \mathbf{R} \mathbin@ \mathbf{S} : A \mathbin@ U \leftrightarrow B \mathbin@ V
+      }
+    \end{prooftree}
+    \qquad
+    \begin{array}{r@{}l}
+      (\mathbf{R}_1 \mathbin; \mathbf{R}_2) \mathbin@ (\mathbf{S}_1 \mathbin; \mathbf{S}_2)
+      & {} \equiv
+      (\mathbf{R}_1 \mathbin@ \mathbf{S}_1) \mathbin; (\mathbf{R}_2 \mathbin@ \mathbf{S}_2)
+      \\
+      \idsc_A \mathbin@ \kw{id}_U & {} \equiv \idsc_{A \mathbin@ U}
+    \end{array}
+    \\[1em]
+    \begin{prooftree}
+      \hypo{\phi: L \le_{\mathbf{R}_1 \twoheadrightarrow \mathbf{S}_1} L'}
+      \hypo{\psi: f \le_{\mathbf{R}_2 \twoheadrightarrow \mathbf{S}_2} f'}
+      \infer2[\kw{sim}-$\mathbin@$]{\phi \mathbin@ \psi :
+	L \mathbin@ f
+        \le_{\mathbf{R}_1 \mathbin@ \mathbf{R}_2 \twoheadrightarrow
+             \mathbf{S}_1 \mathbin@ \mathbf{S}_2}
+	L' \mathbin@ f'}
+    \end{prooftree}
+  \end{gather*}
+  \caption{Additional composition principles $\odot$ and $\mathbin@$ in our model}
+\end{figure}
 %}}}
 
 \subsection{Memory Separation} \label{sec:overview:sepalg} %{{{
@@ -6508,68 +6808,6 @@ The simulation properties can be depicted as bends: %{{{
 as well as 3D algebra, but with minimal reliance on categorical jargon or
 the 2D string diagrams for simulation proofs that we no longer
 introduce before]
-
-\begin{table} % tbl:roadmap -- Roadmap and notations {{{
-  \caption{
-    A summary of
-    the various kinds of mathematical objects
-    we use to model interfaces,
-    component behaviors,
-    abstraction conventions and
-    refinement properties.
-    For each one,
-    we show the horizontal (H), vertical (V) and spatial~(S)
-    composition operations they support.
-    When we use string diagrams
-    for components of a given kind,
-    we also list the composition operations which correspond to
-    the horizontal ($\mathbb{H}$) and vertical~($\mathbb{V}$)
-    juxtaposition of diagrams.
-    Note that the structure $\mathbf{TSC}$
-    contains $\mathbf{TS}$ and $\mathbf{SC}$ as its edges.
-} \label{tbl:roadmap}
-  \small
-  \begin{tabular}{
-    llc
-    c@{\:\:\:}c@{\:\,}c@{\:}c@{}c
-    c@{\hspace{1em}}c@{\:\,}c@{}c
-  }
-    \toprule
-    Role & Components & Notation &
-      \multicolumn{5}{c}{Compose} & \multicolumn{4}{c}{Diagrams} \\
-    & & && H & V & S &&& $\mathbb{H}$ & $\mathbb{V}$
-    \\
-    \midrule
-      Interface
-        & Language interfaces & $A, B, C$ && & & $\mathbin@$
-    \\
-        & Sets & $U, V$ && & & $\times$
-    \\[1ex]
-      Behavior
-        & Transition systems & $L : A \twoheadrightarrow B \in \mathbf{TS}$ &&
-            $\odot$ & & $\mathbin@$ &&& $\odot$ & $\mathbin@$
-    \\
-        & Lenses & $f : U \lensarrow V \in \mathbf{Lens}^\kw{op}$ &&
-            $\circ$ & & $\times$ &&& $\circ$ & $\times$
-    \\[1ex]
-      Abstraction
-        & Simulation conventions & $\mathbf{R} : A \leftrightarrow B \in \mathbf{SC}$ &&
-            & $\mathbin;\,$ & $\mathbin@$ &&& $\mathbin@$ & $\,\mathbin;$
-    \\
-        & Relations & $R \subseteq U \times V \in \mathbf{Rel}$ &&
-            & $\mathbin;\,$ & $\times$ &&& $\times$ & $\,\mathbin;$
-    \\[1ex]
-      Refinement
-        & Simulations &
-          $\pi :
-           L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2
-             \in \mathbf{TSC}$ &&
-          $\odot$ & $\mathbin;\,$ & $\mathbin@$ &&& $\odot$ & $\,\mathbin;$
-    \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-%}}}
 
 \newcommand{\pasv}{%
   \begin{tikzpicture}[baseline=0.1ex,x=1.2ex,y=1.2ex]
