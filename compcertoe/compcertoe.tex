@@ -341,7 +341,109 @@ by interacting with the component through its interface.
 
 %}}}
 
-\subsubsection{Certified Compilation} \label{sec:req:cc} %{{{
+\begin{example}[Verifying a bounded queue]
+Consider the code shown in Fig.~\ref{fig:code},
+which implements a bounded queue
+and serves as our running example.
+To an extent,
+the C language enables compositionality
+by allowing us to split this code into two parts:
+the translation unit $\kw{rb.c}$
+provides a rudimentary ring buffer,
+which is then used by $\kw{bq.c}$
+to implement the queue.
+
+Moreover,
+although data abstraction and encapsulation
+are not supported by C language features,
+they also play a role.
+For example,
+since the variables $\kw{c1}$, $\kw{c2}$ and $\kw{buf}$
+are declared $\kw{static}$ and
+their addresses are not leaked by the code in $\kw{rb.c}$,
+we can reason that under normal circumstances
+the environment will not access them directly,
+even though this is not enforced by
+the monolithic memory model of C.
+In fact it is sufficient for
+a user of the code in Fig.~\ref{fig:code}
+to picture the queue
+as a sequence of the values which have been enqueued
+but are still waiting to be dequeued.
+%$\kw{enq}$'ed values waiting to be $\kw{deq}$'ed.
+
+An effective verification framework
+must provide a way to make this intuition formal.
+The specifications in Fig.~\ref{fig:spec},
+adapted from \citet{rbgs-cal},
+demonstrate one approach.
+A top-level specification $\Gamma_\kw{bq}$
+describes the overall behavior of $\kw{enq}$ and $\kw{deq}$,
+using an abstract sequence $\vec{q}$ as the only state.
+The verification task can then be decomposed using
+the intermediate specifications $\Sigma_\kw{bq}$ and $\Gamma_\kw{rb}$
+which characterize $\kw{bq.c}$ and $\kw{rb.c}$ in isolation.
+$\Gamma_\kw{rb}$ is similar in form to $\Gamma_\kw{bq}$
+but describes the ring buffer data structure
+rather than the overall queue.
+$\Sigma_\kw{bq}$ does not describe a data structure,
+but rather the sequence of calls into $\kw{rb.c}$
+which are necessary to realize the queue operations
+in terms of the ring buffer primitives.
+$\Sigma_\kw{bq}$ itself does not carry any state at all,
+but the relation $R$ describes how queue state
+are realized in terms of the underlying ring buffer states.
+\end{example}
+
+%}}}
+
+\begin{figure} % fig:code {{{
+  \centering\footnotesize
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+static int c1, c2;
+static V buf[N];
+
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.38\textwidth}
+\begin{minted}{C}
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Running example, adapted from \citet{rbgs-cal}.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
+\end{figure}
+%}}}
+
+\subsection{Certified Compilation} \label{sec:req:cc} %{{{
 
 Compilers play a critical role
 in the construction of modern software systems,
@@ -354,59 +456,238 @@ for correctness:
 if we verify programs at the source level only,
 the compiler may still introduce bugs
 into the code that is actually run.
-
+%
 Certified compilers such as CompCert \cite{compcert}
 mitigate this issue by
 establishing a correctness proof for the compiler itself.
+%For example, \emph{semantics preservation} ensures that
+%the semantics $\llbracket p \rrbracket_\kw{S}$
+%of the source program $p$ are refined by
+%the semantics $\llbracket p' \rrbracket_\kw{T}$
+%of a compiled target program $p'$:
+%\[
+%  \kw{Compile}(p) = p'
+%  \quad\Rightarrow\quad
+%  \llbracket p \rrbracket_\kw{S}
+%  \sqsubseteq
+%  \llbracket p' \rrbracket_\kw{T}
+%\]
+
 However, ensuring \emph{end-to-end} correctness
 requires the verification framework to seamlessly integrate
 with the compiler's proof,
 so that guarantees obtained with respect to source-level components
 can be formally transferred to the target program.
+Unfortunately, this is quite difficult to achieve.
+In practice,
+work towards the development of
+mechanized certified systems engineering frameworks
+tends to fall into one of two separate categories:
+\begin{itemize}
+  \item on one hand,
+    work which focuses on realistic languages and
+    problems associated with compositional certified compilation
+    tends to provide only basic specification and
+    verification capabilities
+    \cite{compcompcert,compcertm,compcerto};
+  \item conversely,
+    advanced specification techniques
+    and mechanized program logics
+    tend to side-step issues with low-level computation
+    by relying on simple models
+    such as free monads or interaction trees
+    \cite{rbgs-cal,popl22,ccr}.
+\end{itemize}
+What makes a synthesis difficult is that
+certified compilation and
+the requirements outlined in \S\ref{sec:req}
+are not only challenging on their own,
+but they also interact with each other in non-trivial ways.
+At the same time,
+there is some overlap between them
+and we will see that they can be understood
+in the context of a common framework.
 
 %}}}
 
+\begin{figure} % fig:spec {{{
+  \small
+%$\top = \langle \varnothing, \varnothing \rangle$
+%$\vec{q} \in D_\kw{bq} := \kw{val}^*$,
+\begin{align*}
+\toprule
+&
+  \Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
+&  
+  \Gamma_\kw{bq} &\vDash
+      \kw{enq}(v) @ \vec{q}
+      \:\rightarrowtail\:
+      {*} @ \vec{q}v
+&
+  \hspace{-5em}
+  \vec{q} \in D_\kw{bq} := \kw{val}^*, \:
+  v \in \kw{val}
+\\ &&
+  \Gamma_\kw{bq} &\vDash
+      \kw{deq}() @ v\vec{q}
+      \:\rightarrowtail\:
+      v @ \vec{q}
+\\
+\midrule
+&
+  \Sigma_\kw{bq} : \mathcal{C} \twoheadrightarrow \mathcal{C}
+&
+  \Sigma_\kw{bq} &\vDash
+      \kw{enq}(v) \rightarrowtail
+      (\kw{inc2}() \leadsto i) \rightarrowtail
+      (\kw{set}(i, v) \leadsto *) \rightarrowtail
+      *
+&
+  i \in \mathbb{N}, \:
+  v \in \kw{val}
+\\ &&
+    \Sigma_\kw{bq} &\vDash
+      \kw{deq}() \rightarrowtail
+      (\kw{inc1}() \leadsto i) \rightarrowtail
+      (\kw{get}(i) \leadsto v) \rightarrowtail
+      v
+\\ &
+  \Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
+&
+  \Gamma_\kw{rb} &\vDash
+    \kw{inc1}()@(b, c_1, c_2) \rightarrowtail
+    c_1@(b, c_1\!\!+\!\!1, c_2)
+&
+  \hspace{-8em}
+  (b, c_1, c_2) \in D_\kw{rb} :=
+    \kw{val}^N \times \mathbb{N} \times \mathbb{N},
+\\ &&
+  \Gamma_\kw{rb} &\vDash
+    \kw{inc2}()@(b, c_1, c_2) \rightarrowtail
+    c_2@(b, c_1, c_2\!\!+\!\!1)
+&
+  i \in \mathbb{N}, \:
+  v \in \kw{val}
+\\ &&
+  \Gamma_\kw{rb} &\vDash
+    \kw{set}(i, v)@(b, c_1, c_2) \rightarrowtail
+    {*}@(b[i := v], c_1, c_2)
+\\ &&
+  \Gamma_\kw{rb} &\vDash
+    \kw{get}(i)@(b, c_1, c_2) \rightarrowtail
+    b_i@(b, c_1, c_2)
+\\ \midrule &
+  R \subseteq D_\kw{bq} \times D_\kw{rb}
+&
+        \vec{q} &\mathrel{R} (b, c_1, c_2) \: \Leftrightarrow \:
+           (c_1 \le c_2 < N \wedge
+            \vec{q} = b_{c_1} \cdots b_{c_2-1}) \vee {}
+&
+  (b, c_1, c_2) \in D_\kw{rb},
+\\ &&
+         & \hspace{16.3ex}
+           (c_2 \le c_1 < N \wedge
+            \vec{q} = b_{c_1} \cdots b_{N-1} b_0 \cdots b_{c_2 - 1})
+&
+  \vec{q} \in D_\kw{bq}
+\\
+\bottomrule
+\end{align*}
+\vspace{-2.5em}
+  \caption{Abstract specifications for $\kw{bq.c}$ and $\kw{rb.c}$.
+    The overall specification $\Gamma_\kw{bq}$
+    describes the queue operations in terms of
+    a sequence values $\vec{q} \in D_\kw{bq} := \kw{val}^*$.
+    Verification can be decomposed using the intermediate specifications
+    $\Sigma_\kw{bq}$ and $\Gamma_\kw{rb}$ for
+    $\kw{bq.c}$ and $\kw{rb.c}$.
+    See Example~\ref{ex:abspec} for details.}
+  \label{fig:spec}
+\end{figure}
 %}}}
 
 \subsection{State of the Art} %{{{
 
-There are of course many existing verification projects and tools
-which leverage one or more of the techniques above.
-In particular,
-several verification frameworks implemented in the Coq proof assistant
-interface with the certified compiler CompCert \cite{compcert}
-to allow correctness properties proved at the C level
-to be transferred to the assembly code.
+Existing work which \emph{does} manage
+to connect mechanized high-level verification techniques with
+certified compilation
+illustrates some of the challenges which we have outlined above.
+Much of this work has been carried out in the context of
+the certified compiler CompCert \citep{compcert}.
 
-However,
-managing the \emph{interactions} between these different techniques
-can often prove quite challenging.
 For example,
-over the span of a decade
-many different approaches have been proposed
-to make the CompCert correctness theorem compositional
-\cite{compcompcert,sepcompcert,compcertm,compcerto,nominalcompcert},
-and this problem alone still constitutes
-an active area of research.
-In order to verify the operating system kernel CertiKOS,
-the methodology of certified abstraction layers (CAL),
-which leverages data abstraction
-to facilitate the compositional verification of large artifacts,
-was successfully implemented and interfaced with CompCert;
-however, this required invasive changes on the CompCert side,
-and forced the verification side to take into account
-particularities of the CompCert memory model such as memory injections.
+the Verified Software Toolchain (VST) \citep{vst}
+provides a separation logic for the language Clight
+which CompCert can correctly compiled to assembly.
+It represents an early and valuable achievement which demonstrates
+the viability and usefulness of end-to-end correctness techniques.
+At the same time,
+in essence VST is implemented as an extension to CompCert,
+and is tied very closely to CompCert semantics.
+As such it cannot be used as the starting point for a larger ecosystem.
+It can only be used to verify systems
+which are implemented entirely in C
+and whose functionality
+can be specified completely within the VST logic.
 
-Because of this,
-to our knowledge there exists no verification framework or semantic model
-which simultaneously supports
-compositionality, abstraction, state encapsulation and certified compilation.
-Among extensions of CompCert,
-CompCertO is distinguished by its use of compositional semantics (\S\ref{sec:req:comp})
-and its support of abstraction (\S\ref{sec:req:abs}).
-However CompCertO is too ad-hoc to serve as a general-purpose framework.
-It also gets away with a very rudimentary handling of state
-and does not support state encapsulation (\S\ref{sec:req:encap}).
+The same kind of restrictions apply to CompCertX,
+which was developed to verify the operating system kernel CertiKOS \citep{popl15}
+using the methodology of \emph{certified abstraction layers} (CAL).
+It provides support for data abstraction;
+compared with VST it allows flexible specifications
+similar to those shown in Fig.~\ref{fig:spec}
+and can support low-level assembly code.
+But implementing CAL required invasive changes to CompCert,
+and conversely its high-level reasoning techniques
+must take into account idiosyncrasies of the CompCert memory model.
+
+Nevertheless,
+more recent work on CompCert
+has enhanced the expressiveness of its semantic model
+and correctness theorem.
+By nature,
+much of this work consists in understanding certified compilation
+in the context of the techniques outlined in \S\ref{sec:req}.
+CompCertO \citep{compcerto} in particular
+introduces a powerful notion of \emph{simulation convention}
+which can be used to describe abstraction relationships
+between high- and low-level views of a system.
+
+We will show that,
+by generalizing away some of the CompCert-specific aspects,
+and by introducing a compositional treatment of state,
+this work can be extended to reach ``escape velocity''
+and provide a semantic framework capable of accommodating,
+\emph{independently and on an equal footing},
+both sophisticated verification techniques
+and realistic compiler correctness theorems.
+
+%For example,
+%over the span of a decade
+%many different approaches have been proposed
+%to make the CompCert correctness theorem compositional
+%\cite{compcompcert,sepcompcert,compcertm,compcerto,nominalcompcert},
+%and this problem alone still constitutes
+%an active area of research.
+%In order to verify the operating system kernel CertiKOS,
+%the methodology of certified abstraction layers (CAL),
+%which leverages data abstraction
+%to facilitate the compositional verification of large artifacts,
+%was successfully implemented and interfaced with CompCert;
+%however, this required invasive changes on the CompCert side,
+%and forced the verification side to take into account
+%particularities of the CompCert memory model such as memory injections.
+
+%Because of this,
+%to our knowledge there exists no verification framework or semantic model
+%which simultaneously supports
+%compositionality, abstraction, state encapsulation and certified compilation.
+%Among extensions of CompCert,
+%CompCertO is distinguished by its use of compositional semantics (\S\ref{sec:req:comp})
+%and its support of abstraction (\S\ref{sec:req:abs}).
+%However CompCertO is too ad-hoc to serve as a general-purpose framework.
+%It also gets away with a very rudimentary handling of state
+%and does not support state encapsulation (\S\ref{sec:req:encap}).
 
 %}}}
 
@@ -775,52 +1056,6 @@ is far from straightforward.
 
 %}}}
 
-%}}}
-
-\begin{figure} % fig:code {{{
-  \centering\footnotesize
-  \begin{subfigure}{0.45\textwidth}
-\begin{minted}{C}
-static int c1, c2;
-static V buf[N];
-
-int inc1() { int i = c1++; c1 %= N; return i; }
-int inc2() { int i = c2++; c2 %= N; return i; }
-V get(int i) { return buf[i]; }
-void set(int i, V val) { buf[i] = val; }
-\end{minted}
-  \subcaption{The translation unit $\kw{rb.c}$}
-  \label{fig:rb}
-  \end{subfigure}
-  \hspace{4em}
-  \begin{subfigure}{0.38\textwidth}
-\begin{minted}{C}
-extern int inc1(void);
-extern int inc2(void);
-extern V get(int i);
-extern void set(int i, V val);
-
-void enq(V val) { set(inc2(), val); }
-V deq() { return get(inc1()); }
-\end{minted}
-  \subcaption{The translation unit $\kw{bq.c}$}
-  \label{fig:bq}
-  \end{subfigure}
-  \caption{Running example, adapted from \citet{rbgs-cal}.
-    The component $\kw{rb.c}$
-    implements a ring buffer by encapsulating an array
-    and two counters. It is used by the component
-    $\kw{bq.c}$ to implement a
-    bounded queue.}
-  \label{fig:code}
-%\caption{The state of a ring buffer,
-%  made of two counters and a fixed-size array,
-%  is encapsulated behind a simple interface.}
-%\label{fig:rb}
-%\caption{This component relies on the ring buffer primitives
-%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
-%\label{fig:bq}
-\end{figure}
 %}}}
 
 \subsection{Compositional Semantics in CompCertO} %{{{
