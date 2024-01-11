@@ -1,0 +1,101 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+\usepackage{ebproof}
+
+\title{Context switching for Clight}
+
+\newcommand\kw[1]{\mathsf{#1}}
+
+\begin{document}
+
+\maketitle
+
+\section{Semantics of $\kw{swapcontext}$}
+
+We do not need to alter the Clight semantics
+but can formulate specifications for the primitives
+$\kw{initcontext}$ and $\kw{swapcontext}$
+as an operator $\langle L \rangle$ on transition systems:
+
+\begin{gather*}
+  S' \: := \: S \times (\kw{block} \rightharpoonup \mathcal{P}(\mathcal{C}^\circ \times S))
+  \\[1em]
+  \begin{prooftree}
+    \hypo{q \mathrel{I} s}
+    \infer1{q \mathrel{I} (s, \varnothing)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s \rightarrow s'}
+    \infer1{(s, \Phi) \rightarrow' (s', \Phi)}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s \mathrel{F} r}
+    \infer1{(s, \Phi) \mathrel{F'} r}
+  \end{prooftree}
+  \\[1em]
+  \begin{prooftree}
+    \hypo{s \mathrel{X} \kw{initcontext}(p, f) @ m}
+    \hypo{
+      \begin{array}{c}
+        \kw{alloc}(m, 0) = (m', b) \\
+        m'[p \mapsto b] = m''
+      \end{array}
+    }
+    \hypo{* @ m'' \mathrel{Y^s} s'}
+    \infer3{(s, \Phi) \rightarrow' \big( s', \: \Phi[b \mapsto K_f] \big)}
+  \end{prooftree}
+  \\[1ex]
+  \text{where the relation $K_f$ is defined by } \:
+    {*}@m \mathrel{K_f} s \: :\Leftrightarrow \: f()@m \mathrel{I} s
+  \\[1em]
+  \begin{prooftree}
+    \hypo{
+      \begin{array}{c}
+        s \mathrel{X} \kw{swapcontext}(p_1, p_2) @ m \\
+        m[p_2] = \kw{ptr}(b_2, 0)
+      \end{array}
+    }
+    \hypo{
+      \begin{array}{c}
+        \kw{alloc}(m, 0) = (m', b_1) \\
+        m'[p_1 \mapsto \kw{ptr}(b_1,0)] = m''
+      \end{array}
+    }
+    \hypo{{*}@m'' \: \mathrel{\Phi[b_2]} \: s'}
+    \infer3{(s, \Phi) \rightarrow' \big(s', \: \Phi[b_1 \mapsto Y^s] \big)}
+  \end{prooftree}
+\end{gather*}
+
+\section{Correctness}
+
+First we show that an assembly-level version of the transformation
+is compatible with the compiler calling convention:
+\[
+  \begin{prooftree}
+    \hypo{\kw{Clight}(M.c) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(M.s)}
+    \infer1{
+      \langle \kw{Clight}(M.c) \rangle \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
+      \langle \kw{Asm}(M.s) \rangle
+    }
+  \end{prooftree}
+\]
+Then we refine into the context switch implementation at the assembly level:
+\[
+  \langle \kw{Asm}(M.s) \rangle
+  \:\le\:
+  \kw{Asm}(M.s) \odot \kw{Asm}(\kw{ucontext.s})
+\]
+
+\section{Issues}
+
+\begin{itemize}
+  \item Need to make the context environment part of persistent state
+  \item More precise compiler correctness theorem needed to ensure monotonicity
+\end{itemize}
+
+\end{document}
