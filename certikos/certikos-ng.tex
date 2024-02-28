@@ -1,0 +1,314 @@
+\documentclass{article}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{libertine}
+\usepackage{hyperref}
+\usepackage{tikz-cd}
+
+\newtheorem{quest}{Research Question}
+\newtheorem{task}{Task}
+%\newcommand\pfun{\mathrel{\ooalign{\hfil$\mapstochar$\hfil\cr$\to$\cr}}}
+\newcommand\pfun{\mathrel{\ooalign{\hfil$\mapstochar\mkern5mu$\hfil\cr$\to$\cr}}}
+
+\title{Re-verifying CertiKOS in a modular framework}
+\author{J\'er\'emie Koenig}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The original CertiKOS proof of correctness
+championed the methodology of certified abstraction layers,
+but otherwise inherited many of CompCert's limitations.
+Since then,
+our group has developed methods and tools
+which seek to overcome these limitations,
+but these tools
+have not yet been incorporated into the CertiKOS proof.
+In this document I outline
+a set of principles and
+a concrete strategy
+for developing a modern version of the CertiKOS proof
+to serve as a solid foundation
+for our future work.
+\end{abstract}
+
+\tableofcontents
+
+\section{Introduction} %{{{
+
+This document presents an implementation plan
+for a modernized version of the CertiKOS correctness proof.
+Specifically,
+we wish to improve on its previous iteration
+along the following dimensions:
+\begin{description}
+  \item[Focus on usability and best practices.]
+    The original CAL framework was a daring experiment
+    carried out without the benefit of hindsight.
+    Now that we have a better grasp of the underlying concepts
+    and more experience working with CAL,
+    it is easier to engineer a well-designed system.
+  \item[CompCert as a mere component.]
+    The existing proof uses CompCert as a framework.
+    It is modified to enable CAL but otherwise remains fairly rigid.
+    By contrast we would like CompCert to be a component among others,
+    which we incorporate into a much more flexible framework.
+  \item more flexible and fine-grained compositionality, as opposed to rigid notion of layer;
+  \item as a result, open-ended and can accommodate future work.
+\end{description}
+
+\subsection{Principles}
+
+\subsection{Overview}
+
+\newpage
+
+%}}}
+
+\section{Semantics Library}
+
+\subsection{Mathematical foundations}
+
+Role of categories, etc
+
+\subsection{Categories as modules}
+
+How we leverage the Coq module system
+
+\newpage
+
+\section{Core models} %{{{
+
+CompCertO introduces the notion of simulation convention.
+Simulation conventions are a powerful abstraction mechanism
+but they are not supported by more traditional models.
+As some of our first tasks,
+we will develop models which support various combinations of:
+\begin{itemize}
+  \item simulation conventions,
+  \item effect signatures,
+  \item state encapsulation, and
+  \item dual nondeterminism.
+\end{itemize}
+
+Possible models are shown in \autoref{fig:core}.
+On the left is the concrete model used in CompCertO.
+To the right we find increasingly abstracted game semantics models.
+Each model provides compositional state constructions, and
+the $\dagger$ construction from our CompCertOE work
+can be applied to obtain versions of the models with
+state encapsulation.
+Below I expand on the construction and features of each model.
+
+\begin{figure}[h] % fig:core {{{
+  \centering
+  \begin{tikzcd}
+    \mathsf{CompCertOE} \ar[r] \ar[d,hookrightarrow] &
+    \mathsf{OTS} \ar[r] \ar[d,hookrightarrow] &
+    \mathsf{NTS} \ar[r] \ar[d,hookrightarrow] &
+    \mathsf{NTree} \ar[r] \ar[d,hookrightarrow] &
+    \mathsf{RBGS} \ar[d,hookrightarrow]
+    \\
+    \mathsf{CompCertOE}^\dagger \ar[r] &
+    \mathsf{OTS}^\dagger \ar[r] &
+    \mathsf{NTS}^\dagger \ar[r] &
+    \mathsf{NTree}^\dagger \ar[r] &
+    \mathsf{RBGS}^\dagger
+  \end{tikzcd}
+  \caption{Core models in the RBGS library.}
+  \label{fig:core}
+\end{figure}
+%}}}
+
+\subsection{The models}
+
+\subsubsection{CompCertO} %{{{
+
+Our starting point is the model used in CompCertO \cite{compcerto}.
+Interfaces are of the form $A = \langle A^\circ, A^\bullet \rangle$,
+providing a set of questions and a set of answers.
+A component $L : A \rightarrow B$
+handles incoming calls in $B$ and performs outgoing calls in $A$.
+A simulation convention $R : A \leftrightarrow A'$
+defines an abstraction relationship between interfaces.
+Simulations are given types such as:
+\[
+  \phi : L \le_{R_A \rightarrow R_B} L'
+  \qquad \qquad
+  \begin{tikzcd}[sep=tiny]
+    A \ar[rr, "L"] \ar[dd, leftrightarrow, "R"'] & &
+    B \ar[dd, leftrightarrow, "S"] \\
+    & \phi & \\
+    A' \ar[rr, "L'"'] & & B'
+  \end{tikzcd}
+\]
+
+This model is specialized to the CompCert context.
+As a result
+it must account for silent divergence, and
+it involves CompCert-specific aspects like
+component domains and symbol tables.
+Our approach will be to develop compatible but more flexible models
+which retain the conceptual novelties of CompCertO
+(namely simulation conventions)
+but get rid of its more idiosyncratic aspects.
+
+%}}}
+
+\subsubsection{Open Transition Systems (OTS)} %{{{
+
+The first step in ``cleaning up'' the CompCertO model
+is to move to a more straightforward open transition system model
+based on effect signatures.
+The $\mathsf{OTS}$ model makes the following changes:
+\begin{description}
+\item[Use effect signatures]
+  Instead of language interfaces,
+  we would be using
+  \emph{effect signatures} of the form $E = \{ m : N_m \mid m \in M \}$
+  where for each question $m \in M$
+  we can specify a different type for possible answers $n \in N_m$.
+  A language interface $A$ corresponds to the signature
+  $[A] := \{ q : A^\bullet \mid q \in A^\circ \}$.
+
+\item[Silent divergence as undefined behavior]
+  When establishing compiler correct with respect to the C standard,
+  we need to show that silent divergence is preserved.
+  But for our purposes,
+  we can treat silent divergence as an undesirable behavior
+  assimilated to $\bot$.
+  This simplifies the model significantly
+  because least fixed points can be obtained simply through
+  Kleene-style iteration.
+
+\item[No silent steps]
+  Since we no longer need
+  to distinguish silent divergence from undefined behaviors,
+  it not necessary to include $\tau$ steps.
+  Actions which become internal when hidden by composition
+  can simply be skipped over directly;
+  if there is no finite sequence of internal interactions
+  which lead to an observable behavior,
+  this will simply lead to an undefined behavior $\bot$.
+
+\item[No CompCert-specific idiosyncrasies]
+  The use of effect signatures make it possible to use
+  a stronger approach to typing,
+  where the list of methods provided by a given component
+  are apparent in its type.
+  As a result we no longer need to support
+  the ``footprint'' or ``domain'' information
+  which CompCertO includes in components so that $\oplus$
+  can distinguish between cross-component and external calls.
+  In the more strongly typed approach,
+  the kind of mutual recursion expressed by $\oplus$
+  is better controlled with trace operators, iteration theories,
+  and similar approaches.
+
+  In addition,
+  in the OTS model we should make no provision for symbol tables.
+  We can consider them a fixed external parameter,
+  or include them in the way we embed CompCertO language interfaces
+  as effect signatures,
+  rather than tailoring the model to this aspect of CompCert.
+\end{description}
+
+As a result of these changes,
+the new model should be much cleaner and
+more amenable to theoretical analysis.
+Roughly speaking,
+a component of type $E \rightarrow F$
+responding to a question $(q \mathbin: R) \in F$
+will encode a behavior
+as a coalgebra for an endofunctor:
+\[
+  \mathrm{F} : \mathbf{Rel} \rightarrow \mathbf{Rel}
+  \qquad \text{defined as} \qquad
+  \mathrm{F} X := R \oplus \bigoplus_{(m \mathbin: N) \in E} (N \pfun X)
+  \,,
+\]
+that is a set $S$ of states together with the relation:
+\[
+  \sigma \: : \: S \: \rightarrow \: \mathcal{P}
+    \Big( R \: + \sum_{(m \mathbin: N) \in E} \mathcal{P}(N \times S) \Big)
+  \,.
+\]
+
+The notions of simulation convention and simulation
+used in CompCertO
+should be straightforward to adapt
+to this new context.
+It should then be easy to embed
+the language semantics and correctness properties of CompCertO
+into the $\mathsf{OTS}$ model,
+where they could be used as part of
+larger and more heterogeneous
+system descriptions and correctness proofs.
+
+%}}}
+
+\subsubsection{Dual non-determinism (NTS)}
+
+The model presented in the previous section
+should be enough to connect DeepSEA and CompCertO,
+and to carry out other tasks of this kind.
+However is should be fairly straightforward to extend it
+to increase its expressiveness significantly
+by factoring in dual nondeterminism
+and formulating behaviors as:
+\[
+  \sigma \: : \: S \: \rightarrow \: \mathsf{FCD}
+    \Big( R \: + \sum_{(m \mathbin: N) \in E}
+        \big( N \rightarrow \mathsf{FCD}(S) \big) \Big)
+  \,.
+\]
+
+\subsubsection{Terminal coalgebra (NTree)}
+
+\subsubsection{Refinement-based game semantics (RBGS)}
+
+\subsubsection{Hidden state construction ($\dagger$)}
+
+\subsection{Tasks}
+
+\begin{itemize}
+\item Fill in the details and formalize OTS model
+\item Fit into the new module interfaces
+\item Embed CompCert semantics
+\item External resources and execution environment
+\item Interface with DeepSEA
+\item Explore further models (NTS, NTree, RBGS)
+\end{itemize}
+
+\subsection{Paper submission}
+
+Need to find a killer example.
+One option would be two programs which interact with
+external resource.
+
+\newpage
+
+\section{Verifying Sequential Layers}
+
+\subsection{CompCertO}
+\subsection{Memory Separation}
+\subsection{Code Proofs}
+
+\section{Architecture-level Code}
+\subsection{Memory Management}
+\subsection{Interrupts}
+\subsection{Concrete Stacks}
+\subsection{Binary Code}
+
+\section{Concurrency}
+\subsection{Scheduled Threads}
+\subsection{Multi-processors}
+
+\section{External Resources}
+
+\section{Plan}
+
+\end{document}
