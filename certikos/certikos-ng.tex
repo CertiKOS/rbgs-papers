@@ -1,19 +1,27 @@
-\documentclass{article}
+\documentclass{report}
 \usepackage{geometry}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{thmtools}
 \usepackage{libertine}
 \usepackage[varqu]{zi4}
+\usepackage{cmll}
 \usepackage{listings}
-\usepackage{hyperref}
+\usepackage[colorlinks=true]{hyperref}
 \usepackage{tikz-cd}
+\usepackage{ebproof}
 
 \newtheorem{quest}{Research Question}
-\newtheorem{task}{Task}
+\newtheorem{task}{Task}[chapter]
 %\newcommand\pfun{\mathrel{\ooalign{\hfil$\mapstochar$\hfil\cr$\to$\cr}}}
 \newcommand\pfun{\mathrel{\ooalign{\hfil$\mapstochar\mkern5mu$\hfil\cr$\to$\cr}}}
 
-\lstset{language=C,basicstyle=\ttfamily}
+\lstset{
+  language=C,
+  basicstyle=\ttfamily\small,
+  basewidth=0.5em,
+  frame=single,
+  numbers=left}
 
 \title{Re-verifying CertiKOS in a modular framework}
 \author{J\'er\'emie Koenig}
@@ -22,7 +30,7 @@
 
 \maketitle
 
-\begin{abstract}
+\begin{abstract} %{{{
 The original CertiKOS proof of correctness
 championed the methodology of certified abstraction layers,
 but otherwise inherited many of CompCert's limitations.
@@ -38,10 +46,13 @@ for developing a modern version of the CertiKOS proof
 to serve as a solid foundation
 for our future work.
 \end{abstract}
+%}}}
 
 \tableofcontents
 
-\section{Introduction} %{{{
+\listoftheorems[title={List of Tasks},swapnumber]
+
+\chapter{Introduction} %{{{
 
 This document presents an implementation plan
 for a modernized version of the CertiKOS correctness proof.
@@ -64,29 +75,163 @@ along the following dimensions:
   \item as a result, open-ended and can accommodate future work.
 \end{description}
 
-\subsection{Principles}
+\section{Principles}
 
-\subsection{Overview}
+\section{Overview}
 
 \newpage
 
 %}}}
 
-\section{Semantics Library} %{{{
+\chapter{Semantics Library} %{{{
 
-\subsection{Mathematical foundations}
+\section{Mathematical foundations}
 
 Role of categories, etc
 
-\subsection{Categories as modules}
+\section{Categories as modules}
 
 How we leverage the Coq module system
 
 %}}}
 
 \newpage
+\chapter{Sequential models} %{{{
 
-\section{Core models} %{{{
+\section{Motivation} %{{{
+
+Consider the example programs shown in \autoref{fig:readwritehello}.
+The shell script \textsf{run.sh}
+executes the program \textsf{secret.c}
+and feeds its output to \textsf{rot13.c}.
+The two programs are algorithmically trivial,
+but their combined output depends on their interaction with each other
+within the context of a particular execution environment.
+
+\begin{figure}[h] % fig:readwritehello {{{
+\centering
+\begin{minipage}{.40\textwidth}
+\begin{lstlisting}[title={secret.c}]
+#include <unistd.h>
+char msg[] = "uryyb, jbeyq!\n";
+int main()
+{
+        write(1, msg, sizeof msg - 1);
+        return 0;
+}
+\end{lstlisting}
+\begin{lstlisting}[title={typescript},language=sh]
+$ secret | rot13
+hello, world!
+\end{lstlisting}
+\end{minipage}
+\hspace{3em}
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[title={rot13.c}]
+#include <unistd.h>
+char rot13(char c)
+{
+        return c < 'a' ? c :
+               c > 'z' ? c :
+               (c - 'a' + 13) % 26 + 'a';
+}
+int main()
+{
+        char buf[100];
+        int n = read(0, buf, sizeof buf);
+        for(int i = 0; i < n; i++)
+                buf[i] = rot13(buf[i]);
+        write(1, buf, n);
+        return 0;
+}
+\end{lstlisting}
+\end{minipage}
+\caption{Two C programs made to interact with each other
+  through a pipe.}
+\label{fig:readwritehello}
+\end{figure}
+%}}}
+
+Existing frameworks such as
+VST, CompCertM, CompCertO, CCR, \ldots
+make it possible to analyze the programs themselves
+and derive refinement properties with varying degrees of sophistications,
+but do not provide a solution for
+modeling their execution within the context of a larger system
+once such properties have been established.
+Therefore our goal is to provide a compositional ``glue'' which can
+incorporate such properties into a common framework and
+allow us to combine them in this larger context.
+
+%}}}
+
+\section{Approach} %{{{
+
+To deal with our running example
+we must first model the execution environment
+processes have access to.
+In a sufficiently rich model we could
+express a signature for file descriptor access as:
+\[
+  \mathcal{E} \: := \:
+    \bigwith_{i \in \mathbb{N}} \:
+    \{
+      \mathsf{read}[n] : \Sigma^* , \:
+      \mathsf{write}[s] : \mathbb{N} \mid
+      n \in \mathbb{N}, \:
+      s \in \Sigma^*
+    \}
+\]
+Meanwhile,
+processes are invoked with argument lists and return an exit status:
+\[ 
+  \mathcal{P} \: := \:
+    \{ \mathsf{run}[\vec{s}\,] : \mathbb{N} \mid
+       \vec{s} \in (\Sigma^*)^* \}
+\]
+We must then specify \emph{loading} for C programs,
+which interprets C components as processes:
+\[
+  \begin{prooftree}
+    \hypo{L : \mathcal{C} \rightarrow \mathcal{C}}
+    \infer1{\mathsf{load}(L) : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+\]
+We can also define the shell operators on processes:
+\[
+  \begin{prooftree}
+    \hypo{P : \mathcal{E} \rightarrow \mathcal{P}}
+    \hypo{Q : \mathcal{E} \rightarrow \mathcal{P}}
+    \infer2{P \mathbin\texttt{;} Q : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{P : \mathcal{E} \rightarrow \mathcal{P}}
+    \hypo{Q : \mathcal{E} \rightarrow \mathcal{P}}
+    \infer2{P \mathbin\texttt{|} Q : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{P : \mathcal{E} \rightarrow \mathcal{P}}
+    \hypo{Q : \mathcal{E} \rightarrow \mathcal{P}}
+    \infer2{P \mathbin\texttt{\&} Q : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+\]
+This would allow us to state properties such as:
+\[
+  \mathsf{load}(\mathrm{secret.c})
+  \mathbin{\texttt{|}}
+  \mathsf{load}(\mathrm{rot13.c})
+  \:\vDash\:
+  \mathsf{run}[\epsilon] \cdot
+  \mathsf{write}_1[\text{``hello, world!''}] \cdot
+  15 \cdot
+  0
+\]
+
+%}}}
+
+\section{The models} %{{{
 
 CompCertO introduces the notion of simulation convention.
 Simulation conventions are a powerful abstraction mechanism
@@ -109,7 +254,7 @@ can be applied to obtain versions of the models with
 state encapsulation.
 Below I expand on the construction and features of each model.
 
-\begin{figure}[h] % fig:core {{{
+\begin{figure} % fig:core {{{
   \centering
   \begin{tikzcd}
     \mathsf{CompCertOE} \ar[r] \ar[d,hookrightarrow] &
@@ -129,9 +274,7 @@ Below I expand on the construction and features of each model.
 \end{figure}
 %}}}
 
-\subsection{The models} %{{{
-
-\subsubsection{CompCertO} %{{{
+\subsection{CompCertO} %{{{
 
 Our starting point is the model used in CompCertO \cite{compcerto}.
 Interfaces are of the form $A = \langle A^\circ, A^\bullet \rangle$,
@@ -164,7 +307,7 @@ but get rid of its more idiosyncratic aspects.
 
 %}}}
 
-\subsubsection{Open Transition Systems (OTS)} %{{{
+\subsection{Open Transition Systems (OTS)} %{{{
 
 The first step in ``cleaning up'' the CompCertO model
 is to move to a more straightforward open transition system model
@@ -256,7 +399,7 @@ system descriptions and correctness proofs.
 
 %}}}
 
-\subsubsection{Dual non-determinism (NTS)} %{{{
+\subsection{Dual non-determinism (NTS)} %{{{
 
 The model presented in the previous section
 should be enough to connect DeepSEA and CompCertO,
@@ -274,67 +417,15 @@ and formulating behaviors as:
 
 %}}}
 
-\subsubsection{Terminal coalgebra (NTree)}
+\subsection{Terminal coalgebra (NTree)}
 
-\subsubsection{Refinement-based game semantics (RBGS)}
+\subsection{Refinement-based game semantics (RBGS)}
 
-\subsubsection{Hidden state construction ($\dagger$)}
+\subsection{Hidden state construction ($\dagger$)}
 
 %}}}
 
-\newpage
-\subsection{Paper submission} %{{{
-
-Consider the following examples.
-
-The program writehello.c contains:
-\begin{lstlisting}
-#include <unistd.h>
-
-int main()
-{
-        static const char hello[] = "Hello, World!\n";
-        int fd;
-
-        fd = open("hello.txt", O_WRONLY);
-        write(fd, hello, sizeof hello - 1);
-        close(fd);
-
-        return 0;
-}
-\end{lstlisting}
-
-The program readhello.c:
-\begin{lstlisting}
-#include <unistd.h>
-
-int main()
-{
-        char buf[100];
-        int fd, n;
-
-        fd = open("hello.txt", O_RDONLY);
-        n = read(fd, buf, sizeof buf);
-        write(0, buf, n);
-
-        return 0;
-}
-\end{lstlisting}
-
-Now suppose we run:
-\begin{lstlisting}[language=sh]
-$ writehello ; readhello
-\end{lstlisting}
-in an environment where no other process can interfere with \texttt{hello.txt}.
-
-The two programs are algorithmically trivial.
-But they interact with an external resource (the file system),
-and are only meaningful in the context of that resource.
-Existing frameworks such as
-VST, CompCertM, CompCertO, CCR, \ldots
-make it possible to analyze the program itself
-but do not provide a solution for
-modeling their execution within the context of a larger system.
+\section{Tasks} %{{{
 
 \begin{task}[Mechanize the OTS model in the RBGS library]
 Formalizing the OTS model should be straightforward.
@@ -356,10 +447,6 @@ develop shell operators such as \texttt{;} etc, and
 model the OS kernel as a distinct component that they access.
 \end{task}
 
-%}}}
-
-\subsection{Tasks} %{{{
-
 \begin{itemize}
 \item Fill in the details and formalize OTS model
 \item Fit into the new module interfaces
@@ -375,25 +462,26 @@ model the OS kernel as a distinct component that they access.
 %}}}
 
 \newpage
+\chapter{Verifying Sequential Layers} %{{{
 
-\section{Verifying Sequential Layers}
+\section{CompCertO}
+\section{Memory Separation}
+\section{Code Proofs}
 
-\subsection{CompCertO}
-\subsection{Memory Separation}
-\subsection{Code Proofs}
+\chapter{Architecture-level Code}
+\section{Memory Management}
+\section{Interrupts}
+\section{Concrete Stacks}
+\section{Binary Code}
 
-\section{Architecture-level Code}
-\subsection{Memory Management}
-\subsection{Interrupts}
-\subsection{Concrete Stacks}
-\subsection{Binary Code}
+\chapter{Concurrency}
+\section{Scheduled Threads}
+\section{Multi-processors}
 
-\section{Concurrency}
-\subsection{Scheduled Threads}
-\subsection{Multi-processors}
+%}}}
 
-\section{External Resources}
+\chapter{External Resources}
 
-\section{Plan}
+\chapter{Plan}
 
 \end{document}
