@@ -9,6 +9,8 @@
 \usepackage{minted}
 \usepackage{tikz-cd}
 \usepackage{subcaption}
+\usepackage{listings}
+\usepackage{cmll}
 \usepackage{stmaryrd}
 \usetikzlibrary{patterns}
 \usetikzlibrary{shapes}
@@ -35,7 +37,16 @@
 \hyphenation{Comp-CertM}
 \hyphenation{Certi-KOS}
 
-\ebproofset{right label template=\scriptsize\inserttext}
+\ebproofset{
+  right label template=\scriptsize\inserttext}
+
+\lstset{
+  language=C,
+  basicstyle=\ttfamily\footnotesize,
+  basewidth=0.5em,
+  frame=single,
+  numbers=left}
+
 %}}}
 
 % Macros {{{
@@ -230,7 +241,526 @@ and we showcase its capabilities with multiple use cases.
 
 \maketitle
 
-\section{Introduction} \label{sec:intro} %{{{
+\section{Introduction} %{{{
+
+Programming language semantics
+make formal verification possible
+by giving a mathematical account of program execution.
+In particular,
+semantics given in the \emph{operational} style
+are often considered suitable to use as a trustworthy ``ground truth''
+of program behavior,
+because their definition closely mirrors
+the mechanical process of computation.
+However,
+reasoning about complex programs
+directly in terms of their operational semantics
+is often difficult.
+
+Fortunately,
+compositional proof techniques have been developed
+for many kinds of program properties.
+These techniques include
+program logics and logical relations,
+and can be used to establish properties such as
+correctness with respect to Hoare-style specifications,
+contextual equivalence, contextual refinement,
+and many others.
+
+Among these techniques,
+program logics have found
+the broadest adoption.
+Modern incarnations can deal with
+complex memory layouts,
+concurrency,
+and other sophisticated language features
+while supporting
+a high degree of automation.
+This has allowed practitioners
+to verify the correctness of 
+increasingly complex algorithms and data structures.
+However,
+traditional program logics
+also suffer some limitations which
+restrict their applicability to
+some verification scenarios.
+%other kinds of programs and
+%other aspects of the software development process.
+
+\subsection{The program logic paradigm
+  misses crucial aspects of software development} %{{{
+
+%Since algorithms and data structures
+%constitute the core of any software system,
+%the ability to ensure their reliability
+%in a broad variety of programming contexts is invaluable.
+%At the same time,
+The paradigm embodied by
+traditional program logics
+does not account for all aspects of the software development process,
+nor fully describe
+the operation of a typical software artifact:
+\begin{itemize}
+  \item to be executed,
+    verified program components must first be compiled and linked,
+    and this process may compromise
+    correctness results obtained at the source level;
+  \item operational semantics and program logics
+    are typically designed for a single language, but
+    many programs are built from components written
+    in multiple languages;
+  \item programs such as network servers and clients
+    are algorithmically simple
+    but conduct complex external interactions,
+    which program logics rarely model or take into account.
+\end{itemize}
+The following example illustrates some of these limitations.
+
+\begin{figure} % fig:readwritehello {{{
+\centering
+\begin{minipage}{.35\textwidth}
+%\begin{lstlisting}[title={secret.c}]
+%#include <unistd.h>
+%char msg[] = "uryyb, jbeyq!\n";
+%int main()
+%{
+%        write(1, msg, sizeof msg - 1);
+%        return 0;
+%}
+%\end{lstlisting}
+\begin{lstlisting}[title={secret.s}]
+.globl main
+main:   pushl $13
+        pushl $msg
+        call rot13
+        pushl $1
+        call write
+        addl $12, %esp
+        movl $0, %eax
+        ret
+.data
+msg:    .string "hello, world!\n"
+\end{lstlisting}
+%$ ./secret
+%uryyb, jbeyq!
+\begin{lstlisting}[title={Use case scenario},language=sh]
+$ cc -o secret secret.s rot13.c
+$ cc -o decode decode.c rot13.c
+$ ./secret | ./decode
+hello, world!
+\end{lstlisting}
+\end{minipage}
+\hspace{2.5em}
+\begin{minipage}{.48\textwidth}
+\begin{lstlisting}[title={rot13.c}]
+void rot13(char *buf, int len)
+{
+  for (int i = 0; i < len; i++)
+    if ('a' <= buf[i] && buf[i] <= 'z')
+      buf[i] = (buf[i] - 'a' + 13) % 26 + 'a';
+}
+\end{lstlisting}
+\begin{lstlisting}[title={decode.c}]
+#include <unistd.h>
+extern void rot13(char *, int);
+int main()
+{
+        char buf[100];
+        int n = read(0, buf, sizeof buf);
+        rot13(buf, n);
+        write(1, buf, n);
+        return 0;
+}
+\end{lstlisting}
+\end{minipage}
+\caption{Two programs which use a common library
+  are compiled and made to
+  interact through a pipe.}
+\label{fig:readwritehello}
+\end{figure}
+%}}}
+
+\begin{example} \label{ex:readwritehello} %{{{
+The code shown in \autoref{fig:readwritehello}
+consists of two different programs
+which use a common C library
+and are designed to work together.
+As illustrated in the usage scenario we have shown,
+the 32-bit x86 assembly program \kw{secret.s} 
+outputs a coded message
+to be decyphered by \kw{decode.c}.
+That is,
+they satisfy the informal specification:
+\begin{equation}
+  \begin{minipage}{.9\textwidth}
+  \it
+  Suppose that,
+  after compilation,
+  \kw{secret.s} and \kw{decode.c}
+  are each linked with \kw{rot13.c}.
+  If the output of the first program
+  is fed as input to the second,
+  ``hello, world!'' will be displayed.
+  \end{minipage}
+  \label{eqn:hellospec}
+\end{equation}
+Algorithmically speaking,
+the programs are almost trivial.
+To to verify that property (\ref{eqn:hellospec}) holds,
+a reader with the right background
+can simply follow along the execution step by step
+to convince themself that the scenario outlined in Fig.~\ref{fig:readwritehello}
+will unfold as predicted.
+
+However, this task is complex in its own way
+because it mobilises implicit assumptions and knowledge regarding
+the execution of C and x86 assembly,
+the compiler's correctness \emph{with respect to a specific calling convention},
+and the basics of Unix execution environments and system calls.
+Any mathematical account of property (\ref{eqn:hellospec})
+must involve these aspects of the problem,
+encompassing all three of the challenges outlined at the beginning of this section.
+To make things worse,
+property~(\ref{eqn:hellospec})
+involves \emph{two different} programs simultaneously.
+Nonetheless,
+all of these concerns apply to real-world systems,
+yet to our knowledge
+there exists no program logic or verification framework
+which can deal with problems of this kind.
+\end{example}
+%}}}
+
+To be sure,
+these limitations of traditional approaches
+have long been recognized,
+and a fair amount of work has sought to address them.
+The certified compiler CompCert \citep{compcert}
+comes with a mechanized proof of correctness.
+Better yet,
+the Verified Software Toolchain (VST) \citep{vst}
+provides a separation logic for CompCert's source language Clight, and
+its soundness proof interfaces with
+the compiler's proof of semantics preservation,
+ensuring that the correctness properties obtained for a Clight program
+can be formally transferred to the assembly code emitted by CompCert.
+Operational semantics \cite{opsem-multi} and
+program logics \cite{melocoton}
+have been developed for multi-language programs.
+Finally,
+work based on VST has demonstrated the verification of a network server
+by incorporating \emph{interaction trees} into the logic
+to model external interactions \cite{itrees}.
+
+These efforts show that overcoming the various limitations of
+the program logic paradigm is possible,
+but they only constitute one-off adaptations
+to particular setups.
+To apply this methodology to Example~\ref{ex:readwritehello}
+we would need to investigate and develop a semantics and logic 
+with just the right features
+to tackle the problem,
+and the result would be unlikely to apply directly
+to a different ``exotic'' verification task.
+Instead,
+we would like to create a tool box of sorts
+which would provide reusable building blocks
+out of which the semantic models and verification techniques
+required to tackle this problem
+could be constructed with minimal effort.
+
+%}}}
+
+\begin{figure} % fig:paradigms {{{{
+  \small
+  \[
+    \begin{tikzcd}[column sep=-1em, row sep=small]
+      &
+      \begin{array}{c} \text{program} \\ \text{logic} \end{array}
+      \ar[ddr, leftrightarrow] &
+      \begin{array}{c} \text{logical} \\ \text{relation} \end{array}
+      \ar[dd, leftrightarrow] &
+      \begin{array}{c} \text{compositional} \\ \text{semantics} \end{array}
+      \ar[ddl, leftrightarrow]
+      \\
+      {} \ar[rrrr, dotted, dash] &&&& {}
+      \\
+      & &
+      \begin{array}{c} \text{operational} \\ \text{semantics} \end{array}
+    \end{tikzcd}
+    \qquad
+    \begin{tikzcd}[column sep=-2.5em, row sep=tiny]
+      &
+      \begin{array}{c} \text{manual} \\ \text{proof} \end{array}
+      \ar[ddr, leftrightarrow] &&
+      \begin{array}{c}
+        \text{compiler correctness} \\
+        \text{and related results}
+      \end{array}
+      \ar[ddl, leftrightarrow]
+      %\ar[ddd, leftrightarrow]
+      \ar[ddr, leftrightarrow] &&
+      \begin{array}{c} \text{program} \\ \text{logic} \end{array}
+      \ar[ddl, leftrightarrow]
+      \\
+      {} \ar[rrrrrr, dotted, dash] &&&&&& {}
+      \\
+      &&
+      \begin{array}{c}
+        \text{compositional} \\
+        \text{semantics}
+      \end{array}
+      \ar[dr, leftrightarrow, bend right]
+      &&
+      \hspace{-2em}
+      \begin{array}{c}
+        \text{compositional} \\
+        \text{semantics}
+      \end{array}
+      \ar[dl, leftrightarrow, bend left]
+      \\
+      &&&
+      \begin{array}{c}
+        \text{environment} \\ \text{model}
+      \end{array}
+    \end{tikzcd}
+  \]
+  \caption{
+    Approaches to program verification.
+    The system being verified
+    is modeled using the facilities shown below the line,
+    and the techniques shown above
+    are used to reason about its properties.
+    Traditionally (left),
+    the whole universe in which the computation occurs
+    must be modeled in a monolithic and closed operational semantics.
+    By using compositional semantics as a ground truth instead (right),
+    both the model and reasoning techniques
+    can be constructed out of reusable building blocks
+    and adapted to various contexts and situations.
+  }
+  \label{fig:paradigms}
+\end{figure}
+%}}}
+
+\subsection{Compositional semantics offer a more flexible
+  approach to verification}
+
+The paradigm of operational semantics + proof technique
+can be made more flexible by
+the use of a \emph{compositional} semantics.
+This is illustrated in Fig.~\ref{fig:paradigms}
+
+Historically,
+compositional semantics
+have been understood
+in relation to operational semantics
+as a way to provide
+a high-level, abstract representation
+for partial programs
+more amenable to reasoning.
+In that sense,
+compositional semantics fits into
+the traditional verification framework
+as a reasoning technique
+more than a model.
+In particular,
+traditional domain-theoretic semantics
+tend to provide a very high-level view
+of program behavior,
+abstracting away low-level details such as
+concrete state, execution steps,
+or even sometimes choices of evaluation strategies.
+However,
+the compositional semantics can be connected back to
+the more physical description offered by operational semantics
+through a \emph{full abstraction} theorem,
+which guarantees that
+program equivalence properties
+established using the compositional semantics
+reflect an operational notion of observational equivalence.
+Therefore in this context,
+full abstraction plays a role similar to
+that of program logic soundness.
+
+However,
+nothing in principle prevents us from using
+compositional semantics directly
+as a model for program execution.
+This is especially true
+in the context of approaches such as game semantics,
+which while compositional
+provide a very concrete and fairly low-level view
+of the computation process.
+Moreover,
+whereas operational semantics
+models a closed universe,
+by nature compositional semantics
+emphasize the open-ended nature of program components
+and the ways in which simple components interact
+to form a more complex system.
+This make it easier to model the ways in which
+even complete programs
+are embedded within a large execution environment.
+
+[DimSum does this for multi-language
+semantics and verification,
+however shows only very simple examples.]
+
+[Compositional semantics is not compositional enough!]
+
+\subsection{Reasoning about programs requires
+  multiple dimensions of compositionality}
+
+Typically,
+compositional semantics
+are only compositional in the horizontal sense.
+This limits their power compared to
+verification frameworks which also offer:
+\begin{itemize}
+  \item vertical compositionality
+    ie.~transitivity of refinement
+    and data abstraction relationships
+  \item spatial compositionality
+    as in separation logic.
+\end{itemize}
+
+% - simple example of secret + rot13
+
+% In response to this challenge, researchers come up with
+% approaches that are more open, decentralized, etc
+% multi-languages
+
+% Things being tied to a particular language can also sometimes
+% get in the way of abstraction.
+% cf. queue example.
+% if we were to describe wouldn't talk about ring buffer or memory states!
+
+
+% Things becoming more open-ended but most work focuses on
+% particular technical obstacles that show up when you try to do that.
+% Ie memory states?
+
+% We don't 
+
+%\subsection{Large-scale engineering requires spatial compositionality
+%  and state encapsulation}
+
+\subsection{Contributions}
+
+\newpage
+
+The direct product of effect signatures
+gives our model's cartesian product:
+\[
+  \begin{prooftree}
+    \hypo{L_1 : A_1 \rightarrow B_1}
+    \hypo{L_2 : A_2 \rightarrow B_2}
+    \infer2{L_1 \with L_2 \,:\, A_1 \with A_2 \,\rightarrow\, B_1 \with B_2}
+  \end{prooftree}
+  \qquad
+  \gamma_{A,B} : A \with B \rightarrow B \with A
+  \qquad
+  \Delta_A : A \rightarrow A \with A
+  \qquad
+  {*}_A : A \rightarrow \top
+\]
+
+Processes are represented as semantic objects of type:
+\[
+  P, Q \::\: \mathcal{F} \with \mathcal{F}
+    \rightarrow \mathcal{P}
+  \qquad \text{where} \qquad
+  \begin{array}{r@{}l}
+  \mathcal{F} := {} &
+    \{
+      \kw{read}[n] : \Sigma^* , \:
+      \kw{write}[s] : \mathbb{N} \mid
+      n \in \mathbb{N}, \:
+      s \in \Sigma^*
+    \} \\[1ex]
+  \mathcal{P} := {} &
+    \{ \kw{run} : \mathbb{N} \}
+  \end{array}
+\]
+
+The behavior of a CompCert program as a process
+once it is \emph{loaded} and executed is given by:
+\[
+  \begin{prooftree}
+    \hypo{L : \mathcal{C} \rightarrow \mathcal{C}}
+    \infer1{\mathsf{load}_\mathcal{C}(L) : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{L : \mathcal{C} \rightarrow \mathcal{C}}
+    \infer1{\mathsf{load}_\mathcal{C}(L) : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{L_1 \le_{\mathbb{C} \rightarrow \mathbb{C}} L_2}
+    \infer1{\kw{load}_\mathcal{C}(L_1) \le \kw{load}_\mathcal{A}(L_2)}
+  \end{prooftree}
+\]
+
+Processes can be combined
+with typical shell-like operators:
+\[
+  \begin{prooftree}
+    \hypo{P : \mathcal{E} \rightarrow \mathcal{P}}
+    \hypo{Q : \mathcal{E} \rightarrow \mathcal{P}}
+    \infer2{P \mathbin\texttt{;} Q : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{P : \mathcal{E} \rightarrow \mathcal{P}}
+    \hypo{Q : \mathcal{E} \rightarrow \mathcal{P}}
+    \infer2{P \mathbin\texttt{|} Q : \mathcal{E} \rightarrow \mathcal{P}}
+  \end{prooftree}
+\]
+The component
+$\kw{seq} : \mathcal{P} \with \mathcal{P} \rightarrow \mathcal{P}$
+invokes two processes one after the other:
+\[
+  \kw{seq} \vDash
+    \kw{run} \cdot (\kw{run}_1 \cdot n) \cdot (\kw{run}_2 \cdot m) \cdot m
+\]
+It can then be used to define:
+\[
+  P \mathbin\texttt{;} Q \: := \:
+    \kw{seq} \odot (P \with Q)
+             \odot (\mathcal{F} \with \gamma \with \mathcal{F})
+             \odot (\Delta \with \Delta)
+\]
+In addition
+$\kw{fifo} : \top \rightarrow \mathcal{F}$
+models a buffer so that
+we can define:
+\[
+  P \mathbin\texttt{|} Q \: := \:
+    \kw{seq} \odot (P \with Q)
+         \odot (\mathcal{F} \with (\Delta \odot \kw{fifo}) \with \mathcal{F})
+\]
+
+
+
+
+\[
+  \mathsf{load}(\mathrm{secret.c})
+  \mathbin{\texttt{|}}
+  \mathsf{load}(\mathrm{rot13.c})
+  \:\vDash\:
+  \mathsf{run} \cdot
+  \mathsf{write}_1[\text{``hello, world!''}] \cdot
+  15 \cdot
+  0
+\]
+
+%}}}
+
+\newpage
+
+\section*{Old Introduction} \label{sec:intro} %{{{
 
 %% Preamble {{{
 %Broadening the reach and scale
