@@ -245,7 +245,7 @@ and we showcase its capabilities with multiple use cases.
 
 Programming language semantics
 make formal verification possible
-by giving a mathematical account of program execution.
+by providing a mathematical account of program execution.
 In particular,
 semantics given in the \emph{operational} style
 are often considered suitable to use as a trustworthy ``ground truth''
@@ -253,7 +253,7 @@ of program behavior,
 because their definition closely mirrors
 the mechanical process of computation.
 However,
-reasoning about complex programs
+reasoning about programs
 directly in terms of their operational semantics
 is often difficult.
 
@@ -269,7 +269,7 @@ and many others.
 
 Among these techniques,
 program logics have found
-the broadest adoption.
+broad adoption.
 Modern incarnations can deal with
 complex memory layouts,
 concurrency,
@@ -281,14 +281,14 @@ to verify the correctness of
 increasingly complex algorithms and data structures.
 However,
 traditional program logics
-also suffer some limitations which
+also suffer limitations which
 restrict their applicability to
 some verification scenarios.
 %other kinds of programs and
 %other aspects of the software development process.
 
-\subsection{The program logic paradigm
-  misses crucial aspects of software development} %{{{
+\subsection{The program logic paradigm %{{{
+  misses crucial aspects of software development}
 
 %Since algorithms and data structures
 %constitute the core of any software system,
@@ -298,20 +298,20 @@ some verification scenarios.
 The paradigm embodied by
 traditional program logics
 does not account for all aspects of the software development process,
-nor fully describe
+nor does it fully describe
 the operation of a typical software artifact:
 \begin{itemize}
   \item to be executed,
-    verified program components must first be compiled and linked,
+    verified program components must first be \emph{compiled},
     and this process may compromise
     correctness results obtained at the source level;
   \item operational semantics and program logics
     are typically designed for a single language, but
     many programs are built from components written
-    in multiple languages;
+    in \emph{multiple languages};
   \item programs such as network servers and clients
     are algorithmically simple
-    but conduct complex external interactions,
+    but conduct complex \emph{external interactions},
     which program logics rarely model or take into account.
 \end{itemize}
 The following example illustrates some of these limitations.
@@ -341,10 +341,11 @@ main:   pushl $13
 .data
 msg:    .string "hello, world!\n"
 \end{lstlisting}
-%$ ./secret
-%uryyb, jbeyq!
-\begin{lstlisting}[title={Use case scenario},language=sh]
+\vspace{1em}
+\begin{lstlisting}[language=sh]
 $ cc -o secret secret.s rot13.c
+$ ./secret
+uryyb, jbeyq!
 $ cc -o decode decode.c rot13.c
 $ ./secret | ./decode
 hello, world!
@@ -404,42 +405,37 @@ they satisfy the informal specification:
   \end{minipage}
   \label{eqn:hellospec}
 \end{equation}
-Algorithmically speaking,
-the programs are almost trivial.
-To to verify that property (\ref{eqn:hellospec}) holds,
-a reader with the right background
-can simply follow along the execution step by step
-to convince themself that the scenario outlined in Fig.~\ref{fig:readwritehello}
-will unfold as predicted.
 
+The programs are simple;
+to verify that property (\ref{eqn:hellospec}) holds,
+a reader with the right background
+can mentally execute them step by step
+and convince themself that they will work as expected.
 However, this task is complex in its own way
 because it mobilises implicit assumptions and knowledge regarding
-the execution of C and x86 assembly,
+the C and x86 assembly languages,
 the compiler's correctness \emph{with respect to a specific calling convention},
 and the basics of Unix execution environments and system calls.
-Any mathematical account of property (\ref{eqn:hellospec})
+
+Likewise, any mathematical account of property (\ref{eqn:hellospec})
 must involve these aspects of the problem,
 encompassing all three of the challenges outlined at the beginning of this section.
-To make things worse,
-property~(\ref{eqn:hellospec})
-involves \emph{two different} programs simultaneously.
-Nonetheless,
-all of these concerns apply to real-world systems,
-yet to our knowledge
+%Property~(\ref{eqn:hellospec})
+%also involves \emph{two different} programs.
+To our knowledge,
 there exists no program logic or verification framework
-which can deal with problems of this kind.
+which can deal with this example.
 \end{example}
 %}}}
 
-To be sure,
-these limitations of traditional approaches
+These limitations of traditional approaches
 have long been recognized,
 and a fair amount of work has sought to address them.
 The certified compiler CompCert \citep{compcert}
 comes with a mechanized proof of correctness.
 Better yet,
 the Verified Software Toolchain (VST) \citep{vst}
-provides a separation logic for CompCert's source language Clight, and
+provides a separation logic for CompCert's source language Clight;
 its soundness proof interfaces with
 the compiler's proof of semantics preservation,
 ensuring that the correctness properties obtained for a Clight program
@@ -448,8 +444,8 @@ Operational semantics \cite{opsem-multi} and
 program logics \cite{melocoton}
 have been developed for multi-language programs.
 Finally,
-work based on VST has demonstrated the verification of a network server
-by incorporating \emph{interaction trees} into the logic
+a network server was verfied by
+by incorporating \emph{interaction trees} into VST
 to model external interactions \cite{itrees}.
 
 These efforts show that overcoming the various limitations of
@@ -458,20 +454,14 @@ but they only constitute one-off adaptations
 to particular setups.
 To apply this methodology to Example~\ref{ex:readwritehello}
 we would need to investigate and develop a semantics and logic 
-with just the right features
-to tackle the problem,
-and the result would be unlikely to apply directly
-to a different ``exotic'' verification task.
-Instead,
-we would like to create a tool box of sorts
-which would provide reusable building blocks
-out of which the semantic models and verification techniques
-required to tackle this problem
-could be constructed with minimal effort.
+tailored to the situation at hand,
+which would combine particular features.
+The result would be unlikely to apply directly
+to another verification task.
 
 %}}}
 
-\begin{figure} % fig:paradigms {{{{
+\begin{figure} % fig:paradigms {{{
   \small
   \[
     \begin{tikzcd}[column sep=-1em, row sep=small]
@@ -543,112 +533,536 @@ could be constructed with minimal effort.
 \end{figure}
 %}}}
 
-\subsection{Compositional semantics offer a more flexible
-  approach to verification}
+\subsection{Compositional semantics offer a more flexible approach} %{{{
 
-The paradigm of operational semantics + proof technique
-can be made more flexible by
-the use of a \emph{compositional} semantics.
-This is illustrated in Fig.~\ref{fig:paradigms}
+The main difficulty with Example~\ref{ex:readwritehello}
+is that formalizing property (\ref{eqn:hellospec})
+requires adjustments to the \emph{model}
+within which we consider the behavior of
+the programs \kw{secret.s} and \kw{decode.c}.
+This is difficult to achieve
+in frameworks based on traditional operational semantics
+because they model a closed universe,
+relying on the proof techniques
+to achieve compositional reasoning.
 
-Historically,
-compositional semantics
-have been understood
-in relation to operational semantics
-as a way to provide
-a high-level, abstract representation
-for partial programs
-more amenable to reasoning.
-In that sense,
-compositional semantics fits into
-the traditional verification framework
-as a reasoning technique
-more than a model.
-In particular,
-traditional domain-theoretic semantics
-tend to provide a very high-level view
-of program behavior,
-abstracting away low-level details such as
-concrete state, execution steps,
-or even sometimes choices of evaluation strategies.
-However,
-the compositional semantics can be connected back to
-the more physical description offered by operational semantics
-through a \emph{full abstraction} theorem,
-which guarantees that
-program equivalence properties
-established using the compositional semantics
-reflect an operational notion of observational equivalence.
-Therefore in this context,
-full abstraction plays a role similar to
-that of program logic soundness.
+As illustrated in Fig.~\ref{fig:paradigms},
+this state of affairs can be improved by
+the use of compositional semantics.
+By their nature,
+compositional semantics focus on
+the behavior of \emph{open} components and
+their interactions with each other
+and with the broader environment.
+As a result,
+they are more likely to be suitable
+building blocks for
+modeling complex, heterogeneous systems.
 
-However,
-nothing in principle prevents us from using
-compositional semantics directly
-as a model for program execution.
-This is especially true
-in the context of approaches such as game semantics,
-which while compositional
-provide a very concrete and fairly low-level view
-of the computation process.
+Recent work embracing this paradigm shows promising results.
+For example,
+whereas prior CompCert research
+largely focuses on compositional proof techniques,
+the work on CompCertO \cite{compcerto},
+which identifies modeling heterogeneous systems
+as an important motivation,
+shows that formulating the compiler's correctness result
+directly in terms of a compositional semantics
+is possible with a reasonable proof effort.
+Likewise,
+the DimSum framework \cite{dimsum}
+successfully employs this approach to tackle
+multi-language semantics and verification:
+the framework can be used to stitch together
+independent semantics for individual languages,
+and to reason about refinement within and across
+these languages.
+
+%Historically,
+%compositional semantics
+%have been understood
+%in relation to operational semantics
+%as a way to provide
+%a high-level, abstract representation
+%for partial programs
+%more amenable to reasoning.
+%In that sense,
+%compositional semantics fits into
+%the traditional verification framework
+%as a reasoning technique
+%more than a model.
+%In particular,
+%traditional domain-theoretic semantics
+%tend to provide a very high-level view
+%of program behavior,
+%abstracting away low-level details such as
+%concrete state, execution steps,
+%or even sometimes choices of evaluation strategies.
+%However,
+%the compositional semantics can be connected back to
+%the more physical description offered by operational semantics
+%through a \emph{full abstraction} theorem,
+%which guarantees that
+%program equivalence properties
+%established using the compositional semantics
+%reflect an operational notion of observational equivalence.
+%Therefore in this context,
+%full abstraction plays a role similar to
+%that of program logic soundness.
+%
+%However,
+%nothing in principle prevents us from using
+%compositional semantics directly
+%as a model for program execution.
+%This is especially true
+%in the context of approaches such as game semantics,
+%which while compositional
+%provide a very concrete and fairly low-level view
+%of the computation process.
+%Moreover,
+%whereas operational semantics
+%models a closed universe,
+%by nature compositional semantics
+%emphasize the open-ended nature of program components
+%and the ways in which simple components interact
+%to form a more complex system.
+%This make it easier to model the ways in which
+%even complete programs
+%are embedded within a large execution environment.
+
+At the same time,
+%as we outline below,
+compositional semantics remains
+underdeveloped as a practical tool for verification,
+and lacks a proper treatments of
+many techniques which are routine in the context of
+operational semantics and program logics.
+Our goal in this paper is to show that
+many these techniques can fruitfully be adapted
+to the setting of compositional semantics,
+allowing us to tackle complex verification problems
+in a flexible manner.
+
+%}}}
+
+\subsection{Contributions: Three dimensions of compositionality} %{{{
+
+To demonstrate how various
+compositional verification techniques
+can be adapted
+to the setting of compositional semantics,
+we present a semantic model which simultaneously admits
+\emph{horizontal}, \emph{vertical} and \emph{spatial}
+composition principles,
+allowing us to give a semantics-level account of
+techniques such as data abstraction and memory separation.
+
+While the model does not focus on a particular language,
+our generic notion of component is flexible enough
+to account for the CompCertO semantics of C and assembly translation units, and
+to model the kind of process behavior and communication
+required to handle Example~\ref{ex:readwritehello}.
+
 Moreover,
-whereas operational semantics
-models a closed universe,
-by nature compositional semantics
-emphasize the open-ended nature of program components
-and the ways in which simple components interact
-to form a more complex system.
-This make it easier to model the ways in which
-even complete programs
-are embedded within a large execution environment.
-
-[DimSum does this for multi-language
-semantics and verification,
-however shows only very simple examples.]
-
-[Compositional semantics is not compositional enough!]
-
-\subsection{Reasoning about programs requires
-  multiple dimensions of compositionality}
-
-Typically,
-compositional semantics
-are only compositional in the horizontal sense.
-This limits their power compared to
-verification frameworks which also offer:
+by extending semantics compositionality
+in new directions,
+we obtain a model rich enough to capture---%
+under a uniform notion of refinement---%
+properties as varied as:
 \begin{itemize}
-  \item vertical compositionality
-    ie.~transitivity of refinement
-    and data abstraction relationships
-  \item spatial compositionality
-    as in separation logic.
+  \item program correctness results;
+  \item the semantics preservation theorem of CompCertO;
+  \item the frame property of separation logic;
+  \item representation independence for encapsulated state.
 \end{itemize}
+As we will demonstrate in the context of several examples,
+these properties can then be combined
+along the three dimensions %of compositionality
+to construct sophisticated refinement proofs,
+including a formal statement of (\ref{eqn:hellospec}).
 
-% - simple example of secret + rot13
+We present a high-level overview of our work in \S\ref{sec:overview},
+starting with our analysis of
+the horizontal, vertical and spatial dimensions of compositionality
+which are found in various program logics and other proof techniques,
+but less commonly understood in terms of compositional semantics.
+A technical description of our model is given in \S\ref{sec:model}.
+We then showcase in \S\ref{sec:eval} several uses of our model
+beyond the aforementioned examples:
+\begin{itemize}
+  \item We define an extension of CompCert's Clight language
+    supporting encapsulated, module-local private variables
+    and provide a correctness proof for the erasure of private annotations.
+  \item We use our model to define a framework for
+    \emph{certified abstraction layers} (CAL) \cite{popl15}.
+    Unlike the original work on CAL,
+    our layer framework does not modify the underlying compiler,
+    and its meta-theory requires comparatively negligible effort.
+\end{itemize}
+We discuss of related work in \S\ref{sec:related}
+and our conclusions in \S\ref{sec:conclusion}.
+Our work has been mechanized in the Coq proof assistant
+and we will submit a preliminary artifact alongside this paper.
 
-% In response to this challenge, researchers come up with
-% approaches that are more open, decentralized, etc
-% multi-languages
+%}}}
 
-% Things being tied to a particular language can also sometimes
-% get in the way of abstraction.
-% cf. queue example.
-% if we were to describe wouldn't talk about ring buffer or memory states!
+%}}}
+
+\section*{Postpone to Main Ideas}
+
+\begin{example}[Verifying a bounded queue] \label{ex:bq} %{{{
+The code shown in Fig.~\ref{fig:code}
+implements a bounded queue with capacity $N$.
+This is done in two steps.
+The translation unit $\kw{rb.c}$
+implements a rudimentary ring buffer by
+providing access to an array of size $N$
+and two counters which wrap around to zero when they reach the value $N$.
+The translation unit $\kw{bq.c}$ then uses that interface
+to implement the queue.
+\end{example}
+%}}}
+
+\begin{figure} % fig:code {{{
+  \centering\footnotesize
+  \begin{subfigure}{0.45\textwidth}
+\begin{minted}{C}
+static int c1, c2;
+static V buf[N];
+
+int inc1() { int i = c1++; c1 %= N; return i; }
+int inc2() { int i = c2++; c2 %= N; return i; }
+V get(int i) { return buf[i]; }
+void set(int i, V val) { buf[i] = val; }
+\end{minted}
+  \subcaption{The translation unit $\kw{rb.c}$}
+  \label{fig:rb}
+  \end{subfigure}
+  \hspace{4em}
+  \begin{subfigure}{0.38\textwidth}
+\begin{minted}{C}
+extern int inc1(void);
+extern int inc2(void);
+extern V get(int i);
+extern void set(int i, V val);
+
+void enq(V val) { set(inc2(), val); }
+V deq() { return get(inc1()); }
+\end{minted}
+  \subcaption{The translation unit $\kw{bq.c}$}
+  \label{fig:bq}
+  \end{subfigure}
+  \caption{Running example, adapted from \citet{rbgs-cal}.
+    The component $\kw{rb.c}$
+    implements a ring buffer by encapsulating an array
+    and two counters. It is used by the component
+    $\kw{bq.c}$ to implement a
+    bounded queue.}
+  \label{fig:code}
+%\caption{The state of a ring buffer,
+%  made of two counters and a fixed-size array,
+%  is encapsulated behind a simple interface.}
+%\label{fig:rb}
+%\caption{This component relies on the ring buffer primitives
+%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
+%\label{fig:bq}
+\end{figure}
+%}}}
 
 
-% Things becoming more open-ended but most work focuses on
-% particular technical obstacles that show up when you try to do that.
-% Ie memory states?
+%Although the code described in Example~\ref{ex:bq} is simple,
+There are several well-known techniques which can be used
+formally or informally
+to help us understand and reason about
+the code in Example~\ref{ex:bq}.
+Our goal in this paper is to present a compositional semantic model
+capable of capturing the following ones simultaneously.
 
-% We don't 
+\paragraph{Horizontal Composition} %{{{
 
-%\subsection{Large-scale engineering requires spatial compositionality
-%  and state encapsulation}
+A proof technique or semantic model is usually deemed
+\emph{compositional}
+when the properties or behaviors it describes
+can be broken down along the syntactic structure of the program.
+For example,
+a core rule of Hoare logic
+allows us to verify the correctness of the program $C_1 \mathbin; C_2$
+by first verifying the correctness properties $\{P\} C_1 \{Q\}$ and $\{Q\} C_2 \{R\}$
+for the component programs $C_1$ and $C_2$,
+then combining them to derive the property
+$\{P\} C_1 \mathbin; C_2 \{R\}$
+for the composite whole.
+We refer to this kind of phenomenon as
+\emph{horizontal} compositionality.
+Note that for this to work,
+the properties must agree on a common \emph{interface},
+in this case a state assertion $Q$
+which must hold after $C_1$ finished executing
+but before $C_2$ starts.
 
-\subsection{Contributions}
 
-\newpage
+
+
+%}}}
+
+\paragraph{Data Abstraction and Vertical Composition} %{{{
+
+The code in Fig.~\ref{fig:code}
+stores the queue's data in the array $\kw{buf}$
+at indices $\kw{c1} \ldots \kw{c2}-1$.
+However,
+once the queue has been implemented,
+we no longer need to care about the details
+of this low-level representation.
+A developer using the interface provided by $\kw{bq.c}$
+will picture the queue as a sequence of values
+which should never exceed length $N$,
+and they will understand the behavior of the operations
+$\kw{enq}$ and $\kw{deq}$
+in those terms.
+
+As shown in Fig.~\ref{fig:spec},
+this intuition can be formalized.
+There, the specification $\Gamma_\kw{bq}$
+expresses the behavior of $\kw{enq}$ and $\kw{deq}$
+with respect to an abstract representation $\vec{q} \in \kw{val}^*$.
+The specification $\Gamma_\kw{rb}$
+plays a similar role for the functions provided by $\kw{rb.c}$,
+though its representation of the ring buffer is closer
+to the actual memory layout used by the code.
+
+In the context of operational semantics and transition systems,
+data abstraction is well-understood:
+even when they use different representations for their internal states,
+a transition system can be shown to refine another
+by exhibiting a \emph{simulation relation} between them.
+Moreover,
+simulation relations compose,
+ensuring transitivity of the associated notion of refinement.
+
+To capture data abstraction in the context of compositional semantics,
+CompCertO uses \emph{simulation conventions},
+which express relationships between
+observable source- and target-level interactions
+of the component being refined---%
+a formal analogue to the notion of calling convention
+used in the context of compiler design.
+While program components compose \emph{horizontally} through linking,
+simulation conventions compose \emph{vertically}
+in the manner of simulation relations,
+resulting in a two-dimensional notion of refinement.
+We will use a similar approach.
+
+% XXX: to related work
+%
+%Program logics and other verification techniques
+%based on operational semantics
+%sometimes support data abstraction on a more granular level;
+%examples include the refinement calculus \cite{dataref},
+%certified abstraction layers \cite{popl15},
+%and various kinds of logical relations.
+%There,
+%stepwise data abstraction
+%exists within the context of other compositional structures.
+%
+%Unfortunately,
+%in the context of compositional semantics,
+%a systematic understanding of data abstraction
+%remains to be developed.
+
+%DimSum follows the approach used in the refinement calculus
+%and uses dual nondeterminism to express similar
+%abstraction relationship as a dynamic ``translation''
+%between interacting components which use
+%incompatible representations.
+%Our own approach is closer to the one used in CompCertO
+%but the notions of \emph{companion} and \emph{conjoint}
+%introduced in \S{}X.Y %XXX
+%suggest ways in which these two approaches could be unified.
+
+%}}}
+
+\paragraph{Memory Separation and Spatial Composition}
+
+While data abstraction and vertical compositionality enable
+the transformation of state representation
+across levels of abstraction,
+a complementary feature is the ability to divide
+state into components
+which different parts of the system
+act on independently.
+In Example~\ref{ex:bq},
+the functions $\kw{inc1}$, $\kw{inc2}$ and $\kw{set}$
+act respectively on the variables $\kw{c1}$, $\kw{c2}$ and $\kw{buf}$
+but do not affect any other components of the state.
+Therefore,
+it should be possible to reason about each one
+in terms of their associated state component only.
+We will call this \emph{spatial} compositionality.
+
+Spatial compositionality is
+a central feature of separation logic \cite{seplog},
+where the separating conjunction
+can be used to combine specifications
+operating on arbitrary but disjoint parts of the memory.
+Our approach is more strongly typed,
+in the sense that the different parts of the state
+accessed by a component
+are visible explicitly in its interface.
+Each can be refined independently,
+and components which act on different fields
+can nevertheless be combined.
+
+
+
+Spatial compositionality is an important feature
+of some traditional approaches
+which has not been investigated in the context of compositional semantics.
+By \emph{spatial} compositionality,
+we mean the kind afforded by separation logic \cite{seplog}.
+
+we mean the kind which is offered by the separating conjunction
+of separation logic.
+
+
+
+\paragraph{State Encapsulation}
+
+
+
+\begin{example}
+Moreover,
+while C does not facilitate abstraction and encapsulation,
+they also play a role.
+Since the variables $\kw{c1}$, $\kw{c2}$ and $\kw{buf}$
+are declared $\kw{static}$ and
+their addresses are not leaked, % by the code in $\kw{rb.c}$,
+we can reason that under normal circumstances
+the environment will not access them directly.
+In fact, a user of the code in Fig.~\ref{fig:code}
+could ignore them and picture the queue
+as an abstract sequence of values.
+%$\kw{enq}$'ed values waiting to be $\kw{deq}$'ed.
+
+An effective verification framework
+must provide a way to make these intuitions formal.
+Figure~\ref{fig:spec} demonstrates one approach.
+The top-level specification $\Gamma_\kw{bq}$
+describes the overall behavior of $\kw{enq}$ and $\kw{deq}$
+using an abstract sequence $\vec{q}$ as the only state.
+The verification task can then be decomposed using
+the intermediate specifications for each file.
+The specification
+$\Gamma_\kw{rb}$
+describes the lower-level ring buffer data structure.
+The specification
+$\Sigma_\kw{bq}$ describes
+the sequence of calls into $\kw{rb.c}$
+which are necessary to realize the queue operations
+in terms of the ring buffer primitives,
+and does not carry any state at all.
+The relation $R$
+explains how queue states
+are realized in terms of the ring buffer.
+\end{example}
+%}}}
+
+\begin{figure} % fig:spec {{{
+  \small
+%$\top = \langle \varnothing, \varnothing \rangle$
+%$\vec{q} \in D_\kw{bq} := \kw{val}^*$,
+\begin{align*}
+\toprule
+&
+  \Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
+&  
+  \Gamma_\kw{bq} &\vDash
+      \kw{enq}(v) @ \vec{q}
+      \:\rightarrowtail\:
+      {*} @ \vec{q}v
+&
+  \hspace{-5em}
+  \vec{q} \in D_\kw{bq} := \kw{val}^*, \:
+  v \in \kw{val}
+\\ &&
+  \Gamma_\kw{bq} &\vDash
+      \kw{deq}() @ v\vec{q}
+      \:\rightarrowtail\:
+      v @ \vec{q}
+\\
+\midrule
+&
+  \Sigma_\kw{bq} : \mathcal{C} \twoheadrightarrow \mathcal{C}
+&
+  \Sigma_\kw{bq} &\vDash
+      \kw{enq}(v) \rightarrowtail
+      (\kw{inc2}() \leadsto i) \rightarrowtail
+      (\kw{set}(i, v) \leadsto *) \rightarrowtail
+      *
+&
+  i \in \mathbb{N}, \:
+  v \in \kw{val}
+\\ &&
+    \Sigma_\kw{bq} &\vDash
+      \kw{deq}() \rightarrowtail
+      (\kw{inc1}() \leadsto i) \rightarrowtail
+      (\kw{get}(i) \leadsto v) \rightarrowtail
+      v
+\\ &
+  \Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
+&
+  \Gamma_\kw{rb} &\vDash
+    \kw{inc1}()@(b, c_1, c_2) \rightarrowtail
+    c_1@(b, c_1\!\!+\!\!1, c_2)
+&
+  \hspace{-8em}
+  (b, c_1, c_2) \in D_\kw{rb} :=
+    \kw{val}^N \times \mathbb{N} \times \mathbb{N},
+\\ &&
+  \Gamma_\kw{rb} &\vDash
+    \kw{inc2}()@(b, c_1, c_2) \rightarrowtail
+    c_2@(b, c_1, c_2\!\!+\!\!1)
+&
+  i \in \mathbb{N}, \:
+  v \in \kw{val}
+\\ &&
+  \Gamma_\kw{rb} &\vDash
+    \kw{set}(i, v)@(b, c_1, c_2) \rightarrowtail
+    {*}@(b[i := v], c_1, c_2)
+\\ &&
+  \Gamma_\kw{rb} &\vDash
+    \kw{get}(i)@(b, c_1, c_2) \rightarrowtail
+    b_i@(b, c_1, c_2)
+\\ \midrule &
+  R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}
+&
+        \vec{q} &\mathrel{R_\kw{bq}} (b, c_1, c_2) \: \Leftrightarrow \:
+           (c_1 \le c_2 < N \wedge
+            \vec{q} = b_{c_1} \cdots b_{c_2-1}) \vee {}
+&
+  (b, c_1, c_2) \in D_\kw{rb},
+\\ &&
+         & \hspace{16.3ex}
+           (c_2 \le c_1 < N \wedge
+            \vec{q} = b_{c_1} \cdots b_{N-1} b_0 \cdots b_{c_2 - 1})
+&
+  \vec{q} \in D_\kw{bq}
+\\
+\bottomrule
+\end{align*}
+\vspace{-2.5em}
+  \caption{Abstract specifications for $\kw{bq.c}$ and $\kw{rb.c}$.
+    The types are explained in \S\ref{sec:overview}.
+    The overall specification $\Gamma_\kw{bq}$
+    describes the queue operations in terms of
+    a sequence values $\vec{q} \in D_\kw{bq} := \kw{val}^*$.
+    Verification can be decomposed using the intermediate specifications
+    $\Sigma_\kw{bq}$ and $\Gamma_\kw{rb}$ for
+    $\kw{bq.c}$ and $\kw{rb.c}$.
+    See Example~\ref{ex:abspec} for details.}
+  \label{fig:spec}
+\end{figure}
+%}}}
 
 The direct product of effect signatures
 gives our model's cartesian product:
@@ -760,627 +1174,108 @@ we can define:
 
 \newpage
 
-\section*{Old Introduction} \label{sec:intro} %{{{
+\section*{Main Ideas} %{{{
 
-%% Preamble {{{
-%Broadening the reach and scale
-%of certified software \cite{shao10}
-%will require a notion of standardized certified component.
-%We investigate what kind of
-%semantic framework would make this possible.
-%
-%%}}}
+\subsection{Effect Signatures} %{{{
 
-Software engineers use various techniques
-to manage the complexity of large systems.
-Large-scale \emph{certified} systems engineering
-will require a formal account of these techniques.
-We will focus on the following ones,
-illustrated informally with
-a refinement ordering $\sqsubseteq$ and
-a composition operation $\circ$.
+Our model uses \emph{effect signatures}
+\citep{some-algebraic-effects-ref}
+to describe the interfaces between components.
+An effect signature simply enumerates
+the external operations which
+a component can invoke or implement,
+and describes for each one
+the set of possible outcomes.
 
-\subsection{Requirements for Certified Systems Engineering} \label{sec:req} %{{{
+\begin{definition}
+An \emph{effect signature} is a set $E$
+together with an assignment $\kw{ar} : E \rightarrow \mathbf{Set}$
+of an \emph{arity set} $\kw{ar}(m)$ to each \emph{operation} $m \in E$.
+We will present them together as
+$\{ m : N \mid m \in E, \, \kw{ar}(m) = N \}$.
+\end{definition}
 
-\subsubsection{Compositionality} \label{sec:req:comp} %{{{
-
-Complex systems are built by assembling simpler components.
-In a compositional verification framework,
-correctness properties must be compatible with this process.
-
-Under a \emph{refinement-based} approach,
-specifications and implementations
-are represented by mathematical objects of the same kind.
-The correctness of a composite system $x \circ y \circ z$
-with respect to a specification $\sigma$
-is then stated as the refinement
-$\sigma \sqsubseteq x \circ y \circ z$.
-%Compositionality is then enabled by two key properties.
-%First,
-The monotonicity of composition
-allows componentwise refinement, and
-%with respect to refinement
-%means we can replace a specification by its implementation
-%in any context, and
-%refinement
-transitivity
-allows us to carry out verification in steps.
-For example,
-we can first show
-$\tau \sqsubseteq y \circ z$,
-then reason about $x$ in terms of $\tau$ %the specification $\tau$
-to derive
-$\sigma \sqsubseteq x \circ \tau \sqsubseteq x \circ y \circ z$.
-%In the broader context to which our work belongs,
-%these two properties are known as
-%\emph{horizontal} and \emph{vertical} compositionality.
-
-%}}}
-
-\subsubsection{Data Abstraction} \label{sec:req:abs} %{{{
-
-It is often desirable to describe a complex system
-and its constituents in different terms.
-The transistors $x, y, z$ may operate in terms of continuous voltages,
-but we would like the specification $\sigma$
-of the logic gate they implement
-to be formulated in terms of the binary values $\{0, 1\}$.
-In general,
-\emph{data abstraction} is critical to the construction of large systems.
-
-Unfortunately,
-this means that the truth table $\sigma$
-and the circuit $x \circ y \circ z$
-can no longer be directly compared.
-The refinement $\sigma \sqsubseteq_R x \circ y \circ z$
-must now involve a convention $R$
-which codifies the relationship between
-the logical and electrical views of the system;
-the framework must provide
-%This means we need
- a way to express such conventions
-and manage their interaction with composition principles.
-
-%}}}
-
-\subsubsection{State Encapsulation} \label{sec:req:encap} %{{{
-
-%Systems involving \emph{state} are particularly challenging to reason about.
-As stateful systems become larger,
-so does the number of state variables involved
-and the potential for undesirable interactions between them.
-Reasoning about such systems
-requires partitioning their state
-among loosely coupled \emph{objects}
-and controlling interference between them.
-%
-State encapsulation achieves this by rendering
-all or part of the state used by a component
-inaccessible by its environment.
-From this restriction,
-we gain a guarantee that
-encapsulated state can only be influenced
-by interacting with the component through its interface.
-
-%In addition,
-%encapsulation induces a \emph{representation independence} property,
-%whereby two components can be identified
-%based only on their externally observable behaviors.
-%This helps control the complexity of data abstraction:
-%because it is hidden,
-%encapsulated state no longer needs to be taken into account
-%when formulating a system's abstraction convention $R$
-%relating the data representations used in the specification
-%to the ones used in the implementation.
-
-%}}}
-
-\begin{example}[Verifying a bounded queue]
-Consider the code shown in Fig.~\ref{fig:code}.
-To an extent,
-the C language enables compositionality
-by allowing us to split this code into two parts:
-the translation unit $\kw{rb.c}$
-provides a rudimentary ring buffer,
-which is then used by $\kw{bq.c}$
-to implement a queue.
-
-Moreover,
-while C does not facilitate abstraction and encapsulation,
-they also play a role.
-Since the variables $\kw{c1}$, $\kw{c2}$ and $\kw{buf}$
-are declared $\kw{static}$ and
-their addresses are not leaked, % by the code in $\kw{rb.c}$,
-we can reason that under normal circumstances
-the environment will not access them directly.
-In fact, a user of the code in Fig.~\ref{fig:code}
-could ignore them and picture the queue
-as an abstract sequence of values.
-%$\kw{enq}$'ed values waiting to be $\kw{deq}$'ed.
-
-An effective verification framework
-must provide a way to make these intuitions formal.
-Figure~\ref{fig:spec} demonstrates one approach.
-The top-level specification $\Gamma_\kw{bq}$
-describes the overall behavior of $\kw{enq}$ and $\kw{deq}$
-using an abstract sequence $\vec{q}$ as the only state.
-The verification task can then be decomposed using
-the intermediate specifications for each file.
-The specification
-$\Gamma_\kw{rb}$
-describes the lower-level ring buffer data structure.
-The specification
-$\Sigma_\kw{bq}$ describes
-the sequence of calls into $\kw{rb.c}$
-which are necessary to realize the queue operations
-in terms of the ring buffer primitives,
-and does not carry any state at all.
-The relation $R$
-explains how queue state
-are realized in terms of the ring buffer.
+\begin{example} \label{ex:fdsig} %{{{
+Consider the execution environment
+for the programs \kw{secret} and \kw{encode}
+shown in \autoref{fig:readwritehello} and
+described in Example~\ref{ex:readwritehello}.
+Each process can invoke the \kw{read} and \kw{write} system calls
+based on entries in their file descriptor tables.
+To account for this,
+we can describe the interface associated with a file
+using the signature
+\[
+  \mathcal{F} := \{
+    \kw{read}[n] \mathbin: \Sigma^* , \,
+    \kw{write}[s] \mathbin: \mathbb{N} \, \mid \,
+    n \in \mathbb{N}, \,
+    s \in \Sigma^*
+  \}
+  \,,
+\]
+where the set $\Sigma := \{0,1\}^8$
+is the alphabet of possible byte values.
+In this formalism,
+the program \kw{secret} will invoke
+the operation
+$\kw{write}[\texttt{"uryyb, jbeyq!\textbackslash{}n"}] \mathbin: \mathbb{N}
+ \in \mathcal{F}$
+in the context of its \emph{standard output} interface,
+and should expect the outcome $14 \in \mathbb{N}$
+if the operation succeeds.
 \end{example}
+%}}}
+
+Note that the signature contains a different operation
+for each value of the parameters $n$ and $s$,
+whereas in this context the \emph{arity} of an operation
+corresponds to the possible \emph{outcomes}.
+This terminology comes from the algebraic effects literature,
+where a computation is understood as a term
+in which function symbols correspond to effects,
+and their arguments correspond to
+the ways in which the computation
+which invoked the effect may be resumed.
+
+Effect signatures can be composed in various ways.
+For example, the direct sum \citep{sum-of-effects}
+plays the role of a cartesian product in our model.
+It combines effects from multiple signatures:
+\[
+  \bigoplus_{i \in I} E_i \, := \,
+    \{ \iota_i(m) \mathbin: N \,\mid\, i \in I,\, (m \mathbin: N) \in E_i \}
+\]
+In the context of Example~\ref{ex:fdsig},
+we will use two copies of the signature $\mathcal{F}$
+combined as the binary sum $\mathcal{F} \oplus \mathcal{F}$
+ 
+
+the binary form $\mathcal{F} \oplus \mathcal{F}$
+multiple copies of the elementary signature $\mathcal{F}$
+could be combined in this way
+to account for the various file descriptors
+which a process has access to.
+Another operation
+annotates every operation and outcome in a signature $E$
+with a value taken in a set $S$:
+\[
+  E \mathbin@ S \, := \,
+    \{ m @ s \mathbin: N \times S \,\mid\,
+      (m \mathbin: N) \in E, \, s \in S \}
+\]
+It will play an important role
+in our treatment of spatial composition and state encapsulation.
 
 %}}}
 
-\begin{figure} % fig:code {{{
-  \centering\footnotesize
-  \begin{subfigure}{0.45\textwidth}
-\begin{minted}{C}
-static int c1, c2;
-static V buf[N];
+\subsection{Transition systems} %{{{
 
-int inc1() { int i = c1++; c1 %= N; return i; }
-int inc2() { int i = c2++; c2 %= N; return i; }
-V get(int i) { return buf[i]; }
-void set(int i, V val) { buf[i] = val; }
-\end{minted}
-  \subcaption{The translation unit $\kw{rb.c}$}
-  \label{fig:rb}
-  \end{subfigure}
-  \hspace{4em}
-  \begin{subfigure}{0.38\textwidth}
-\begin{minted}{C}
-extern int inc1(void);
-extern int inc2(void);
-extern V get(int i);
-extern void set(int i, V val);
-
-void enq(V val) { set(inc2(), val); }
-V deq() { return get(inc1()); }
-\end{minted}
-  \subcaption{The translation unit $\kw{bq.c}$}
-  \label{fig:bq}
-  \end{subfigure}
-  \caption{Running example, adapted from \citet{rbgs-cal}.
-    The component $\kw{rb.c}$
-    implements a ring buffer by encapsulating an array
-    and two counters. It is used by the component
-    $\kw{bq.c}$ to implement a
-    bounded queue.}
-  \label{fig:code}
-%\caption{The state of a ring buffer,
-%  made of two counters and a fixed-size array,
-%  is encapsulated behind a simple interface.}
-%\label{fig:rb}
-%\caption{This component relies on the ring buffer primitives
-%  provided in Fig.~\ref{fig:rb} to implement a bounded-size queue.}
-%\label{fig:bq}
-\end{figure}
-%}}}
-
-\subsection{Certified Compilation} \label{sec:req:cc} %{{{
-
-Compilers play a critical role
-in the construction of modern software systems,
-by allowing the low-level code
-executed by the computer
-to be generated %built and analyzed
-using high-level languages.
-But this also creates a challenge
-for correctness:
-if we verify programs at the source level only,
-the compiler may still introduce bugs
-into the code that is actually run.
-%
-Certified compilers %such as CompCert \cite{compcert}
-mitigate this issue by
-establishing a correctness proof for the compiler itself,
-%For example, \emph{semantics preservation} ensures that
-%the semantics $\llbracket p \rrbracket_\kw{S}$
-%of the source program $p$ are refined by
-%the semantics $\llbracket p' \rrbracket_\kw{T}$
-%of a compiled target program $p'$:
-%\[
-%  \kw{Compile}(p) = p'
-%  \quad\Rightarrow\quad
-%  \llbracket p \rrbracket_\kw{S}
-%  \sqsubseteq
-%  \llbracket p' \rrbracket_\kw{T}
-%\]
-%
-but \emph{end-to-end} correctness
-requires the verification framework to seamlessly integrate
-with the compiler's proof,
-so that guarantees established at the source level
-can be formally transferred to the target program.
-
-Unfortunately, this is quite difficult to achieve.
-In practice,
-work towards the development of
-mechanized frameworks for certified systems engineering
-tends to fall in two categories:
-\begin{itemize}
-  \item work on certified compilers,
-    which provides only rudimentary specification and verification
-    mechanisms
-    \cite{compcompcert,compcertm,compcerto};
-  \item work on advanced verification techniques,
-    which do not connect with real-world
-    language semantics and compilers
-    \cite{rbgs-cal,popl22,ccr}.
-\end{itemize}
-Bridging this gap is difficult because
-certified compilation and
-the requirements outlined in \S\ref{sec:req}
-are not only challenging on their own,
-but they also interact with each other in non-trivial ways.
-%At the same time,
-%there is some overlap between them
-%and we will see that they can be understood
-%in the context of a common framework.
+We use a simple transition system model
+to represent the behavior of program components
+and other 
 
 %}}}
-
-\begin{figure} % fig:spec {{{
-  \small
-%$\top = \langle \varnothing, \varnothing \rangle$
-%$\vec{q} \in D_\kw{bq} := \kw{val}^*$,
-\begin{align*}
-\toprule
-&
-  \Gamma_\kw{bq} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{bq}
-&  
-  \Gamma_\kw{bq} &\vDash
-      \kw{enq}(v) @ \vec{q}
-      \:\rightarrowtail\:
-      {*} @ \vec{q}v
-&
-  \hspace{-5em}
-  \vec{q} \in D_\kw{bq} := \kw{val}^*, \:
-  v \in \kw{val}
-\\ &&
-  \Gamma_\kw{bq} &\vDash
-      \kw{deq}() @ v\vec{q}
-      \:\rightarrowtail\:
-      v @ \vec{q}
-\\
-\midrule
-&
-  \Sigma_\kw{bq} : \mathcal{C} \twoheadrightarrow \mathcal{C}
-&
-  \Sigma_\kw{bq} &\vDash
-      \kw{enq}(v) \rightarrowtail
-      (\kw{inc2}() \leadsto i) \rightarrowtail
-      (\kw{set}(i, v) \leadsto *) \rightarrowtail
-      *
-&
-  i \in \mathbb{N}, \:
-  v \in \kw{val}
-\\ &&
-    \Sigma_\kw{bq} &\vDash
-      \kw{deq}() \rightarrowtail
-      (\kw{inc1}() \leadsto i) \rightarrowtail
-      (\kw{get}(i) \leadsto v) \rightarrowtail
-      v
-\\ &
-  \Gamma_\kw{rb} : \top \twoheadrightarrow \mathcal{C} \mathbin@ D_\kw{rb}
-&
-  \Gamma_\kw{rb} &\vDash
-    \kw{inc1}()@(b, c_1, c_2) \rightarrowtail
-    c_1@(b, c_1\!\!+\!\!1, c_2)
-&
-  \hspace{-8em}
-  (b, c_1, c_2) \in D_\kw{rb} :=
-    \kw{val}^N \times \mathbb{N} \times \mathbb{N},
-\\ &&
-  \Gamma_\kw{rb} &\vDash
-    \kw{inc2}()@(b, c_1, c_2) \rightarrowtail
-    c_2@(b, c_1, c_2\!\!+\!\!1)
-&
-  i \in \mathbb{N}, \:
-  v \in \kw{val}
-\\ &&
-  \Gamma_\kw{rb} &\vDash
-    \kw{set}(i, v)@(b, c_1, c_2) \rightarrowtail
-    {*}@(b[i := v], c_1, c_2)
-\\ &&
-  \Gamma_\kw{rb} &\vDash
-    \kw{get}(i)@(b, c_1, c_2) \rightarrowtail
-    b_i@(b, c_1, c_2)
-\\ \midrule &
-  R_\kw{bq} \subseteq D_\kw{bq} \times D_\kw{rb}
-&
-        \vec{q} &\mathrel{R_\kw{bq}} (b, c_1, c_2) \: \Leftrightarrow \:
-           (c_1 \le c_2 < N \wedge
-            \vec{q} = b_{c_1} \cdots b_{c_2-1}) \vee {}
-&
-  (b, c_1, c_2) \in D_\kw{rb},
-\\ &&
-         & \hspace{16.3ex}
-           (c_2 \le c_1 < N \wedge
-            \vec{q} = b_{c_1} \cdots b_{N-1} b_0 \cdots b_{c_2 - 1})
-&
-  \vec{q} \in D_\kw{bq}
-\\
-\bottomrule
-\end{align*}
-\vspace{-2.5em}
-  \caption{Abstract specifications for $\kw{bq.c}$ and $\kw{rb.c}$.
-    The types are explained in \S\ref{sec:overview}.
-    The overall specification $\Gamma_\kw{bq}$
-    describes the queue operations in terms of
-    a sequence values $\vec{q} \in D_\kw{bq} := \kw{val}^*$.
-    Verification can be decomposed using the intermediate specifications
-    $\Sigma_\kw{bq}$ and $\Gamma_\kw{rb}$ for
-    $\kw{bq.c}$ and $\kw{rb.c}$.
-    See Example~\ref{ex:abspec} for details.}
-  \label{fig:spec}
-\end{figure}
-%}}}
-
-\subsection{State of the Art} \label{sec:soa} %{{{
-
-Existing work which \emph{does} manage
-to connect mechanized high-level verification techniques with
-certified compilation
-illustrates the challenge we have outlined above.
-Much of this work has been carried out in the context of
-the certified compiler CompCert \citep{compcert}.
-
-For example,
-the Verified Software Toolchain (VST) \citep{vst}
-provides a separation logic for the language Clight
-(which CompCert can correctly compile to assembly),
-and provides and end-to-end soundness guarantees.
-At the same time,
-VST is implemented as an extension to CompCert
-and is tied closely to the Clight semantics.
-It is hard to use as the starting point for a larger ecosystem,
-as it can only verify systems whose functionality
-can be specified completely within the VST logic.
-
-Similar limitations apply to CompCertX,
-which was used to verify the operating system kernel CertiKOS \citep{popl15}
-using the methodology of \emph{certified abstraction layers} (CAL).
-The resulting framework supports data abstraction
-in the style of Fig.~\ref{fig:spec} and low-level assembly code.
-As with VST, the result is closely tied to CompCert language semantics.
-CAL also requires a specialized version of CompCert
-and the existing implementation is again a closed ecosystem.
-
-Nevertheless,
-more recent work on CompCert
-has enhanced the expressiveness of its semantic model
-and correctness theorem.
-By nature,
-much of this work examines certified compilation
-in the context of the techniques outlined in \S\ref{sec:req}.
-In particular, we will take advantage of
-the powerful abstraction mechanisms introduced by
-CompCertO \citep{compcerto}.
-We will show that,
-by generalizing away some of the CompCert-specific aspects,
-and by introducing a novel and compositional treatment of state,
-this work can be extended to reach ``escape velocity''
-and provide a semantic framework capable of accommodating,
-\emph{independently and on an equal footing},
-both sophisticated verification techniques
-and realistic compiler correctness theorems.
-
-%For example,
-%over the span of a decade
-%many different approaches have been proposed
-%to make the CompCert correctness theorem compositional
-%\cite{compcompcert,sepcompcert,compcertm,compcerto,nominalcompcert},
-%and this problem alone still constitutes
-%an active area of research.
-%In order to verify the operating system kernel CertiKOS,
-%the methodology of certified abstraction layers (CAL),
-%which leverages data abstraction
-%to facilitate the compositional verification of large artifacts,
-%was successfully implemented and interfaced with CompCert;
-%however, this required invasive changes on the CompCert side,
-%and forced the verification side to take into account
-%particularities of the CompCert memory model such as memory injections.
-
-%Because of this,
-%to our knowledge there exists no verification framework or semantic model
-%which simultaneously supports
-%compositionality, abstraction, state encapsulation and certified compilation.
-%Among extensions of CompCert,
-%CompCertO is distinguished by its use of compositional semantics (\S\ref{sec:req:comp})
-%and its support of abstraction (\S\ref{sec:req:abs}).
-%However CompCertO is too ad-hoc to serve as a general-purpose framework.
-%It also gets away with a very rudimentary handling of state
-%and does not support state encapsulation (\S\ref{sec:req:encap}).
-
-%}}}
-
-\subsection{Contributions} %{{{
-
-We present a compositional semantics framework,
-mechanized in the Coq proof assistant
-as an extension to CompCertO's semantic model,
-which meets all of the requirements we have outlined:
-\begin{itemize}
-  \item We supplement CompCertO's model of (horizontal) translation unit \emph{linking}
-    with a more fundamental \emph{layered composition} operator, making it less ad-hoc.
-  \item We generalize CompCertO's \emph{simulation conventions} and their (vertical) composition
-    so that they can express history-sensitive abstraction relationships.
-  \item We further introduce \emph{spatial composition},
-    which provides a compositional treatment of state,
-    and serves as the foundation for our
-    support of encapsulation.
-    %We use a partial commutative monoid defined on the CompCert memory model
-    %to bridge the gap between this compositional view of state
-    %and the monolithic memory model used in program semantics.
-\end{itemize}
-These notions of horizontal, vertical and spatial composition
-work harmoniously with each other and
-are compatible with an updated notion of simulation.
-The result is a
-three-dimensional algebra of refinement
-which can uniformly capture properties as varied as
-program correctness,
-semantics preservation,
-the frame rule of separation logic and
-representation independence:
-\begin{itemize}
-  \item We illustrate the use of our framework
-    with the verification of our running example.
-%  \item String diagram algebras
-%    for specifications, abstraction conventions and refinement proofs
-%    make it possible to formally reason about complex systems
-%    in an intuitive manner.
-  \item We show how a separation algebra
-    can be used to establish a refinement of compositional abstract state
-    into the concrete and monolithic memory states used by CompCert semantics.
-  \item We further use our compositional treatment of state as
-    the basis for a novel treatment of state encapsulation,
-    which only requires the addition of a simple encapsulation primitive.
-  \item We showcase applications of our framework
-    including a theory of certified abstraction layers
-    and an extension of Clight with encapsulated,
-    module-local private variables.
-\end{itemize}
-The code for all of the above is freely available and
-submitted as supplementary material.
-%
-We present our framework in \S\ref{sec:overview}.
-Core technical definitions are given in \S\ref{sec:base}
-and our approach to compositional state is detailed in \S\ref{sec:scomp}.
-Finally, we outline several applications in \S\ref{sec:app}
-and discuss related work in \S\ref{sec:rw}.
-
-%}}}
-
-% Old intro stuff
-%
-%% Preamble {{{
-%
-%Compilers are a critical component
-%of modern computing environments.
-%Therefore, ensuring their reliability
-%is an important goal.
-%To this end,
-%certified compilers such as CompCert \cite{compcert}
-%come with a formal semantics for source and target programs,
-%and a proof of correctness which relates
-%the behavior of compiled programs to that of their corresponding source.
-%
-%In this context,
-%the quality of a compiler's correctness theorem
-%may be judged in terms of its faithfulness
-%to real-world use:
-%are the source and target language semantics accurate?
-%Does the correctness property relating them
-%realistically model the way the compiler is used,
-%and the target code executed?
-%A high quality correctness theorem will provide stronger reliability guaranteed,
-%and reduce the chance of bugs being introduced
-%during program compilation.
-%Empirical evaluation seems to confirm the benefits of this approach,
-%at least in the case of CompCert \cite{csmith}.
-%
-%Moreover,
-%certified compilers can also be important tools
-%for \emph{building} other certified systems.
-%Here,
-%the compiler correctness proof itself
-%will become a component within
-%the correctness proof of a potentially larger
-%and more heterogeneous system.
-%This creates additional demands on
-%the compiler's correctness theorem:
-%is it convenient to interface with the rest of the proof,
-%when the target code becomes part of a larger system?
-%Can the compiler proof integrate into
-%a compositional reasoning framework
-%with a larger horizon than the program being compiled?
-%
-%%Can the compositional structures of the source language
-%%be accounted for, and put in correspondence
-%%with the compositional structures of the target language?
-%%Finally,
-%%can these compositional structures be subsumed within
-%%a larger framework for compositional reasoning,
-%%whose horizon goes beyond the boundary of
-%%the target program?
-%
-%In this paper,
-%we evaluate the capabilities of CompCertO \citep{compcerto}
-%within this paradigm.
-%CompCertO is
-%a version of the certified compiler CompCert
-%featuring compositional language semantics
-%and a compositional correctness theorem.
-%We show that with modest extensions,
-%the semantic model used in CompCertO
-%can support various forms of
-%high-level, algebraically oriented compositional reasoning.
-%The language semantics and correctness theorem of CompCertO
-%can be reused as-is within this framework.
-%
-%%}}}
-%
-%\subsection{The CompCert Verified Compiler} %{{{
-%
-%The extensive body of research
-%on the verified C compiler CompCert
-%illustrates the different facets and roles
-%certified compilers can take on.
-%
-%In its original form \citep{compcert},
-%the correctness theorem of CompCert
-%characterizes the compiler's use on complete, sequential C programs.
-%Since then,
-%efforts have been made to prove more realistic versions
-%of the correctness theorem,
-%covering use cases such as separate compilation \citep{sepcompcert},
-%the compilation of
-%code intended to run in a concurrent setting \citep{compcerttso},
-%or stronger versions of correctness
-%establishing for example
-%guarantees on stack consumption of the target program \citep{qompcert}.
-%
-%Another line of work
-%seeks to enable the use of CompCert's correctness theorem
-%as an ingredient in
-%other verification projects.
-%Here,
-%the ability to decompose programs and specifications
-%is essential,
-%so that components of manageable size can be verified in isolation.
-%Compositional CompCert \cite{compcompcert} achieved this 
-%by giving compositional semantics to the languages of CompCert,
-%then expressing the correctness theorem at the level of individual components,
-%but only at the expense of a significant increase in proof complexity.
-%CompCertX \cite{popl15}, CompCertM \cite{compcertm} and CompCertO \cite{compcerto}
-%
-%[\ldots]
-%
-%%}}}
-%
-%\subsection{Large-scale verification} %{{{
-%
-%[While there are many verification frameworks
-%which use CompCert in some capacity,
-%none of them support encapsulated state.
-%At most, permissions,
-%but here the context still ``sees'' the memory,
-%even though it must be shown to be insensitive to it.]
-%
-%%}}}
 
 %}}}
 
@@ -1543,6 +1438,7 @@ so that for example we may derive the overall correctness property
   \:\le\:
   \kw{Asm}(\kw{bq.s}) \oplus \kw{Asm}(\kw{rb.s})
 \]
+[XXX need to introduce $+$ which is used in $\odot$ vs $\oplus$ theorem later]
 from the compiler correctness properties
 associated with the individual translation units.
 
@@ -1809,6 +1705,7 @@ and can be stated as follows:
   \kw{Asm}(p')
   \:.
 \]
+[XXX]
 Finally, the case where $L_1$ and $L_2$ are both identities
 is a \emph{simulation convention refinement}, written:
 \[
@@ -2225,6 +2122,7 @@ We can again derive:
     \kw{Asm}(\kw{bq.s} + \kw{rb.s})
   \,.
 \]
+[XXX should be $\odot$, also position of $\varnothing$ is suspect]
 \end{example}
 %}}}
 
@@ -3272,10 +3170,10 @@ with persistent component-local state.
 %to be used with the next activation.
 %
 %\paragraph{Encapsulation Primitive} %{{{
-%
+
 The compositional structure and constructions we have described
 embed into the extended model.
-
+%
 In addition,
 the model supports an \emph{encapsulation} primitive
 $
@@ -3307,7 +3205,7 @@ this follows from the property:
   \quad\Longrightarrow\quad
   [\zeta\rangle : [u\rangle \le_{R \twoheadrightarrow \mathbbm{1}} [v\rangle
 \]
-%[TODO: incorporate explanation from author response]
+[XXX: incorporate explanation from POPL author response]
 
 %}}}
 
