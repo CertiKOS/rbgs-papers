@@ -79,8 +79,6 @@ along the following dimensions:
 
 \section{Overview}
 
-\newpage
-
 %}}}
 
 \chapter{Semantics Library} %{{{
@@ -95,7 +93,6 @@ How we leverage the Coq module system
 
 %}}}
 
-\newpage
 \chapter{Sequential models} %{{{
 
 \section{Motivation} %{{{
@@ -120,8 +117,12 @@ int main()
         return 0;
 }
 \end{lstlisting}
+\vspace{1em}
 \begin{lstlisting}[title={typescript},language=sh]
 $ secret | rot13
+hello, world!
+$ secret > secret.txt
+$ rot13 < secret.txt
 hello, world!
 \end{lstlisting}
 \end{minipage}
@@ -153,41 +154,115 @@ int main()
 %}}}
 
 Existing frameworks such as
-VST, CompCertM, CompCertO, CCR, \ldots
+VST, CAL, CompCertM, CompCertO, CCR, \ldots
 make it possible to analyze the programs themselves
-and derive refinement properties with varying degrees of sophistications,
-but do not provide a solution for
-modeling their execution within the context of a larger system
+and prove correctness properties about them,
+but they do not provide a solution for
+modeling the programs' execution within the context of a larger system
 once such properties have been established.
-Therefore our goal is to provide a compositional ``glue'' which can
-incorporate such properties into a common framework and
-allow us to combine them in this larger context.
+Therefore we want to develop
+a compositional ``glue'' which can
+incorporate correcntess properties of this kind
+into a framework where this larger context can also be modeled.
 
 %}}}
 
 \section{Approach} %{{{
 
-To deal with our running example
+I will use the example shown above
+to illustrate the principles behind our approach.
+As a starting point, we can use
+CompCertO semantics to assign a behavior
+to the programs:
+\[
+  \mathsf{Clight}(\mathrm{secret.c}) :
+    \mathcal{C} \twoheadrightarrow \mathcal{C} \,,
+  \qquad
+  \mathsf{Clight}(\mathrm{rot13.c}) :
+    \mathcal{C} \twoheadrightarrow \mathcal{C} \,.
+\]
+However,
+this semantics describes the programs' behaviors
+as \emph{C translation units}
+and does not say much about how they would behave
+as \emph{processes}.
+
+One disadvantage of this view
+is that it involves low-level details of the C language
+such as symbol tables and memory states,
+which are important for describing internal function calls,
+but are no longer relevant once the program is linked and loaded.
+Therefore,
+as we attempt to model processes and their interactions,
+we will want to reinterpret he semantics to hide these internal details.
+
+Moreover,
+the language interfaces such as $\mathcal{C}$ used by CompCertO
+are rather limited as they assume that every interaction
+that a component has will take the same form
+and expect a response of the same type.
+To model the way various processes of the system interact with one another,
+it will be preferable to use a more general model,
+allowing us to follow a more ``strongly typed'' approach
+when we describe the shape of these interactions.
+
+At the same time,
+language interfaces are sufficient and appropriate for CompCertO,
+so we have no interest in supplanting them in that context.
+Overall,
+our strategy for dealing with this kind of situations
+will rely on the following principles:
+\begin{itemize}
+  \item We should always be working in the simplest appropriate model
+    for any particular task.
+  \item Most tasks should take the form of defining semantics
+    or proving a refinement relationship.
+  \item When a task which requires a rich model
+    relies on components and properties formulated in a simpler model,
+    we can use a refinement-preserving embedding of the simple model into the rich one.
+    This allows us to use the results obtained in the simpler model
+    within the context of the richer one.
+  \item Conversely,
+    we should decompose tasks so that
+    their constituents can be reformulated as embeddings from
+    the simpler models.
+    This ensures that the complexity of the sub-tasks can be reduced.
+\end{itemize}
+In this chapter I go over some core models
+of sequential computation
+which we could implement in our semantics library,
+and will illustrate how these principles
+can be applied to modeling Unix-style processes.
+
+%}}}
+
+\section{Features} %{{{
+
+\subsection{Effect signatures}
+
+To deal with a situation like this one,
 we must first model the execution environment
 processes have access to.
 In a sufficiently rich model we could
-express a signature for file descriptor access as:
+model file descriptor access
+to standard input and output as:
 \[
-  \mathcal{E} \: := \:
-    \bigwith_{i \in \mathbb{N}} \:
+  \mathcal{E} := \mathcal{F} \with \mathcal{F}
+  \qquad \text{where} \qquad
+  \mathcal{F} := 
     \{
       \mathsf{read}[n] : \Sigma^* , \:
       \mathsf{write}[s] : \mathbb{N} \mid
       n \in \mathbb{N}, \:
       s \in \Sigma^*
     \}
+  \,.
 \]
 Meanwhile,
 processes are invoked with argument lists and return an exit status:
 \[ 
   \mathcal{P} \: := \:
-    \{ \mathsf{run}[\vec{s}\,] : \mathbb{N} \mid
-       \vec{s} \in (\Sigma^*)^* \}
+    \{ \mathsf{run} : \mathbb{N} \}
 \]
 We must then specify \emph{loading} for C programs,
 which interprets C components as processes:
@@ -223,11 +298,25 @@ This would allow us to state properties such as:
   \mathbin{\texttt{|}}
   \mathsf{load}(\mathrm{rot13.c})
   \:\vDash\:
-  \mathsf{run}[\epsilon] \cdot
+  \mathsf{run} \cdot
   \mathsf{write}_1[\text{``hello, world!''}] \cdot
   15 \cdot
   0
 \]
+
+To formulate the $\texttt{|}$ operator,
+we can use a small component
+$\mathsf{pipe} : \top \rightarrow \mathcal{F} \with \mathcal{F}$,
+which acts as a buffer.
+Whenever $\mathsf{write}$ is called in the first component,
+the corresponding data is saved at the end of the buffer.
+When $\mathsf{read}$ is called in the second component,
+data is 
+
+%three levels of things we can do:
+%* ; and && || require very minimal stuff
+%* | or some approximation need to store state
+%* & requires concurrency
 
 %}}}
 
@@ -388,14 +477,26 @@ that is a set $S$ of states together with the relation:
 
 The notions of simulation convention and simulation
 used in CompCertO
-should be straightforward to adapt
+should be easy to adapt
 to this new context.
-It should then be easy to embed
+Then we can embed
 the language semantics and correctness properties of CompCertO
 into the $\mathsf{OTS}$ model,
 where they could be used as part of
 larger and more heterogeneous
 system descriptions and correctness proofs.
+
+\begin{task}[Mechanize the OTS model in the RBGS library]
+Formalizing the model should be straightforward.
+We can use it as a case study to develop the interfaces of the RBGS library.
+\end{task}
+
+\begin{task}[Embed CompCertO semantics into OTS]
+Given the similarity between CompCertO semantics and OTS,
+it should be easy to embed CompCertO transition systems.
+One challenge might be to deal with CompCertO-specific aspects
+such as symbol environments and $\oplus$.
+\end{task}
 
 %}}}
 
@@ -425,19 +526,13 @@ and formulating behaviors as:
 
 %}}}
 
-\section{Tasks} %{{{
+\section{OOPSLA submission} %{{{
 
-\begin{task}[Mechanize the OTS model in the RBGS library]
-Formalizing the OTS model should be straightforward.
-We can use it as a case study to develop the interfaces of the RBGS library.
-\end{task}
+\subsection{Processes and Combinators}
 
-\begin{task}[Embed CompCertO semantics into OTS]
-Given the similarity between CompCertO semantics and OTS,
-it should be easy to embed CompCertO transition systems.
-One challenge might be to deal with CompCertO-specific aspects
-such as symbol environments and $\oplus$.
-\end{task}
+We use the ``process environment'' example
+outlined at the beginning of this chapter
+as a running example.
 
 \begin{task}[Model a rudimentary execution environment]
 Next we would use the OTS model to describe a simple execution environment
@@ -447,11 +542,93 @@ develop shell operators such as \texttt{;} etc, and
 model the OS kernel as a distinct component that they access.
 \end{task}
 
+\noindent
+Below I give definitions for the various moving parts.
+
+\subsubsection{Loaders}
+
+Recall that for a transition system
+$L : \mathcal{C} \rightarrow \mathcal{C}$,
+we want to define the process
+$\mathsf{load}(L) : \mathcal{E} \rightarrow \mathcal{P}$.
+There are several moving parts involved:
 \begin{itemize}
-\item Fill in the details and formalize OTS model
-\item Fit into the new module interfaces
-\item Embed CompCert semantics
-\item Model external resources and execution environment
+  \item On the incoming side,
+    we must prepare and execute the initial call to $\mathsf{main}$
+    and interpret its return value.
+    We do this by defining a transition system
+    $\mathsf{init}_L : \mathcal{C} \rightarrow \mathcal{P}$.
+  \item On the outgoing side,
+    most calls will yield an undefined behavior,
+    but appropriate calls to $\mathsf{read}$ and $\mathsf{write}$
+    will trigger the corresponding system calls.
+    This translation is performed by
+    $\mathsf{sys} : \mathcal{E} \rightarrow \mathcal{C}$.
+\end{itemize}
+We can then define the overall loader as
+\[
+  \mathsf{load}_\mathcal{C}(L) \: := \:
+  \mathsf{init}_L \odot L \odot \mathsf{sys} \: : \:
+  \mathcal{E} \rightarrow \mathcal{P}
+  \,.
+\]
+The component $\mathsf{init}_L$ is the one that will
+compute and instantiate the symbol table and initial memory
+from the CompCert program skeleton associated with $L$.
+Based on this, it can be defined by the rules:
+\[
+  S := \mathbf{1} + \mathbb{N}
+  \qquad \qquad
+  \begin{prooftree}
+    \hypo{\mathsf{init\_mem(L) = m}}
+    \infer1{
+      \mathsf{run}
+      \mathrel{I}
+      \iota_1({*})
+      \mathrel{X}
+      \mathsf{main}(\epsilon) @ m
+    }
+  \end{prooftree}
+  \qquad \qquad
+  \begin{prooftree}
+    \infer0{
+      \mathsf{Vint}(x)@m'
+      \: \mathrel{Y}^{\iota_1(*)} \:
+      \iota_2(x)
+      \: \mathrel{F} \:
+      x}
+  \end{prooftree}
+\]
+The component $\mathsf{sys}$ can be defined by:
+\[
+  S ::= C^\circ + C^\bullet
+  \qquad \qquad
+  \begin{prooftree}
+    \hypo{m : buf \mapsto {-}^n}
+    \infer1{
+      \mathsf{read}(i :: buf :: n)
+      \mathrel{I}
+      \iota_1({*})
+      \mathrel{X}
+      \mathsf{main}(\epsilon) @ m
+    }
+  \end{prooftree}
+  \qquad \qquad
+  \begin{prooftree}
+    \infer0{
+      \mathsf{Vint}(x)@m'
+      \: \mathrel{Y}^{\iota_1(*)} \:
+      \iota_2(x)
+      \: \mathrel{F} \:
+      x}
+  \end{prooftree}
+\]
+
+%}}}
+
+\section{Further Tasks} %{{{
+
+\begin{itemize}
 \item Interface with DeepSEA
 \item Explore further models (NTS, NTree, RBGS)
 \end{itemize}
@@ -461,7 +638,6 @@ model the OS kernel as a distinct component that they access.
 
 %}}}
 
-\newpage
 \chapter{Verifying Sequential Layers} %{{{
 
 \section{CompCertO}
