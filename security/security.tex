@@ -1,0 +1,451 @@
+\documentclass[11pt]{article}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+\usepackage{stmaryrd}
+\usepackage{cmll}
+\usepackage{bbm}
+
+\title{Security properties in CompCertO/RBGS}
+\author{J\'er\'emie Koenig}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract} %{{{
+In this document I summarize how I understand
+secure compilation
+in the context of CompCertO and refinement-based game semantics.
+In a model with dual nondeterminism,
+properties and hyperproperties
+can be formulated as specifications.
+Both are preserved by simple refinement as a result,
+but the ways in which specific (hyper)properties interact with
+a compiler's calling convention $\mathbb{C}$
+must be investigated on a case-by-base basis.
+
+For example, \emph{nonintereference} is
+a special case of hyperproperty.
+But since assembly-level contexts can potentially observe details
+which are not visible at the C level,
+noninterefence is not automatically preserved by CompCertO.
+However,
+source-level noninterference induces a target-level property
+of noninterference \emph{up to $\mathbb{C}$}
+which can be characterized precisely.
+
+Based on this characterization,
+I show how to equip the target program
+with call wrappers which eliminate
+the potential information leaks introduced by compilation
+and turn noninterference up to $\mathbb{C}$
+back into the full-blown version of target-level noninterference.
+\end{abstract}
+%}}}
+
+\section{Specification model} %{{{
+
+What follows is a tentative formalization of the model $\mathsf{NTree}$.
+This model is similar in spirit to the one used in our LICS '20 paper
+and it defines some kind of free monad in $\mathbf{CDLat}$,
+but unlike in the LICS model,
+non-deterministic choices do not commute with external operations.
+
+\subsection{Interaction specifications} %{{{
+
+A computation with external operations in an effect signature~$E$
+can be specified with an \emph{interaction specification} of the form:
+\begin{equation} \label{eqn:construct}
+  x \in \mathcal{I}_E ::=
+    \bigvee_{i \in I} \bigwedge_{j \in J}
+      m_{ij} \big( x_{ijk} \big)_{k \in N_{ij}}
+  \qquad \text{where} \quad
+  (m_{ij} \mathbin: N_{ij}) \in E
+\end{equation}
+The notations $\bigvee, \bigwedge$ are respectively meant to denote
+angelic and demonic choice
+constituting the joins and meet of a refinement lattice.
+As such it will be natural to omit unary choices from notations,
+and likewise denote nullary choices with the corresponding
+upper and lower bounds:
+\begin{align*}
+  m(x_k)_k &:= \bigvee_{i \in \mathbbm{1}} \bigwedge_{j \in \mathbbm{1}} m(x_k)_k
+  &
+  \bigvee_{i \in I} m_i(x_k)_k &:=
+    \bigvee_{i \in I} \bigwedge_{j \in \mathbbm{1}} m_i(x_{ik})_k
+    & \bot &:= \bigvee_{i \in \varnothing} ()
+  \\ &&
+  \bigwedge_{j \in J} m_j(x_k)_k &:=
+    \bigvee_{i \in \mathbbm{1}} \bigwedge_{j \in J} m_j(x_{jk})_k
+    & \top &:= \bigwedge_{i \in \varnothing} ()
+\end{align*}
+
+Note that we define interaction specifications inductively,
+so on any ``branch'' within a term
+the constructor (\ref{eqn:construct})
+can only be applied a finite number of times.
+However,
+because the index sets $I$ and $J$ can be infinite,
+we are able to model infinite computations
+by ranging over finite approximations.
+
+%We could also use the less ``algebraic'' and more ``computational'' notation
+%$
+%  \bigvee_{i \in I} \bigwedge_{j \in J} k \leftarrow m_{ij} \mathbin; x_k
+%$
+%and corresponding abbreviations.
+
+%}}}
+
+\subsection{Refinement lattice} %{{{
+
+Interaction specifications are equipped with a form of refinement
+such that
+\[
+  \bigvee_{i \in I} \bigwedge_{j \in J_i}
+  m_{ij}\big(x_{ijk}\big)_{k \in N_{ij}}
+  \quad\le\quad
+  \bigvee_{u \in U} \bigwedge_{v \in V_u}
+  q_{uv}\big(y_{uvk}\big)_{k \in R_{uv}}
+\]
+holds when
+\[
+  \forall i \, \exists u \,
+  \forall v \, \exists j \mathbin.
+  (m_{ij} = q_{uv}) \wedge
+  \forall k \mathbin. (x_{ijk} \le y_{uvk})
+  \,.
+\]
+We will consider the interaction specifications $x$ and $y$
+to be equal when both $x \le y$ and $y \le x$.
+
+This ordering induces a completely distributive refinement lattice,
+where joins and meets can be computed as expected.
+Consider a family of interaction specifications $(x_i)_{i \in I}$
+which can each be written as
+$x_i = \bigvee_{j \in J_i} \bigwedge_{k \in K_{ij}} m_{ijk}(y_{ijkl})_l$.
+We can give the supremum and infimum as:
+\[
+  \bigvee_{i \in I} x_i \:=\:
+    \bigvee_{(i, j) \in \sum_i J_i} \,
+    \bigwedge_{k \in K_{ij}} \,
+    m_{ijk}(y_{ijkl})_l
+  \qquad \qquad
+  \bigwedge_{i \in I} x_i \:=\:
+    \bigvee_{u \in \prod_i J_i} \,
+    \bigwedge_{(i, k) \in \sum_i K_{i u_i}}
+    m_{i u_i k}(y_{i u_i kl})_l
+\]
+
+%}}}
+
+\subsection{Sequential composition} %{{{
+
+Interaction specifications can used to build an interaction specification monad.
+For an effect signature $E$ and a set $V$ we define
+\[
+  \mathcal{I}_E(V) \: := \: \mathcal{I}_{E \oplus \{\eta v \mid v \in V \}}
+  \,,
+\]
+which is the set of interaction specifications
+over a version of the signature $E$ which has been extended
+with a nullary operation $\eta v : \varnothing$
+for each of the variables $v \in V$.
+The action of $\mathcal{I}_E(-)$ on functions
+transforms those terminal operations:
+\begin{gather*}
+  \mathcal{I}_E(f)\Big( \bigvee_i \bigwedge_j m_{ij}(x_{ijk})_k \Big) :=
+    \bigvee_i \bigwedge_j \bar{f}\big(m_{ij}(x_{ijk})_k \big)
+  \\
+  \text{where}
+  \quad
+  \bar{f}\big(m(x_k)_k\big) =
+  \begin{cases}
+    \eta[f(v)] () & \text{if } m = \eta v () \\ 
+    m(\mathcal{I}_E(f)(x_k))_k & \text{otherwise}
+  \end{cases}
+\end{gather*}
+Then the monad's unit
+$\eta : V \rightarrow \mathcal{I}_E(V)$ and multiplication
+$\mu : \mathcal{I}_E(\mathcal{I}_E(V)) \rightarrow \mathcal{I}_E(V)$
+are defined as
+\begin{align*}
+  & \eta(v) := \eta v () & \text{and} \quad &
+  \mu \Big( \bigvee_i \bigwedge_j m_{ij}(x_{ijk})_k \Big) :=
+    \bigvee_i \bigwedge_j \bar{\mu} \big( m_{ij}(x_{ijk})_k \big) 
+ \\
+  && \text{where} \quad & \bar{\mu}\big(m(x_k)_k\big) :=
+  \begin{cases}
+    x & \text{if } m = \eta x () \\
+    m\big(\mu(x_k)\big)_k & \text{otherwise.}
+  \end{cases}
+\end{align*}
+
+%}}}
+
+\subsection{Strategy specifications} %{{{
+
+We can give an interpretation of a signature $F$
+by giving for each $(m \mathbin: N) \in F$
+a~specification $\sigma_m \in \mathcal{I}_E(N)$
+in another signature $E$.
+We will say that
+\[
+  \sigma \in \prod_{(m \mathbin: N) \in F} \mathcal{I}_{E}(N)
+\]
+implements the signature $F$ in terms of the signature $E$,
+and write $\sigma : E \rightarrow F$.
+
+Combining $\sigma : E \rightarrow F$ with
+a client specification $x \in \mathcal{I}_F$
+yields a result $x\sigma \in \mathcal{I}_E$,
+where every external operation occurring in $x$
+is replaced with its implementation in $\sigma$.
+Formally,
+\[
+  \Big( \bigvee_i \bigwedge_j m_{ij}\big(x_{ijk}\big)_k \Big) \sigma
+  \::=\:
+  \bigvee_i \bigwedge_j
+    \big(k \mathbin\leftarrow \sigma_{m_{ij}} \mathbin; x_{ijk} \sigma \big)
+  \,,
+\]
+where $v \mathbin\leftarrow x \mathbin; y$
+denotes the Kleisli extension
+$\mu \circ \mathcal{I}_E(v \mapsto y)$
+being applied to $x$,
+in this case instructing to continue the computation with $x_{ijk} \sigma$
+if $\sigma_{m_j}$ yields the value $k$.
+
+The operation described above serves as the basis for strategy composition.
+Given the strategy specifications
+$\sigma : E \rightarrow F$ and $\tau : F \rightarrow G$,
+the composition $\tau \circ \sigma : E \rightarrow G$ is defined by
+\[
+  (\tau \circ \sigma)_m \: := \: \tau_m \sigma \: \in \: \mathcal{I}_E(N)
+  \,,
+  \qquad \text{where }
+  (m \mathbin: N) \in G
+  \,.
+\]
+
+%}}}
+
+\subsection{Deterministic computations}
+
+%}}}
+
+\section{Security properties as specifications} %{{{
+
+The specification model outlined in the previous section
+departs from usual trace semantics approaches,
+resembling free monad constructions like interaction trees more closely.
+Nevertheless,
+I will show below that
+traditional trace properties and hyperproperties
+can be reformulated as specifications within that model.
+
+\subsection{Traces and properties} %{{{
+
+As a system executes, we can record in a \emph{trace}
+the observable interactions between the system and its environment
+(and sometimes record the evolution of the system's internal state).
+Trace semantics model a system's behavior as
+the set of traces which may be observed as the system executes.
+
+Under this traditional setup,
+desirable aspects of system behavior
+can be described as \emph{trace properties}.
+A trace property is simply a predicate which identifies
+acceptable traces.
+A system satisfies a trace property when
+every one of its traces is acceptable.
+
+
+%}}}
+
+\subsection{Safety properties} %{{{
+
+\emph{safety} property:
+\[
+  \bigvee_{q_1} \bigwedge_{r_1 \mid q_1 r_1 \in P}
+  \bigvee_{q_2} \bigwedge_{r_2 \mid q_1 r_1 q_2 r_2 \in P}
+  \cdots
+\]
+
+\[
+  \bigwedge_{i \in I} m_i \Big(
+  \bigwedge_{j \in J_{iu}} m_{iuj} \Big(
+  \bigwedge_{k \in K_{iujv}} m_{iujvk} \Big(
+  \cdots
+  \Big)_w
+  \Big)_v
+  \Big)_u
+\]
+
+\begin{align*}
+  \phi P &:= \{ q \mid qrs \in P \}  \quad \text{(first action)} \\
+  qr \backslash P &:= \{ s \mid qrs \in P \} \quad \text{(residual)}
+\end{align*}
+
+\[
+  \Sigma : \mathbf{Prop} \rightarrow \mathbf{Spec}
+  \qquad \qquad
+  \Sigma := \mu F \mathbin. \bigvee_{q \in \phi[P]}
+    \underline{q} \big( F(\rho_{qr}[P]) \big)_r
+\]
+
+%}}}
+
+\subsection{Hyperproperties}
+
+%}}}
+
+\section{Data abstraction and noninterference}
+
+
+
+\section{Secure compilation}
+
+We have seen that properties and hyperproperties
+are special cases of RBGS specifications.
+As such they are preserved by simple refinement.
+However,
+the data abstraction component of a compiler's correctness property
+
+
+
+
+
+\section*{Old model}
+
+The specification model has:
+\begin{itemize}
+  \item finite traces of the form $q_1 r_1 q_2 r_2 \cdots q_n r_n$;
+  \item a refinement ordering $\le$, with
+  \item unbounded angelic choices $\bigvee_{i \in I} x_i$ and
+  \item unbounded demonic choices $\bigwedge_{i \in I} x_i$.
+\end{itemize}
+The \emph{finite trace} $q_1 r_1 q_2 r_2 \cdots q_n r_n$
+can be interpreted as an elementary specification requiring that:
+\begin{quote}
+  If the system is invoked with a question $q_1$,
+  its response will be $r_1$;
+  if it is then invoked with a new question $q_2$,
+  its response will be $r_2$,
+  and so on.
+\end{quote}
+The \emph{refinement} $\sigma \le \tau$
+means that the specification $\tau$ is more strict than $\sigma$.
+In other words $\tau$ imposes at least the same requirements as $\sigma$,
+and any system which satisfies $\tau$ will satisfy $\sigma$ as well:
+\begin{align*}
+  \sigma \le \tau
+  \:\:\Longleftrightarrow\:\:
+  \mathrm{Requirements}(\sigma) &\subseteq
+  \mathrm{Requirements}(\tau)
+\end{align*}
+From the definitions above we can see
+the prefix ordering of traces is a special case of refinement:
+\[
+  q_1 r_1 \:\le\: q_1 r_1 q_2 r_2 \:\le\: \cdots \:\le\: q_1 r_1 q_2 r_2 \cdots q_n r_n
+  \,,
+\]
+since longer traces impose additional requirements
+compared with their prefixes.
+
+
+\paragraph{Refinement lattice}
+
+Specifications constitute a complete lattice under the refinement ordering.
+\emph{Angelic} choices let the \emph{user} of the system
+pick which specification they wish to rely on,
+and \emph{demonic} choices let the \emph{implementer} pick.
+They are the join and meet of the refinement lattice:
+\[
+  \bigvee_{i \in I} \sigma_i \:\le\: \tau
+  \:\:\Leftrightarrow\:\:
+  \forall i \in I \mathbin. \sigma_i \le \tau
+  \qquad \qquad
+  \sigma \:\le\: \bigwedge_{i \in I} \tau_i
+  \:\:\Leftrightarrow\:\:
+  \forall i \in I \mathbin. \sigma \le \tau_i
+\]
+Note that
+an infinite trace $t$ can be represented as
+a limit $\bigvee \mathsf{FP}(t)$ of its finite prefixes
+$s \in \mathsf{FP}(t)$.
+
+\paragraph{Implementations}
+
+Usually,
+the point of a specification $\sigma$ is to
+eventually construct a system $x$ which satisfies it.
+We use the same kind of mathematical objects
+to represent specifications and implementations,
+and will state the correctness of $x$ with respect to $\sigma$
+as the refinement $\sigma \le x$.
+However,
+not every specification represents a possible implementation.
+
+Compared with general specifications,
+implementations exhibit a well-defined behavior
+which can only be influenced by observable inputs.
+In other words,
+implementations take the form
+$x = \bigvee S$
+where $S$ is a set of pairwise coherent traces.
+Traces are coherent when
+the same inputs lead to the same outputs:
+\[
+  s \coh \epsilon \qquad\qquad
+  \epsilon \coh t \qquad\qquad
+  q_1 r_1 s \coh q_1' r_1' t
+  \: :\Leftrightarrow \:
+  (q_1 = q_1' \Rightarrow r_1 = r_1' \wedge s \coh t)
+\]
+I will write
+\[
+  \mathbf{Impl} := \Big\{ \bigvee S \mathrel\Big|
+    \forall s, t \in S \mathbin. s \coh t  \, \Big\}
+  \qquad \text{and} \qquad
+  \mathrm{Impl}(\sigma) :=
+    \{ x \in \mathbf{Impl} \mid \sigma \le x \}
+  \,.
+\]
+We can observe that:
+{\small \[
+  \sigma \le \tau
+  \:\:\Longrightarrow\:\:
+  \mathrm{Impl}(\sigma) \supseteq
+  \mathrm{Impl}(\tau)
+\qquad
+  \mathrm{Impl} \Big( \bigvee_{i \in I} \sigma_i \Big) \: = \:
+  \bigcap_{i \in I} \, \mathrm{Impl}(\sigma_i)
+\qquad
+  \mathrm{Impl} \Big( \bigwedge_{i \in I} \sigma_i \Big) \: = \:
+  \bigcup_{i \in I} \, \mathrm{Impl}(\sigma_i)
+\]}%
+However,
+specifications are not completely characterized
+by their set of implementations,
+and even nonimplementable specifications
+may be non-trivial.
+For example, the specification
+\[
+  \sigma = q r \vee q' r_1 \vee q' r_2
+  \qquad \text{where} \qquad
+  r_1 \neq r_2
+\]
+is not implementable,
+but it could appear as a component in a larger specification
+$\tau \circ \sigma$ which is.
+For example $\tau$ may not invoke the overconstrained $q'$ at all,
+or could react in the same way to the answers $r_1$ and $r_2$.
+
+
+
+\end{document}
