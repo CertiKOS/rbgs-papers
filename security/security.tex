@@ -51,9 +51,12 @@ back into the full-blown version of target-level noninterference.
 
 What follows is a tentative formalization of the model $\mathsf{NTree}$.
 This model is similar in spirit to the one used in our LICS '20 paper
-and it defines some kind of free monad in $\mathbf{CDLat}$,
+in that it defines some kind of free monad in $\mathbf{CDLat}$,
 but unlike in the LICS model,
 non-deterministic choices do not commute with external operations.
+The new model is similar to a construction recently used by Yu
+to attempt to circumvent the LICS '20 issues model
+which show up in our refinement conventions work
 
 \subsection{Interaction specifications} %{{{
 
@@ -234,7 +237,47 @@ the composition $\tau \circ \sigma : E \rightarrow G$ is defined by
 
 %}}}
 
-\subsection{Deterministic computations}
+\subsection{Implementation behaviors} %{{{
+
+Usually,
+the point of a specification $\sigma$ is to
+eventually construct a system $x$ which satisfies it.
+If we use the same kind of mathematical objects
+to represent specifications and implementations,
+and can state the correctness of $x$ with respect to $\sigma$
+as the refinement $\sigma \le x$.
+However,
+not every specification represents a possible implementation.
+
+Compared with general specifications,
+implementations exhibit a deterministic behavior
+which can only be influenced by observable inputs.
+However,
+this does not necessarily mean that every subterm
+\[
+  \bigvee_{i \in I} \bigwedge_{j \in J} m_{ij}(x_ijk)_k
+\]
+is such that $|I| = |J| = 1$ because:
+\begin{itemize}
+  \item equivalence classes contain representations where
+   $i, j$ range over multiple copies of the same term,
+   or less defined terms.
+   In fact this is necessary to define behaviors that are
+   deterministic but infinite;
+  \item we want to allow $\bot$ (where $I = \varnothing$)
+    as a catch-all to capture
+    silent divergence,
+    undefined behaviors,
+    and other undesirable outcomes.
+\end{itemize}
+So we will want something more along the lines of:
+\begin{itemize}
+  \item ranging over $i \in I$ gives us an upward directed set;
+  \item for every i there must be a $j \in J$ that gives a smallest
+    term in the family.
+\end{itemize}
+
+%}}}
 
 %}}}
 
@@ -254,61 +297,108 @@ As a system executes, we can record in a \emph{trace}
 the observable interactions between the system and its environment
 (and sometimes record the evolution of the system's internal state).
 Trace semantics model a system's behavior as
-the set of traces which may be observed as the system executes.
+the set of traces which may be observed as it executes.
 
-Under this traditional setup,
+Under this approach,
 desirable aspects of system behavior
 can be described as \emph{trace properties}.
 A trace property is simply a predicate which identifies
 acceptable traces.
-A system satisfies a trace property when
-every one of its traces is acceptable.
+A~system satisfies the trace property when
+all of its possible traces are acceptable.
 
+%}}}
+
+\subsection{Interpreting nondeterminism} %{{{
+
+[Technical details of what the set of traces mean:
+angelic over inputs but
+demonic over outputs (implied by the notion of property used).
+We could also discuss incomplete vs. finite vs. infinite traces]
+
+The important thing is we can define:
+\begin{align*}
+  \phi P &:= \{ m \mid mns \in P \}  \quad \text{(first action)} \\
+  mn \backslash P &:= \{ s \mid mns \in P \} \quad \text{(residual)}
+\end{align*}
+and a property can be translated into a specification
+using the construction
+\[
+  \Sigma : \mathbf{Prop} \rightarrow \mathbf{Spec}
+  \qquad \qquad
+  \Sigma(P) := \bigwedge_{m \in \phi P}
+    \underline{m} \big( \Sigma(mn \backslash P) \big)_n
+\]
+With that said,
+there are technical difficulties with this definition:
+\begin{itemize}
+  \item what does the case where $m n_1 s \ldots \in P$ but
+    $m n_2 t \notin P$ for any $t$ mean?
+  \item properties are based on complete traces,
+    but our approach to infinite traces in particular
+    uses finite approximations;
+  \item this creates an issue where neither LFP nor GFP
+    would be appropriate to define $\Sigma$.
+\end{itemize}
+Thankfully, these issues don't occur with \emph{safety} properties.
 
 %}}}
 
 \subsection{Safety properties} %{{{
 
-\emph{safety} property:
-\[
-  \bigvee_{q_1} \bigwedge_{r_1 \mid q_1 r_1 \in P}
-  \bigvee_{q_2} \bigwedge_{r_2 \mid q_1 r_1 q_2 r_2 \in P}
-  \cdots
-\]
+Explain why here.
 
-\[
-  \bigwedge_{i \in I} m_i \Big(
-  \bigwedge_{j \in J_{iu}} m_{iuj} \Big(
-  \bigwedge_{k \in K_{iujv}} m_{iujvk} \Big(
-  \cdots
-  \Big)_w
-  \Big)_v
-  \Big)_u
-\]
+%}}}
 
+\subsection{Hyperproperties} %{{{
+
+
+
+%}}}
+
+%}}}
+
+\section{Data abstraction and noninterference} %{{{
+
+A key property is that for a relation $R \subseteq X \times Y$, we have:
+\begin{equation} \label{eqn:reladj}
+  \bigvee_{y \mid x \mathrel{R} y} \,
+  \bigwedge_{z \mid z \mathrel{R} y} \, M[z]
+  \quad \le \quad M[x] \quad \le \quad
+  \bigwedge_{y \mid x \mathrel{R} y} \,
+    \bigvee_{z \mid z \mathrel{R} y} M[z]
+\end{equation}
+So for example a CompCertO simulation convention $\mathbb{R}$
+can be encoded as
+\begin{gather*}
+  \mathbb{R}^*(q_1) =
+    \bigvee_{w, q_2 \mid w \Vdash q_1 \mathbb{R}^\circ q_2}
+      r_2 \leftarrow q_2 \mathbin;
+          \bigwedge_{r_1 \mid w \vDash r_1 \mathbb{R}^\bullet r_2} \eta r_1 ()
+\\[1ex]
+  \mathbb{R}_*(q_2) =
+    \bigwedge_{w, q_1 \mid w \Vdash q_1 \mathbb{R}^\circ q_2}
+      r_1 \leftarrow q_1 \mathbin;
+          \bigvee_{r_2 \mid w \vDash r_1 \mathbb{R}^\bullet r_2} \eta r_2 ()
+\end{gather*}
+By (\ref{eqn:reladj}) we have the adjunction property:
+\[
+  \mathbb{R}^* \circ \mathbb{R}_* \le \mathsf{id}
+  \qquad \qquad
+  \mathsf{id} \le \mathbb{R}_* \circ \mathbb{R}^*
+\]
+Then we can define equivalently
 \begin{align*}
-  \phi P &:= \{ q \mid qrs \in P \}  \quad \text{(first action)} \\
-  qr \backslash P &:= \{ s \mid qrs \in P \} \quad \text{(residual)}
+  x \le_{\mathbb{R} \rightarrow \mathbb{S}} y &\:\Leftrightarrow\:
+  \mathbb{R}_* \circ x \circ \mathbb{S}^* \le y \\ &\:\Leftrightarrow\:
+  x \le \mathbb{R}^* \circ y \circ \mathbb{S}_* \\ &\:\Leftrightarrow\:
+  \mathbb{R}_* \circ x \le y \circ \mathbb{S}_* \\ &\:\Leftrightarrow\:
+  x \circ \mathbb{S}^* \le \mathbb{R}^* \circ y
 \end{align*}
 
-\[
-  \Sigma : \mathbf{Prop} \rightarrow \mathbf{Spec}
-  \qquad \qquad
-  \Sigma := \mu F \mathbin. \bigvee_{q \in \phi[P]}
-    \underline{q} \big( F(\rho_{qr}[P]) \big)_r
-\]
-
 %}}}
 
-\subsection{Hyperproperties}
-
-%}}}
-
-\section{Data abstraction and noninterference}
-
-
-
-\section{Secure compilation}
+\section{Secure compilation} %{{{
 
 We have seen that properties and hyperproperties
 are special cases of RBGS specifications.
@@ -316,11 +406,12 @@ As such they are preserved by simple refinement.
 However,
 the data abstraction component of a compiler's correctness property
 
+%}}}
 
 
 
 
-\section*{Old model}
+\section*{XXX First thing I tried}
 
 The specification model has:
 \begin{itemize}
