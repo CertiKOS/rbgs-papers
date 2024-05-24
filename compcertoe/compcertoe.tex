@@ -1562,6 +1562,7 @@ when $\mathbf{R}$ and $\mathbf{S}$ are both $\idsc$,
 our sophisticated notion of simulation reduces to the usual one.
 
 \begin{example}[Semantics preservation of CompCert]
+\label{ex:bq-proof}
 XXX: We can express the calling convention $\mathbb{C}$ in this form
 and reuse the CompCertO correctness theorem.
 \end{example}
@@ -4575,6 +4576,88 @@ and discuss its implementation.
 
 \subsection{CompCertO semantics} %{{{
 
+We first show how the CompCertO semantics
+can be embedded into our framework,
+thus allowing us to implement
+the specifications with C programs.
+
+The language interfaces for CompCertO
+can be viewed as a coarse-grained form
+of the effect signatures,
+where the set of questions and answers
+includes all the syntactically correct function calls
+and return values.
+Thus,
+a language interface $A := \langle A^\que, A^\ans \rangle$
+has its corresponding
+effect signature $\llbracket A \rrbracket := \{ q : A^\ans \mid q \in A^\que \}$.
+
+The semantics model present in this work
+has no internal transitions,
+thus we need to hide
+the internal steps of CompCertO.
+Given the CompCertO semantics
+$L: A \twoheadrightarrow B = \langle S, \rightarrow, I, X, Y, F \rangle$,
+we define the embedded semantics as
+$\llbracket L \rrbracket : \llbracket A \rrbracket \rightarrow \llbracket B \rrbracket =
+\langle S, I', X, Y', F \rangle$
+where the internal steps transitions
+are absorbed into
+the initializations $I'$,
+and the resumption $Y'$ as follows:
+\[
+  \begin{prooftree}
+    \hypo{q_B \,I\, s}
+    \hypo{s \rightarrow^* s'}
+    \infer2{q_B \,I'\, s'}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{r_A \,Y^{s}\, s'}
+    \hypo{s' \rightarrow^* s''}
+    \infer2{r_A \,Y'^{s}\, s''}
+  \end{prooftree}
+\]
+
+The embedding preserves the simulation relation.
+
+
+Back to the bounded queue example in~\ref{ex:bq-proof},
+the specification $\Gamma_\kw{bq}$ is implemented by
+composition of two C components
+$\llbracket \kw{Clight}(\kw{bq.c}) \rrbracket \odot
+\llbracket \kw{Clight}(\kw{rb.c}) \rrbracket$.
+Using the compiler correctness,
+this is refined by
+$\llbracket \kw{Asm}(\kw{bq.s}) \rrbracket \odot
+\llbracket \kw{Asm}(\kw{rb.s}) \rrbracket$.
+To further link the compiled programs,
+we prove the embedding interacts with
+CompCertO's horizontal composition
+as follows:
+\[
+  \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
+    \sqsubseteq  \llbracket L_1 \oplus L_2 \rrbracket
+  \qquad \text{for all} \; L_1, L_2 \in A \twoheadrightarrow A
+\]
+In particular, when combined with CompCertO's linking property
+of assembly programs,
+this means
+\[
+  \llbracket \kw{Asm}(\kw{bq.s}) \rrbracket
+  \odot \llbracket \kw{Asm}(\kw{rb.s}) \rrbracket
+  \sqsubseteq \llbracket \kw{Asm}(\kw{bq.s} + \kw{rb.s}) \rrbracket
+\]
+Thus, we have shown the
+specification $\Gamma_\kw{bq}$
+is implemented by the assembly programs
+$\kw{bq.s}$ and $\kw{rb.s}$.
+
+
+We omit the brackets for the open semantics
+when the context is clear.
+
+
 %}}}
 
 \subsection{Modeling loading and the execution environments}
@@ -4599,6 +4682,132 @@ once it is \emph{loaded} and executed is given by:
   \end{prooftree}
 \]
 \end{example}
+
+The CompCertO semantics explores
+the intricate interaction among individual components,
+which are eventually linked
+through the linking property.
+However, even after this linking,
+the behavior of the resulting program remains
+somewhat unclear.
+It requires invocation
+through a query
+with a specific program state
+and may entail interactions
+with the environment.
+To bring clarity to this process
+and model the semantics of linked programs
+akin to a process
+running within an operating system,
+we introduce the notion of a \textit{loader}.
+
+On one end,
+the loader uses
+$\kw{entry}_\mathcal{A} : \mathcal{A} \rightarrow \mathcal{P}$
+to invoke the main function.
+\[
+  \kw{entry}_\mathcal{A} \:\vDash\:
+  \kw{run} \rightarrowtail
+  (\vec{rs_0}[\kw{PC}\mapsto (b_\kw{main}, 0),
+  \kw{RA} \mapsto \kw{null},
+  \kw{RSP}\mapsto \kw{null}]@m_0 \leadsto
+  \vec{rs}[\kw{RAX} \mapsto r]@m) \rightarrowtail r \\
+\]
+The registers $\vec{rs_0}$ and the memory $m_0$ are
+initialized that
+the program counter $\kw{PC}$ points to
+the block $b_\kw{main}$
+associated to the main function in the symbol table,
+and the static variables
+are properly initialized in the memory.
+The return address $\kw{RA}$
+and the stack pointer $\kw{RSP}$
+are initialized to $\kw{null}$
+according to the CompCertO's simulation convention.
+At the end,
+the value stored in the $\kw{RAX}$ is returned.
+
+On the other end,
+the component
+$\kw{runtime} : \mathcal{E} \rightarrow \mathcal{C}$
+acts as the conduit for runtime libraries
+to interface the program with the operating system.
+In our scenario,
+the programs use $\kw{read}$ and $\kw{write}$
+functions from $\kw{unistd.h}$
+to perform I/O operations.
+Thus, we implement the following minimalist runtime.
+
+\begin{align*}
+  \kw{runtime}_\mathcal{A} & \:\vDash\:
+  \vec{rs}[\kw{PC} \mapsto (b_\kw{read}, 0),
+    \kw{RDI} \mapsto 0,
+    \kw{RSI} \mapsto (b, ofs),
+    \kw{RDX} \mapsto n]@m \\
+  & \rightarrowtail (\kw{read}_0[n] \leadsto data)
+    \rightarrowtail \vec{rs'}[\kw{RAX} \mapsto \kw{len}(data)]@m[(b, ofs) \mapsto data] \\
+  \kw{runtime}_\mathcal{A} & \:\vDash\:
+    \vec{rs}[\kw{PC} \mapsto (b_\kw{write}, 0),
+    \kw{RDI} \mapsto 1,
+    \kw{RSI} \mapsto (b, ofs),
+    \kw{RDX} \mapsto n]@m[(b, ofs) \mapsto data] \\
+  & \rightarrowtail
+  (\kw{write}_0[data[0..n]] \leadsto n')
+  \rightarrowtail \vec{rs'}[\kw{RAX} \mapsto n']@m
+\end{align*}
+
+Following the x86 conventions,
+arguments are passed through
+the \kw{RDI}, \kw{RSI}, and \kw{RDX} registers.
+The call to the \kw{read} function
+stores the data read from the file descriptor 0
+into the memory at the address $(b, ofs)$,
+and returns the length of the data read.
+The call to the \kw{write} function
+writes the first $n$ bytes of data, $data[0..n]$,
+from the memory at $(b, ofs)$
+to the file descriptor 1.
+
+Overall, the loader
+for the CompCertO assembly semantics
+$L_\mathcal{A}: \mathcal{A} \rightarrow \mathcal{A}$
+is defined as
+\[
+  \kw{load}_\mathcal{A}(L_\mathcal{A}) : \mathcal{E} \rightarrow \mathcal{P}
+  \::=\: \kw{entry}_\mathcal{A} \odot L_\mathcal{A}
+  \odot \kw{runtime}_\mathcal{A}
+\]
+
+The loader for
+the CompCertO's C semantics
+$L_\mathcal{C}: \mathcal{C} \rightarrow \mathcal{C}$
+is defined similarly
+with the corresponding entry and runtime components.
+\[
+  \kw{entry}_\mathcal{C} \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{main}()@m_0 \leadsto r@m) \rightarrowtail r
+\]
+\begin{align*}
+  \kw{runtime}_\mathcal{C} & \:\vDash\:
+  \kw{read}(0, (b, ofs), n)@m \rightarrowtail
+  (\kw{read}_0[n] \leadsto data)
+  \rightarrowtail \kw{len}(data)@m[(b, ofs) \mapsto data] \\
+  \kw{runtime}_\mathcal{C} & \:\vDash\:
+  \kw{write}(1, b, n)@m[(b, ofs) \mapsto data] \rightarrowtail
+  (\kw{write}_0[data[0..n]] \leadsto n')
+  \rightarrowtail n'@m
+\end{align*}
+\[
+  \kw{load}_\mathcal{C}(L_\mathcal{C}) : \mathcal{E} \rightarrow \mathcal{P}
+  \::=\: \kw{entry}_\mathcal{C} \odot L_\mathcal{C}
+  \odot \kw{runtime}_\mathcal{C}
+\]
+
+% TODO: more on why we need the C & Asm loaders
+% TODO: similarity on the loader and embedding
+% both go from C to Asm somehow
+
+
 %}}}
 
 \subsection{Certified Abstraction Layers} \label{sec:application:cal} %{{{
