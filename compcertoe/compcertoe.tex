@@ -553,6 +553,18 @@ to another verification task.
 
 \subsection{Compositional semantics offer a more flexible approach} %{{{
 
+[Add to address process encapsulation per Zhong:]
+Mechanized semantics, program logics and certified compilers exist
+which can deal with the C and assembly code use in Example~\ref{ex:readwritehello}.
+However, the programs \emph{as such} are not the end of the story.
+Rather than constituting standalone artifacts,
+the programs are part of a larger context where
+they are first interpreted as \emph{processes},
+then used as building blocks in a larger system.
+[communication through function calls, memory states in a shared address space at some level;
+vs IPC over file descriptors at another level;
+things are encapsulated, etc.]
+
 The main difficulty with Example~\ref{ex:readwritehello}
 is that formalizing property (\ref{eqn:hellospec})
 in an existing framework
@@ -2406,7 +2418,7 @@ $.
 
 %}}}
 
-\section{The Model} \label{sec:model} %{{{
+\section{Strategy Model} \label{sec:model} %{{{
 
 Definition~\ref{def:esig} provides a formal description of effect signatures.
 This section defines
@@ -2650,13 +2662,13 @@ The least element $\bot = \bigvee \varnothing$
 captures undefined or undesirable behaviors,
 including silent divergence.
 
-We usually expect a function $f : S \rightarrow T$
+We expect a function $f : S \rightarrow T$
 between two sup-lattices $(S, {\le})$ and $(T, {\sqsubseteq})$
 to preserve all joins so that
 $f \bigl( \bigvee_{i \in I} \sigma_i \bigr) = \bigsqcup_{i \in I} f(\sigma_i)$.
 In other words,
-we expect operations on computations
-to act independently on each angelic choice.
+operations which transform computations
+should act independently on each angelic choice.
 Since this property is satisfied by the identity function and
 preserved by composition,
 sup-lattices and sup-preserving functions
@@ -2738,54 +2750,16 @@ but before choosing $j$.
 \paragraph{Fixed points} %{{{
 
 Every endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-has a unique fixed point $\mu F \in \mathbf{Sup}$,
+has a unique fixed point $\mu X \cdot FX \in \mathbf{Sup}$,
 with the defining property that
-$\mu F \cong F (\mu F)$.
-We will usually write out
-$\mu (X \mapsto M)$ in full, as $\mu X \cdot M$,
-instead of defining $F$ separately.
-Essentially,
-a computation in $\mu X \cdot M$
-proceeds as in the expression $M$,
-but any occurrence of the parameter $X$
-is unfolded into another copy of $M$.
-The sup-lattice $\mu F$ carries both
-an initial algebra $c_F : F (\mu F) \rightarrow \mu F \in \mathbf{Sup}$ and
-a terminal coalgebra $d_F : \mu F \rightarrow F (\mu F) \in \mathbf{Sup}$,
-which are inverse to each other and
-can be used to fold and unfold $\mu F$ as needed.
-%
-%Since $c_F$ is initial,
-%any $F$-algebra (folding operator)
-%$\phi : F S \rightarrow S \in \mathbf{Sup}$
-%on a sup-lattice $S$ induces a unique mapping
-%$[\phi] : \mu F \rightarrow S$
-%which uses $\phi$ as an interpretation for $c_F$
-%in the sense that $[\phi] \circ c_F = \phi \circ F [\phi]$.
-%
-This means that an $F$-algebra
-$\alpha : F S \rightarrow S \in \mathbf{Sup}$
-induces a unique
-$[ \alpha ] : \mu F \rightarrow S \in \mathbf{Sup}$
-and likewise an $F$-coalgebra $\delta : S \rightarrow F S$
-induces a unique
-$\langle \delta \rangle : S \rightarrow \mu F$
-such that
-\[
-  \begin{tikzcd}
-    F (\mu F) \ar[r, "c_F"] \ar[d, "{F [\alpha]}"'] &
-    \mu F \ar[d, dashed, "{[\alpha]}"] \\
-    F S \ar[r, "\alpha"] &
-    S
-  \end{tikzcd}
-  \qquad
-  \begin{tikzcd}
-    S \ar[r, "\delta"] \ar[d, "\langle \delta \rangle"', dashed] &
-    F S \ar[d, "F \delta"] \\
-    \mu F \ar[r, "d_F"] &
-    F (\mu F)
-  \end{tikzcd}
-\]
+$\mu X \cdot FX \cong F (\mu X \cdot FX)$.
+In other words,
+a computation in $\mu X \cdot FX$
+proceeds as in the expression $FX$,
+where any occurrence of $X$
+triggers a new iteration of the game.
+We discuss this construction extensively
+in \S\ref{sec:interactions} below.
 
 %}}}
 
@@ -2836,27 +2810,61 @@ using much simpler sets of generators and monotonic functions.
   \qquad
   \bigotimes_{i \in I} \mathcal{D}(P_i) \cong
   \mathcal{D}\left(\prod_{i \in I} P_i \right)
-  \qquad
-  \begin{prooftree}
-    \hypo{F \mathcal{D} \cong \mathcal{D} G}
-    \infer1{\mu F \cong \mathcal{D}(\mu G)}
-  \end{prooftree}
 \]
 
 %}}}
 
 %}}}
 
-\subsection{Interactive computations} %{{{
+\subsection{Interactive computations} \label{sec:interactions} %{{{
 
-To illustrate some of the constructions above,
-consider an interactive computation
-using external operations
-in an effect signature $E$.
+Consider an interactive computation
+which repeatedly invokes operations in an effect signature $E$,
+and eventually yields a result in the set $X$.
+The corresponding sup-lattice can be written
+\begin{equation} \label{eqn:intlat}
+  \mathcal{I}_E(X) \: := \:\:
+    \mu S \cdot
+      \bigoplus_{m \in E} \biggl( \bigwith_{n \in \kw{ar}(m)} S \biggr)_\bot
+      \oplus\:
+      \bigoplus_{x \in X} \mathbf{1}
+  \:\: \in \: \mathbf{Sup}
+  \,.
+\end{equation}
+Computations in $\mathcal{I}_E(X)$
+are similar in shape to interaction trees \citep{itrees},
+however sup-lattices can model silent divergence as $\bot$
+so we do not need to concern ourselves with $\tau$ moves.
 
+Concretely,
+the expression (\ref{eqn:intlat}) above
+can be interpreted as a game
+which is iterated at will ($\mu S \cdot {-}$).
+For each iteration, two choices are possible ($\oplus$):
+\begin{itemize}
+\item
+Per the left-hand side $\bigoplus_m (\cdots)_\bot$
+the computation may choose a question $m \in E$.
+The lifting operator $(-)_\bot$ makes
+this choices immediately observable.
+After the environment supplies an answer $n \in \kw{ar}(m)$,
+as indicated by the product $\bigwith_n$,
+the game will start over ($S$).
+\item
+Alternatively,
+the computation may choose $x \in X$
+and terminate ($\mathbf{1}$).
+Note that the elements of $X$ can be understood
+as additional, nullary operations $x \mathbin: \varnothing$,
+and indeed $\mathbf{1} \cong \mathbf{0}_\bot$.
+\end{itemize}
 
-
-
+\[
+  \begin{prooftree}
+    \hypo{F \mathcal{D} \cong \mathcal{D} G}
+    \infer1{\mu F \cong \mathcal{D}(\mu G)}
+  \end{prooftree}
+\]
 
 An \emph{interaction} $x \in \mathcal{I}_E(A)$ over $E$
 with outcomes in $A$ is then simply a set of plays,
@@ -2884,6 +2892,46 @@ define:
   mns_1 \coh mns_2
 \]
 \end{definition}
+
+but any occurrence of the parameter $X$
+is unfolded into another copy of $M$.
+The sup-lattice $\mu F$ carries both
+an initial algebra $c_F : F (\mu F) \rightarrow \mu F \in \mathbf{Sup}$ and
+a terminal coalgebra $d_F : \mu F \rightarrow F (\mu F) \in \mathbf{Sup}$,
+which are inverse to each other and
+can be used to fold and unfold $\mu F$ as needed.
+%
+%Since $c_F$ is initial,
+%any $F$-algebra (folding operator)
+%$\phi : F S \rightarrow S \in \mathbf{Sup}$
+%on a sup-lattice $S$ induces a unique mapping
+%$[\phi] : \mu F \rightarrow S$
+%which uses $\phi$ as an interpretation for $c_F$
+%in the sense that $[\phi] \circ c_F = \phi \circ F [\phi]$.
+%
+This means that an $F$-algebra
+$\alpha : F S \rightarrow S \in \mathbf{Sup}$
+induces a unique
+$[ \alpha ] : \mu F \rightarrow S \in \mathbf{Sup}$
+and likewise an $F$-coalgebra $\delta : S \rightarrow F S$
+induces a unique
+$\langle \delta \rangle : S \rightarrow \mu F$
+such that
+\[
+  \begin{tikzcd}
+    F (\mu F) \ar[r, "c_F"] \ar[d, "{F [\alpha]}"'] &
+    \mu F \ar[d, dashed, "{[\alpha]}"] \\
+    F S \ar[r, "\alpha"] &
+    S
+  \end{tikzcd}
+  \qquad
+  \begin{tikzcd}
+    S \ar[r, "\delta"] \ar[d, "\langle \delta \rangle"', dashed] &
+    F S \ar[d, "F \delta"] \\
+    \mu F \ar[r, "d_F"] &
+    F (\mu F)
+  \end{tikzcd}
+\]
 
 %}}}
 
