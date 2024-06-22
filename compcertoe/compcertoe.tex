@@ -2450,25 +2450,9 @@ we can write
 
 \section{Strategy Model} \label{sec:model} %{{{
 
-Definition~\ref{def:esig} provides a formal description of effect signatures.
-This section defines
-the remaining objects and constructions involved in our model
-and establishes their relevant properties.
-
-In \S\ref{sec:model:strat} we examine strategies and their composition,
-as in a traditional game semantics paper.
-We also analyze our model under a more operational lens
-and provide an algebraic characterization of the model.
-This nontraditional view
-serves as a base in \S\ref{sec:model:ref}
-to develop the vertical part of the model
-consisting of refinement conventions and refinement squares.
-
-\subsection{Strategies} \label{sec:model:strat} %{{{
-
 % Preamble {{{
-Our model of component behaviors uses standard game semantics constructions.
-Strategies are represented as sets of traces of the form
+Our model uses a standard game semantics approach,
+representing strategies as sets of plays %of the form
 \[
   q \rightarrowtail
   (m_1 \leadsto n_1) \rightarrowtail
@@ -2479,15 +2463,40 @@ Strategies are represented as sets of traces of the form
   \leadsto
   q' \rightarrowtail
   \cdots
+  \,,
 \]
-In the following
-we will usually use the more compact notation
+which we will also write more compactly as
 $q \underline{m}_1 n_1
    \underline{m}_2 n_2 \cdots
    \underline{m}_k n_k \underline{r}
- q' \cdots$,
-where we have underlined the moves of the component.
+ q' \cdots$.
+As usual,
+composition of
+$\sigma : F \twoheadrightarrow G$ with
+$\tau : E \twoheadrightarrow F$
+matches
+the outgoing moves
+($\underline{m}_1 n_1, \underline{m}_2 n_2, \ldots$) of $\sigma$
+in the signature $F$
+with the incoming moves
+($\underline{q}r, \underline{q}'r', \ldots$) of $\tau$
+and hides them from the composite
+$\sigma \odot \tau : E \twoheadrightarrow G$.
+
+At the same time,
+our constructions go beyond traditional game semantics.
+Refinement squares in particular
+cannot be formulated in terms of individual plays.
+Therefore we supplement this traditional strategy construction
+with a novel (co-)algebraic lens,
+explaining the strategy construction in operational terms
+and enriching the mathematical toolbox we use
+to manipulate strategies.
+
+
 %}}}
+
+\subsection{Game semantics formulation} %{{{
 
 \begin{definition}[Strategy] %{{{
 Consider two effect signatures $E, F$.
@@ -3368,7 +3377,202 @@ $S_{E \twoheadrightarrow F} := \check{F}[\hat{E}^*]^*(\mathbf{0})$.
 
 [Connect to the play model]
 
+\subsection{Strategies as handlers}
+
+When a client computation $f \in \hat{F} X$ asks a question $q \in F$,
+a strategy $\sigma : E \twoheadrightarrow F$
+can be used to handle the question,
+use a computation in $\hat{E}^*$ to produce an answer $r \in \kw{ar}(q)$,
+and resume the client computation as
+the strategy waits for the next question in $F$.
+Below we explain how this process can be formalized in our
+domain-theoretic approach.
+Since we only consider one type of strategy,
+for the sake of brevity
+we will write $S := S_{E \twoheadrightarrow F}$.
+
+\paragraph{Interaction Primitive}
+
+We start by defining a sup-lattice homomorphism $\kappa^\circ_{X,E,F}$
+handling a single interaction in $F$.
+When two computations make complementary choices,
+we can use a distributive law to observe
+the choice made by one
+and propagate it to the other:
+\[
+  \kappa^\bullet_{R,X,Y} \: : \:
+    \biggl( \bigwith_{r \in R} X \biggr)
+    \otimes
+    \biggl( \bigoplus_{r \in R} Y \biggr)
+  \:\xrightarrow{\rho_{\otimes\oplus}}\:
+    \bigoplus_{r \in R} \:
+      \biggl( \bigwith_{r \in R} X \biggr)
+      \otimes Y
+  \:\xrightarrow{[\pi_r \otimes \kw{id}]_{r \in R}}\:
+    X \otimes Y
+\]
+Likewise,
+the strength of the free monad
+$\rho_{\hat{E}^*} : X \otimes \hat{E}^* Y \rightarrow \hat{E}^*(X \otimes Y)$
+can be used to observe the strategy's computation over $\hat{E}^*$
+in the interaction primitive
+\begin{align*}
+\kappa^\que_{X,E,F} \: := \:
+  %\lambda_{\otimes\oplus} \circ (\kw{id} \otimes (d \circ \epsilon_\bot))
+  %\: : \:
+  \hat{F}X \otimes S_\bot
+  \:\xrightarrow{
+    (\hat{F}X \otimes (\epsilon_\bot \mathbin; d)) \mathbin; \lambda_{\otimes\oplus}
+  }\: {}&
+  %\hat{F}X \:\otimes\:
+  %\bigwith_{q \in F} \hat{E}^* \bigoplus_{r \in \kw{ar}(q)} S_\bot
+  %\:\xrightarrow{\lambda_{\otimes\oplus}}\:
+  \bigoplus_{q \in F}
+    \Biggl(
+      \biggl(
+        \bigwith_{r \in \kw{ar}(q)} X
+      \biggr)_\bot
+      \:\otimes\:
+      \biggl(
+        \bigwith_{q \in F} \hat{E}^*
+        \bigoplus_{r \in \kw{ar}(q)}
+        S_\bot
+      \biggr)
+    \Biggr)
+\\
+  \:\xrightarrow{
+    [\kw{id} \otimes \pi_q \mathbin;
+     \rho_{\hat{E}^*} \mathbin;
+     E^*(\epsilon_\bot \otimes \kw{id} \mathbin;
+         \kappa^\ans)]_{q \in F}
+  }\:
+  {}&\hat{E}^* \bigl( X \otimes S_\bot \bigr)
+  \,.
+\end{align*}
+
+\paragraph{Strategy Action}
+
+To handle iterated interactions in $\hat{F}^* X$,
+we will define an $\hat{F}$-algebra
+\[
+  \alpha^\otimes :
+    \hat{F} K \rightarrow K
+  \qquad \text{where} \qquad
+  K :=
+    \bigl[S_\bot , \,
+       \hat{E}^* \bigl(X \otimes S_\bot \bigr) \bigr]
+  \,.
+\]
+Algebraically,
+the interpretation of
+$\underline{m}(k_n)_{n \in \kw{ar}(m)} \in \hat{F}^* X$
+is derived from that of the arguments~$k_n$.
+This means that computationally, the interpretation proceeds backward in time.
+Hence, we formulate $\alpha$ in continuation-passing style,
+where a continuation $k \in K$ expects
+the strategy's starting state,
+and produces both the outcome in $X$ and
+the strategy's ending state.
+We use
+\[
+  \chi \: := \:
+  [S_\bot, \eta_{\hat{E}} \circ \gamma]
+  \circ \eta_\otimes
+  \: : \:
+  X
+  \: \rightarrow \:
+  [S_\bot, \: \hat{E}^*(X \otimes S_\bot)]
+  \:= \: K
+  \,,
+\]
+to encode simple outcomes into continuations.
+For a round of interaction in $F$,
+we use the algebra $\alpha^\otimes$ above,
+defined by currying a morphism
+$\alpha : \hat{F} K \otimes S_\bot \rightarrow \hat{E}^*(X \otimes S_\bot)$
+which uses $\kappa^\que_K$
+to handle the initial interaction.
+This leaves us with a continuation in $K$
+as well as the strategy's intermediate state in $S_\bot$.
+Using the counit $\epsilon_\otimes$ of the monoidal closure,
+we feed the intermediate strategy to the intermediate continuation,
+allowing us to carry out the remainder of the computation:
+\[
+  \alpha \: : \:
+    \hat{F} K \otimes S_\bot
+    \xrightarrow{\kappa^\que \mathbin; \gamma}
+    \hat{E}^*(S_\bot \otimes K)
+    \xrightarrow{\hat{E}^* (\epsilon_\otimes \mathbin; \gamma)}
+    \hat{E}^* \hat{E}^* (X \otimes S_\bot)
+    \xrightarrow{\mu_{\hat{E}}}
+    \hat{E}^* (X \otimes S_\bot)
+  \,.
+\]
+The overall interaction between the client computation and the strategy
+is then captured with
+\[
+  h : \hat{F}^* X \otimes S_\bot \rightarrow \hat{E}^* (X \otimes S_\bot)
+  \,, \quad \text{defined by} \:
+  h^\otimes :=
+    [\alpha^\otimes, \chi]_{\hat{F}} :
+    \hat{F}^* X \rightarrow [S_\bot, \, \hat{E}^*(X \otimes S_\bot)]
+  \,.
+\]
+
 \subsection{Layered Composition}
+
+The constructions above
+can be extended to define strategy composition $\sigma \odot \tau$.
+Here the client computation
+handled by the strategy $\tau \in S_{E \twoheadrightarrow F}$
+it itself a strategy $\sigma \in S_{F \twoheadrightarrow G}$.
+We use the coalgebra
+\[
+  \delta \: : \:
+    S_{F \twoheadrightarrow G} \otimes (S_{E \twoheadrightarrow F})_\bot
+    \: \rightarrow \:
+    \bigwith_{q \in G} \hat{E}^* \!
+      \bigoplus_{r \in \kw{ar}(q)}
+        \bigl(
+          S_{F \twoheadrightarrow G} \otimes
+          (S_{E \twoheadrightarrow F})_\bot
+        \bigr)_\bot
+\]
+to define the resulting strategy in $S_{E \twoheadrightarrow G}$.
+For each incoming question $q \in G$, the component
+\begin{align*}
+  \delta_q :
+    S_{F \twoheadrightarrow G}
+        \otimes (S_{E \twoheadrightarrow F})_\bot
+    \xrightarrow{\pi_q \otimes \kw{id}}
+    \hat{F}^* \biggl(
+      \bigoplus_{r \in \kw{ar}(q)} (S_{F \twoheadrightarrow G})_\bot
+    \biggr)
+        \otimes (S_{E \twoheadrightarrow F})_\bot
+    \xrightarrow{h}
+{}& \hat{E}^* \biggl(
+      \bigoplus_{r \in \kw{ar}(q)} (S_{F \twoheadrightarrow G})_\bot
+      \otimes (S_{E \twoheadrightarrow F})_\bot
+    \biggr)
+\\
+    \xrightarrow{\hat{E}^*\left(\lambda_{\otimes\oplus} \mathbin;
+                           \bigoplus_r \lambda_{\otimes\bot}\right)}
+{}& \hat{E}^* \! \bigoplus_{r \in \kw{ar}(q)} \biggl(
+      S_{F \twoheadrightarrow G} \otimes
+      (S_{E \twoheadrightarrow F})_\bot
+    \biggr)_\bot
+\end{align*}
+passes the question to $\sigma$,
+handles the resulting computation in $\hat{F}^*$ with $\tau$,
+and returns the answer.
+We can then define layered composition
+by letting $\delta$ generate the strategy
+\[
+  \sigma \odot \tau \: := \:
+    \langle \delta \rangle (\sigma \otimes \tau_\bot)
+  \,.
+\]
+
 
 To see how a client computation in $\hat{E}$
 can be made to interact with a strategy in $\check{E}_T$,
