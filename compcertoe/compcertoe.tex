@@ -6005,14 +6005,33 @@ outlined in Fig.~\ref{fig:xcomp}.
 
 We now showcase further applications of our framework
 and discuss its implementation.
+In~\ref{sec:application:compcerto}
+and~\ref{sec:application:loader},
+we show the CompCertO semantics and the simulation
+can be interpreted
+into strategies and the refinement order,
+thus complete the verification
+of the running examples.
+In addition to ad-hoc verification
+on individual programs,
+we further implement the theory of
+certified abstraction layers,
+which is a generic verification framework,
+using our strategy model in~\ref{sec:application:cal}.
+Inspired by the stateful strategies,
+we develop the ClightP language in~\ref{sec:application:clightp},
+a variant of the Clight in CompCertO,
+enabling language features such as state encapsulation
+for better modularity in verification.
 
-\subsection{CompCertO semantics} %{{{
+\subsection{CompCertO semantics}\label{sec:application:compcerto} %{{{
 
 We first show how the CompCertO semantics
 can be embedded into our framework,
 thus allowing us to implement
 the specifications with C programs.
 
+\paragraph{Language Interface}
 The language interfaces for CompCertO
 can be viewed as a coarse-grained form
 of the effect signatures,
@@ -6024,37 +6043,43 @@ a language interface $A := \langle A^\que, A^\ans \rangle$
 has its corresponding
 effect signature $\llbracket A \rrbracket := \{ q : A^\ans \mid q \in A^\que \}$.
 
-The semantics model present in this work
-has no internal transitions,
-thus we need to hide
-the internal steps of CompCertO.
-Given the CompCertO semantics
+\paragraph{Transition System}
+
+Given a CompCertO's transition system
 $L: A \twoheadrightarrow B = \langle S, \rightarrow, I, X, Y, F \rangle$,
-we define the embedded semantics as
-$\llbracket L \rrbracket : \llbracket A \rrbracket \rightarrow \llbracket B \rrbracket =
-\langle S, I', X, Y', F \rangle$
-where the internal steps transitions
-are absorbed into
-the initializations $I'$,
-and the resumption $Y'$ as follows:
+we define the following transitions
+to simulate its observable behaviors
+by hiding all the internal steps,
+where
 \[
+  \delta : S \rightarrow \mathcal{P}(\ddot{A}(S) + B^\ans) \qquad
   \begin{prooftree}
-    \hypo{q_B \,I\, s}
-    \hypo{s \rightarrow^* s'}
-    \infer2{q_B \,I'\, s'}
+    \hypo{s \rightarrow^* s' \: X \: m \leadsto n \: Y^{s} \: s''}
+    \infer1{\iota_1(\underline{m}n\underline{s''}) \in \delta(s)}
   \end{prooftree}
   \qquad
   \begin{prooftree}
-    \hypo{r_A \,Y^{s}\, s'}
-    \hypo{s' \rightarrow^* s''}
-    \infer2{r_A \,Y'^{s}\, s''}
+    \hypo{s \rightarrow^* s' \: F \: r}
+    \infer1{\iota_2(r) \in \delta(s)}
   \end{prooftree}
 \]
+Since there is as adjunction
+$(\epsilon, \eta) : \mathcal{P} \dashv |{-}| : \mathbf{Set} \rightarrow \mathbf{Pos}$,
+the above state transition generates
+a coalgebra $(\mathcal{P}(S), \delta')$ where
+\[
+  \delta' : \mathcal{P}(S) \rightarrow \hat{A}(\mathcal{P}(S)) \oplus \mathcal{P}(B^\ans) \qquad
+  \delta' :=  \mathcal{P}(\delta) \circ \epsilon_{\mathcal{P}(\ddot{A}(S) + B^\ans)}
+\]
+The CompCertO transition systems are stateless,
+so we define the strategy
+$\llbracket {L} \rrbracket := \hat{\sigma}$
+by promoting the following regular strategy
+\[
+  \sigma(q) := \delta'(\{ s | q \: I\: s \})
+\]
 
-The embedding preserves the simulation relation.
-
-
-Back to the bounded queue example in~\ref{ex:bq-proof},
+\paragraph{Example} Back to the bounded queue example in~\ref{ex:bq-proof},
 the specification $\Gamma_\kw{bq}$ is implemented by
 composition of two C components
 $\llbracket \kw{Clight}(\kw{bq.c}) \rrbracket \odot
@@ -6085,16 +6110,16 @@ specification $\Gamma_\kw{bq}$
 is implemented by the assembly programs
 $\kw{bq.s}$ and $\kw{rb.s}$.
 
+\paragraph{Simulation Convention}
 
-We omit the brackets for the open semantics
-when the context is clear.
-
+\paragraph{Simulation}
 
 %}}}
 
 \subsection{Modeling loading and the execution environments}
+\label{sec:application:loader}  %{{{
 
-\begin{example} %{{{
+\begin{example}
 The behavior of a CompCert program as a process
 once it is \emph{loaded} and executed is given by:
 \[
