@@ -1308,6 +1308,7 @@ The translation unit $\kw{bq.c}$ then uses that interface
 to implement the queue.
 We can describe this situation using
 high-level specifications with the following types:
+[FIXME: the signature conflicts with Fig~\ref{fig:spec}]
 \begin{align*}
   \Sigma_\kw{rb} : \top &\twoheadrightarrow E_\kw{rb} \,,
   & \text{where} \:\:\,
@@ -6587,30 +6588,113 @@ can be embedded into our framework,
 thus allowing us to implement
 the specifications with C programs.
 
-\paragraph{Language Interface}
-The language interfaces for CompCertO
-can be viewed as a coarse-grained form
-of the effect signatures,
-where the set of questions and answers
-includes all the syntactically correct function calls
-and return values.
+\paragraph{Open Transition System}
+CompCertO
+uses a notion of \emph{open} transition system
+to describe interactions across component boundaries.
+The boundaries are specified as
+language interfaces,
+as shown in Example~\ref{ex:compcertosig},
+which classify interactions
+in a coarse-grained form.
+In particular,
+unlike effect signatures,
+the type of answers
+is not dependent on the questions.
 Thus,
 a language interface $A := \langle A^\que, A^\ans \rangle$
 has its corresponding
 effect signature $\llbracket A \rrbracket := \{ q : A^\ans \mid q \in A^\que \}$.
 
-\paragraph{Transition System}
+A \emph{transition system} $L : A \twoheadrightarrow B$
+is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
+consisting of:
+\begin{itemize}
+  \item a set $S$ of states and
+    a transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $I \subseteq B^\que \times S$
+    which assigns possible \emph{initial states}
+    to each question of $B$;
+  \item a relation $F \subseteq S \times B^\ans$
+    which specifies \emph{final states} together with
+    corresponding answers in $B$;
+  \item a relation $X \subseteq S \times A^\que$
+    which identifies \emph{external states} and
+    corresponding questions of $A$;
+  \item a relation $Y \subseteq S \times A^\ans \times S$,
+    which identifies \emph{resumption states}.
+\end{itemize}
 
-Given a CompCertO's transition system
-$L: A \twoheadrightarrow B = \langle S, \rightarrow, I, X, Y, F \rangle$,
-we define the following transitions
-to simulate its observable behaviors
-by hiding all the internal steps,
-where
+Executions take the form
+\[
+  q \mathrel{I} s_0 \rightarrow^*
+  s_1 \mathrel{X} q_1 \leadsto
+  r_1 \mathrel{Y^{s_1}} s_1' \rightarrow^*
+  s_2 \mathrel{\cdots}
+  s_n \mathrel{X} q_n \leadsto
+  r_n \mathrel{Y^{s_n}} s_n' \rightarrow^*
+  s_f \mathrel{F} r
+  \,,
+\]
+corresponding to an interaction trace
+$
+  q \rightarrowtail
+  (q_1 \leadsto r_1) \rightarrowtail
+  \cdots \rightarrowtail
+  (q_n \leadsto r_n) \rightarrowtail
+  r
+$.
+
+%The component is activated by an incoming call,
+%described by a question $q \in B^\que$.
+%%which is used to determine the transition system's initial state.
+%As it executes,
+%the transition system may perform outgoing calls,
+%asking questions
+%$q_1, \ldots, q_n \in A^\que$
+%and receiving corresponding answers
+%$r_1, \ldots, r_n \in A^\ans$.
+%Execution terminates with
+%the top-level answer $r \in B^\ans$.
+
+\begin{example}[Clight semantics] \label{ex:overview:clightsem} %{{{
+Consider the translation unit $\kw{rb.c}$ shown in Fig.~\ref{fig:code}.
+Its semantics is given by
+the transition system $\kw{Clight}(\kw{rb.c})$,\!%
+which admits the following interaction trace:
+\[
+  \kw{Clight}(\kw{rb.c}) \quad \vDash \quad
+  \kw{inc1}()@[\kw{c1} \mapsto 2]
+  \: \rightarrowtail \:
+  2@[\kw{c1} \mapsto 3]
+\]
+Note that the memory is updated to store the new value of the counter $\kw{c1}$.
+By contrast, $\kw{bq.c}$
+does not directly modify the memory,
+but it makes outgoing calls which may have that effect:
+\[
+  \kw{Clight}(\kw{bq.c}) \:\: \vDash \:\:
+  \kw{deq}()@m
+  \rightarrowtail
+  \big( \kw{inc1}()@m \leadsto i@m' \big)
+  \rightarrowtail
+  \big( \kw{get}(i)@m' \leadsto v@m'' \big)
+  \rightarrowtail
+  v@m''
+  \,.
+\]
+\end{example}
+%}}}
+
+We define the following transitions
+to simulate the execution
+of a CompCertO transition system.
+Notably, the transitions
+hide the internal steps.
 \[
   \delta : S \rightarrow \mathcal{P}(\ddot{A}(S) + B^\ans) \qquad
   \begin{prooftree}
-    \hypo{s \rightarrow^* s' \: X \: m \leadsto n \: Y^{s'} \: s''}
+    \hypo{s \rightarrow^* s' \: X \: m \leadsto n \: Y^{s} \: s''}
     \infer1{\iota_1(\underline{m}n\underline{s''}) \in \delta(s)}
   \end{prooftree}
   \qquad
@@ -6619,7 +6703,7 @@ where
     \infer1{\iota_2(r) \in \delta(s)}
   \end{prooftree}
 \]
-Since there is as adjunction
+Using the well-known adjunction
 $(\epsilon, \eta) : \mathcal{P} \dashv |{-}| : \mathbf{Set} \rightarrow \mathbf{Pos}$,
 the above state transition generates
 a coalgebra $(\mathcal{P}(S), \delta')$ where
@@ -6632,7 +6716,7 @@ so we define the strategy
 $\llbracket {L} \rrbracket := \hat{\sigma}$
 by promoting the following regular strategy
 \[
-  \sigma(q) := \delta'(\{ s | q \: I\: s \})
+  \sigma(q) := \delta'(\{ s \mid q \: I\: s \})
 \]
 
 \paragraph{Simulation Convention}
@@ -6647,7 +6731,7 @@ CompCertO defines a notion of
 horizontal composition
 $L_1 \oplus L_2$ with the property
 \[
-  \kw{Asm}(p_1) \odot \kw{Asm}(p_2) \le \kw{Asm}(p_1 + p_2)
+  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2) \le \kw{Asm}(p_1 + p_2)
 \]
 [Move \ref{ex:bq-proof} to here]
 
@@ -6656,7 +6740,7 @@ with CompCertO's horizontal composition
 in the sense that
 \[
   \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
-    \sqsubseteq  \llbracket L_1 \oplus L_2 \rrbracket
+    \le  \llbracket L_1 \oplus L_2 \rrbracket
   \qquad \forall \; L_1, L_2 \in A \twoheadrightarrow A
 \]
 which means
@@ -6665,21 +6749,38 @@ the composition of strategies
 the horizontal composition $\oplus$.
 
 \paragraph{Example}
+
+We prove that
+\[
+  \phi_\kw{bq} : \Sigma_\kw{bq} \le_{\mathcal{C}@\langle m_{0} \rangle \twoheadrightarrow \mathcal{C}@\langle m_{0} \rangle} \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
+  \qquad
+  \phi_\kw{rb} : \Gamma_\kw{rb} \le_{\varnothing \twoheadrightarrow \mathcal{C}@\langle m_{0} \rangle} \llbracket \kw{Clight}(\kw{rb.c}) \rrbracket
+\]
+
+[TODO: memory relation]
+
 The property above allows us to prove
 \[
+  \ell :
   \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket \odot
   \llbracket \kw{Clight}(\kw{rb.c}) \rrbracket
-  \sqsubseteq
+  \le_{\mathbb{C} \rightarrow \mathbb{C}}
   \llbracket \kw{Asm}(\kw{bq.s}) \rrbracket \odot
   \llbracket \kw{Asm}(\kw{rb.s}) \rrbracket
-  \sqsubseteq \llbracket \kw{Asm}(\kw{bq.s} + \kw{rb.s}) \rrbracket
+  \le \llbracket \kw{Asm}(\kw{bq.s} + \kw{rb.s}) \rrbracket
 \]
 Thus, combining with~\ref{ex:bq},
 we conclude that
 specification $\Gamma_\kw{bq}$
 is implemented by the assembly programs
 $\kw{bq.s}$ and $\kw{rb.s}$.
-[$\Gamma_\kw{bq}$ refined by $\Sigma_\kw{bq} \odot \Sigma_\kw{rb}$ seems unexplained]
+
+Example~\ref{ex:bqcorrect} proves at high abstraction level.
+We can give the complete proof as:
+\[
+  \phi_1 \fatsemi (\phi_\kw{bq} \fatsemi \phi^\kw{cc}_\kw{bq}) \odot
+  (\phi_\kw{rb} \fatsemi \phi^\kw{cc}_\kw{rb}) \fatsemi \ell
+\]
 
 %}}}
 
