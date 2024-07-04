@@ -1531,31 +1531,6 @@ where the refinement convention
 $\mathbb{C} : \mathcal{C} \leftrightarrow \mathcal{A}$
 captures the calling convention used by the compiler
 to represent C calls at the level of assembly.
-In addition,
-we will show that \emph{linking} implements layered composition in the following sense:
-\[
-  \ell :
-  \kw{Asm}(p_1) \odot \kw{Asm}(p_2) \le
-  \kw{Asm}(p_1 + p_2)
-\]
-Note that here the refinement convention $\idsc_\mathcal{A}$
-has been left implicit.
-Importantly,
-the properties $\phi^\kw{cc}$ and $\ell$ can be combined,
-resulting in a property using the refinement convention
-$\mathbb{C} \fatsemi \idsc_\mathcal{A} = \mathbb{C}$.
-When two Clight programs $p_1$ and $p_2$
-compile into the assembly programs $p_1'$ and $p_2'$,
-we can characterize the behavior of the linked assembly program
-$p_1' + p_2'$ using the refinement
-\[
-  (\phi^\kw{cc}_{p_1} \odot \phi^\kw{cc}_{p_2}) \fatsemi \ell
-  \: : \:
-  \kw{Clight}(p_1) \odot \kw{Clight}(p_2)
-  \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
-  \kw{Asm}(p_1' + p_2')
-  \,.
-\]
 \end{example}
 %}}}
 
@@ -6723,34 +6698,47 @@ by promoting the following regular strategy
 
 \paragraph{Simulation}
 
-\paragraph{Linking Property}
-
-To compose transition systems
-with compatible language interfaces,
-CompCertO defines a notion of
-horizontal composition
-$L_1 \oplus L_2$ with the property
+\paragraph{Composition}
+CompCertO comes with a notion of
+horizontal composition,
+which is implemented by the \emph{linking}
+in the following sense:
 \[
-  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2) \le \kw{Asm}(p_1 + p_2)
+  \ell :
+  \kw{Asm}(p_1) \oplus \kw{Asm}(p_2) \le
+  \kw{Asm}(p_1 + p_2)
 \]
-[Move \ref{ex:bq-proof} to here]
 
 The embedding is compatible
-with CompCertO's horizontal composition
-in the sense that
+with CompCertO's horizontal composition,
+meaning
+the composition of strategies
+\emph{under-approximates}
+the $\oplus$ combinator:
 \[
-  \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
+  \mathit{z}: \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
     \le  \llbracket L_1 \oplus L_2 \rrbracket
   \qquad \forall \; L_1, L_2 \in A \twoheadrightarrow A
 \]
-which means
-the composition of strategies
-\emph{under-approximates}
-the horizontal composition $\oplus$.
+
+When two Clight programs $p_1$ and $p_2$
+compile into the assembly programs $p_1'$ and $p_2'$,
+we can characterize the behavior of the linked assembly program
+$p_1' + p_2'$ using the refinement
+\[
+  \theta_{p_1, p_2} :=
+  \mathit{z} \fatsemi (\phi^\kw{cc}_{p_1} \odot \phi^\kw{cc}_{p_2}) \fatsemi \ell
+  \: : \:
+  \llbracket \kw{Clight}(p_1) \rrbracket \odot
+  \llbracket \kw{Clight}(p_2) \rrbracket
+  \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
+  \llbracket \kw{Asm}(p_1' + p_2') \rrbracket
+  \,.
+\]
 
 \paragraph{Example}
 
-We prove that
+We prove the individual correctness that
 \[
   \phi_\kw{bq} : \Sigma_\kw{bq} \le_{\mathcal{C}@\langle m_{0} \rangle \twoheadrightarrow \mathcal{C}@\langle m_{0} \rangle} \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket
   \qquad
@@ -6759,16 +6747,6 @@ We prove that
 
 [TODO: memory relation]
 
-The property above allows us to prove
-\[
-  \ell :
-  \llbracket \kw{Clight}(\kw{bq.c}) \rrbracket \odot
-  \llbracket \kw{Clight}(\kw{rb.c}) \rrbracket
-  \le_{\mathbb{C} \rightarrow \mathbb{C}}
-  \llbracket \kw{Asm}(\kw{bq.s}) \rrbracket \odot
-  \llbracket \kw{Asm}(\kw{rb.s}) \rrbracket
-  \le \llbracket \kw{Asm}(\kw{bq.s} + \kw{rb.s}) \rrbracket
-\]
 Thus, combining with~\ref{ex:bq},
 we conclude that
 specification $\Gamma_\kw{bq}$
@@ -6778,8 +6756,7 @@ $\kw{bq.s}$ and $\kw{rb.s}$.
 Example~\ref{ex:bqcorrect} proves at high abstraction level.
 We can give the complete proof as:
 \[
-  \phi_1 \fatsemi (\phi_\kw{bq} \fatsemi \phi^\kw{cc}_\kw{bq}) \odot
-  (\phi_\kw{rb} \fatsemi \phi^\kw{cc}_\kw{rb}) \fatsemi \ell
+  \phi_1 \fatsemi (\phi_\kw{bq} \odot \phi_\kw{rb}) \fatsemi \theta_{\kw{bq}, \kw{rb}}
 \]
 
 %}}}
@@ -6875,25 +6852,141 @@ to the file descriptor 1,
 and the return value $n'$ indicates
 the number of bytes that are successfully written.
 
-Overall, the loader
-for the CompCertO assembly semantics
-$L_\mathcal{A}: \mathcal{A} \rightarrow \mathcal{A}$
-is defined as
+Similarly, we define a loader for Clight programs
+with the following definition
+and property:
+
 \[
-  \kw{load}_\mathcal{A}(L_\mathcal{A}) : \mathcal{S} \rightarrow \mathcal{P}
-  \::=\: \kw{entry}_\mathcal{A} \odot L_\mathcal{A}
-  \odot \kw{runtime}_\mathcal{A}
+  \begin{prooftree}
+    \hypo{\kw{load}_\mathcal{C}(L_1)
+  \::=\: \kw{entry}_\mathcal{C} \odot \llbracket L_1 \rrbracket
+  \odot \kw{runtime}_\mathcal{C}}
+    \infer[no rule]1{\kw{load}_\mathcal{A}(L_2)
+  \::=\: \kw{entry}_\mathcal{A} \odot \llbracket L_2 \rrbracket
+  \odot \kw{runtime}_\mathcal{A}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{\phi: L_1 \le_{\mathbb{C} \rightarrow \mathbb{C}} L_2}
+    \infer1{\phi^\ell: \kw{load}_\mathcal{C}(L_1) \le
+      \kw{load}_\mathcal{A}(L_2)}
+  \end{prooftree}
 \]
 
-\begin{example}
-  The program $\kw{secret.s}$ is itself written is assembly.
-  We compile the $\kw{rot13.c}$ to assembly,
-  and load the programs:
-  \[
-    \kw{load}_\mathcal{A}(\kw{secret.s} + \kw{rot13.s}) \:\vDash\:
-    \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0
-  \]
-\end{example}
+The loader is used
+to close the gap between
+strategy specifications
+and CompCertO semantics.
+The strategy- and
+program-level specification
+for the secret module:
+{\scriptsize
+\begin{align*}
+  \Gamma_\kw{secret} & \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0 \\
+  \Sigma_\kw{secret} & \:\vDash\:
+  \kw{main()}@m[b \mapsto \texttt{"hello, world!\textbackslash{}n"}] \\
+  & \rightarrowtail
+    (\kw{write}(1, b, 14)@m [b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14@m[b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}]) \\
+  & \rightarrowtail 0@m[b \mapsto deallocated]
+\end{align*}}
+The program-level specification
+implements the strategy
+in the following sense:
+\[
+  \phi_\kw{secret}: \Gamma_\kw{secret} \le \kw{load}_\mathcal{C}(\Sigma_\kw{secret})
+  \quad
+  \begin{array}{c}
+    \begin{tikzcd}[row sep=2.5ex, column sep=4ex]
+      \mathcal{S} \ar[dd, equal]
+      \ar[rrr, "\Gamma_\kw{secret}"]
+       &&&
+      \mathcal{P} \ar[dd, equal] \\
+      & &|[xshift=-4ex, overlay]| \phi_\kw{secret} & \\
+      \mathcal{S} \ar[r, "\kw{entry}"'] & \mathcal{C} \ar[r, "\Sigma_\kw{secret}"'] & \mathcal{C}\ar[r, "\kw{runtime}"']  & \mathcal{P}
+    \end{tikzcd}
+  \end{array}
+  \quad
+  \begin{array}{c}
+    \begin{tikzcd}[row sep=0.5ex, column sep=1ex]
+      \mathcal{S} \ar[dd, leftrightarrow, "\kw{runtime}^*"']
+	  \ar[rr, "\Gamma_\kw{secret}"] &&
+      \mathcal{P} \ar[dd, leftrightarrow, "\kw{entry}_*"] \\
+      & \phi_\kw{secret} & \\
+      \mathcal{C} \ar[rr, "\Sigma_\kw{secret}"'] &&
+      \mathcal{C}
+    \end{tikzcd}
+  \end{array}
+\]
+
+Likewise,
+we define the specifications
+for the decode module,
+and prove that
+$\phi_\kw{decode}: \Gamma_\kw{decode} \le \kw{load}_\mathcal{C}(\Sigma_\kw{decode})$
+{\scriptsize
+\begin{align*}
+  \Gamma_\kw{decode} & \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{read}_0[100] \leadsto s) \rightarrowtail (\kw{write}_1[\kw{rot13}(s)] \leadsto n) \rightarrowtail 0 \\
+  \Sigma_\kw{decode} & \:\vDash\:
+  \kw{main()}@m 
+  \rightarrowtail (\kw{read}(0, b, 100)@m[b \mapsto unspecified] \leadsto \kw{len}(s)@m[b \mapsto s]) \\
+  & \rightarrowtail (\kw{write}(1, b, \kw{len}(s))@m[b\mapsto \kw{rot13}(s)] \leadsto n@m[b\mapsto \kw{rot13}(s)]) \\
+  & \rightarrowtail 0@m[b \mapsto deallocated]
+\end{align*}}
+
+The loader takes care of
+the connection between strategies
+and CompCertO semantics.
+The rest of the proof
+can be split into two parts.
+
+On the end of program semantics,
+we prove the CompCertO programs
+indeed meet their specifications
+\begin{gather*}
+  \pi_\kw{secret}: \Sigma_\kw{secret} \le L_\kw{secret} \oplus \kw{Clight}(\kw{rot13.c})
+  \qquad
+  \pi'_\kw{secret}: L_\kw{secret} \le_{\mathbb{C} \rightarrow \mathbb{C}} \kw{Asm}(\kw{secret.s})
+  \\
+  \pi_\kw{decode}: \Sigma_\kw{decode} \le \kw{Clight}(\kw{decode.c}) \oplus \kw{Clight}(\kw{rot13.c})
+\end{gather*}
+such that
+\begin{align*}
+   \psi_\kw{secret} := \pi_\kw{secret} \fatsemi
+  (\pi'_\kw{secret} \oplus \phi^\kw{cc}_\kw{rot13})
+  \fatsemi \ell
+  & \quad :\quad \Sigma_\kw{secret} \le_{\mathbb{C} \rightarrow \mathbb{C}}
+  \kw{Asm}(\kw{secret.s} + \kw{rot13.s}) \\
+   \psi_\kw{decode} := \pi_\kw{decode} \fatsemi
+  (\phi^\kw{cc}_\kw{decode} \oplus \phi^\kw{cc}_\kw{rot13})
+  \fatsemi \ell
+  & \quad :\quad \Sigma_\kw{decode} \le_{\mathbb{C} \rightarrow \mathbb{C}}
+  \kw{Asm}(\kw{decode.s} + \kw{rot13.s})
+\end{align*}
+
+On the end of strategies,
+we define the overall behavior:
+\[
+  \Gamma \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0 \\
+\]
+and prove
+\[
+  \phi_t: \Gamma \le \Gamma_\kw{secret} \mid \Gamma_\kw{decode}
+\]
+
+Eventually,
+the property~\ref{eqn:hellospec}
+translates to the following
+refinement with the proof:
+\[
+ \phi_t \fatsemi
+ (\phi_\kw{secret} \fatsemi \psi_\kw{secret}^\ell \mid
+ \phi_\kw{decode} \fatsemi \psi_\kw{decode}^\ell) \quad : \quad
+ \Sigma \le \kw{load}_\mathcal{A}(\kw{secret.s} + \kw{rot13.s})
+ \mid \kw{load}_\mathcal{A}(\kw{decode.s} + \kw{rot13.s})
+\]
 
 %}}}
 
