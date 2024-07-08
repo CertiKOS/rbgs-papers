@@ -7092,41 +7092,63 @@ This is identified as the
 \subsection{Modeling loading and the execution environments}
 \label{sec:application:loader}  %{{{
 
-The CompCertO semantics explores
-the intricate interaction among individual components,
-which are eventually linked
-through the linking property.
-However, even after this linking,
-the behavior of the resulting program remains
-somewhat unclear.
-It requires invocation
-through a query
-with a specific program state
-and may entail interactions
-with the environment.
-To bring clarity to this process
-and model the semantics of linked programs
-akin to a process
-running within an operating system,
+\paragraph{Verifying Strategies}
+{\color{gray}
+[Move to previous sections]
+On the end of strategies,
+we define the strategy level specifications:
+\begin{gather*}
+  \Gamma \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0 \\
+  \Gamma_\kw{secret} \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0 \\
+  \Gamma_\kw{decode} \:\vDash\:
+  \kw{run} \rightarrowtail (\kw{read}_0[100] \leadsto s) \rightarrowtail (\kw{write}_1[\kw{rot13}(s)] \leadsto n) \rightarrowtail 0
+\end{gather*}
+and prove
+\[
+  \phi_t: \Gamma \le \Gamma_\kw{secret} \mid \Gamma_\kw{decode}
+\]
+}
+
+Verifying functionailities
+of library code substantially benefits from
+the CompCertO's open semantics.
+However,
+the openness hinders reasoning
+on the behavior of executables.
+For the executables,
+it is desirable to
+model them
+in terms of the \textit{process behavior};
+the behaviors are self-contained,
+and can be characterized
+by the sequence of system calls
+they perform.
+To bridge the gap
+between the open semantics of
+the process behavior,
 we introduce the notion of a \textit{loader}.
 
 On one end,
-the loader uses
+the loader launches
+the component as a process
+by using the
 $\kw{entry}_\mathcal{A} : \mathcal{A} \rightarrow \mathcal{P}$
-to invoke the main function.
+to invoke its main function:
 \[
   \kw{entry}_\mathcal{A} \:\vDash\:
   \kw{run} \rightarrowtail
   (\vec{rs_0}[\kw{PC}\mapsto \kw{main},
   \kw{RA} \mapsto \kw{null},
   \kw{RSP}\mapsto \kw{null}]@m_0 \leadsto
-  \vec{rs}[\kw{RAX} \mapsto r]@m) \rightarrowtail r \\
+  \vec{rs}[\kw{RAX} \mapsto r]@m) \rightarrowtail r \,.
 \]
 The registers $\vec{rs_0}$ and the memory $m_0$ are
 initialized that
 the program counter $\kw{PC}$ holds a pointer value
 that points to
-the function $b_\kw{main}$,
+the $\kw{main}$ function,
 and the static variables
 are properly initialized in the memory.
 The return address $\kw{RA}$
@@ -7137,16 +7159,15 @@ At the end,
 the value stored in the $\kw{RAX}$ is returned.
 
 On the other end,
-the component
-$\kw{runtime} : \mathcal{E} \rightarrow \mathcal{A}$
+the $\kw{runtime} : \mathcal{S} \rightarrow \mathcal{A}$
 acts as the conduit for runtime libraries
 to interface the program with the operating system.
 In our scenario,
-the programs use $\kw{read}$ and $\kw{write}$
+the programs only use $\kw{read}$ and $\kw{write}$
 functions from $\kw{unistd.h}$
 to perform I/O operations.
 Thus, we implement the minimalist runtime:
-
+{\footnotesize
 \begin{align*}
   \kw{runtime}_\mathcal{A} & \:\vDash\:
   \vec{rs}[\kw{PC} \mapsto \kw{read},
@@ -7159,12 +7180,12 @@ Thus, we implement the minimalist runtime:
     \vec{rs}[\kw{PC} \mapsto \kw{write},
     \kw{RDI} \mapsto 1,
     \kw{RSI} \mapsto b,
-    \kw{RDX} \mapsto n]@m[b \mapsto s] \\
-  & \rightarrowtail
-  (\kw{write}_1[s[0..n]] \leadsto n')
-  \rightarrowtail \vec{rs'}[\kw{RAX} \mapsto n']@m[b \mapsto deallocated]
+    \kw{RDX} \mapsto n]@m[b \mapsto s] \\ 
+ &  \rightarrowtail
+  (\kw{write}_1[s[0:n]] \leadsto n')
+  \rightarrowtail \vec{rs'}[\kw{RAX} \mapsto n']@m[b \mapsto s]
 \end{align*}
-
+}
 Following the x86 conventions,
 arguments are passed through
 the \kw{RDI}, \kw{RSI}, and \kw{RDX} registers.
@@ -7180,19 +7201,73 @@ to the file descriptor 1,
 and the return value $n'$ indicates
 the number of bytes that are successfully written.
 
-Similarly, we define a loader for Clight programs
-with the following definition
-and property:
-
+The assembly loader can be obtained from:
 \[
-  \begin{prooftree}
-    \hypo{\kw{load}_\mathcal{C}(L_1)
-  \::=\: \kw{entry}_\mathcal{C} \odot \llbracket L_1 \rrbracket
-  \odot \kw{runtime}_\mathcal{C}}
-    \infer[no rule]1{\kw{load}_\mathcal{A}(L_2)
-  \::=\: \kw{entry}_\mathcal{A} \odot \llbracket L_2 \rrbracket
-  \odot \kw{runtime}_\mathcal{A}}
-  \end{prooftree}
+  \kw{load}_\mathcal{A}(L)
+  \::=\: \kw{entry}_\mathcal{A} \: \odot \: \llbracket L \rrbracket
+  \: \odot \: \kw{runtime}_\mathcal{A}
+  \,.
+\]
+With the assembly loader,
+we then formally formulate the property (\ref{eqn:hellospec})
+as follows:
+\[
+\Gamma \le \kw{load}_\mathcal{A}(\kw{secret.s} + \kw{rot13.s})
+\mid \kw{load}_\mathcal{A}(\kw{decode.s} + \kw{rot13.s})
+\,.
+\]
+
+\paragraph{Verifying Loaded Programs}
+
+Reasoning the process behavior
+directly at the level of assembly programs
+is intricate because of
+the large abstraction gap between
+the strategy-level specifications
+and the assembly semantics.
+Therefore,
+We also introduce a loader
+for the $\kw{Clight}$ semantics
+to divide the proof
+into manageable pieces.
+The auxiliary components
+$\kw{entry}_\mathcal{C}$ and
+$\kw{runtime}_\mathcal{C}$
+are defined as:
+{\small
+\begin{align*}
+  & \kw{entry}_\mathcal{C} \:\vDash\:
+  \kw{run} \rightarrowtail
+  (\kw{main}()@m_0 \leadsto r@m) \rightarrowtail r \\
+  & \kw{runtime}_\mathcal{C} \:\vDash\:
+  \kw{read}(0, b, n)@m[b \mapsto unspecified]
+   \rightarrowtail (\kw{read}_0[n] \leadsto s)
+    \rightarrowtail \kw{len}(s)@m[b \mapsto s] \\
+  & \kw{runtime}_\mathcal{C} \:\vDash\:
+    \kw{write}(1, b, n)@m[b \mapsto s]
+   \rightarrowtail
+  (\kw{write}_1[s[0:n]] \leadsto n')
+  \rightarrowtail n'@m[b \mapsto s]
+\end{align*}}
+It is obvious that
+the \kw{Clight} level
+questions and answers
+in $\kw{entry}_\mathcal{C}$ and $\kw{runtime}_\mathcal{C}$
+can be related
+with their counterparts in the assembly loader
+with respect to
+the simulation convention $\mathbb{C}$.
+Thus, the loaders
+transport
+the $\mathbb{C}$-related CompCertO simulations
+into
+simulation relations
+between process behaviors
+in the following sense:
+\[
+  \kw{load}_\mathcal{C}(L)
+  \::=\: \kw{entry}_\mathcal{C} \: \odot \: \llbracket L \rrbracket
+  \: \odot \: \kw{runtime}_\mathcal{C}
   \qquad
   \begin{prooftree}
     \hypo{\phi: L_1 \le_{\mathbb{C} \rightarrow \mathbb{C}} L_2}
@@ -7201,28 +7276,51 @@ and property:
   \end{prooftree}
 \]
 
-The loader is used
-to close the gap between
-strategy specifications
-and CompCertO semantics.
-The strategy- and
-program-level specification
-for the secret module:
-{\scriptsize
-\begin{align*}
-  \Gamma_\kw{secret} & \:\vDash\:
-  \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0 \\
-  \Sigma_\kw{secret} & \:\vDash\:
+\begin{example}
+Revisiting
+the task articulated in property (\ref{eqn:hellospec}),
+we first
+define the following
+program-level specifications,
+and prove
+they implement
+the strategy-level spcifications
+via the loader:
+\noindent
+{\small
+\makebox[\linewidth]{%
+  \begin{minipage}[c][][c]{.45\textwidth}
+\begin{alignat*}{2}
+  & \Sigma_\kw{secret} && \:\vDash\:
   \kw{main()}@m[b \mapsto \texttt{"hello, world!\textbackslash{}n"}] \\
-  & \rightarrowtail
-    (\kw{write}(1, b, 14)@m [b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14@m[b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}]) \\
-  & \rightarrowtail 0@m[b \mapsto deallocated]
-\end{align*}}
+  &\quad \rightarrowtail &&
+    (\kw{write}(1, b, 14)@m [b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}] \\
+   &&& \leadsto 14@m[b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}]) \\
+  &\quad \rightarrowtail && 0@m[b \mapsto deallocated]
+\end{alignat*}
+  \end{minipage}
+    \quad
+  \begin{minipage}[c][][c]{.45\textwidth}
+\begin{alignat*}{2}
+  & \Sigma_\kw{decode} && \:\vDash\
+  \kw{main()}@m \\
+  &\quad \rightarrowtail && ( \kw{read}(0, b, 100)@m[b \mapsto unspecified] \\
+   &&& \leadsto \kw{len}(s)@m[b \mapsto s]) \\
+  &\quad \rightarrowtail && (\kw{write}(1, b, \kw{len}(s))@m[b\mapsto \kw{rot13}(s)] \\
+   &&& \leadsto n@m[b\mapsto \kw{rot13}(s)]) \\
+  &\quad \rightarrowtail && 0@m[b \mapsto deallocated] \\ 
+\end{alignat*}
+\end{minipage}}}
 The program-level specification
 implements the strategy
 in the following sense:
+{\small
 \[
-  \phi_\kw{secret}: \Gamma_\kw{secret} \le \kw{load}_\mathcal{C}(\Sigma_\kw{secret})
+  \begin{prooftree}
+    \hypo{\phi_\kw{decode}: \Gamma_\kw{decode} \le \kw{load}_\mathcal{C}(\Sigma_\kw{decode})}
+    \infer[no rule]1
+    {\phi_\kw{secret}: \Gamma_\kw{secret} \le \kw{load}_\mathcal{C}(\Sigma_\kw{secret})}
+  \end{prooftree}
   \quad
   \begin{array}{c}
     \begin{tikzcd}[row sep=2.5ex, column sep=4ex]
@@ -7237,49 +7335,44 @@ in the following sense:
   \quad
   \begin{array}{c}
     \begin{tikzcd}[row sep=0.5ex, column sep=1ex]
-      \mathcal{S} \ar[dd, leftrightarrow, "\kw{runtime}^*"']
+      \mathcal{S} \ar[dd, leftrightarrow, "\kw{runtime}_*"']
 	  \ar[rr, "\Gamma_\kw{secret}"] &&
-      \mathcal{P} \ar[dd, leftrightarrow, "\kw{entry}_*"] \\
+      \mathcal{P} \ar[dd, leftrightarrow, "\kw{entry}^*"] \\
       & \phi_\kw{secret} & \\
       \mathcal{C} \ar[rr, "\Sigma_\kw{secret}"'] &&
       \mathcal{C}
     \end{tikzcd}
   \end{array}
-\]
+\]}
+It is worth mentioning that
+the components $\kw{entry}_\mathcal{C}$ and $\kw{runtime}_\mathcal{C}$
+can also be viewed as simulation conventions
+that translates signatures $\mathcal{S}$ and $\mathcal{P}$
+into the $\mathcal{C}$ language interface,
+as illustrated in the diagrams above.
 
-Likewise,
-we define the specifications
-for the decode module,
-and prove that
-$\phi_\kw{decode}: \Gamma_\kw{decode} \le \kw{load}_\mathcal{C}(\Sigma_\kw{decode})$
-{\scriptsize
-\begin{align*}
-  \Gamma_\kw{decode} & \:\vDash\:
-  \kw{run} \rightarrowtail (\kw{read}_0[100] \leadsto s) \rightarrowtail (\kw{write}_1[\kw{rot13}(s)] \leadsto n) \rightarrowtail 0 \\
-  \Sigma_\kw{decode} & \:\vDash\:
-  \kw{main()}@m 
-  \rightarrowtail (\kw{read}(0, b, 100)@m[b \mapsto unspecified] \leadsto \kw{len}(s)@m[b \mapsto s]) \\
-  & \rightarrowtail (\kw{write}(1, b, \kw{len}(s))@m[b\mapsto \kw{rot13}(s)] \leadsto n@m[b\mapsto \kw{rot13}(s)]) \\
-  & \rightarrowtail 0@m[b \mapsto deallocated]
-\end{align*}}
-
-The loader takes care of
-the connection between strategies
-and CompCertO semantics.
 The rest of the proof
-can be split into two parts.
-
-On the end of program semantics,
-we prove the CompCertO programs
-indeed meet their specifications
+only involves the CompCertO semantics.
+In particular,
+the following properties
+state that
+the programs correctly implement
+their corresonding specifications,
+where $L_\kw{secret}$
+is a manually written
+$\kw{Clight}$ transition system
+that captures the behavior of
+the assembly program $\kw{secret.s}$:
 \begin{gather*}
   \pi_\kw{secret}: \Sigma_\kw{secret} \le L_\kw{secret} \oplus \kw{Clight}(\kw{rot13.c})
   \qquad
   \pi'_\kw{secret}: L_\kw{secret} \le_{\mathbb{C} \rightarrow \mathbb{C}} \kw{Asm}(\kw{secret.s})
   \\
   \pi_\kw{decode}: \Sigma_\kw{decode} \le \kw{Clight}(\kw{decode.c}) \oplus \kw{Clight}(\kw{rot13.c})
+  \,.
 \end{gather*}
-such that
+Combining with CompCertO's compiler correctness,
+we obtain:
 \begin{align*}
    \psi_\kw{secret} := \pi_\kw{secret} \fatsemi
   (\pi'_\kw{secret} \oplus \phi^\kw{cc}_\kw{rot13})
@@ -7291,30 +7384,20 @@ such that
   \fatsemi \ell
   & \quad :\quad \Sigma_\kw{decode} \le_{\mathbb{C} \rightarrow \mathbb{C}}
   \kw{Asm}(\kw{decode.s} + \kw{rot13.s})
+  \,.
 \end{align*}
-
-On the end of strategies,
-we define the overall behavior:
-\[
-  \Gamma \:\vDash\:
-  \kw{run} \rightarrowtail (\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}] \leadsto 14) \rightarrowtail 0 \\
-\]
-and prove
-\[
-  \phi_t: \Gamma \le \Gamma_\kw{secret} \mid \Gamma_\kw{decode}
-\]
-
 Eventually,
-the property~\ref{eqn:hellospec}
-translates to the following
-refinement with the proof:
+the property (\ref{eqn:hellospec})
+is witnessed by the following proof:
 \[
  \phi_t \fatsemi
  (\phi_\kw{secret} \fatsemi \psi_\kw{secret}^\ell \mid
  \phi_\kw{decode} \fatsemi \psi_\kw{decode}^\ell) \quad : \quad
- \Sigma \le \kw{load}_\mathcal{A}(\kw{secret.s} + \kw{rot13.s})
+ \Gamma \le \kw{load}_\mathcal{A}(\kw{secret.s} + \kw{rot13.s})
  \mid \kw{load}_\mathcal{A}(\kw{decode.s} + \kw{rot13.s})
 \]
+\end{example}
+
 
 %}}}
 
