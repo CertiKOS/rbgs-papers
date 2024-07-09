@@ -2425,1969 +2425,358 @@ we can write
 
 %}}}
 
-\section{Algebraic Game Semantics} \label{sec:ags} %{{{
-
-% Preamble {{{
-
-The formalism we use to define our model
-employs a novel approach which we dub
-\emph{algebraic game semantics},
-drawing simultaneously from
-game semantics,
-algebraic effects and
-universal coalgebra.
-We start by presenting this approach.
-
-%}}}
-
-\subsection{Domains and Games} %{{{
-
-Denotational semantics traditionally employs a domain-theoretic approach.
-To handle programming language features
-(recursion, high-order functions, nondeterminism),
-corresponding domain constructions
-(cpos, exponentials, powerdomains)
-are investigated,
-then used to construct the denotational model:
-types are associated with domains;
-terms of a given type
-are interpreted as elements of the corresponding domain,
-which are often input--output functions of some kind.
-
-\paragraph{Game Semantics} %{{{
-
-Unfortunately, the domain-theoretic approach
-sometimes struggles to account for details of a more operational nature
-(such as sequentiality in the functional programming language PCF).
-Game semantics overcomes this problem
-by emphasizing the \emph{interactive} nature of program components.
-Types are interpreted as
-two-player \emph{games} between the component and its environment, and
-terms type are interpreted as 
-\emph{strategies} for the corresponding games.
-For example, the simple game associated with an effect signature $E$
-can be described as follows:
-\begin{quote}
-The \emph{client} first asks a question $q \in E$;
-the \emph{handler} then gives an answer $r \in \kw{ar}(q)$.
-\end{quote}
-Note that depending on the context,
-a component may play the role of either the client or handler.
-
-A typical strategy model is constructed as follows.
-As a game proceeds,
-we can record the \emph{play} or sequence of moves
-performed by the players.
-A strategy can then be encoded as
-the set of plays that a component will generate if 
-we range over all possible choices of its environment.
-%The following example illustrates this idea.
-
-%}}}
-
-\begin{figure} % fig:qstrat {{{
-  \[
-    \vcenter{\hbox{
-    \begin{tikzpicture}
-      [level 1/.style={sibling distance=2cm},
-       level 2/.style={sibling distance=3cm},
-       level 3/.style={sibling distance=1cm}]
-      \node {}
-        child {
-          node {$*$}
-          child {
-            node {$*$}
-            child {
-              node {$*$}
-              edge from parent node[left] {$\kw{enq}[v_3]$}
-            }
-            child {
-              node {$v_1$}
-              edge from parent node[right] {$\kw{deq}$}
-            }
-            edge from parent node[left] {$\kw{enq}[v_2]$}
-          }
-          child {
-            node {$v_1$}
-            child {
-              node {$*$}
-              edge from parent node[left] {$\kw{enq}[v_2]$}
-            }
-            child {
-              node {$\bot$}
-              edge from parent node[right] {$\kw{deq}$}
-            }
-            edge from parent node[right] {$\kw{deq}$}
-          }
-          edge from parent node[left] {$\kw{enq}[v_1]$}
-        }
-        child {
-          node {$\bot$}
-          edge from parent node[right] {$\kw{deq}$}
-        }
-      ;
-    \end{tikzpicture}     
-    }}
-    \qquad
-    \begin{array}{r@{}l}
-      \sigma :=
-      \{ \, &
-        \kw{enq}[v_1] \cdot \underline{*} \,
-        , \\ &
-        \kw{enq}[v_1] \cdot \underline{*} \cdot
-        \kw{enq}[v_2] \cdot \underline{*} \,
-        , \\ &
-        \kw{enq}[v_1] \cdot \underline{*} \cdot
-        \kw{enq}[v_2] \cdot \underline{*} \cdot
-        \kw{enq}[v_3] \cdot \underline{*} \,
-        , \\ &
-        \kw{enq}[v_1] \cdot \underline{*} \cdot
-        \kw{enq}[v_2] \cdot \underline{*} \cdot
-        \kw{deq} \cdot \underline{v}_1 \,
-        , \\ &
-        \kw{enq}[v_1] \cdot \underline{*} \cdot
-        \kw{deq} \cdot \underline{v}_1 \,
-        , \\ &
-        \kw{enq}[v_1] \cdot \underline{*} \cdot
-        \kw{deq} \cdot \underline{v}_1 \cdot
-        \kw{enq}[v_2] \cdot \underline{*} \,
-      \}
-    \end{array}
-  \]
-  \caption{A strategy for the game associated with $E_\kw{bq}$,
-    shown as a tree and as a set of plays.}
-  \label{fig:qstrat}
-\end{figure}
-%}}}
-
-\begin{example}[Bounded queue game and strategy] \label{ex:qstrat} %{{{
-Consider a version of
-the game associated with the signature $E_\kw{bq}$,
-iterated three times.
-A partial strategy for this game is shown in Fig.~\ref{fig:qstrat}.
-Here, the environment plays the role of the client
-and the component plays the role of the handler.
-The tree shows the possible questions of the environment as edges.
-Nodes are labeled with the answers given by the component,
-or $\bot$ if the strategy is undefined.
-The corresponding set of plays $\sigma$
-collects the possible paths from the root of the tree.
-We have underlined the moves of the component.
-\end{example}
-%}}}
-
-\paragraph{Game and Domain Constructions} %{{{
-
-Once the games and strategies used in a particular model have been formalized,
-a denotational interpretation %of the language under consideration
-can be formulated in those terms.
-Games serve as an intermediate representation
-for the domains (of strategies) in which terms are interpreted,
-and those domains are no longer manipulated directly \emph{as such}.
-
-At the same time,
-constructions on domains and constructions on games
-remain closely related.
-For example, games starting with
-an environment choice ($\bigwith_{i \in I} G_i$) or
-a system choice ($\bigoplus_{i \in I} G_i$)
-correspond to products and coproducts
-in corresponding categories of domains.
-%
-In this sense,
-domain- and game-theoretic semantics
-are not strictly speaking alternatives
-but rather two \emph{lenses} through which
-particular models can be understood,
-with varying degrees of usefulness.
-
-Embracing this complementarity is crucial to the project
-we have outlined in
-\S\ref{sec:intro:compsem} and Fig.~\ref{fig:paradigms}.
-On one hand,
-games provide an operational description
-of interfaces between open components,
-with few assumptions regarding their precise nature;
-as such they constitute a reasonable foundation for
-a reusable semantics toolbox.
-At the same time,
-the compositional structures we wish to formalize
-go beyond the realm of traditional game semantics.
-In particular,
-refinement conventions and data abstraction
-do not fit usual game and strategy constructions,
-but we will see in \S\ref{sec:refconv}
-that the more general reading of these constructions
-developed below
-allows us to adapt them for this task.
-
-%}}}
-
-\paragraph{Our Approach} %{{{
-
-Building on \citet{ags-act},
-we will show that a typical strategy model
-for components of the kind we have described
-can be obtained from first principles
-using domain-theoretic constructions.
-The result is a free sup-lattice containing
-prefix-closed sets of plays.
-
-%}}}
-
-%}}}
-
-\subsection{Games in the category of sup-lattices} %{{{
-
-% Preamble {{{
-
-A sup-lattice is a partially ordered set with all joins.
-We regard sup-lattices as spaces of computations
-ordered under refinement,
-where the joins $\bigvee_{i\in I} x_i$ model angelic nondeterminism.
-The least element $\bot = \bigvee \varnothing$
-captures an undefined or undesirable behavior,
-such as going wrong or silent divergence.
-
-We expect a function $f : S \rightarrow T$
-between two sup-lattices $(S, {\le})$ and $(T, {\sqsubseteq})$
-to preserve all joins so that
-$f \bigl( \bigvee_{i \in I} \sigma_i \bigr) = \bigsqcup_{i \in I} f(\sigma_i)$.
-In other words,
-operations which transform computations
-should act independently on each angelic choice.
-Since this property is satisfied by the identity function and
-preserved by composition,
-sup-lattices and sup-preserving functions
-form a category $\mathbf{Sup}$.
-
-%}}}
-
-\paragraph{Products of sup-lattices} %{{{
-
-%As a model of linear logic,
-$\mathbf{Sup}$ features a rich structure \cite{egg}
-which can be interpreted in terms of interactive computations.
-The zero object $\mathbf{0} := \{\bot\}$
-only has the undefined behavior $\bot$;
-the sup-lattice $\mathbf{1} := \{\bot \le {*} \}$
-also allows a successful but trivial computation $*$.
-More interestingly, two sup-lattices $S_1$ and $S_2$ can be composed
-in various ways:
-\begin{itemize}
-  \item $S_1 \with S_2$
-    has the \emph{environment} choose $i \in \{1, 2\}$,
-    then the computation proceeds as in $S_i$.
-  \item $S_1 \oplus S_2$
-    has the \emph{system} choose $i \in \{1, 2\}$,
-    then the computation proceeds as in $S_i$.
-  \item $S_1 \otimes S_2$ 
-    lets a computation of $S_1$ and a computation of $S_2$
-    proceed concurrently.
-\end{itemize}
-The product ($\with$) and coproduct ($\oplus$)
-can both be constructed as the lattice of pairs
-$\langle \sigma_1, \sigma_2 \rangle$
-which combine an element $\sigma_1 \in S_1$ with an element $\sigma_2 \in S_2$
-and where joins are component-wise.
-When this lattice is used as the coproduct $S_1 \oplus S_2$,
-we interpret the computations $\iota_i(\sigma_i)$ defined by
-\[
-  \iota_1(\sigma_1) := \langle \sigma_1, \bot \rangle \in S_1 \oplus S_2
-  \qquad \text{and} \qquad
-  \iota_2(\sigma_2) := \langle \bot, \sigma_2 \rangle \in S_1 \oplus S_2
-\]
-as first making a choice $i \in \{1, 2\}$ and
-then proceeding with the behavior $\sigma_i \in S_i$.
-When the lattice is used as the cartesian product $S_1 \with S_2$,
-we interpret the pair $\langle \sigma_1 , \sigma_2 \rangle$
-as an angelic choice
-\[
-  \langle \sigma_1, \sigma_2 \rangle \: = \:
-  \iota_1(\sigma_1) \vee \iota_2(\sigma_2) \: \in \:
-  S_1 \with S_2
-  \,,
-\]
-where the environment decides between $\sigma_1$ and $\sigma_2$.
-Finally,
-the tensor product $S_1 \otimes S_2$
-is in essence generated by taking formal joins 
-of the form $\bigvee_{i \in I} (\sigma_i \otimes \tau_i)$,
-quotiented by the laws
-\[
-  \biggl( \bigvee_{i\in I} \sigma_i \biggr) \otimes \tau =
-    \bigvee_{i\in I} ( \sigma_i \otimes \tau )
-  \qquad \text{and} \qquad
-  \sigma \otimes \biggl( \bigvee_{i \in I} \tau_i \biggr) =
-    \bigvee_{i\in I} ( \sigma \otimes \tau_i )
-  \,.
-\]
-These constructions generalize to infinitary versions
-with expected projections and (co)tupling:
-\[
-\begin{array}{r@{\:}l}
-  \pi_j &: \textstyle \bigl(\bigwith_{i\in I} S_i\bigr) \rightarrow S_j
-  \\[1ex]
-  \iota_j &: \textstyle S_j \rightarrow \bigl(\bigoplus_{i\in I} S_i\bigr)
-\end{array}
-\quad
-\begin{prooftree}
-  \hypo{\forall i\in I \cdot f_i : S \rightarrow T_i}
-  \infer1{\textstyle \langle f_i \rangle_{i\in I} :
-    S \rightarrow \bigwith_i T_i}
-\end{prooftree}
-\quad
-\begin{prooftree}
-  \hypo{\forall i\in I \cdot f_i : S_i \rightarrow T}
-  \infer1{\textstyle [ f_i ]_{i\in I} :
-    \bigoplus_i S_i \rightarrow T}
-\end{prooftree}
-\quad
-\begin{prooftree}
-  \hypo{\forall i\in I \cdot f_i : S_i \rightarrow T_i}
-  \infer1{\bigotimes_i f_i :
-    \bigotimes_i S_i \rightarrow \bigotimes_i T_i}
-\end{prooftree}
-\]
-In addition,
-$\otimes$~distributes over $\oplus$ in the sense that
-\[
-  \lambda_{\otimes\oplus} :
-    \left(\bigoplus_{i \in I} S_i \right) \otimes T
-    \cong
-    \bigoplus_{i \in I} (S_i \otimes T)
-  \qquad \text{and} \qquad
-  \rho_{\otimes\oplus} :
-    S \otimes \left(\bigoplus_{i \in I} T_i \right)
-    \cong
-    \bigoplus_{i \in I} (S \otimes T_i)
-  \,.
-\]
-Note that the trivial lattices can be described as the units
-$\mathbf{0} \cong \bigoplus \varnothing \cong \bigwith \varnothing$
-and $\mathbf{1} \cong \bigotimes \varnothing$.
-
-%Referring to the interpretation above,
-%$\pi_j(\sigma) \in S_j$ is the behavior
-%taken by $\sigma \in \bigwith_i S_i$
-%when the environment chooses $i := j$, whereas
-%in $\iota_j(\sigma) \in \bigoplus_i S_i$,
-%the system chooses $i := j$
-%and the computation continues as $\sigma \in S_j$.
-%Finally,
-%$\sigma \in S$ and $\tau \in T$
-%can be combined into $\sigma \otimes \tau \in S \otimes T$;
-%their nondeterministic choices are independent,
-%so that $\otimes$ is strictly sup-preserving
-%in both arguments.
-%
-%As it turns out,
-%the same sup-lattice can be used to
-%encode the product ($\with$) and coproduct ($\oplus$):
-%the computations $\sigma_1 \in S_1$ and $\sigma_2 \in S_2$
-%can be promoted to $\iota_1(\sigma_1), \iota_2(\sigma_2) \in S_1 \oplus S_2$.
-%Each has the system make a particular choice of $i \in \{1, 2\}$
-%and continue as $\sigma_i$.
-
-%}}}
-
-\paragraph{Partial observations} %{{{
-
-The \emph{lifting} operator
-$X_\bot := \{\bot \le x_\bot \mid x \in X\}$
-extends a sup-lattice $X$ with a new least element $\bot$,
-and enables
-partial observations of a computation.
-%corresponding to incomplete plays in the strategy model.
-For example,
-in $\bigoplus_i \bigoplus_j \mathbf{1}$
-the choices of $i$ and $j$ are observed simultaneously,
-but a computation in
-$\bigoplus_i \bigl( \bigoplus_j \mathbf{1} \bigr)_\bot$
-could go wrong after revealing $i$
-but before choosing $j$.
-Sup-morphisms out of $S_\bot$
-are defined by their image on $S$,
-which must preserve non-empty joins
-but need not preserve $\bot$.
-For example,
-the counit $\epsilon_\bot : S_\bot \rightarrow S$
-and multiplication $\mu_\bot : S_\bot \rightarrow (S_\bot)_\bot$
-of the lifting comonad $(-)_\bot$
-are fully defined by
-\[
-  \epsilon_\bot(\sigma_\bot) := \sigma
-  \qquad \text{and} \qquad
-  \mu_\bot(\sigma_\bot) := (\sigma_\bot)_\bot
-  \,,
-\]
-since we know that as sup-morphisms
-they must satisfy
-$\epsilon_\bot(\bot) := \bot$ and
-$\mu_\bot(\bot) := \bot$.
-
-%}}}
-
-\begin{example} % lattice version of qstrat {{{
-The game discussed in Example~\ref{ex:qstrat}
-can be transcribed to the sup-lattice of strategies:
-\[
-  S_\kw{3bq} :=
-  \bigwith_{q_1 \in E_\kw{bq}}
-  \bigoplus_{r_1 \in \kw{ar}(q_1)}
-  \biggl(
-  \bigwith_{q_2 \in E_\kw{bq}}
-  \bigoplus_{r_2 \in \kw{ar}(q_1)}
-  \biggl(
-  \bigwith_{q_3 \in E_\kw{bq}}
-  \bigoplus_{r_3 \in \kw{ar}(q_1)}
-  \mathbf{1}
-  \biggr)_\bot
-  \biggr)_\bot
-\]
-The lifting operator ensures that
-every decision of the component becomes immediately visible.
-Writing
-$\bigl\langle M[v] \mathrel{\big|} N \bigr\rangle_{v \in V} \in
- \bigwith_{q \in E_\kw{bq}} S$
-for the computation which responds to the question $\kw{enq}[v]$
-by continuing as $M[v]$
-and to $\kw{deq}$ by continuing as $N$,
-the strategy shown in Fig.~\ref{fig:qstrat}
-can be defined as
-\[
-  \sigma_{3bq} \: := \:
-  \Biggl\langle
-    \iota_*
-   \Biggl(
-    \Bigl(
-    \Bigl\langle
-      \iota_{*}
-       \Bigl(
-        \bigl(
-        \bigl\langle
-          \iota_{*}(*)
-          \mathrel{\big|}
-          \iota_{v_1}(*)
-        \bigr\rangle_{v_3}
-        \bigr)_\bot
-       \Bigr)
-      \:\mathrel{\Big|}\:
-      \iota_{v_1}
-       \Bigl(
-        \bigl(
-        \bigl\langle
-          \iota_{*}(*)_\bot
-          \mathrel{\big|}
-          \bot
-        \bigr\rangle_{v_3}
-        \bigr)_\bot
-       \Bigr)
-    \Bigr\rangle_{v_2}
-    \Bigr)_\bot
-   \Biggr)
-    \quad\mathrel{\Bigg|}\quad
-    \bot
-  \Biggr\rangle_{v_1}
-  \: \in \: 
-  S_\kw{3bq}
-\]
-We will see that more convenient notations
-can be devised.
-\end{example}
-%}}}
-
-\paragraph{Monoidal Closure} %{{{
-
-Homomorphisms between the sup-lattices $S_1$ and $S_2$
-themselves form a sup-lattice $S_1 \multimap S_2$
-where joins are taken pointwise.
-Together with the tensor product $\otimes$,
-this equips $\mathbf{Sup}$ with
-the structure of a closed monoidal category.
-The corresponding \emph{currying} adjunction
-${-} \otimes S \, \dashv \, S \multimap {-} \, : \,
- \mathbf{Sup} \rightarrow \mathbf{Sup}$
-establishes a correspondence between morphisms of type
-\[
-  f^{\otimes} : S_1 \otimes S \longrightarrow S_2 \in \mathbf{Sup}
-  \qquad
-  \text{and}
-  \qquad
-  f^{\multimap} : S_1 \longrightarrow S \multimap S_2 \in \mathbf{Sup}
-  \,.
-\]
-The counit
-$\epsilon^S_X \, := \, \kw{id}_{S \multimap X}^\otimes
- \, : \, (S \multimap X) \otimes S \longrightarrow X$
-serves as an evaluation primitive.
-
-%}}}
-
-%}}}
-
-\subsection{Endofunctors and Free Monad} %{{{
-
-A sup-lattice endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-can be thought of as a \emph{partial} game,
-where an occurrence of the parameter $X$ in the definition of $F X$
-hands over control to the next stage.
-For example,
-given an effect signature $E$ we can consider the functor
-$\hat{E} : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-defined as:
-\[
-  \hat{E} X := \bigoplus_{m \in E} \biggl(
-    \bigwith_{n \in \kw{ar}(m)} X
-  \biggr)_\bot
-  \,.
-\]
-The functor $\hat{E}$
-describes an interaction where
-a client computation asks
-exactly one question in the signature $E$,
-and upon receiving an answer
-continues with a behavior in the sup-lattice $X$.
-
-Under this interpretation,
-endofunctor composition
-corresponds to a sequential composition of games:
-a computation in $FGX$
-first carries out the interaction described by $F$,
-then the one described by $G$,
-then moves on to the game $X$.
-We will see that the \emph{free monad} $F^*$
-associated with a sup-lattice endofunctor $F$
-allows the interaction described by $F$
-to be iterated an arbitrary number of times.
-
-\paragraph{Algebraic View} %{{{
-
-From an algebraic point of view,
-the lattice $\hat{E} X$ describes
-applications of an operation $m \in E$
-to arguments in $X$,
-which we write
-\[
-  \qquad \qquad
-  \underline{m} \langle \sigma_n \rangle_{n \in \kw{ar}(m)}
-  \: := \:
-  \iota_m \Bigl( \bigl(
-     \langle \sigma_n \rangle_{n \in \kw{ar}(m)}
-  \bigr)_\bot \Bigr)
-  \: \in \: \hat{E} S
-  \,.
-  \qquad \qquad
-  (m \in E,\, \sigma_n \in S)
-\]
-%This corresponds to a computation which
-%triggers the external operation $m \in E$,
-%awaits its outcome $n \in \kw{ar}(m)$,
-%then proceeds with the behavior $\sigma_n$.
-%
-An \emph{algebra} for the signature $E$
-gives an interpretation for the operations of $E$
-in a carrier lattice $S$,
-specified using a morphism
-$\alpha : \hat{E}S \rightarrow S \in \mathbf{Sup}$.
-
-\begin{example}[Peano arithmetic] \label{ex:peano} %{{{
-The signature
-$E_\kw{nat} = \{ \kw{zero} \mathbin: 0, \kw{succ} \mathbin: 1 \}$
-can be interpreted in the free lattice $\mathcal{P}(\mathbb{N})$
-using the algebra
-$\alpha : \hat{E}_\kw{nat} \mathcal{P}(\mathbb{N}) \rightarrow \mathcal{P}(\mathbb{N})$
-defined by
-\[
-  \alpha \bigl( \kw{zero}\langle \rangle \bigr) := \{0\}
-  \qquad \text{and} \qquad
-  \alpha \bigl( \kw{succ}\langle \{n \} \rangle \bigr) := \{n+1\}
-  \,.
-\]
-We can also interpret $E$ in the sup-lattice
-$\bar{\mathbb{N}} := \langle \mathbb{N} \cup \{\infty\}, \, {\max} \rangle$
-using
-$\beta : \hat{E}_\kw{nat} \bar{\mathbb{N}} \rightarrow \bar{\mathbb{N}}$
-defined by
-\[
-  \beta \bigl( \kw{zero}\langle \rangle \bigr) := \bar{0}
-  \,, \qquad
-  \beta \bigl( \kw{succ}\langle \bar{n} \rangle \bigr) := \overline{n+1}
-  \,, \quad \text{and} \quad
-  \beta \bigl( \kw{succ}\langle\infty\rangle \bigr) := \infty
-  \,.
-\]
-\end{example}
-%}}}
-
-Computationally,
-an algebra $\alpha : \hat{E} S \rightarrow S$
-equips a domain $S$ with
-an interpretation for the operations or effects
-described by the signature $E$.
-In the example above,
-$\kw{succ}$ could be interpreted as a ``clock tick'' effect,
-whereas $\kw{zero}$ terminates the computation.
-The elements of the lattice $\mathcal{P}(\mathbb{N})$
-used by the algebra $\alpha$
-allow an angelic choice
-among elementary behaviors of the form $\{n\}$
-representing a computation $\kw{succ}^n \cdot \kw{zero}$.
-By contrast,
-$\beta$ interprets $\kw{zero}$ as the undefined behavior~$\bot$,
-and the elements of $\bar{\mathbb{N}}$
-are increasing under-approximations of
-the infinite computation
-$\kw{succ}^\omega$.
-
-%}}}
-
-\paragraph{Algebra Homomorphisms} %{{{
-
-Algebras for an endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-form a category $\mathbf{Alg}(F)$.
-An object $(S, \alpha) \in \mathbf{Alg}(F)$ 
-consists of a sup-lattice $S$
-and a sup-lattice homomorphism $\alpha : F S \rightarrow S$.
-An algebra homomorphism
-$f : (S, \alpha) \rightarrow (T, \beta) \in \mathbf{Alg}(F)$
-is a sup-lattice homomorphism $f : S \rightarrow T$
-such that $f \circ \alpha = \beta \circ F f$.
-In particular,
-$\hat{E}$-algebra homomorphisms
-preserve the operations of $E$.
-
-\begin{example} % Peano algebra homomorphism {{{
-Building on Example~\ref{ex:peano},
-the function $f : \mathcal{P}(\mathbb{N}) \rightarrow \bar{\mathbb{N}}$
-given by $f(N) := \max_{n \in N} \bar{n}$
-defines an algebra homomorphism from $\alpha$ to $\beta$.
-\end{example}
-%}}}
-
-%}}}
-
-\paragraph{Free Monad} %{{{
-
-The functor $U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
-which maps an algebra $(S, \alpha) \in \mathbf{Alg}(F)$
-to its carrier $S \in \mathbf{Sup}$
-has a left adjoint,
-which constructs the \emph{free algebra} $(F^* X, c_F) \in \mathbf{Alg}(F)$
-generated by a sup-lattice $X \in \mathbf{Sup}$.
-The adjunction's unit $\eta_X : X \rightarrow F^* X$
-embeds the space of generators into the free algebra.
-The counit
-$\epsilon_\alpha : (F^* S, c_F) \rightarrow (S, \alpha) \in \mathbf{Sup}$
-recursively flattens an element $\sigma \in F^*S$ into~$S$
-by evaluating any use of the constructor $c_F : FF^*S \rightarrow F^*S$
-using the algebra $\alpha : F S \rightarrow S$.
-The monad $\langle F^*, \eta^F, \mu^F \rangle$
-associated with the free algebra adjunction
-is called the \emph{free monad}.
-
-Concretely,
-for effect signatures,
-the sup-lattice $\hat{E}^*X$ is
-a term algebra which uses
-operations in~$E$ and
-variables in~$X$.
-It is in essence generated by the grammar
-\begin{equation} \label{eqn:termalg}
-  \tau \in \hat{E}^*X \: ::= \:
-    \underline{m}(\tau_n)_{n \in \kw{ar}(m)} \: \mid \:
-    \underline{x}
-  \,,
-  \qquad
-  (m \in E, \: x \in X)
-\end{equation}
-subject to the identities
-$\underline{m} \big(
-   \bigvee_{i \in I \neq \varnothing} \tau_{ni}
- \big)_{n \in \kw{ar}(m)} =
- \bigvee_{i \in I \neq \varnothing} \underline{m}(\tau_{ni})_{n \in \kw{ar}(m)}$
-and
-$\underline{\bigvee_{i\in I} x_i} = \bigvee_{i \in I} \underline{x}_i$.
-The round parentheses help us distinguish recursive terms
-$\underline{m}( \tau_n )_{n \in \kw{ar}(m)} \in \hat{E}^* X$
-from flat applications
-$\underline{m}\langle x_n \rangle_{n \in \kw{ar}(m)} \in \hat{E}X$.
-The constructor $c : \hat{E}\hat{E}^*X \rightarrow \hat{E}^*X$
-and unit $\eta : X \rightarrow \hat{E}^*X$
-are defined by:
-\[
-  c^F_X \big(\, \underline{m} \langle \tau_n \rangle_{n \in \kw{ar}(m)} \,\big)
-    \: := \:
-    \underline{m}(\tau_n)_{n \in \kw{ar}(m)}
-  \qquad \text{and} \qquad
-  \eta^F_X \big( x \big) := \underline{x}
-  \,.
-\]
-
-%}}}
-
-\paragraph{Initial Algebra} %{{{
-
-The image $\mu F := F^*\mathbf{0}$
-of the initial sup-lattice $\mathbf{0}$
-carries the initial algebra for the endofunctor $F$.
-We will sometimes use the notation $\mu X \cdot FX$
-instead of defining the functor $F$ explicitly.
-In general,
-the relationship between the free monad and initial algebras
-can be stated as:
-\[
-  F^* X
-  \:\cong\:
-  \mu Y \cdot F Y \oplus X
-  \,,
-\]
-mirroring and generalizing
-the term algebra construction (\ref{eqn:termalg}) above.
-In general,
-given an $F$-algebra $\alpha : FS \rightarrow S$
-and a valuation $\chi : X \rightarrow S$ of the variables $X$,
-the mapping $\epsilon_\alpha \circ F^*\chi : F^*X \rightarrow S$
-evaluates the terms of $F^*X$ into the carrier lattice $S$.
-The catamorphism
-$[\alpha]^F : (\mu F, c^F) \rightarrow (S, \alpha) \in \mathbf{Alg}(F)$
-associated with $\alpha$
-can likewise be defined as
-$[\alpha]^F := \epsilon_\alpha \circ F^* (!_S)$,
-where $!_S : \mathbf{0} \rightarrow S$.
-
-%}}}
-
-\begin{figure} % fig:fixpoint {{{
-\[
-  \begin{tikzcd}[row sep=large]
-    F (\mu F) \ar[r, "c_F"] \ar[d, "{F [\alpha]}"'] &
-    \mu F \ar[d, dashed, "!"', "{[\alpha]}"] &&
-    S \ar[r, "\delta"] \ar[d, "\langle \delta \rangle"', "!", dashed] &
-    F S \ar[d, "F \langle \delta \rangle"]
-    \\
-    F S \ar[r, "\alpha"] &
-    S &&
-    \mu F \ar[r, "d_F"] &
-    F (\mu F)
-  \end{tikzcd}
-\]
-  \caption{Universal properties characterizing the
-    initial algebra and final coalgebra for an endofunctor $F$.}
-  \label{fig:fixpoint}
-\end{figure}
-%}}}
-
-\paragraph{Final Coalgebra} %{{{
-
-The categorical dual of an $F$-algebra is
-an $F$-\emph{coalgebra} $\delta : S \rightarrow F S$.
-Coalgebras generalize transition systems
-by associating to states in a space $S$
-the possible actions captured by~$F$.
-A coalgebra \emph{homomorphism} $f : (S, \delta) \rightarrow (T, \gamma)$
-if a morphism $f : S \rightarrow T$ such that $\gamma \circ f = F f \circ \delta$,
-and a \emph{final coalgebra} for the functor $F$
-satisfies the universal property shown in Fig.~\ref{fig:fixpoint}b.
-
-%Because $\mathbf{Sup}$ is CPO-enriched,
-In $\mathbf{Sup}$,
-the initial algebra $c_F : F \mu F \rightarrow \mu F$ 
-and final coalgebra $d_F : \mu F \rightarrow F \mu F$
-for a cpo-enriched endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-always coincide:
-they are both carried by $\mu F$ and are inverses to each other
-\cite{dcpoalg}.
-This means in particular that
-a coalgebra $\delta : S \rightarrow F S \oplus X$
-defines a computation $\langle \delta \rangle \in F^*X$
-in the free monad associated with $F$.
-
-%}}}
-
-%}}}
-
-\subsection{Constructing Strategies} \label{sec:fsl} %{{{
-
-We have seen how the structure found in $\mathbf{Sup}$
-allows us to interpret typical algebraic and coalgebraic constructions
-in game-theoretic terms.
-We now complete the connection by showing how
-the lattices we have discussed above
-can be constructed using prefix-closed sets of plays,
-mirroring traditional game semantics strategies.
-
-\paragraph{Free sup-lattice} %{{{
-
-The sup-lattice $\mathcal{D}(P)$
-is generated by taking formal joins over a poset $\langle P, {\le} \rangle$.
-Concretely,
-this lattice consists of the
-downward-closed subsets of $P$,
-ordered under inclusion ($\subseteq$):
-\[
-  \mathcal{D}(P) :=
-    \{ \sigma \subseteq P \mid
-      \forall p q \cdot p \le q \wedge q \in \sigma \Rightarrow p \in \sigma \}
-  \,.
-\]
-Abstractly,
-there is an adjunction
-$\mathcal{D} \dashv |{-}| : \mathbf{Sup} \rightarrow \mathbf{Pos}$
-between the forgetful functor which views a lattice $S \in \mathbf{Sup}$
-as a poset $|S| \in \mathbf{Pos}$,
-and the functor which computes the
-free lattice $\mathcal{D}(P) \in \mathbf{Sup}$
-generated by a poset $P \in \mathbf{Pos}$.
-The unit
-${\downarrow}(-) : P \rightarrow |\mathcal{D}(P)| \in \mathbf{Pos}$
-embeds an generator $q \in P$ into the free lattice as
-${\downarrow} q := \{ p \mid p \le q \} \in \mathcal{D}(P)$.
-The counit
-$\bigvee (-) : \mathcal{D}\big(|S|\big) \rightarrow S \in \mathbf{Sup}$
-evaluates formal joins into the lattice $S$.
-A sup-preserving map out of $\mathcal{D}(P)$
-is the image of the generators:
-\[
-  f : \mathcal{D}(P) \rightarrow S \in \mathbf{Sup}
-  \qquad \Longleftrightarrow \qquad
-  f({\downarrow} {-}) : P \rightarrow |S| \in \mathbf{Pos}
-\]
-Note that the special case of a discrete order $\langle U, {=} \rangle$
-corresponds to the powerset construction $\mathcal{P}(U)$,
-where the generators embed as singletons ${\downarrow} u = \{u\}$.
-
-%}}}
-
-\paragraph{Constructions on Free Lattices}
-
-The class of free sup-lattices of the form $\mathcal{D}(P)$
-is closed under the constructions we have described above.
-Specifically, the following relationships hold:
-\[
-%  \begin{array}{c}
-%    \mathbf{0} \cong \mathcal{D}(\varnothing) \\[1ex]
-%    \mathbf{1} \cong \mathcal{D}(\mathbbm{1})
-%  \end{array}
-%  \qquad
-  \bigwith_{i \in I} \mathcal{D}(P_i) \cong
-  \bigoplus_{i \in I} \mathcal{D}(P_i) \cong
-  \mathcal{D}\left(\sum_{i \in I} P_i \right)
-  \qquad
-  \bigotimes_{i \in I} \mathcal{D}(P_i) \cong
-  \mathcal{D}\left(\prod_{i \in I} P_i \right)
-  \quad
-  \begin{array}{c}
-    \mathbf{0} \cong \mathcal{P}(\varnothing)
-    \quad
-    \mathbf{1} \cong \mathcal{P}(\mathbbm{1})
-    \\[1ex]
-    \mathcal{D}(P)_\bot \cong \mathcal{D}(P_\bot)
-  \end{array}
-\]
-The initial algebra $\mu F \in \mathbf{Sup}$
-can often be constructed as a free sup-lattice as well.
-As follows from \citet[\S 2.5]{hjsic},
-when there is a poset endofunctor $G : \mathbf{Pos} \rightarrow \mathbf{Pos}$
-such that $F \mathcal{D} \cong \mathcal{D} G$,
-the initial algebra is carried by
-the free sup-lattice $\mu F \cong \mathcal{D}(\mu G)$
-and given by
-\[
-  c_F \quad := \quad
-    F \mu F \cong
-    F \mathcal{D}(\mu G) \cong % \xrightarrow{\cong}
-    \mathcal{D}(G \mu G) \xrightarrow{\mathcal{D}(c_G)}
-    \mathcal{D}(\mu G) \cong
-    \mu F
-\]
-For effect signatures,
-the corresponding poset functor
-and its initial algebras are given by
-\[
-  \ddot{E} P \: := \:
-    \sum_{m \in E} \biggl(
-      \sum_{n \in \kw{ar}(m)} P
-    \biggr)_\bot
-  \qquad
-  s \in \mu \ddot{E} ::=
-    \underline{m} \mid \underline{m} n s
-  \qquad
-  \begin{array}{c}
-    c_{\ddot{E}}(\iota_m(\bot)) := \underline{m} \\
-    c_{\ddot{E}}(\iota_m(\iota_n(s)_\bot) := \underline{m} n s
-  \end{array}
-%  \begin{prooftree}
-%    \hypo{s \sqsubseteq t}
-%    \infer1{\underline{m}ns \sqsubseteq \underline{m}nt}
-%  \end{prooftree}
-%  \qquad
-%  \begin{prooftree}
-%    \infer0{\underline{m} \sqsubseteq \underline{m}ns}
-%  \end{prooftree}
-\]
-where the sequences in $\mu\ddot{E}$ are ordered under the prefix relation
-recursively induced by $\underline{m} \sqsubseteq \underline{m}ns$.
-In other words,
-the initial algebra in $\mathbf{Sup}$
-for an effect signature $E$
-can be constructed as a lattice $\mu \hat{E} := \mathcal{D}(\mu \ddot{E})$
-of prefix-closed set of odd-length plays
-of the form $\underline{m}_1 n_1 \underline{m}_2 n_2 \cdots \underline{m}_k$.
-
-%}}}
-
-\paragraph{Conclusion}
-
-These relationships explain the form taken by traditional
-strategy models which use prefix-closed sets of plays.
-They are invaluable for mechanization
-as they allow us to represent
-sup-lattices and their homomorphisms
-using underlying sets of generators and monotonic functions.
-
-%}}}
-
-\begin{color}{gray}
-\section*{Old material} %{{{
-
-\paragraph{Initial algebra} %{{{
-
-Because $\mathbf{Sup}$ has all colimits,
-every endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-induces an initial $F$-algebra $(\mu F, c_F) \in \mathbf{Alg}(F)$
-\citep{dcpoalg}.
-This means there exists a unique $F$-algebra homomorphism
-$[ \alpha ] : (\mu F, c_F) \rightarrow (S, \alpha)$
-into every $F$-algebra $(S, \alpha) \in \mathbf{Alg}(F)$.
-%\[
-%  \begin{tikzcd}
-%    F (\mu F) \ar[r, "c_F"] \ar[d, "F \langle \alpha \rangle"'] &
-%    \mu F \ar[d, dashed, "!"', "\langle \alpha \rangle"] \\
-%    F S \ar[r, "\alpha"] & S
-%  \end{tikzcd}
-%\]
-When $F$ corresponds to an algebraic signature,
-$\mu F$ often takes the form of a term algebra,
-$c_F$ takes the role of a term constructor,
-and $[\alpha]$ uses $\alpha$ to interpret
-the function symbols in a term.
-In $\mathbf{Sup}$,
-if there is a poset endofunctor $G : \mathbf{Pos} \rightarrow \mathbf{Pos}$
-such that $F \mathcal{D} \cong \mathcal{D} G$,
-then per \citet[\S 2.5]{hjsic}
-the initial algebra is carried by the free sup-lattice $\mathcal{D}(\mu G)$
-and given by
-\[
-  c_F \quad := \quad
-    F (\mu F) \cong
-    F \mathcal{D}(\mu G) \cong % \xrightarrow{\cong}
-    \mathcal{D} G(\mu G) \xrightarrow{\mathcal{D}(c_G)}
-    \mathcal{D}(\mu G) \cong
-    \mu F
-\]
-For effect signatures,
-the corresponding poset functor
-and its initial algebras are given by
-\[
-  \ddot{E} P \: := \:
-    \sum_{m \in E} \biggl(
-      \sum_{n \in \kw{ar}(m)} P
-    \biggr)_\bot
-  \qquad
-  s \in \mu \ddot{E} ::=
-    \underline{m} \mid \underline{m} n s
-  \qquad
-  \begin{array}{c}
-    c_{\ddot{E}}(\iota_m(\bot)) := \underline{m} \\
-    c_{\ddot{E}}(\iota_m(\iota_n(s)_\bot) := \underline{m} n s
-  \end{array}
-%  \begin{prooftree}
-%    \hypo{s \sqsubseteq t}
-%    \infer1{\underline{m}ns \sqsubseteq \underline{m}nt}
-%  \end{prooftree}
-%  \qquad
-%  \begin{prooftree}
-%    \infer0{\underline{m} \sqsubseteq \underline{m}ns}
-%  \end{prooftree}
-\]
-where the sequences in $\mu\ddot{E}$ are ordered under the prefix relation
-recursively induced by $\underline{m} \sqsubseteq \underline{m}ns$.
-In other words,
-the initial algebra in $\mathbf{Sup}$
-for an effect signature $E$
-can be constructed as a lattice $\mu \hat{E} := \mathcal{D}(\mu \ddot{E})$
-of prefix-closed set of odd-length plays
-of the form $\underline{m}_1 n_1 \underline{m}_2 n_2 \cdots \underline{m}_k$.
-
-%}}}
-
-\begin{example} % Peano initial algebra %{{{
-For $E_\kw{nat}$ plays take the form
-$
-  s \in \mu \ddot{E}_\kw{nat} \cong
-    \{
-(\underline{\kw{succ}} \, {*})^n \, \underline{\kw{zero}} \,, \:
-(\underline{\kw{succ}} \, {*})^n \, \underline{\kw{succ}}
-\: \mid \: n \in \mathbb{N} \}
-$.
-The initial algebra
-$c_{\hat{E}_\kw{nat}} : \hat{E}(\mu\hat{E}) \rightarrow \mu\hat{E}$
-is carried by the lattice
-$\mu_{\hat{E}_\kw{nat}} = \mathcal{D}(\mu_{\ddot{E}_\kw{nat}})$
-and defined by
-\[
-  c_{\hat{E}_\kw{nat}} \bigl(
-    \underline{\kw{zero}}\langle \rangle
-  \bigr) := \bigl\{ \underline{\kw{zero}} \bigr\}
-  \qquad
-  c_{\hat{E}_\kw{nat}} \bigl(
-    \underline{\kw{succ}} \langle \sigma \rangle
-  \bigr) := \bigl\{
-    \underline{\kw{succ}} \, , \:
-    \underline{\kw{succ}} \, {*} \, s \mathrel\big| s \in \sigma
-  \bigr\}
-\]
-This model combines the features of $\mathcal{P}(\mathbb{N})$ and $\bar{\mathbb{N}}$
-as it allows partial observations of both finite and infinite computations.
-The catamorphisms
-$[ \alpha ] : \mu \hat{E}_\kw{nat} \rightarrow \mathcal{P}(\mathbb{N})$ and
-$[ \beta ] : \mu \hat{E}_\kw{nat} \rightarrow \bar{\mathbb{N}}$
-collapse these features back into what the target models allow,
-and can be described by
-\begin{align*}
-  [ \alpha ]
-    \bigl( {\downarrow} \, \underline{zero} \bigr) &:=
-    \{0\} &
-  [ \alpha ]
-    \bigl( {\downarrow} \, \underline{succ} \bigr) &:=
-    \varnothing &
-  [ \alpha ]
-    \bigl( {\downarrow} \, \underline{succ} \, {*} \, s \bigr) &:=
-    \{ n+1 \mid n \in [ \alpha ](s) \} \\
-  [ \beta ]
-    \bigl( {\downarrow} \, \underline{zero} \bigr) &:=
-    \bar{0} &
-  [ \beta ]
-    \bigl( {\downarrow} \, \underline{succ} \bigr) &:=
-    \bar{1} &
-  [ \beta ]
-    \bigl( {\downarrow} \, \underline{succ} \, {*} \, s \bigr) &:=
-    [ \beta ](s) + \bar{1}
-\end{align*}
-Note that $[ \alpha ]$ drops partial plays
-and $[\beta]$ flattens angelic choices into
-$[ \beta ] \bigl( \bigvee_{i \in I} \sigma_i \bigr) =
- \max_{i \in I} [ \beta ](\sigma_i)$.
-\end{example}
-%}}}
-
-\begin{example} \label{ex:coalgebras} %{{{
-Consider the coalegebras
-$\delta_1 : \mathcal{P}(\mathbb{N}) \rightarrow
- \hat{E}_\kw{nat} \mathcal{P}(\mathbb{N})$
-and
-$\delta_2 : \mathbf{1} \rightarrow \hat{E}_\kw{nat} \mathbf{1}$
-defined by:
-\[
-  \delta_1(\{n+1\}) := \underline{\kw{succ}}\langle \{n\} \rangle \,,
-  \quad
-  \delta_1(\{0\}) := \underline{\kw{zero}}\langle \rangle \,,
-  \qquad \text{and} \quad
-  \delta_2(*) := \kw{succ}\langle * \rangle \,.
-\]
-The corresponding anamorphisms into $\mu \hat{E}_\kw{nat}$
-give the sets of traces generated by a state:
-\[
-  \langle \delta_1 \rangle(\{n\}) =
-    {\downarrow} \, (\underline{\kw{succ}} \, *)^n \, \underline{\kw{zero}}
-  \,,
-  \qquad
-  \langle \delta_2 \rangle(*) =
-    \bigvee_{n \in \mathbb{N}} {\downarrow} \, (\underline{\kw{succ}} \, {*})^n \,\underline{\kw{succ}}
-  \,.
-\]
-The coalgebra homomorphism property
-$d_F \circ \langle \delta \rangle = F\langle \delta \rangle \circ \delta$
-allows us to establish:
-\[
-  d \bigl( \langle \delta_1 \rangle(\{n+1\}) \bigr) =
-    \underline{\kw{succ}}\bigl\langle
-      \langle \delta_1 \rangle(\{n\})
-    \bigr\rangle \,,
-  \quad
-  d \bigl( \langle \delta_1 \rangle(\{0\}) \bigr) =
-    \underline{\kw{zero}}\langle\rangle \,,
-  \quad
-  d \bigl( \langle \delta_2 \rangle(*) \bigr) =
-    \underline{\kw{succ}}\langle * \rangle
-  \,.
-\]
-\end{example}
-%}}}
-
-\subsection{Free monad} %{{{
-
-The initial algebra construction can be generalized
-to incorporate a generating lattice.
-Given endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
-and a sup-lattice $X \in \mathbf{Sup}$,
-we can construct
-\[
-  F^* X := \mu Y \cdot F Y \oplus X \in \mathbf{Sup}
-  \,,
-\]
-which both contains a copy of $X$ and is closed under $F$,
-as demonstrated by the morphisms:
-\begin{align*}
-  \eta_F^X &:= c_{F(-)\oplus X} \circ \iota_2 : X \rightarrow F^* X \in \mathbf{Sup}
-  \,,
-  \\
-  c_F^X &:= c_{F(-)\oplus X} \circ \iota_1 : F(F^*X) \rightarrow F^*X \in \mathbf{Sup}
-  \,.
-\end{align*}
-More precisely,
-the lattice
-$F^*X$ carries the \emph{free algebra} $\bigl(F^*X, c_F^X \bigr)$
-generated by $X$.
-
-\paragraph{Algebraic interpretation}
-
-When $F$ corresponds to a signature, 
-Like the initial algebra, when $F$ corresponds to a signature
-
-Algebraically, compared with the term algebra $\mu \hat{E}$
-the free monad $\hat{E}^*(X)$ incorporates \emph{variables} from the space $X$
-into the term algebra for $E$,
-
-For effect signatures,
-we will sometimes use the notations
-\[
-  \underline{x} := \eta_{\hat{E}}^X(x) \in \hat{E}^*X
-  \qquad \text{and} \qquad
-  \underline{m}(\sigma_n)_n :=
-    c_{\hat{E}}^X \bigl( \underline{m}\langle \sigma \rangle_n \bigr)
-    \in \hat{E}^*X
-  \,.
-\]
-
-\paragraph{Formal definition}
-The free algebra functor $\bigl(F^* (-), c_F^{(-)}\bigr) : \mathbf{Sup} \rightarrow \mathbf{Alg}(F)$
-is the left adjoint to the forgetful functor $U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
-which takes an algebra $(S, \alpha)$ to its carrier sup-lattice $S$.
-This means that for an assignment $\rho : X \rightarrow S$ of the generators
-into a target algebra $(S, \alpha)$,
-there is a unique algebra homomorphism
-$\rho^* : \bigl(F^*X, c_F^X\bigr) \rightarrow (S, \alpha) \in \mathbf{Alg}(F)$
-which interprets the elements of $F^*X$ into $S$ using $\rho$ and $\alpha$.
-
-Given $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$,
-the forgetful functor $U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
-which takes an $F$-algebra $(S, \alpha)$ to its carrier $S$
-has a left adjoint
-which takes the sup-lattice $X \in \mathbf{Sup}$ to
-the \emph{free algebra} $(F^* X, c_F^X) \in \mathbf{Alg}(F)$
-generated by $X$,
-defined by:
-\[
-  F^*X := \mu Y \cdot F Y \oplus X \,,
-  \qquad \text{and} \quad
-  c_F^X := c_{F(-) \oplus X} \circ \iota_1
-  : F (F^* X) \rightarrow F^* X
-  \,.
-\]
-The adjunction's unit $\eta_F^X$
-embeds the generators into the free algebra $F^*X$.
-The counit
-uses the algebra $\alpha : F S \rightarrow S$
-to evaluate instances of $c_F^S$ and
-provide an interpretation of the free algebra into the sup-lattice $S$.
-The can be defined as
-\[
-  \eta_F^X : X \rightarrow F^*X \in \mathbf{Sup}
-  \,, \qquad \text{and} \quad
-  \epsilon_F^\alpha : (F^* S, c_F^S) \rightarrow (S, \alpha)
-  \,.
-\]
-
-The counit
-$\epsilon_F^{\alpha} := \bigl[ [\alpha, \kw{id}_S] \bigr]_F
- : \bigl( F^* S, c_F^S \bigr) \rightarrow (S, \alpha) \in \mathbf{Alg}(F)$
-uses the algebra $\alpha : F S \rightarrow S$
-
-As usual, the adjunction
-$F^* \dashv U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
-defines a monad $(UF^*, \eta_F, \mu_F)$
-called the \emph{free monad} associated with $F$.
-As we have done above,
-we will omit $U$ from $UF^*$
-and write $F^* : \mathbf{Sup} \rightarrow \mathbf{Sup}$.
-
-%}}}
-
-%}}}
-\end{color}
-
 \section{Strategy Model} \label{sec:model} %{{{
 
-%%{{{
-%Our formalism uses standard game semantics constructions.
-%Strategies are sets of plays of the form
-%\[
-%  q \rightarrowtail
-%  (m_1 \leadsto n_1) \rightarrowtail
-%  (m_2 \leadsto n_2) \rightarrowtail
-%  \cdots \rightarrowtail
-%  (m_k \leadsto n_k) \rightarrowtail
-%  r
-%  \leadsto
-%  q' \rightarrowtail
-%  \cdots
-%  \,,
-%\]
-%which we will also write more compactly as
-%$q \underline{m}_1 n_1
-%   \underline{m}_2 n_2 \cdots
-%   \underline{m}_k n_k \underline{r}
-% q' \cdots$.
-%As usual,
-%composition of
-%$\sigma : F \twoheadrightarrow G$ with
-%$\tau : E \twoheadrightarrow F$
-%matches
-%the outgoing moves
-%($\underline{m}_1 n_1, \underline{m}_2 n_2, \ldots$) of $\sigma$
-%in the signature $F$
-%with the incoming moves
-%($\underline{q}r, \underline{q}'r', \ldots$) of $\tau$
-%and hides them from the composite
-%$\sigma \odot \tau : E \twoheadrightarrow G$.
-%
-%At the same time,
-%our model goes beyond traditional game semantics.
-%Refinement squares in particular
-%cannot be formulated in terms of individual plays.
-%Therefore we supplement this traditional approach
-%by deploying with a novel (co-)algebraic lens,
-%which explains the strategy model in operational terms
-%and provide new ways to manipulate strategies.
-%
-%
-%%}}}
+% Preamble {{{
 
-Now that we have recalled
-relevant constructions in $\mathbf{Sup}$
-and examined them through the lens of
-game semantics, algebraic effect and universal coalgebra,
-we are ready to use these constructions
-to formalize the game model outlined in \S\ref{sec:overview},
-starting with our notion of strategy.
+We now turn to the task of formalizing
+the constructions we have outlined in \S\ref{sec:overview},
+starting with the horizontal component of our framework.
+Our strategy model follows standard game semantics constructions,
+specialized to the setting of effect signatures.
+
+%}}}
 
 \subsection{Strategies} %{{{
 
-As described in \S\ref{sec:strat},
-a strategy $\sigma : E \twoheadrightarrow F$
-simultaneously plays the role of
-a client for $E$ and
-a handler for $F$.
-When a question $q \in F$ is received,
-the strategy performs an interaction over $\hat{E}^*$,
-eventually producing an answer $r \in \kw{ar}(q)$
-and returning control to the environment,
-as it waits for the next question in $F$.
-This can be expressed as follows.
-
-\begin{definition}
-For the effect signatures $E$ and $F$,
-a \emph{strategy} $\sigma : E \twoheadrightarrow F$
-is an element of the lattice
+We have already informally described many strategies
+using plays of the form
 \[
-  \sigma \: \in \:
-  S_{E \twoheadrightarrow F} \: := \:
-    \mu S \cdot
-      \bigwith_{q \in F}
-      \hat{E}^*
-      \bigoplus_{r \in \kw{ar}(q)}
-      S_\bot
-  \: \in \: \mathbf{Sup}
+  q \rightarrowtail
+  (m_1 \leadsto n_1) \rightarrowtail
+  (m_2 \leadsto n_2) \rightarrowtail
+  \cdots \rightarrowtail
+  (m_k \leadsto n_k) \rightarrowtail
+  r
+  \leadsto
+  q' \rightarrowtail
+  \cdots
   \,.
 \]
-\end{definition}
+For the sake of brevity,
+we will also plays of this kind write more compactly as
+$q \underline{m}_1 n_1
+   \underline{m}_2 n_2 \cdots
+   \underline{m}_k n_k \underline{r}
+ q' \cdots$,
+where the actions of the component have been underlined
+and alternate with the actions of the environment.
 
-\paragraph{Plays}
-
-Per the properties given in \S\ref{sec:fsl},
-strategies of type $E \twoheadrightarrow F$
-form a free sup-lattice:
-\[
-  S_{E \rightarrow F} \: \cong \:
-    \mathcal{D} \left(
-      \mu P \cdot
-        \sum_{q \in F}
-          \, \ddot{E}^* \!
-          \sum_{r \in \kw{ar}(q)}
-          P_\bot
-    \right)
-    \: \in \: \mathbf{Sup}
-    \,.
-\]
-From this calculation,
-we can give a play-based representation
-for strategies of this type.
-A play in $E \twoheadrightarrow F$
+\begin{definition}[Strategy] \label{def:strat} %{{{
+Consider an \emph{outgoing} effect signature $E$
+and an \emph{incoming} effect signature $F$.
+A \emph{play} in the game $E \twoheadrightarrow F$
 is an element $s \in P_{E \rightarrow F}$
 in the set generated by the recursive grammar:
 \[
-  s \in P_{E \rightarrow F} ::= q s_q \:;
-  \quad
-  s_q \in \bar{P}_{E \rightarrow F}^q ::=
-    \underline{m} \mid
-    \underline{m} n s_q \mid
-    \underline{r} \mid
-    \underline{r} s \,,
+  \begin{array}{r@{}ll}
+    s \in P_{E,F} &{} ::= \epsilon \mid q s^q &
+    \bigl( q \in F \bigr)
+  \\[1ex]
+    s^q \in P_{E,F}^q &{} ::= \underline{m} s^{qm} \mid \underline{r} s &
+    \bigl( m \in E, r \in \kw{ar}(q) \bigr)
+  \\[1ex]
+    s^{qm} \in P_{E,F}^{qm} &{} ::= \epsilon \mid n s^q &
+    \bigl( n \in \kw{ar}(m) \bigr)
+  \end{array}
   \qquad
-  (m \in E, q \in F, n \in \kw{ar}(m), r \in \kw{ar}(q))
+  \begin{tikzcd}
+    P_{E,F} \ar[r, bend left, "q"] &
+    P_{E,F}^q \ar[r, bend left, "m"] \ar[l, bend left, "r"] &
+    P_{E,F}^{qm} \ar[l, bend left, "n"]
+  \end{tikzcd}
 \]
-and ordered by the smallest relation $\sqsubseteq$ satisfying:
-\[
-  \begin{prooftree}
-    \hypo{s_q \sqsubseteq_q s_q'}
-    \infer1{q s_q \sqsubseteq q s_q'}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \infer0{\underline{m} \sqsubseteq_q \underline{m}n s_q}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{s_q \sqsubseteq_q s_q'}
-    \infer1{\underline{m}n s_q \sqsubseteq_q \underline{m}n s_q'}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \infer0{\underline{r} \sqsubseteq_q \underline{r} s}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{s \sqsubseteq s'}
-    \infer1{\underline{r} s \sqsubseteq_q \underline{r} s'}
-  \end{prooftree}
-\]
-In other words, plays are even-length, non-empty prefixes
-of sequences of the form
-\[
-  q_1 \, \underline{m}_{11} n_{11} \cdots \underline{m}_{1k_1} n_{1k_1} \, r_1 \,
-  q_2 \, \underline{m}_{21} n_{21} \cdots \underline{m}_{2k_2} n_{2k_2} \, r_2
-    \cdots
-\]
-ordered under the prefix relation $\sqsubseteq$.
-A \emph{strategy} for the game $E \rightarrow F$
-is then a set of plays
-\[
-  \sigma \subseteq P_{E \rightarrow F}
-  \qquad \text{such that} \qquad
-  \forall \, s_1 \, s_2 \cdot s_1 \sqsubseteq s_2 \wedge
-    s_2 \in \sigma \Rightarrow s_1 \in \sigma
-  \,.
-\]
-We will write $\sigma : E \rightarrow F$
-and write the corresponding set of strategies as
-$S_{E \rightarrow F}$.
-%Consider an effect signature $E$ and a partially ordered set $X$.
-%The \emph{coplays} for $E$ with a result in $X$
-%are generated by the grammar
+and ordered by the prefix relation $\sqsubseteq$.
 %\[
-%  \qquad \qquad \qquad \qquad
-%  s \in \bar{P}_E(X) ::=
-%    \underline{x} \mid
-%    \underline{m} \mid
-%    \underline{m}ns
-%    \,,
+%  \begin{prooftree}
+%    \hypo{s_q \sqsubseteq_q s_q'}
+%    \infer1{q s_q \sqsubseteq q s_q'}
+%  \end{prooftree}
 %  \qquad
-%    \big( x \in X, \, m \in E, \, n \in \kw{ar}(m) \big)
+%  \begin{prooftree}
+%    \infer0{\underline{m} \sqsubseteq_q \underline{m}n s_q}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{s_q \sqsubseteq_q s_q'}
+%    \infer1{\underline{m}n s_q \sqsubseteq_q \underline{m}n s_q'}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \infer0{\underline{r} \sqsubseteq_q \underline{r} s}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{s \sqsubseteq s'}
+%    \infer1{\underline{r} s \sqsubseteq_q \underline{r} s'}
+%  \end{prooftree}
 %\]
-%and ordered under the smallest relation $\sqsubseteq$ satisfying
+Then a \emph{strategy} $\sigma : E \twoheadrightarrow F$
+is a prefix-closed subset of $P_{E,F}$.
+%We will write
 %\[
-%  x \le y \Rightarrow \underline{x} \sqsubseteq \underline{y}
-%  \,,
-%  \qquad
-%  \underline{m} \sqsubseteq \underline{m}ns
-%  \,,
-%  \qquad
-%  s \sqsubseteq t \Rightarrow \underline{m}ns \sqsubseteq \underline{m}nt
+%  \sigma \subseteq P_{E\twoheadrightarrow F}
+%  \qquad \text{such that} \qquad
+%  \forall s t \cdot
+%    s \sqsubseteq t \wedge t \in \sigma \Rightarrow s \in \sigma
 %  \,.
-%\]
-%Given the signatures $E$ and $F$,
-%a \emph{play} for the game $E \rightarrow F$
-%is an element $s \in P_{E \rightarrow F}$ of the poset
-%\[
-%  P_{E \rightarrow F} = \sum_{(q \mathbin: R) \in F} P_E(R) \,,
-%\]
-%where the play
-%$s = \iota_q(s')$ is written as $qs'$,
-%so that for example, complete plays ending with an answer $r \in R$ take the form
-%%$s = \iota_q(\underline{m}_1 n_1 \cdots \underline{m}_k n_k \underline{r})$
-%%is written
-%$q \underline{m}_1 n_1 \cdots \underline{m}_k n_k \underline{r}$.
-%Finally,
-%a \emph{strategy} for $E \rightarrow F$
+%\] 
+\end{definition}
 %}}}
 
-\paragraph{Regular strategies}
+\begin{example} % Stateful queue {{{
+The behavior of a queue with infinite capacity
+can be modeled as follows.
+For a starting state $\vec{q} \in V^*$,
+the strategy $\sigma_{\vec{q}} : \top \twoheadrightarrow E_\kw{bq}$
+is defined by the following rules:
+\[
+  \begin{prooftree}
+    \hypo{s \in \sigma_{\vec{q}}}
+    \infer1{\kw{deq} \cdot \underline{v} \cdot s \, \in \, \sigma_{v \vec{q}} }
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s \in \sigma_{\vec{q} v}}
+    \infer1{\kw{enq}[v] \cdot \underline{*} \cdot s \, \in \, \sigma_{\vec{q}} }
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \infer0{\epsilon \in \sigma_{\vec{q}} }
+  \end{prooftree}
+\]
+Note that as expected, the strategy never performs any outgoing calls
+but only interacts over $E_\kw{bq}$.
+The behavior of a queue which is initially empty
+is described by $\sigma_\epsilon : \top \twoheadrightarrow E_\kw{bq}$.
+\end{example}
+%}}}
 
-Many strategies of interest are stateless
+\paragraph{Regular strategies} %{{{
+
+Unlike $\sigma_{\vec{q}}$ above,
+many strategies of interest are stateless
 in the sense that every incoming question
 is handled in that same way
 regardless of any previous history.
-In this case,
-to define a strategy of type $E \rightarrow F$,
-it is enough to provide for each question $(q \mathbin: R) \in F$ 
-a computation in $E^*(\mathcal{P}(R))$.
+Following \citet{objsem},
+we call such strategies \emph{regular}.
 
-\begin{definition}
-A \emph{regular strategy} of type $E \rightarrow F$ is a computation
-$\sigma \in \bigwith_{q \in F} \hat{E}^*\mathcal{P}(\kw{ar}(q))$.
-It can be promoted to the strategy $\hat{\sigma} : E \rightarrow F$ defined by:
+\begin{definition}[Regular Strategy]
+Consider a strategy $\sigma : E \twoheadrightarrow F$.
+First,
+given two plays $s, t \in P_{E,F}$
+the play $s \rhd t$ first proceeds as $s$
+but goes on to proceed as $t$ if $s$ ends
+when a question $q \in F$ is expected.
+Formally,
+we define
+$\rhd^x : P_{E,F}^x \times P_{E,F} \rightarrow P_{E,F}^x$
+as follows:
+\begin{align*}
+  qs^q \rhd t &:= q ( s^q \rhd^q t ) &
+  \underline{m} s^{qm} \rhd^q t &:= \underline{m} (s^{qm} \rhd^{qm} t) &
+  n s^q \rhd^{qm} t &:= n (s^q \rhd^q t) \\
+  \epsilon \rhd t &:= t &
+  \underline{r} s \rhd^q t &:= \underline{r} (s \rhd t)
+\end{align*}
+The \emph{regular closure} $\sigma^* : E \twoheadrightarrow F$
+allows the strategy $\sigma$
+to start over with each new incoming question:
 \[
-  \hat{\sigma} := \langle
-    {*} \mapsto E^* (\{r\} \mapsto \iota_r({*}_\bot) )\circ \sigma
-  \rangle
+  \begin{prooftree}
+    \infer0{\epsilon \in \sigma^*}
+  \end{prooftree}
+  \qquad \qquad
+  \begin{prooftree}
+    \hypo{s \in \sigma}
+    \hypo{t \in \sigma^*}
+    \infer2{s \rhd t \in \sigma^*}
+  \end{prooftree}
 \]
+We say that $\sigma$ is a \emph{regular strategy}
+when $\sigma^* = \sigma$.
 \end{definition}
 
-\subsection{Strategies as handlers} %{{{
+%}}}
 
-When a client computation $f \in \hat{F} X$ asks a question $q \in F$,
-a strategy $\sigma : E \twoheadrightarrow F$
-can be used to handle the question,
-use a computation in $\hat{E}^*$ to produce an answer $r \in \kw{ar}(q)$,
-and resume the client computation as
-the strategy waits for the next question in $F$.
-Below we explain how this process can be formalized in our
-domain-theoretic approach.
-Since we only consider one type of strategy,
-for the sake of brevity
-we will write $S := S_{E \twoheadrightarrow F}$.
+In the previous section
+we described the behavior of various components
+by writing down exection traces.
+We can use the constructions above to turn such descriptions
+into formal strategies.
 
-\paragraph{Interaction Primitive}
-
-We start by defining a sup-lattice homomorphism $\kappa^\circ_{X,E,F}$
-handling a single interaction in $F$.
-When two computations make complementary choices,
-we can use a distributive law to observe
-the choice made by one
-and propagate it to the other:
+\begin{example} %{{{
+The behavior of the process $\kw{secret}$
+as a strategy $\sigma_\kw{secret} : \mathcal{S} \rightarrow \mathcal{P}$
+can be defined as:
 \[
-  \kappa^\bullet_{R,X,Y} \: : \:
-    \biggl( \bigwith_{r \in R} X \biggr)
-    \otimes
-    \biggl( \bigoplus_{r \in R} Y \biggr)
-  \:\xrightarrow{\rho_{\otimes\oplus}}\:
-    \bigoplus_{r \in R} \:
-      \biggl( \bigwith_{r \in R} X \biggr)
-      \otimes Y
-  \:\xrightarrow{[\pi_r \otimes \kw{id}]_{r \in R}}\:
-    X \otimes Y
-\]
-Likewise,
-the strength of the free monad
-$\rho_{\hat{E}^*} : X \otimes \hat{E}^* Y \rightarrow \hat{E}^*(X \otimes Y)$
-can be used to observe the strategy's computation over $\hat{E}^*$
-in the interaction primitive
-\begin{align*}
-\kappa^\que_{X,E,F} \: := \:
-  %\lambda_{\otimes\oplus} \circ (\kw{id} \otimes (d \circ \epsilon_\bot))
-  %\: : \:
-  \hat{F}X \otimes S_\bot
-  \:\xrightarrow{
-    (\hat{F}X \otimes (\epsilon_\bot \mathbin; d)) \mathbin; \lambda_{\otimes\oplus}
-  }\: {}&
-  %\hat{F}X \:\otimes\:
-  %\bigwith_{q \in F} \hat{E}^* \bigoplus_{r \in \kw{ar}(q)} S_\bot
-  %\:\xrightarrow{\lambda_{\otimes\oplus}}\:
-  \bigoplus_{q \in F}
-    \Biggl(
-      \biggl(
-        \bigwith_{r \in \kw{ar}(q)} X
-      \biggr)_\bot
-      \:\otimes\:
-      \biggl(
-        \bigwith_{q \in F} \hat{E}^*
-        \bigoplus_{r \in \kw{ar}(q)}
-        S_\bot
-      \biggr)
-    \Biggr)
-\\
-  \:\xrightarrow{
-    [\kw{id} \otimes \pi_q \mathbin;
-     \rho_{\hat{E}^*} \mathbin;
-     E^*(\epsilon_\bot \otimes \kw{id} \mathbin;
-         \kappa^\ans)]_{q \in F}
-  }\:
-  {}&\hat{E}^* \bigl( X \otimes S_\bot \bigr)
-  \,.
-\end{align*}
-
-\paragraph{Strategy Action}
-
-To handle iterated interactions in $\hat{F}^* X$,
-we will define an $\hat{F}$-algebra
-\[
-  \alpha^\otimes :
-    \hat{F} K \rightarrow K
-  \qquad \text{where} \qquad
-  K :=
-    \bigl[S_\bot , \,
-       \hat{E}^* \bigl(X \otimes S_\bot \bigr) \bigr]
+  \sigma_\kw{secret} :=
+    \biggl( \,
+      \bigcup_{n \in \mathbb{N}}
+      {\downarrow} \,
+      \kw{run} \cdot \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}]
+               \cdot n \cdot \underline{*}
+    \, \biggr)^*
   \,.
 \]
-Algebraically,
-the interpretation of
-$\underline{m}(k_n)_{n \in \kw{ar}(m)} \in \hat{F}^* X$
-is derived from that of the arguments~$k_n$.
-This means that computationally, the interpretation proceeds backward in time.
-Hence, we formulate $\alpha$ in continuation-passing style,
-where a continuation $k \in K$ expects
-the strategy's starting state,
-and produces both the outcome in $X$ and
-the strategy's ending state.
-We use
-\[
-  \chi \: := \:
-  [S_\bot, \eta_{\hat{E}} \circ \gamma]
-  \circ \eta_\otimes
-  \: : \:
-  X
-  \: \rightarrow \:
-  [S_\bot, \: \hat{E}^*(X \otimes S_\bot)]
-  \:= \: K
-  \,,
-\]
-to encode simple outcomes into continuations.
-For a round of interaction in $F$,
-we use the algebra $\alpha^\otimes$ above,
-defined by currying a morphism
-$\alpha : \hat{F} K \otimes S_\bot \rightarrow \hat{E}^*(X \otimes S_\bot)$
-which uses $\kappa^\que_K$
-to handle the initial interaction.
-This leaves us with a continuation in $K$
-as well as the strategy's intermediate state in $S_\bot$.
-Using the counit $\epsilon_\otimes$ of the monoidal closure,
-we feed the intermediate strategy to the intermediate continuation,
-allowing us to carry out the remainder of the computation:
-\[
-  \alpha \: : \:
-    \hat{F} K \otimes S_\bot
-    \xrightarrow{\kappa^\que \mathbin; \gamma}
-    \hat{E}^*(S_\bot \otimes K)
-    \xrightarrow{\hat{E}^* (\epsilon_\otimes \mathbin; \gamma)}
-    \hat{E}^* \hat{E}^* (X \otimes S_\bot)
-    \xrightarrow{\mu_{\hat{E} }}
-    \hat{E}^* (X \otimes S_\bot)
-  \,.
-\]
-The overall interaction between the client computation and the strategy
-is then captured with
-\[
-  h : \hat{F}^* X \otimes S_\bot \rightarrow \hat{E}^* (X \otimes S_\bot)
-  \,, \quad \text{defined by} \:
-  h^\otimes :=
-    [\alpha^\otimes, \chi]_{\hat{F}} :
-    \hat{F}^* X \rightarrow [S_\bot, \, \hat{E}^*(X \otimes S_\bot)]
-  \,.
-\]
-
+The principal downset ${\downarrow}\, s$ for a play $s$
+is the set $\{t \mid t \sqsubseteq s\}$ of all its prefixes.
+Since it is downward-closed, it constitutes a valid strategy.
+In addition,
+processes do not retain state from one execution to the next,
+but our use of the regular closure $(-)^*$
+allows the process to restart after it terminates.
+\end{example}
 %}}}
 
 \subsection{Layered Composition} %{{{
 
-The constructions above
-can be extended to define strategy composition $\sigma \odot \tau$.
-Here the client computation
-handled by the strategy $\tau \in S_{E \twoheadrightarrow F}$
-it itself a strategy $\sigma \in S_{F \twoheadrightarrow G}$.
-We use the coalgebra
+The layered
+composition of
+$\sigma : F \twoheadrightarrow G$ with
+$\tau : E \twoheadrightarrow F$
+allows the strategies to synchronize
+over the signature $F$.
+Their interaction over the intermediate signature is then hidded from
+the composite strategy $\sigma \odot \tau : E \twoheadrightarrow G$.
+Layered composition can be defined
+at the level of individual plays.
+
+\begin{definition}[Layered Composition of Strategies] %{{{
+The \emph{identity} strategy $\kw{id}_E : E \twoheadrightarrow E$
+is defined as:
 \[
-  \delta \: : \:
-    S_{F \twoheadrightarrow G} \otimes (S_{E \twoheadrightarrow F})_\bot
-    \: \rightarrow \:
-    \bigwith_{q \in G} \hat{E}^* \!
-      \bigoplus_{r \in \kw{ar}(q)}
-        \bigl(
-          S_{F \twoheadrightarrow G} \otimes
-          (S_{E \twoheadrightarrow F})_\bot
-        \bigr)_\bot
+  \kw{id}_E :=
+    \bigl(
+      \{\epsilon\} \cup 
+      \{ m \underline{m} \mid m \in E \} \cup
+      \{ m \underline{m} n \underline{n} \mid m \in E, n \in \kw{ar}(m) \}
+    \bigr)^*
+  \,.
 \]
-to define the resulting strategy in $S_{E \twoheadrightarrow G}$.
-For each incoming question $q \in G$, the component
+In addition, two strategies
+$\sigma : F \twoheadrightarrow G$ and
+$\tau : E \twoheadrightarrow F$
+compose to yield a strategy
+$\sigma \odot \tau : E \twoheadrightarrow G$.
+Individual plays compose
+according to the relations:
 \begin{align*}
-  \delta_q :
-    S_{F \twoheadrightarrow G}
-        \otimes (S_{E \twoheadrightarrow F})_\bot
-    \xrightarrow{\pi_q \otimes \kw{id}}
-    \hat{F}^* \biggl(
-      \bigoplus_{r \in \kw{ar}(q)} (S_{F \twoheadrightarrow G})_\bot
-    \biggr)
-        \otimes (S_{E \twoheadrightarrow F})_\bot
-    \xrightarrow{h}
-{}& \hat{E}^* \biggl(
-      \bigoplus_{r \in \kw{ar}(q)} (S_{F \twoheadrightarrow G})_\bot
-      \otimes (S_{E \twoheadrightarrow F})_\bot
-    \biggr)
-\\
-    \xrightarrow{\hat{E}^*\left(\lambda_{\otimes\oplus} \mathbin;
-                           \bigoplus_r \lambda_{\otimes\bot}\right)}
-{}& \hat{E}^* \! \bigoplus_{r \in \kw{ar}(q)} \biggl(
-      S_{F \twoheadrightarrow G} \otimes
-      (S_{E \twoheadrightarrow F})_\bot
-    \biggr)_\bot
+  {\odot} : P_{F,G} \times P_{E,F}
+    &\rightarrow \mathcal{P}(P_{E,G}) &
+  \epsilon \odot t &:= \{ \epsilon \} \\&&
+  qs^q \odot t &:= \{ qw \mid w \in s^q \odot t \}
+  \\
+  {\odot}^q : P_{F,G}^q \times P_{E,F}
+    &\rightarrow \mathcal{P}(P_{E,G}^q) &
+  \underline{r} s \odot^q t &:=
+    \{ \underline{r} w \mid w \in s \odot t \} \\&&
+  \underline{m} s^{qm} \odot^q t &:=
+    \{ w \mid \exists t^m \cdot t = mt^m \wedge w \in s \odot^{qm} t^m \}
+  \\
+  {\odot}^{qm} : P_{F,G}^{qm} \times P_{E,F}^m
+    &\rightarrow \mathcal{P}(P_{E,G}^q) &
+  s^{qm} \odot^{qm} \underline{u} t^{mu} &:=
+    \{ \underline{u} w \mid w \in s^{qm} \odot^{qmu} t^{mu} \} \\&&
+  s^{qm} \odot^{qm} \underline{n} t &:=
+    \{ w \mid \exists s^q \cdot s^{qm} = ns^q \wedge w \in s^q \odot^q t \}
+  \\
+  {\odot}^{qmu} : P_{F,G}^{qm} \times P_{E,F}^{mu}
+    &\rightarrow \mathcal{P}(P_{E,G}^{qu}) &
+  s^{qm} \odot^{qmu} \epsilon &:= \{ \epsilon \} \\&&
+  s^{qm} \odot^{qmu} v t^m &:= \{ v w \mid w \in s^{qm} \odot^{qm} t^m \}
 \end{align*}
-passes the question to $\sigma$,
-handles the resulting computation in $\hat{F}^*$ with $\tau$,
-and returns the answer.
-We can then define layered composition
-by letting $\delta$ generate the strategy
+We can then define the \emph{layered composition} of $\sigma$ and $\tau$ as
 \[
   \sigma \odot \tau \: := \:
-    \langle \delta \rangle (\sigma \otimes \tau_\bot)
+    \bigcup_{(s,t) \in \sigma \times \tau}
+      s \odot t
   \,.
 \]
+\end{definition}
+%}}}
 
+This compositional structure behaves as expected.
+Namely,
 
-To see how a client computation in $\hat{E}$
-can be made to interact with a strategy in $\check{E}_T$,
-assume $\langle T, \eta_T, \mu_T \rangle$ is a monad equipped with a strength
-$s_T^{X,Y} : X \otimes T Y \rightarrow T (X \otimes Y)$.
-Concretely, the strength
-``pulls forward'' the part of the computation happening over $T$,
-then resumes the residual computation in $X \otimes Y$.
-With this tool,
-we can model the interaction of a client request
-$\sigma \in \hat{E} X$
-with the strategy
-$\sigma \in \check{E}_T^*(\mathbf{0})$
-as follows.
-%using a primitive
-%$
-%  \kappa : \hat{E} X \otimes \check{E}_T^* \mathbf{0} \rightarrow
-%    T (X \otimes \check{E}_T^* \mathbf{0})
-%$.
-%To this end,
-We focus first on the simpler task of
-propagating the choice of answer $r \in \kw{ar}(q)$
-from the strategy to the client in a residual computation
-by defining the corresponding operation $\kappa^\ans_R$ as:
-\[
-  \kappa^\ans_R \: := \: \bigl[
-    (\pi_r \circ \epsilon_\bot) \otimes \epsilon_\bot
-  \bigr]_{r \in R} \circ \rho_{\otimes\oplus}
-  \: : \:
-  \biggl(\bigwith_{r \in R} X \biggr)_\bot \otimes
-  \biggl(\bigoplus_{r \in R} Y_\bot \biggr) \rightarrow
-  X \otimes Y
-  \,.
-\]
-Here,
-the distributive law $\rho_{\otimes\oplus}$
-first extracts the choice of answer $r \in R$
-performed by the handler
-and use the corresponding projection $\pi_r$
-to pass it to the client.
-The counit $\epsilon_\bot : S_\bot \rightarrow S$
-associated with the comonad $(-)_\bot$
-is used to collapse the new $\bot$ in $S_\bot$
-back into the original lattice $S$.
-It remains to pass the question from the client to the handler,
-and to perform the handler's side-effects:
-%\[
-%  \kappa \: := \:
-%  \bigl[
-%    T \kappa'_{\kw{ar}(q)} \circ
-%    s \circ
-%    (\kw{id} \otimes \pi_q)
-%  \bigr]_{q \in E} \circ \lambda_{\otimes\oplus}
-%  \: : \:
-%  \hat{E}X \otimes \check{E}_T Y \rightarrow
-%  T (X \otimes Y)
-%\]
-\[
-  \kappa^\que \: := \:
-  \bigl[
-    T \kappa^\ans_{\kw{ar}(q)} \circ
-    s_T \circ
-    (\kw{id} \otimes \pi_q)
-  \bigr]_{q \in E}
-  \: : \:
-  \hat{E} \bigl( X \otimes \check{E}_T Y \bigr) \rightarrow
-  T (X \otimes Y)
-\]
-Note that we have assumed 
-Here again a distributive law is used to extract the choice of $q$
-out of the tensor product,
-and the strength is used to extract the $T$ component of
-the handler's computation.
-
-\paragraph{Iterating interactions}
-
-The constructions above take care of a single round interaction
-between a client and handler.
-We can iterate them to construct
-\[
-  \hat{E}^* X \otimes \check{E}_T^* \mathbf{0}
-  \xrightarrow{d \otimes \kw{id}}
-  (\hat{E} \hat{E}^* X \oplus X) \otimes \check{E}_T^* \mathbf{0}
-  \xrightarrow{\lambda_{\otimes\oplus}}
-  (\hat{E} \hat{E}^* X \otimes \check{E}_T^* \mathbf{0}) \oplus
-  (X \otimes \check{E}_T \mathbf{0})
-  \xrightarrow{[\kappa \circ (\kw{id} \otimes d),  }
- \rightarrow T (X \otimes 
-\]
-\[
-  \hat{E}^* X \otimes \check{E}_T^* \mathbf{0}
-  \xrightarrow{s}
-  \hat{E}^* (X \otimes \check{E}_T^* \mathbf{0})
-\]
+\begin{theorem}
+Layered composition is associative
+and admits identity strategies as units.
+\end{theorem}
 
 %}}}
 
-\subsection{Game semantics formulation} %{{{
+\subsection{Flat Composition}
 
-\begin{example} %{{{
-In the previous section
-we have informally describe the behavior of various components
-by writing down traces generated by their executions.
-It takes very little effort to turn such descriptions into formal strategies.
+In addition to layered composition,
+strategies can also be combined side-by-side.
+Specifically, two strategies
+$\sigma_1 : E \rightarrow F_1$ and
+$\sigma_2 : E \rightarrow F_2$
+can be used to independently handle
+the two components of an incoming effect signature $F_1 \oplus F_2$.
+
+\begin{definition}[Flat Composition]
+The strategy $\pi_i : E_1 \oplus E_2 \rightarrow E_i$
+can be defined as:
+\[
+  \pi_i := \bigl(
+    \{ \epsilon \} \cup
+    \{ m \, \underline{\iota_i(m)} \mid m \in E_i \} \cup
+    \{ m \, \underline{\iota_i(m)} \, n \, \underline{n} \mid
+       m \in E_i, n \in \kw{ar}(m) \}
+  \big)^*
+  \,.
+\]
+Moreover,
+two strategies
+$\sigma_1 : E \rightarrow F_1$ and
+$\sigma_2 : E \rightarrow F_2$
+can be combined into
+$\langle \sigma_1, \sigma_2 \rangle : E \rightarrow F_1 \oplus F_2$.
+Individual plays combine as follows:
+\[ ... XXX ... \]
+%\begin{align*}
+%  \langle qs_1^q , s_2 \rangle &:=
+%    \{ q w \mid w \in \langle s_1^q, s_2 \rangle^q_1 \} &
+%  \langle s_1 , qs_2^q \rangle &:=
+%    \{ q w \mid w \in \langle s_1, s_2^q \rangle^q_2 \} \\
+%  \langle s_1^q, s_2 \rangle_1^q &:=
+%    \{ \}
+%\end{align*}
+Then
+$\langle \sigma_1, \sigma_2 \rangle :=
+ \bigcup_{(s_1, s_2) \in \sigma_1 \times \sigma_2}
+   \langle s_1, s_2 \rangle$.
+In addition,
+for $\sigma_1 : E_1 \twoheadrightarrow F_1$ and
+$\sigma_2 : E_2 \twoheadrightarrow F_2$
+we define
+\[
+  \sigma_1 \oplus \sigma_2 :=
+    \langle \sigma_1 \odot \pi_1, \, \sigma_2 \odot \pi_2 \rangle
+    :
+    E_1 \oplus E_2 \twoheadrightarrow F_1 \oplus F_2
+  \,.
+\]
+\end{definition}
+
+Note that despite the notations we have used,
+flat composition does not constitute a cartesian product of strategies,
+because there are strategies of type
+$E \rightarrow F_1 \oplus F_2$
+which do not take the form $\langle \sigma_1, \sigma_2 \rangle$.
 For example,
-the behavior as a process of the program $\kw{secret}$
-can be given as a strategy $\sigma : \mathcal{S} \rightarrow \mathcal{P}$
-defined by:
-\begin{align*}
-  \sigma :=
-  %\bigcup_{n \in \mathbb{N} } {\downarrow} (
-   % &\kw{run} \cdot \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}]
-   %          \cdot n \cdot \underline{*} \, ) \\ =
-  \{
-    &\kw{run} \cdot \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}] \, , \, \\
-    &\kw{run} \cdot \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}]
-             \cdot n \cdot \underline{*} \,,\, \\
-    &\kw{run} \cdot \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}]
-             \cdot n \cdot \underline{*} \cdot \kw{run} \cdot
-                 \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}] \, , \,
-    \ldots 
-      \mid n \in \mathbb{N} \}
-\end{align*}
-Note that the process can be run again after it terminates,
-although it will behave identically in any subsequent executions.
-\end{example}
-%}}}
-
-\paragraph{Algebraic characterization} %{{{
-While the model we have defined above
-is straightforward and follows game semantics tradition,
-it may not be completely clear at first
-\emph{why} it is an appropriate choice.
-In the remainder of this section
-we will show the model is %in a precise sense
-the most general possible which combines
-\begin{itemize}
-  \item unbounded angelic nondeterminism with
-  \item execution shapes of the kind outlined in \S\ref{sec:strat}.
-\end{itemize}
-To this end,
-we conduct an analysis of the model's (co)algebraic structure
-along the lines of \citet{ags-act}.
-The category $\mathbf{Sup}$ of
-sup-lattices and sup-preserving functions
-provides a model of nondeterminism;
-the shape of the game $E \rightarrow F$
-leads us to the particular sup-lattice
-\begin{equation} \label{eqn:stratlat}
-  S_{E \rightarrow F} \:\cong\:
-  \mu Y \cdot
-    \bigwith_{q \in F}
-    \left(
-    \mu Z \cdot
-      \bigoplus_{m \in E}
-      \left( \bigwith_{n \in \kw{ar}(n)} Z \right)_\bot
-    \oplus
-      \bigoplus_{r \in \kw{ar}(q)}
-      Y_\bot
-    \right)
-  \:\in\:
-  \mathbf{Sup}
-  \,,
-\end{equation}
-where $\with$ and $\oplus$ respectively denote
-the (coinciding) product and coproduct in $\mathbf{Sup}$, and where
-$\mu X \cdot F X$ denotes
-the (coinciding) initial algebra and terminal coalgebra
-for an endofunctor
-$F : \mathbf{Sup} \rightarrow \mathbf{Sup}$.
-
-The remainder of this section
-will elucidate the characterization (\ref{eqn:stratlat}) given above.
-In the process, we build a toolbox of constructions and properties
-connecting the
-trace-based,
-state-based and
-algebraic views of
-interactive computation.
-This toolbox is
-used as a foundation
-in formulating the more sophisticated constructions
-offered by our model.
+questions in $F_1$ may determine
+how later questions in $F_2$ are answered.
 
 %}}}
 
-%}}}
-
-%\subsection{Layered Composition} \label{sec:base:ts} %{{{
-%
-%Identity $\mathbf{1} \rightarrow [E \rightarrow E](\mathbf{1})$
-%\[
-%  \kw{id}_E :=
-%  \left\langle {*} \mapsto
-%    \bigl\langle
-%      \underline{q}(\iota_r({*}_\bot))_{r \in \kw{ar}(q)}
-%    \bigr\rangle_{q \in E}
-%  \right\rangle
-%\]
-%
-%
-%
-%$S_{F \rightarrow G} \otimes S_{E \rightarrow F} \rightarrow
-%$
-%
-%Our model uses CompCertO's notion of transition system
-%as described in Definition~\ref{def:lts},
-%but we introduce the following notion of horizontal composition
-%(depicted in Fig.~\ref{fig:overview:ts}).
-%
-%\begin{definition}[Transition system composition] \label{def:lcomp} %{{{
-%The transition system
-%$\kw{id}_A : A \twoheadrightarrow A$
-%is defined as
-%\[
-%  \kw{id}_A \::=\:
-%  \big\langle
-%    A^\que + A^\ans, \:
-%    \varnothing, \:
-%    \iota_1, \:
-%    \iota_1^{-1}, \:
-%    \iota_2, \:
-%    \iota_2^{-1}
-%  \big\rangle
-%  \,.
-%\]
-%The composition of
-%$
-%  L_1 = \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
-%    : B \twoheadrightarrow C
-%$ and $
-%  L_2 = \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
-%    : A \twoheadrightarrow B
-%$
-%is the transition system
-%$
-%  L_1 \odot L_2 :=
-%  \langle S, {\rightarrow}, I, X, Y, F \rangle
-%  : A \twoheadrightarrow C
-%$ defined as follows.
-%States are taken in the set
-%$
-%    S := S_1 + (S_2 \times S_1)
-%$.
-%When an call in $C$ activates $L_1$,
-%the left summand is used:
-%\[
-%  \begin{prooftree}
-%    \hypo{q_C \mathrel{I_1} s_1}
-%    \infer1{q_C \mathrel{I} \iota_1(s_1)}
-%  \end{prooftree}
-%  \qquad
-%  \begin{prooftree}
-%    \hypo{s_1 \rightarrow_1 s_1'}
-%    \infer1{\iota_1(s_1) \rightarrow \iota_1(s_1')}
-%  \end{prooftree}
-%  \qquad
-%  \begin{prooftree}
-%    \hypo{s_1 \mathrel{F_1} r_C}
-%    \infer1{\iota_1(s_1) \mathrel{F} r_C}
-%  \end{prooftree}
-%\]
-%When $L_1$ makes an outgoing call in $B$,
-%its current state is saved and
-%the question activates $L_2$.
-%The execution then
-%operates on the state of $L_2$
-%until a final state of $L_2$ is reached
-%and $L_1$ is resumed:
-%\[
-%  \small
-%  \begin{prooftree}
-%    \hypo{s_1 \mathrel{X_1} q_B}
-%    \hypo{q_B \mathrel{I_2} s_2}
-%    \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
-%  \end{prooftree}
-%  \quad
-%  \begin{prooftree}
-%    \hypo{s_2 \rightarrow_2 s_2'}
-%    \infer1{\iota_2(s_2, s_1) \rightarrow \iota_2(s_2', s_1)}
-%  \end{prooftree}
-%  \quad
-%  \begin{prooftree}
-%    \hypo{s_2 \mathrel{X_2} q_A}
-%    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_A}
-%  \end{prooftree}
-%  \quad
-%  \begin{prooftree}
-%    \hypo{r_A \mathrel{Y_2^{s_2}} s_2'}
-%    \infer1{r_A \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
-%  \end{prooftree}
-%  \quad
-%  \begin{prooftree}
-%    \hypo{s_2 \mathrel{F_2} r_B}
-%    \hypo{r_B \mathrel{Y_1^{s_1}} s_1'}
-%    \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
-%  \end{prooftree}
-%\]
-%\end{definition}
-%%}}}
-%
-%%\begin{example} \label{ex:base:lcomp} %{{{
-%%Referring back to Example~\ref{ex:base:clightsem},
-%%consider the transition system:
-%%\[
-%%  \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c}) :
-%%  \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
-%%  \,.
-%%\]
-%%There,
-%%the calls of $\kw{bq.c}$ into $\kw{rb.c}$
-%%are turned into internal steps,
-%%triggering a switch between executions of the two components.
-%%For example,
-%%the call to $\kw{inc1}$ from $\kw{deq}$
-%%may proceed as follows:
-%%\begin{align*}
-%%  \kw{deq}()@m[\kw{c_1} \mapsto 5] \mathrel{I} \iota_1(u_0)
-%%  \rightarrow \cdots &\rightarrow \iota_1(u_1)
-%%  \rightarrow \iota_2(s_0, u_1)
-%%  \rightarrow \cdots \\ \cdots &\rightarrow \iota_2(s_k, u_1)
-%%  \rightarrow \iota_1(u_2) \rightarrow \cdots
-%%  \rightarrow \iota_1(u_5) \mathrel{F} v@m[\kw{c1} \mapsto 6]
-%%  \,.
-%%\end{align*}
-%%\end{example}
-%%%}}}
-%
-%%}}}
-
-%}}}
 
 \section{Refinement Conventions} \label{sec:refconv} %{{{
 
-Our strategy spaces are equipped with an inherent notion of refinement.
+The inclusion order on strategies serves as a notion of refinement.
 For example, consider the computations $\sigma \le \tau \in \mu\hat{E}$
 acting as clients for the signature $E$.
 Operationally,
@@ -4508,12 +2897,7 @@ we first consider computations in the free monad,
 then extend our notion refinement up to convention
 to the setting of two-sided strategies.
 
-\subsection{Duality in $\mathbf{Sup}$}
-
 \subsection{Definition}
-
-The dual construction $\lnot S$ introduced above
-allows to define refinement conventions as follows.
 
 \begin{definition}
 A \emph{refinement convention} $R : E \leftrightarrow F$
@@ -4602,58 +2986,50 @@ However, they become meaningless
 as a simulation can never proceed
 in a way that they could influence.
 
-\subsection{Simulations in the Free Monad}
-
-Now that we have defined a notion of
-refinement conventions $\mathbf{R} : E \leftrightarrow F$
-between the effect signatures $E$ and $F$,
-we formalize the corresponding notion of refinement
-between two computations $\sigma \in E^*X$ and $\tau \in F^*Y$.
-Specifically,
-a relation $R \subseteq X \times Y$,
-induces a relation
-$\sigma \le_{\mathbf{R}^*R} \tau$
-between the free monads.
-This relation can be defined inductively or coinductively.
-
-\paragraph{Inductive Definition}
-
-\[
-  \begin{prooftree}
-    \hypo{x \mathrel{R} y}
-    \infer1{\eta^E_X(x)\: \le_{\mathbf{R}^* R}\: \eta^F_Y(y)}
-  \end{prooftree}
-  \qquad
-  \begin{prooftree}
-    \hypo{m_1 \mathrel{\mathbf{R}^\circ} m_2}
-    \hypo{\forall (n_1, n_2) \in \mathbf{R}^\bullet_{m_1m_2} \cdot
-      \sigma_{n_1}
-      \le_{(\mathbf{R}_{m_1m_2}^{n_1n_2})^* R}
-      \tau_{n_2}}
-    \infer2{
-      \underline{m}_1 (\sigma_n)_n
-      \:\le_{\mathbf{R}^*R}\:
-      \underline{m}_2 (\tau_n)_n
-    }
-  \end{prooftree}
-\]
-\[
-  \forall i \cdot \sigma_i \le_{\mathbf{R}^* R} \tau
-  \Leftrightarrow
-  \bigvee_i \sigma_i \le_{\mathbf{R}^* R} \tau
-\]
-
-\paragraph{Coinductive Definition}
-
-For a coalgebra
-
-
-
-
-
-\subsection{Compositional Structure}
+%\subsection{Simulations in the Free Monad}
+%
+%Now that we have defined a notion of
+%refinement conventions $\mathbf{R} : E \leftrightarrow F$
+%between the effect signatures $E$ and $F$,
+%we formalize the corresponding notion of refinement
+%between two computations $\sigma \in E^*X$ and $\tau \in F^*Y$.
+%Specifically,
+%a relation $R \subseteq X \times Y$,
+%induces a relation
+%$\sigma \le_{\mathbf{R}^*R} \tau$
+%between the free monads.
+%This relation can be defined inductively or coinductively.
+%
+%\paragraph{Inductive Definition}
+%
+%\[
+%  \begin{prooftree}
+%    \hypo{x \mathrel{R} y}
+%    \infer1{\eta^E_X(x)\: \le_{\mathbf{R}^* R}\: \eta^F_Y(y)}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{m_1 \mathrel{\mathbf{R}^\circ} m_2}
+%    \hypo{\forall (n_1, n_2) \in \mathbf{R}^\bullet_{m_1m_2} \cdot
+%      \sigma_{n_1}
+%      \le_{(\mathbf{R}_{m_1m_2}^{n_1n_2})^* R}
+%      \tau_{n_2}}
+%    \infer2{
+%      \underline{m}_1 (\sigma_n)_n
+%      \:\le_{\mathbf{R}^*R}\:
+%      \underline{m}_2 (\tau_n)_n
+%    }
+%  \end{prooftree}
+%\]
+%\[
+%  \forall i \cdot \sigma_i \le_{\mathbf{R}^* R} \tau
+%  \Leftrightarrow
+%  \bigvee_i \sigma_i \le_{\mathbf{R}^* R} \tau
+%\]
 
 \subsection{Refinement Squares}
+
+\subsection{Vertical Composition}
 
 
 
@@ -9518,6 +7894,1820 @@ we obtain the composite correctness of \kw{ClightP} compilation:
 
 \end{document}
 \endinput
+
+As described in \S\ref{sec:strat},
+a strategy $\sigma : E \twoheadrightarrow F$
+simultaneously plays the role of
+a client for $E$ and
+a handler for $F$.
+When a question $q \in F$ is received,
+the strategy performs an interaction over $\hat{E}^*$,
+eventually producing an answer $r \in \kw{ar}(q)$
+and returning control to the environment,
+as it waits for the next question in $F$.
+This can be expressed as follows.
+
+\section{Algebraic Game Semantics} \label{sec:ags} %{{{
+
+% Preamble {{{
+
+The formalism we use to define our model
+employs a novel approach which we dub
+\emph{algebraic game semantics},
+drawing simultaneously from
+game semantics,
+algebraic effects and
+universal coalgebra.
+We start by presenting this approach.
+
+%}}}
+
+\subsection{Domains and Games} %{{{
+
+Denotational semantics traditionally employs a domain-theoretic approach.
+To handle programming language features
+(recursion, high-order functions, nondeterminism),
+corresponding domain constructions
+(cpos, exponentials, powerdomains)
+are investigated,
+then used to construct the denotational model:
+types are associated with domains;
+terms of a given type
+are interpreted as elements of the corresponding domain,
+which are often input--output functions of some kind.
+
+\paragraph{Game Semantics} %{{{
+
+Unfortunately, the domain-theoretic approach
+sometimes struggles to account for details of a more operational nature
+(such as sequentiality in the functional programming language PCF).
+Game semantics overcomes this problem
+by emphasizing the \emph{interactive} nature of program components.
+Types are interpreted as
+two-player \emph{games} between the component and its environment, and
+terms type are interpreted as 
+\emph{strategies} for the corresponding games.
+For example, the simple game associated with an effect signature $E$
+can be described as follows:
+\begin{quote}
+The \emph{client} first asks a question $q \in E$;
+the \emph{handler} then gives an answer $r \in \kw{ar}(q)$.
+\end{quote}
+Note that depending on the context,
+a component may play the role of either the client or handler.
+
+A typical strategy model is constructed as follows.
+As a game proceeds,
+we can record the \emph{play} or sequence of moves
+performed by the players.
+A strategy can then be encoded as
+the set of plays that a component will generate if 
+we range over all possible choices of its environment.
+%The following example illustrates this idea.
+
+%}}}
+
+\begin{figure} % fig:qstrat {{{
+  \[
+    \vcenter{\hbox{
+    \begin{tikzpicture}
+      [level 1/.style={sibling distance=2cm},
+       level 2/.style={sibling distance=3cm},
+       level 3/.style={sibling distance=1cm}]
+      \node {}
+        child {
+          node {$*$}
+          child {
+            node {$*$}
+            child {
+              node {$*$}
+              edge from parent node[left] {$\kw{enq}[v_3]$}
+            }
+            child {
+              node {$v_1$}
+              edge from parent node[right] {$\kw{deq}$}
+            }
+            edge from parent node[left] {$\kw{enq}[v_2]$}
+          }
+          child {
+            node {$v_1$}
+            child {
+              node {$*$}
+              edge from parent node[left] {$\kw{enq}[v_2]$}
+            }
+            child {
+              node {$\bot$}
+              edge from parent node[right] {$\kw{deq}$}
+            }
+            edge from parent node[right] {$\kw{deq}$}
+          }
+          edge from parent node[left] {$\kw{enq}[v_1]$}
+        }
+        child {
+          node {$\bot$}
+          edge from parent node[right] {$\kw{deq}$}
+        }
+      ;
+    \end{tikzpicture}     
+    }}
+    \qquad
+    \begin{array}{r@{}l}
+      \sigma :=
+      \{ \, &
+        \kw{enq}[v_1] \cdot \underline{*} \,
+        , \\ &
+        \kw{enq}[v_1] \cdot \underline{*} \cdot
+        \kw{enq}[v_2] \cdot \underline{*} \,
+        , \\ &
+        \kw{enq}[v_1] \cdot \underline{*} \cdot
+        \kw{enq}[v_2] \cdot \underline{*} \cdot
+        \kw{enq}[v_3] \cdot \underline{*} \,
+        , \\ &
+        \kw{enq}[v_1] \cdot \underline{*} \cdot
+        \kw{enq}[v_2] \cdot \underline{*} \cdot
+        \kw{deq} \cdot \underline{v}_1 \,
+        , \\ &
+        \kw{enq}[v_1] \cdot \underline{*} \cdot
+        \kw{deq} \cdot \underline{v}_1 \,
+        , \\ &
+        \kw{enq}[v_1] \cdot \underline{*} \cdot
+        \kw{deq} \cdot \underline{v}_1 \cdot
+        \kw{enq}[v_2] \cdot \underline{*} \,
+      \}
+    \end{array}
+  \]
+  \caption{A strategy for the game associated with $E_\kw{bq}$,
+    shown as a tree and as a set of plays.}
+  \label{fig:qstrat}
+\end{figure}
+%}}}
+
+\begin{example}[Bounded queue game and strategy] \label{ex:qstrat} %{{{
+Consider a version of
+the game associated with the signature $E_\kw{bq}$,
+iterated three times.
+A partial strategy for this game is shown in Fig.~\ref{fig:qstrat}.
+Here, the environment plays the role of the client
+and the component plays the role of the handler.
+The tree shows the possible questions of the environment as edges.
+Nodes are labeled with the answers given by the component,
+or $\bot$ if the strategy is undefined.
+The corresponding set of plays $\sigma$
+collects the possible paths from the root of the tree.
+We have underlined the moves of the component.
+\end{example}
+%}}}
+
+\paragraph{Game and Domain Constructions} %{{{
+
+Once the games and strategies used in a particular model have been formalized,
+a denotational interpretation %of the language under consideration
+can be formulated in those terms.
+Games serve as an intermediate representation
+for the domains (of strategies) in which terms are interpreted,
+and those domains are no longer manipulated directly \emph{as such}.
+
+At the same time,
+constructions on domains and constructions on games
+remain closely related.
+For example, games starting with
+an environment choice ($\bigwith_{i \in I} G_i$) or
+a system choice ($\bigoplus_{i \in I} G_i$)
+correspond to products and coproducts
+in corresponding categories of domains.
+%
+In this sense,
+domain- and game-theoretic semantics
+are not strictly speaking alternatives
+but rather two \emph{lenses} through which
+particular models can be understood,
+with varying degrees of usefulness.
+
+Embracing this complementarity is crucial to the project
+we have outlined in
+\S\ref{sec:intro:compsem} and Fig.~\ref{fig:paradigms}.
+On one hand,
+games provide an operational description
+of interfaces between open components,
+with few assumptions regarding their precise nature;
+as such they constitute a reasonable foundation for
+a reusable semantics toolbox.
+At the same time,
+the compositional structures we wish to formalize
+go beyond the realm of traditional game semantics.
+In particular,
+refinement conventions and data abstraction
+do not fit usual game and strategy constructions,
+but we will see in \S\ref{sec:refconv}
+that the more general reading of these constructions
+developed below
+allows us to adapt them for this task.
+
+%}}}
+
+\paragraph{Our Approach} %{{{
+
+Building on \citet{ags-act},
+we will show that a typical strategy model
+for components of the kind we have described
+can be obtained from first principles
+using domain-theoretic constructions.
+The result is a free sup-lattice containing
+prefix-closed sets of plays.
+
+%}}}
+
+%}}}
+
+\subsection{Games in the category of sup-lattices} %{{{
+
+% Preamble {{{
+
+A sup-lattice is a partially ordered set with all joins.
+We regard sup-lattices as spaces of computations
+ordered under refinement,
+where the joins $\bigvee_{i\in I} x_i$ model angelic nondeterminism.
+The least element $\bot = \bigvee \varnothing$
+captures an undefined or undesirable behavior,
+such as going wrong or silent divergence.
+
+We expect a function $f : S \rightarrow T$
+between two sup-lattices $(S, {\le})$ and $(T, {\sqsubseteq})$
+to preserve all joins so that
+$f \bigl( \bigvee_{i \in I} \sigma_i \bigr) = \bigsqcup_{i \in I} f(\sigma_i)$.
+In other words,
+operations which transform computations
+should act independently on each angelic choice.
+Since this property is satisfied by the identity function and
+preserved by composition,
+sup-lattices and sup-preserving functions
+form a category $\mathbf{Sup}$.
+
+%}}}
+
+\paragraph{Products of sup-lattices} %{{{
+
+%As a model of linear logic,
+$\mathbf{Sup}$ features a rich structure \cite{egg}
+which can be interpreted in terms of interactive computations.
+The zero object $\mathbf{0} := \{\bot\}$
+only has the undefined behavior $\bot$;
+the sup-lattice $\mathbf{1} := \{\bot \le {*} \}$
+also allows a successful but trivial computation $*$.
+More interestingly, two sup-lattices $S_1$ and $S_2$ can be composed
+in various ways:
+\begin{itemize}
+  \item $S_1 \with S_2$
+    has the \emph{environment} choose $i \in \{1, 2\}$,
+    then the computation proceeds as in $S_i$.
+  \item $S_1 \oplus S_2$
+    has the \emph{system} choose $i \in \{1, 2\}$,
+    then the computation proceeds as in $S_i$.
+  \item $S_1 \otimes S_2$ 
+    lets a computation of $S_1$ and a computation of $S_2$
+    proceed concurrently.
+\end{itemize}
+The product ($\with$) and coproduct ($\oplus$)
+can both be constructed as the lattice of pairs
+$\langle \sigma_1, \sigma_2 \rangle$
+which combine an element $\sigma_1 \in S_1$ with an element $\sigma_2 \in S_2$
+and where joins are component-wise.
+When this lattice is used as the coproduct $S_1 \oplus S_2$,
+we interpret the computations $\iota_i(\sigma_i)$ defined by
+\[
+  \iota_1(\sigma_1) := \langle \sigma_1, \bot \rangle \in S_1 \oplus S_2
+  \qquad \text{and} \qquad
+  \iota_2(\sigma_2) := \langle \bot, \sigma_2 \rangle \in S_1 \oplus S_2
+\]
+as first making a choice $i \in \{1, 2\}$ and
+then proceeding with the behavior $\sigma_i \in S_i$.
+When the lattice is used as the cartesian product $S_1 \with S_2$,
+we interpret the pair $\langle \sigma_1 , \sigma_2 \rangle$
+as an angelic choice
+\[
+  \langle \sigma_1, \sigma_2 \rangle \: = \:
+  \iota_1(\sigma_1) \vee \iota_2(\sigma_2) \: \in \:
+  S_1 \with S_2
+  \,,
+\]
+where the environment decides between $\sigma_1$ and $\sigma_2$.
+Finally,
+the tensor product $S_1 \otimes S_2$
+is in essence generated by taking formal joins 
+of the form $\bigvee_{i \in I} (\sigma_i \otimes \tau_i)$,
+quotiented by the laws
+\[
+  \biggl( \bigvee_{i\in I} \sigma_i \biggr) \otimes \tau =
+    \bigvee_{i\in I} ( \sigma_i \otimes \tau )
+  \qquad \text{and} \qquad
+  \sigma \otimes \biggl( \bigvee_{i \in I} \tau_i \biggr) =
+    \bigvee_{i\in I} ( \sigma \otimes \tau_i )
+  \,.
+\]
+These constructions generalize to infinitary versions
+with expected projections and (co)tupling:
+\[
+\begin{array}{r@{\:}l}
+  \pi_j &: \textstyle \bigl(\bigwith_{i\in I} S_i\bigr) \rightarrow S_j
+  \\[1ex]
+  \iota_j &: \textstyle S_j \rightarrow \bigl(\bigoplus_{i\in I} S_i\bigr)
+\end{array}
+\quad
+\begin{prooftree}
+  \hypo{\forall i\in I \cdot f_i : S \rightarrow T_i}
+  \infer1{\textstyle \langle f_i \rangle_{i\in I} :
+    S \rightarrow \bigwith_i T_i}
+\end{prooftree}
+\quad
+\begin{prooftree}
+  \hypo{\forall i\in I \cdot f_i : S_i \rightarrow T}
+  \infer1{\textstyle [ f_i ]_{i\in I} :
+    \bigoplus_i S_i \rightarrow T}
+\end{prooftree}
+\quad
+\begin{prooftree}
+  \hypo{\forall i\in I \cdot f_i : S_i \rightarrow T_i}
+  \infer1{\bigotimes_i f_i :
+    \bigotimes_i S_i \rightarrow \bigotimes_i T_i}
+\end{prooftree}
+\]
+In addition,
+$\otimes$~distributes over $\oplus$ in the sense that
+\[
+  \lambda_{\otimes\oplus} :
+    \left(\bigoplus_{i \in I} S_i \right) \otimes T
+    \cong
+    \bigoplus_{i \in I} (S_i \otimes T)
+  \qquad \text{and} \qquad
+  \rho_{\otimes\oplus} :
+    S \otimes \left(\bigoplus_{i \in I} T_i \right)
+    \cong
+    \bigoplus_{i \in I} (S \otimes T_i)
+  \,.
+\]
+Note that the trivial lattices can be described as the units
+$\mathbf{0} \cong \bigoplus \varnothing \cong \bigwith \varnothing$
+and $\mathbf{1} \cong \bigotimes \varnothing$.
+
+%Referring to the interpretation above,
+%$\pi_j(\sigma) \in S_j$ is the behavior
+%taken by $\sigma \in \bigwith_i S_i$
+%when the environment chooses $i := j$, whereas
+%in $\iota_j(\sigma) \in \bigoplus_i S_i$,
+%the system chooses $i := j$
+%and the computation continues as $\sigma \in S_j$.
+%Finally,
+%$\sigma \in S$ and $\tau \in T$
+%can be combined into $\sigma \otimes \tau \in S \otimes T$;
+%their nondeterministic choices are independent,
+%so that $\otimes$ is strictly sup-preserving
+%in both arguments.
+%
+%As it turns out,
+%the same sup-lattice can be used to
+%encode the product ($\with$) and coproduct ($\oplus$):
+%the computations $\sigma_1 \in S_1$ and $\sigma_2 \in S_2$
+%can be promoted to $\iota_1(\sigma_1), \iota_2(\sigma_2) \in S_1 \oplus S_2$.
+%Each has the system make a particular choice of $i \in \{1, 2\}$
+%and continue as $\sigma_i$.
+
+%}}}
+
+\paragraph{Partial observations} %{{{
+
+The \emph{lifting} operator
+$X_\bot := \{\bot \le x_\bot \mid x \in X\}$
+extends a sup-lattice $X$ with a new least element $\bot$,
+and enables
+partial observations of a computation.
+%corresponding to incomplete plays in the strategy model.
+For example,
+in $\bigoplus_i \bigoplus_j \mathbf{1}$
+the choices of $i$ and $j$ are observed simultaneously,
+but a computation in
+$\bigoplus_i \bigl( \bigoplus_j \mathbf{1} \bigr)_\bot$
+could go wrong after revealing $i$
+but before choosing $j$.
+Sup-morphisms out of $S_\bot$
+are defined by their image on $S$,
+which must preserve non-empty joins
+but need not preserve $\bot$.
+For example,
+the counit $\epsilon_\bot : S_\bot \rightarrow S$
+and multiplication $\mu_\bot : S_\bot \rightarrow (S_\bot)_\bot$
+of the lifting comonad $(-)_\bot$
+are fully defined by
+\[
+  \epsilon_\bot(\sigma_\bot) := \sigma
+  \qquad \text{and} \qquad
+  \mu_\bot(\sigma_\bot) := (\sigma_\bot)_\bot
+  \,,
+\]
+since we know that as sup-morphisms
+they must satisfy
+$\epsilon_\bot(\bot) := \bot$ and
+$\mu_\bot(\bot) := \bot$.
+
+%}}}
+
+\begin{example} % lattice version of qstrat {{{
+The game discussed in Example~\ref{ex:qstrat}
+can be transcribed to the sup-lattice of strategies:
+\[
+  S_\kw{3bq} :=
+  \bigwith_{q_1 \in E_\kw{bq}}
+  \bigoplus_{r_1 \in \kw{ar}(q_1)}
+  \biggl(
+  \bigwith_{q_2 \in E_\kw{bq}}
+  \bigoplus_{r_2 \in \kw{ar}(q_1)}
+  \biggl(
+  \bigwith_{q_3 \in E_\kw{bq}}
+  \bigoplus_{r_3 \in \kw{ar}(q_1)}
+  \mathbf{1}
+  \biggr)_\bot
+  \biggr)_\bot
+\]
+The lifting operator ensures that
+every decision of the component becomes immediately visible.
+Writing
+$\bigl\langle M[v] \mathrel{\big|} N \bigr\rangle_{v \in V} \in
+ \bigwith_{q \in E_\kw{bq}} S$
+for the computation which responds to the question $\kw{enq}[v]$
+by continuing as $M[v]$
+and to $\kw{deq}$ by continuing as $N$,
+the strategy shown in Fig.~\ref{fig:qstrat}
+can be defined as
+\[
+  \sigma_{3bq} \: := \:
+  \Biggl\langle
+    \iota_*
+   \Biggl(
+    \Bigl(
+    \Bigl\langle
+      \iota_{*}
+       \Bigl(
+        \bigl(
+        \bigl\langle
+          \iota_{*}(*)
+          \mathrel{\big|}
+          \iota_{v_1}(*)
+        \bigr\rangle_{v_3}
+        \bigr)_\bot
+       \Bigr)
+      \:\mathrel{\Big|}\:
+      \iota_{v_1}
+       \Bigl(
+        \bigl(
+        \bigl\langle
+          \iota_{*}(*)_\bot
+          \mathrel{\big|}
+          \bot
+        \bigr\rangle_{v_3}
+        \bigr)_\bot
+       \Bigr)
+    \Bigr\rangle_{v_2}
+    \Bigr)_\bot
+   \Biggr)
+    \quad\mathrel{\Bigg|}\quad
+    \bot
+  \Biggr\rangle_{v_1}
+  \: \in \: 
+  S_\kw{3bq}
+\]
+We will see that more convenient notations
+can be devised.
+\end{example}
+%}}}
+
+\paragraph{Monoidal Closure} %{{{
+
+Homomorphisms between the sup-lattices $S_1$ and $S_2$
+themselves form a sup-lattice $S_1 \multimap S_2$
+where joins are taken pointwise.
+Together with the tensor product $\otimes$,
+this equips $\mathbf{Sup}$ with
+the structure of a closed monoidal category.
+The corresponding \emph{currying} adjunction
+${-} \otimes S \, \dashv \, S \multimap {-} \, : \,
+ \mathbf{Sup} \rightarrow \mathbf{Sup}$
+establishes a correspondence between morphisms of type
+\[
+  f^{\otimes} : S_1 \otimes S \longrightarrow S_2 \in \mathbf{Sup}
+  \qquad
+  \text{and}
+  \qquad
+  f^{\multimap} : S_1 \longrightarrow S \multimap S_2 \in \mathbf{Sup}
+  \,.
+\]
+The counit
+$\epsilon^S_X \, := \, \kw{id}_{S \multimap X}^\otimes
+ \, : \, (S \multimap X) \otimes S \longrightarrow X$
+serves as an evaluation primitive.
+
+%}}}
+
+%}}}
+
+\subsection{Endofunctors and Free Monad} %{{{
+
+A sup-lattice endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
+can be thought of as a \emph{partial} game,
+where an occurrence of the parameter $X$ in the definition of $F X$
+hands over control to the next stage.
+For example,
+given an effect signature $E$ we can consider the functor
+$\hat{E} : \mathbf{Sup} \rightarrow \mathbf{Sup}$
+defined as:
+\[
+  \hat{E} X := \bigoplus_{m \in E} \biggl(
+    \bigwith_{n \in \kw{ar}(m)} X
+  \biggr)_\bot
+  \,.
+\]
+The functor $\hat{E}$
+describes an interaction where
+a client computation asks
+exactly one question in the signature $E$,
+and upon receiving an answer
+continues with a behavior in the sup-lattice $X$.
+
+Under this interpretation,
+endofunctor composition
+corresponds to a sequential composition of games:
+a computation in $FGX$
+first carries out the interaction described by $F$,
+then the one described by $G$,
+then moves on to the game $X$.
+We will see that the \emph{free monad} $F^*$
+associated with a sup-lattice endofunctor $F$
+allows the interaction described by $F$
+to be iterated an arbitrary number of times.
+
+\paragraph{Algebraic View} %{{{
+
+From an algebraic point of view,
+the lattice $\hat{E} X$ describes
+applications of an operation $m \in E$
+to arguments in $X$,
+which we write
+\[
+  \qquad \qquad
+  \underline{m} \langle \sigma_n \rangle_{n \in \kw{ar}(m)}
+  \: := \:
+  \iota_m \Bigl( \bigl(
+     \langle \sigma_n \rangle_{n \in \kw{ar}(m)}
+  \bigr)_\bot \Bigr)
+  \: \in \: \hat{E} S
+  \,.
+  \qquad \qquad
+  (m \in E,\, \sigma_n \in S)
+\]
+%This corresponds to a computation which
+%triggers the external operation $m \in E$,
+%awaits its outcome $n \in \kw{ar}(m)$,
+%then proceeds with the behavior $\sigma_n$.
+%
+An \emph{algebra} for the signature $E$
+gives an interpretation for the operations of $E$
+in a carrier lattice $S$,
+specified using a morphism
+$\alpha : \hat{E}S \rightarrow S \in \mathbf{Sup}$.
+
+\begin{example}[Peano arithmetic] \label{ex:peano} %{{{
+The signature
+$E_\kw{nat} = \{ \kw{zero} \mathbin: 0, \kw{succ} \mathbin: 1 \}$
+can be interpreted in the free lattice $\mathcal{P}(\mathbb{N})$
+using the algebra
+$\alpha : \hat{E}_\kw{nat} \mathcal{P}(\mathbb{N}) \rightarrow \mathcal{P}(\mathbb{N})$
+defined by
+\[
+  \alpha \bigl( \kw{zero}\langle \rangle \bigr) := \{0\}
+  \qquad \text{and} \qquad
+  \alpha \bigl( \kw{succ}\langle \{n \} \rangle \bigr) := \{n+1\}
+  \,.
+\]
+We can also interpret $E$ in the sup-lattice
+$\bar{\mathbb{N}} := \langle \mathbb{N} \cup \{\infty\}, \, {\max} \rangle$
+using
+$\beta : \hat{E}_\kw{nat} \bar{\mathbb{N}} \rightarrow \bar{\mathbb{N}}$
+defined by
+\[
+  \beta \bigl( \kw{zero}\langle \rangle \bigr) := \bar{0}
+  \,, \qquad
+  \beta \bigl( \kw{succ}\langle \bar{n} \rangle \bigr) := \overline{n+1}
+  \,, \quad \text{and} \quad
+  \beta \bigl( \kw{succ}\langle\infty\rangle \bigr) := \infty
+  \,.
+\]
+\end{example}
+%}}}
+
+Computationally,
+an algebra $\alpha : \hat{E} S \rightarrow S$
+equips a domain $S$ with
+an interpretation for the operations or effects
+described by the signature $E$.
+In the example above,
+$\kw{succ}$ could be interpreted as a ``clock tick'' effect,
+whereas $\kw{zero}$ terminates the computation.
+The elements of the lattice $\mathcal{P}(\mathbb{N})$
+used by the algebra $\alpha$
+allow an angelic choice
+among elementary behaviors of the form $\{n\}$
+representing a computation $\kw{succ}^n \cdot \kw{zero}$.
+By contrast,
+$\beta$ interprets $\kw{zero}$ as the undefined behavior~$\bot$,
+and the elements of $\bar{\mathbb{N}}$
+are increasing under-approximations of
+the infinite computation
+$\kw{succ}^\omega$.
+
+%}}}
+
+\paragraph{Algebra Homomorphisms} %{{{
+
+Algebras for an endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
+form a category $\mathbf{Alg}(F)$.
+An object $(S, \alpha) \in \mathbf{Alg}(F)$ 
+consists of a sup-lattice $S$
+and a sup-lattice homomorphism $\alpha : F S \rightarrow S$.
+An algebra homomorphism
+$f : (S, \alpha) \rightarrow (T, \beta) \in \mathbf{Alg}(F)$
+is a sup-lattice homomorphism $f : S \rightarrow T$
+such that $f \circ \alpha = \beta \circ F f$.
+In particular,
+$\hat{E}$-algebra homomorphisms
+preserve the operations of $E$.
+
+\begin{example} % Peano algebra homomorphism {{{
+Building on Example~\ref{ex:peano},
+the function $f : \mathcal{P}(\mathbb{N}) \rightarrow \bar{\mathbb{N}}$
+given by $f(N) := \max_{n \in N} \bar{n}$
+defines an algebra homomorphism from $\alpha$ to $\beta$.
+\end{example}
+%}}}
+
+%}}}
+
+\paragraph{Free Monad} %{{{
+
+The functor $U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
+which maps an algebra $(S, \alpha) \in \mathbf{Alg}(F)$
+to its carrier $S \in \mathbf{Sup}$
+has a left adjoint,
+which constructs the \emph{free algebra} $(F^* X, c_F) \in \mathbf{Alg}(F)$
+generated by a sup-lattice $X \in \mathbf{Sup}$.
+The adjunction's unit $\eta_X : X \rightarrow F^* X$
+embeds the space of generators into the free algebra.
+The counit
+$\epsilon_\alpha : (F^* S, c_F) \rightarrow (S, \alpha) \in \mathbf{Sup}$
+recursively flattens an element $\sigma \in F^*S$ into~$S$
+by evaluating any use of the constructor $c_F : FF^*S \rightarrow F^*S$
+using the algebra $\alpha : F S \rightarrow S$.
+The monad $\langle F^*, \eta^F, \mu^F \rangle$
+associated with the free algebra adjunction
+is called the \emph{free monad}.
+
+Concretely,
+for effect signatures,
+the sup-lattice $\hat{E}^*X$ is
+a term algebra which uses
+operations in~$E$ and
+variables in~$X$.
+It is in essence generated by the grammar
+\begin{equation} \label{eqn:termalg}
+  \tau \in \hat{E}^*X \: ::= \:
+    \underline{m}(\tau_n)_{n \in \kw{ar}(m)} \: \mid \:
+    \underline{x}
+  \,,
+  \qquad
+  (m \in E, \: x \in X)
+\end{equation}
+subject to the identities
+$\underline{m} \big(
+   \bigvee_{i \in I \neq \varnothing} \tau_{ni}
+ \big)_{n \in \kw{ar}(m)} =
+ \bigvee_{i \in I \neq \varnothing} \underline{m}(\tau_{ni})_{n \in \kw{ar}(m)}$
+and
+$\underline{\bigvee_{i\in I} x_i} = \bigvee_{i \in I} \underline{x}_i$.
+The round parentheses help us distinguish recursive terms
+$\underline{m}( \tau_n )_{n \in \kw{ar}(m)} \in \hat{E}^* X$
+from flat applications
+$\underline{m}\langle x_n \rangle_{n \in \kw{ar}(m)} \in \hat{E}X$.
+The constructor $c : \hat{E}\hat{E}^*X \rightarrow \hat{E}^*X$
+and unit $\eta : X \rightarrow \hat{E}^*X$
+are defined by:
+\[
+  c^F_X \big(\, \underline{m} \langle \tau_n \rangle_{n \in \kw{ar}(m)} \,\big)
+    \: := \:
+    \underline{m}(\tau_n)_{n \in \kw{ar}(m)}
+  \qquad \text{and} \qquad
+  \eta^F_X \big( x \big) := \underline{x}
+  \,.
+\]
+
+%}}}
+
+\paragraph{Initial Algebra} %{{{
+
+The image $\mu F := F^*\mathbf{0}$
+of the initial sup-lattice $\mathbf{0}$
+carries the initial algebra for the endofunctor $F$.
+We will sometimes use the notation $\mu X \cdot FX$
+instead of defining the functor $F$ explicitly.
+In general,
+the relationship between the free monad and initial algebras
+can be stated as:
+\[
+  F^* X
+  \:\cong\:
+  \mu Y \cdot F Y \oplus X
+  \,,
+\]
+mirroring and generalizing
+the term algebra construction (\ref{eqn:termalg}) above.
+In general,
+given an $F$-algebra $\alpha : FS \rightarrow S$
+and a valuation $\chi : X \rightarrow S$ of the variables $X$,
+the mapping $\epsilon_\alpha \circ F^*\chi : F^*X \rightarrow S$
+evaluates the terms of $F^*X$ into the carrier lattice $S$.
+The catamorphism
+$[\alpha]^F : (\mu F, c^F) \rightarrow (S, \alpha) \in \mathbf{Alg}(F)$
+associated with $\alpha$
+can likewise be defined as
+$[\alpha]^F := \epsilon_\alpha \circ F^* (!_S)$,
+where $!_S : \mathbf{0} \rightarrow S$.
+
+%}}}
+
+\begin{figure} % fig:fixpoint {{{
+\[
+  \begin{tikzcd}[row sep=large]
+    F (\mu F) \ar[r, "c_F"] \ar[d, "{F [\alpha]}"'] &
+    \mu F \ar[d, dashed, "!"', "{[\alpha]}"] &&
+    S \ar[r, "\delta"] \ar[d, "\langle \delta \rangle"', "!", dashed] &
+    F S \ar[d, "F \langle \delta \rangle"]
+    \\
+    F S \ar[r, "\alpha"] &
+    S &&
+    \mu F \ar[r, "d_F"] &
+    F (\mu F)
+  \end{tikzcd}
+\]
+  \caption{Universal properties characterizing the
+    initial algebra and final coalgebra for an endofunctor $F$.}
+  \label{fig:fixpoint}
+\end{figure}
+%}}}
+
+\paragraph{Final Coalgebra} %{{{
+
+The categorical dual of an $F$-algebra is
+an $F$-\emph{coalgebra} $\delta : S \rightarrow F S$.
+Coalgebras generalize transition systems
+by associating to states in a space $S$
+the possible actions captured by~$F$.
+A coalgebra \emph{homomorphism} $f : (S, \delta) \rightarrow (T, \gamma)$
+if a morphism $f : S \rightarrow T$ such that $\gamma \circ f = F f \circ \delta$,
+and a \emph{final coalgebra} for the functor $F$
+satisfies the universal property shown in Fig.~\ref{fig:fixpoint}b.
+
+%Because $\mathbf{Sup}$ is CPO-enriched,
+In $\mathbf{Sup}$,
+the initial algebra $c_F : F \mu F \rightarrow \mu F$ 
+and final coalgebra $d_F : \mu F \rightarrow F \mu F$
+for a cpo-enriched endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
+always coincide:
+they are both carried by $\mu F$ and are inverses to each other
+\cite{dcpoalg}.
+This means in particular that
+a coalgebra $\delta : S \rightarrow F S \oplus X$
+defines a computation $\langle \delta \rangle \in F^*X$
+in the free monad associated with $F$.
+
+%}}}
+
+%}}}
+
+\subsection{Constructing Strategies} \label{sec:fsl} %{{{
+
+We have seen how the structure found in $\mathbf{Sup}$
+allows us to interpret typical algebraic and coalgebraic constructions
+in game-theoretic terms.
+We now complete the connection by showing how
+the lattices we have discussed above
+can be constructed using prefix-closed sets of plays,
+mirroring traditional game semantics strategies.
+
+\paragraph{Free sup-lattice} %{{{
+
+The sup-lattice $\mathcal{D}(P)$
+is generated by taking formal joins over a poset $\langle P, {\le} \rangle$.
+Concretely,
+this lattice consists of the
+downward-closed subsets of $P$,
+ordered under inclusion ($\subseteq$):
+\[
+  \mathcal{D}(P) :=
+    \{ \sigma \subseteq P \mid
+      \forall p q \cdot p \le q \wedge q \in \sigma \Rightarrow p \in \sigma \}
+  \,.
+\]
+Abstractly,
+there is an adjunction
+$\mathcal{D} \dashv |{-}| : \mathbf{Sup} \rightarrow \mathbf{Pos}$
+between the forgetful functor which views a lattice $S \in \mathbf{Sup}$
+as a poset $|S| \in \mathbf{Pos}$,
+and the functor which computes the
+free lattice $\mathcal{D}(P) \in \mathbf{Sup}$
+generated by a poset $P \in \mathbf{Pos}$.
+The unit
+${\downarrow}(-) : P \rightarrow |\mathcal{D}(P)| \in \mathbf{Pos}$
+embeds an generator $q \in P$ into the free lattice as
+${\downarrow} q := \{ p \mid p \le q \} \in \mathcal{D}(P)$.
+The counit
+$\bigvee (-) : \mathcal{D}\big(|S|\big) \rightarrow S \in \mathbf{Sup}$
+evaluates formal joins into the lattice $S$.
+A sup-preserving map out of $\mathcal{D}(P)$
+is the image of the generators:
+\[
+  f : \mathcal{D}(P) \rightarrow S \in \mathbf{Sup}
+  \qquad \Longleftrightarrow \qquad
+  f({\downarrow} {-}) : P \rightarrow |S| \in \mathbf{Pos}
+\]
+Note that the special case of a discrete order $\langle U, {=} \rangle$
+corresponds to the powerset construction $\mathcal{P}(U)$,
+where the generators embed as singletons ${\downarrow} u = \{u\}$.
+
+%}}}
+
+\paragraph{Constructions on Free Lattices}
+
+The class of free sup-lattices of the form $\mathcal{D}(P)$
+is closed under the constructions we have described above.
+Specifically, the following relationships hold:
+\[
+%  \begin{array}{c}
+%    \mathbf{0} \cong \mathcal{D}(\varnothing) \\[1ex]
+%    \mathbf{1} \cong \mathcal{D}(\mathbbm{1})
+%  \end{array}
+%  \qquad
+  \bigwith_{i \in I} \mathcal{D}(P_i) \cong
+  \bigoplus_{i \in I} \mathcal{D}(P_i) \cong
+  \mathcal{D}\left(\sum_{i \in I} P_i \right)
+  \qquad
+  \bigotimes_{i \in I} \mathcal{D}(P_i) \cong
+  \mathcal{D}\left(\prod_{i \in I} P_i \right)
+  \quad
+  \begin{array}{c}
+    \mathbf{0} \cong \mathcal{P}(\varnothing)
+    \quad
+    \mathbf{1} \cong \mathcal{P}(\mathbbm{1})
+    \\[1ex]
+    \mathcal{D}(P)_\bot \cong \mathcal{D}(P_\bot)
+  \end{array}
+\]
+The initial algebra $\mu F \in \mathbf{Sup}$
+can often be constructed as a free sup-lattice as well.
+As follows from \citet[\S 2.5]{hjsic},
+when there is a poset endofunctor $G : \mathbf{Pos} \rightarrow \mathbf{Pos}$
+such that $F \mathcal{D} \cong \mathcal{D} G$,
+the initial algebra is carried by
+the free sup-lattice $\mu F \cong \mathcal{D}(\mu G)$
+and given by
+\[
+  c_F \quad := \quad
+    F \mu F \cong
+    F \mathcal{D}(\mu G) \cong % \xrightarrow{\cong}
+    \mathcal{D}(G \mu G) \xrightarrow{\mathcal{D}(c_G)}
+    \mathcal{D}(\mu G) \cong
+    \mu F
+\]
+For effect signatures,
+the corresponding poset functor
+and its initial algebras are given by
+\[
+  \ddot{E} P \: := \:
+    \sum_{m \in E} \biggl(
+      \sum_{n \in \kw{ar}(m)} P
+    \biggr)_\bot
+  \qquad
+  s \in \mu \ddot{E} ::=
+    \underline{m} \mid \underline{m} n s
+  \qquad
+  \begin{array}{c}
+    c_{\ddot{E}}(\iota_m(\bot)) := \underline{m} \\
+    c_{\ddot{E}}(\iota_m(\iota_n(s)_\bot) := \underline{m} n s
+  \end{array}
+%  \begin{prooftree}
+%    \hypo{s \sqsubseteq t}
+%    \infer1{\underline{m}ns \sqsubseteq \underline{m}nt}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \infer0{\underline{m} \sqsubseteq \underline{m}ns}
+%  \end{prooftree}
+\]
+where the sequences in $\mu\ddot{E}$ are ordered under the prefix relation
+recursively induced by $\underline{m} \sqsubseteq \underline{m}ns$.
+In other words,
+the initial algebra in $\mathbf{Sup}$
+for an effect signature $E$
+can be constructed as a lattice $\mu \hat{E} := \mathcal{D}(\mu \ddot{E})$
+of prefix-closed set of odd-length plays
+of the form $\underline{m}_1 n_1 \underline{m}_2 n_2 \cdots \underline{m}_k$.
+
+%}}}
+
+\paragraph{Conclusion}
+
+These relationships explain the form taken by traditional
+strategy models which use prefix-closed sets of plays.
+They are invaluable for mechanization
+as they allow us to represent
+sup-lattices and their homomorphisms
+using underlying sets of generators and monotonic functions.
+
+%}}}
+
+\paragraph{Algebraic characterization} %{{{
+While the model we have defined above
+is straightforward and follows game semantics tradition,
+it may not be completely clear at first
+\emph{why} it is an appropriate choice.
+In the remainder of this section
+we will show the model is %in a precise sense
+the most general possible which combines
+\begin{itemize}
+  \item unbounded angelic nondeterminism with
+  \item execution shapes of the kind outlined in \S\ref{sec:strat}.
+\end{itemize}
+To this end,
+we conduct an analysis of the model's (co)algebraic structure
+along the lines of \citet{ags-act}.
+The category $\mathbf{Sup}$ of
+sup-lattices and sup-preserving functions
+provides a model of nondeterminism;
+the shape of the game $E \rightarrow F$
+leads us to the particular sup-lattice
+\begin{equation} \label{eqn:stratlat}
+  S_{E \rightarrow F} \:\cong\:
+  \mu Y \cdot
+    \bigwith_{q \in F}
+    \left(
+    \mu Z \cdot
+      \bigoplus_{m \in E}
+      \left( \bigwith_{n \in \kw{ar}(n)} Z \right)_\bot
+    \oplus
+      \bigoplus_{r \in \kw{ar}(q)}
+      Y_\bot
+    \right)
+  \:\in\:
+  \mathbf{Sup}
+  \,,
+\end{equation}
+where $\with$ and $\oplus$ respectively denote
+the (coinciding) product and coproduct in $\mathbf{Sup}$, and where
+$\mu X \cdot F X$ denotes
+the (coinciding) initial algebra and terminal coalgebra
+for an endofunctor
+$F : \mathbf{Sup} \rightarrow \mathbf{Sup}$.
+
+The remainder of this section
+will elucidate the characterization (\ref{eqn:stratlat}) given above.
+In the process, we build a toolbox of constructions and properties
+connecting the
+trace-based,
+state-based and
+algebraic views of
+interactive computation.
+This toolbox is
+used as a foundation
+in formulating the more sophisticated constructions
+offered by our model.
+
+%}}}
+
+\subsection{Strategies} %{{{
+
+\begin{definition}
+For the effect signatures $E$ and $F$,
+a \emph{strategy} $\sigma : E \twoheadrightarrow F$
+is an element of the lattice
+\[
+  \sigma \: \in \:
+  S_{E \twoheadrightarrow F} \: := \:
+    \mu S \cdot
+      \bigwith_{q \in F}
+      \hat{E}^*
+      \bigoplus_{r \in \kw{ar}(q)}
+      S_\bot
+  \: \in \: \mathbf{Sup}
+  \,.
+\]
+\end{definition}
+
+\paragraph{Plays}
+
+Per the properties given in \S\ref{sec:fsl},
+strategies of type $E \twoheadrightarrow F$
+form a free sup-lattice:
+\[
+  S_{E \rightarrow F} \: \cong \:
+    \mathcal{D} \left(
+      \mu P \cdot
+        \sum_{q \in F}
+          \, \ddot{E}^* \!
+          \sum_{r \in \kw{ar}(q)}
+          P_\bot
+    \right)
+    \: \in \: \mathbf{Sup}
+    \,.
+\]
+From this calculation,
+we can give a play-based representation
+for strategies of this type.
+
+In other words, plays are even-length, non-empty prefixes
+of sequences of the form
+\[
+  q_1 \, \underline{m}_{11} n_{11} \cdots \underline{m}_{1k_1} n_{1k_1} \, r_1 \,
+  q_2 \, \underline{m}_{21} n_{21} \cdots \underline{m}_{2k_2} n_{2k_2} \, r_2
+    \cdots
+\]
+ordered under the prefix relation $\sqsubseteq$.
+A \emph{strategy} for the game $E \rightarrow F$
+is then a set of plays
+\[
+  \sigma \subseteq P_{E \rightarrow F}
+  \qquad \text{such that} \qquad
+  \forall \, s_1 \, s_2 \cdot s_1 \sqsubseteq s_2 \wedge
+    s_2 \in \sigma \Rightarrow s_1 \in \sigma
+  \,.
+\]
+We will write $\sigma : E \rightarrow F$
+and write the corresponding set of strategies as
+$S_{E \rightarrow F}$.
+%Consider an effect signature $E$ and a partially ordered set $X$.
+%The \emph{coplays} for $E$ with a result in $X$
+%are generated by the grammar
+%\[
+%  \qquad \qquad \qquad \qquad
+%  s \in \bar{P}_E(X) ::=
+%    \underline{x} \mid
+%    \underline{m} \mid
+%    \underline{m}ns
+%    \,,
+%  \qquad
+%    \big( x \in X, \, m \in E, \, n \in \kw{ar}(m) \big)
+%\]
+%and ordered under the smallest relation $\sqsubseteq$ satisfying
+%\[
+%  x \le y \Rightarrow \underline{x} \sqsubseteq \underline{y}
+%  \,,
+%  \qquad
+%  \underline{m} \sqsubseteq \underline{m}ns
+%  \,,
+%  \qquad
+%  s \sqsubseteq t \Rightarrow \underline{m}ns \sqsubseteq \underline{m}nt
+%  \,.
+%\]
+%Given the signatures $E$ and $F$,
+%a \emph{play} for the game $E \rightarrow F$
+%is an element $s \in P_{E \rightarrow F}$ of the poset
+%\[
+%  P_{E \rightarrow F} = \sum_{(q \mathbin: R) \in F} P_E(R) \,,
+%\]
+%where the play
+%$s = \iota_q(s')$ is written as $qs'$,
+%so that for example, complete plays ending with an answer $r \in R$ take the form
+%%$s = \iota_q(\underline{m}_1 n_1 \cdots \underline{m}_k n_k \underline{r})$
+%%is written
+%$q \underline{m}_1 n_1 \cdots \underline{m}_k n_k \underline{r}$.
+%Finally,
+%a \emph{strategy} for $E \rightarrow F$
+%}}}
+
+\subsection{Strategies as handlers} %{{{
+
+When a client computation $f \in \hat{F} X$ asks a question $q \in F$,
+a strategy $\sigma : E \twoheadrightarrow F$
+can be used to handle the question,
+use a computation in $\hat{E}^*$ to produce an answer $r \in \kw{ar}(q)$,
+and resume the client computation as
+the strategy waits for the next question in $F$.
+Below we explain how this process can be formalized in our
+domain-theoretic approach.
+Since we only consider one type of strategy,
+for the sake of brevity
+we will write $S := S_{E \twoheadrightarrow F}$.
+
+\paragraph{Interaction Primitive}
+
+We start by defining a sup-lattice homomorphism $\kappa^\circ_{X,E,F}$
+handling a single interaction in $F$.
+When two computations make complementary choices,
+we can use a distributive law to observe
+the choice made by one
+and propagate it to the other:
+\[
+  \kappa^\bullet_{R,X,Y} \: : \:
+    \biggl( \bigwith_{r \in R} X \biggr)
+    \otimes
+    \biggl( \bigoplus_{r \in R} Y \biggr)
+  \:\xrightarrow{\rho_{\otimes\oplus}}\:
+    \bigoplus_{r \in R} \:
+      \biggl( \bigwith_{r \in R} X \biggr)
+      \otimes Y
+  \:\xrightarrow{[\pi_r \otimes \kw{id}]_{r \in R}}\:
+    X \otimes Y
+\]
+Likewise,
+the strength of the free monad
+$\rho_{\hat{E}^*} : X \otimes \hat{E}^* Y \rightarrow \hat{E}^*(X \otimes Y)$
+can be used to observe the strategy's computation over $\hat{E}^*$
+in the interaction primitive
+\begin{align*}
+\kappa^\que_{X,E,F} \: := \:
+  %\lambda_{\otimes\oplus} \circ (\kw{id} \otimes (d \circ \epsilon_\bot))
+  %\: : \:
+  \hat{F}X \otimes S_\bot
+  \:\xrightarrow{
+    (\hat{F}X \otimes (\epsilon_\bot \mathbin; d)) \mathbin; \lambda_{\otimes\oplus}
+  }\: {}&
+  %\hat{F}X \:\otimes\:
+  %\bigwith_{q \in F} \hat{E}^* \bigoplus_{r \in \kw{ar}(q)} S_\bot
+  %\:\xrightarrow{\lambda_{\otimes\oplus}}\:
+  \bigoplus_{q \in F}
+    \Biggl(
+      \biggl(
+        \bigwith_{r \in \kw{ar}(q)} X
+      \biggr)_\bot
+      \:\otimes\:
+      \biggl(
+        \bigwith_{q \in F} \hat{E}^*
+        \bigoplus_{r \in \kw{ar}(q)}
+        S_\bot
+      \biggr)
+    \Biggr)
+\\
+  \:\xrightarrow{
+    [\kw{id} \otimes \pi_q \mathbin;
+     \rho_{\hat{E}^*} \mathbin;
+     E^*(\epsilon_\bot \otimes \kw{id} \mathbin;
+         \kappa^\ans)]_{q \in F}
+  }\:
+  {}&\hat{E}^* \bigl( X \otimes S_\bot \bigr)
+  \,.
+\end{align*}
+
+\paragraph{Strategy Action}
+
+To handle iterated interactions in $\hat{F}^* X$,
+we will define an $\hat{F}$-algebra
+\[
+  \alpha^\otimes :
+    \hat{F} K \rightarrow K
+  \qquad \text{where} \qquad
+  K :=
+    \bigl[S_\bot , \,
+       \hat{E}^* \bigl(X \otimes S_\bot \bigr) \bigr]
+  \,.
+\]
+Algebraically,
+the interpretation of
+$\underline{m}(k_n)_{n \in \kw{ar}(m)} \in \hat{F}^* X$
+is derived from that of the arguments~$k_n$.
+This means that computationally, the interpretation proceeds backward in time.
+Hence, we formulate $\alpha$ in continuation-passing style,
+where a continuation $k \in K$ expects
+the strategy's starting state,
+and produces both the outcome in $X$ and
+the strategy's ending state.
+We use
+\[
+  \chi \: := \:
+  [S_\bot, \eta_{\hat{E}} \circ \gamma]
+  \circ \eta_\otimes
+  \: : \:
+  X
+  \: \rightarrow \:
+  [S_\bot, \: \hat{E}^*(X \otimes S_\bot)]
+  \:= \: K
+  \,,
+\]
+to encode simple outcomes into continuations.
+For a round of interaction in $F$,
+we use the algebra $\alpha^\otimes$ above,
+defined by currying a morphism
+$\alpha : \hat{F} K \otimes S_\bot \rightarrow \hat{E}^*(X \otimes S_\bot)$
+which uses $\kappa^\que_K$
+to handle the initial interaction.
+This leaves us with a continuation in $K$
+as well as the strategy's intermediate state in $S_\bot$.
+Using the counit $\epsilon_\otimes$ of the monoidal closure,
+we feed the intermediate strategy to the intermediate continuation,
+allowing us to carry out the remainder of the computation:
+\[
+  \alpha \: : \:
+    \hat{F} K \otimes S_\bot
+    \xrightarrow{\kappa^\que \mathbin; \gamma}
+    \hat{E}^*(S_\bot \otimes K)
+    \xrightarrow{\hat{E}^* (\epsilon_\otimes \mathbin; \gamma)}
+    \hat{E}^* \hat{E}^* (X \otimes S_\bot)
+    \xrightarrow{\mu_{\hat{E} }}
+    \hat{E}^* (X \otimes S_\bot)
+  \,.
+\]
+The overall interaction between the client computation and the strategy
+is then captured with
+\[
+  h : \hat{F}^* X \otimes S_\bot \rightarrow \hat{E}^* (X \otimes S_\bot)
+  \,, \quad \text{defined by} \:
+  h^\otimes :=
+    [\alpha^\otimes, \chi]_{\hat{F}} :
+    \hat{F}^* X \rightarrow [S_\bot, \, \hat{E}^*(X \otimes S_\bot)]
+  \,.
+\]
+
+%}}}
+
+\subsection{Layered Composition} %{{{
+
+The constructions above
+can be extended to define strategy composition $\sigma \odot \tau$.
+Here the client computation
+handled by the strategy $\tau \in S_{E \twoheadrightarrow F}$
+it itself a strategy $\sigma \in S_{F \twoheadrightarrow G}$.
+We use the coalgebra
+\[
+  \delta \: : \:
+    S_{F \twoheadrightarrow G} \otimes (S_{E \twoheadrightarrow F})_\bot
+    \: \rightarrow \:
+    \bigwith_{q \in G} \hat{E}^* \!
+      \bigoplus_{r \in \kw{ar}(q)}
+        \bigl(
+          S_{F \twoheadrightarrow G} \otimes
+          (S_{E \twoheadrightarrow F})_\bot
+        \bigr)_\bot
+\]
+to define the resulting strategy in $S_{E \twoheadrightarrow G}$.
+For each incoming question $q \in G$, the component
+\begin{align*}
+  \delta_q :
+    S_{F \twoheadrightarrow G}
+        \otimes (S_{E \twoheadrightarrow F})_\bot
+    \xrightarrow{\pi_q \otimes \kw{id}}
+    \hat{F}^* \biggl(
+      \bigoplus_{r \in \kw{ar}(q)} (S_{F \twoheadrightarrow G})_\bot
+    \biggr)
+        \otimes (S_{E \twoheadrightarrow F})_\bot
+    \xrightarrow{h}
+{}& \hat{E}^* \biggl(
+      \bigoplus_{r \in \kw{ar}(q)} (S_{F \twoheadrightarrow G})_\bot
+      \otimes (S_{E \twoheadrightarrow F})_\bot
+    \biggr)
+\\
+    \xrightarrow{\hat{E}^*\left(\lambda_{\otimes\oplus} \mathbin;
+                           \bigoplus_r \lambda_{\otimes\bot}\right)}
+{}& \hat{E}^* \! \bigoplus_{r \in \kw{ar}(q)} \biggl(
+      S_{F \twoheadrightarrow G} \otimes
+      (S_{E \twoheadrightarrow F})_\bot
+    \biggr)_\bot
+\end{align*}
+passes the question to $\sigma$,
+handles the resulting computation in $\hat{F}^*$ with $\tau$,
+and returns the answer.
+We can then define layered composition
+by letting $\delta$ generate the strategy
+\[
+  \sigma \odot \tau \: := \:
+    \langle \delta \rangle (\sigma \otimes \tau_\bot)
+  \,.
+\]
+
+
+To see how a client computation in $\hat{E}$
+can be made to interact with a strategy in $\check{E}_T$,
+assume $\langle T, \eta_T, \mu_T \rangle$ is a monad equipped with a strength
+$s_T^{X,Y} : X \otimes T Y \rightarrow T (X \otimes Y)$.
+Concretely, the strength
+``pulls forward'' the part of the computation happening over $T$,
+then resumes the residual computation in $X \otimes Y$.
+With this tool,
+we can model the interaction of a client request
+$\sigma \in \hat{E} X$
+with the strategy
+$\sigma \in \check{E}_T^*(\mathbf{0})$
+as follows.
+%using a primitive
+%$
+%  \kappa : \hat{E} X \otimes \check{E}_T^* \mathbf{0} \rightarrow
+%    T (X \otimes \check{E}_T^* \mathbf{0})
+%$.
+%To this end,
+We focus first on the simpler task of
+propagating the choice of answer $r \in \kw{ar}(q)$
+from the strategy to the client in a residual computation
+by defining the corresponding operation $\kappa^\ans_R$ as:
+\[
+  \kappa^\ans_R \: := \: \bigl[
+    (\pi_r \circ \epsilon_\bot) \otimes \epsilon_\bot
+  \bigr]_{r \in R} \circ \rho_{\otimes\oplus}
+  \: : \:
+  \biggl(\bigwith_{r \in R} X \biggr)_\bot \otimes
+  \biggl(\bigoplus_{r \in R} Y_\bot \biggr) \rightarrow
+  X \otimes Y
+  \,.
+\]
+Here,
+the distributive law $\rho_{\otimes\oplus}$
+first extracts the choice of answer $r \in R$
+performed by the handler
+and use the corresponding projection $\pi_r$
+to pass it to the client.
+The counit $\epsilon_\bot : S_\bot \rightarrow S$
+associated with the comonad $(-)_\bot$
+is used to collapse the new $\bot$ in $S_\bot$
+back into the original lattice $S$.
+It remains to pass the question from the client to the handler,
+and to perform the handler's side-effects:
+%\[
+%  \kappa \: := \:
+%  \bigl[
+%    T \kappa'_{\kw{ar}(q)} \circ
+%    s \circ
+%    (\kw{id} \otimes \pi_q)
+%  \bigr]_{q \in E} \circ \lambda_{\otimes\oplus}
+%  \: : \:
+%  \hat{E}X \otimes \check{E}_T Y \rightarrow
+%  T (X \otimes Y)
+%\]
+\[
+  \kappa^\que \: := \:
+  \bigl[
+    T \kappa^\ans_{\kw{ar}(q)} \circ
+    s_T \circ
+    (\kw{id} \otimes \pi_q)
+  \bigr]_{q \in E}
+  \: : \:
+  \hat{E} \bigl( X \otimes \check{E}_T Y \bigr) \rightarrow
+  T (X \otimes Y)
+\]
+Note that we have assumed 
+Here again a distributive law is used to extract the choice of $q$
+out of the tensor product,
+and the strength is used to extract the $T$ component of
+the handler's computation.
+
+\paragraph{Iterating interactions}
+
+The constructions above take care of a single round interaction
+between a client and handler.
+We can iterate them to construct
+\[
+  \hat{E}^* X \otimes \check{E}_T^* \mathbf{0}
+  \xrightarrow{d \otimes \kw{id}}
+  (\hat{E} \hat{E}^* X \oplus X) \otimes \check{E}_T^* \mathbf{0}
+  \xrightarrow{\lambda_{\otimes\oplus}}
+  (\hat{E} \hat{E}^* X \otimes \check{E}_T^* \mathbf{0}) \oplus
+  (X \otimes \check{E}_T \mathbf{0})
+  \xrightarrow{[\kappa \circ (\kw{id} \otimes d),  }
+ \rightarrow T (X \otimes 
+\]
+\[
+  \hat{E}^* X \otimes \check{E}_T^* \mathbf{0}
+  \xrightarrow{s}
+  \hat{E}^* (X \otimes \check{E}_T^* \mathbf{0})
+\]
+
+%}}}
+
+%\subsection{Layered Composition} \label{sec:base:ts} %{{{
+%
+%Identity $\mathbf{1} \rightarrow [E \rightarrow E](\mathbf{1})$
+%\[
+%  \kw{id}_E :=
+%  \left\langle {*} \mapsto
+%    \bigl\langle
+%      \underline{q}(\iota_r({*}_\bot))_{r \in \kw{ar}(q)}
+%    \bigr\rangle_{q \in E}
+%  \right\rangle
+%\]
+%
+%
+%
+%$S_{F \rightarrow G} \otimes S_{E \rightarrow F} \rightarrow
+%$
+%
+%Our model uses CompCertO's notion of transition system
+%as described in Definition~\ref{def:lts},
+%but we introduce the following notion of horizontal composition
+%(depicted in Fig.~\ref{fig:overview:ts}).
+%
+%\begin{definition}[Transition system composition] \label{def:lcomp} %{{{
+%The transition system
+%$\kw{id}_A : A \twoheadrightarrow A$
+%is defined as
+%\[
+%  \kw{id}_A \::=\:
+%  \big\langle
+%    A^\que + A^\ans, \:
+%    \varnothing, \:
+%    \iota_1, \:
+%    \iota_1^{-1}, \:
+%    \iota_2, \:
+%    \iota_2^{-1}
+%  \big\rangle
+%  \,.
+%\]
+%The composition of
+%$
+%  L_1 = \langle S_1, {\rightarrow_1}, I_1, X_1, Y_1, T_1 \rangle
+%    : B \twoheadrightarrow C
+%$ and $
+%  L_2 = \langle S_2, {\rightarrow_2}, I_2, X_2, Y_2, T_2 \rangle
+%    : A \twoheadrightarrow B
+%$
+%is the transition system
+%$
+%  L_1 \odot L_2 :=
+%  \langle S, {\rightarrow}, I, X, Y, F \rangle
+%  : A \twoheadrightarrow C
+%$ defined as follows.
+%States are taken in the set
+%$
+%    S := S_1 + (S_2 \times S_1)
+%$.
+%When an call in $C$ activates $L_1$,
+%the left summand is used:
+%\[
+%  \begin{prooftree}
+%    \hypo{q_C \mathrel{I_1} s_1}
+%    \infer1{q_C \mathrel{I} \iota_1(s_1)}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{s_1 \rightarrow_1 s_1'}
+%    \infer1{\iota_1(s_1) \rightarrow \iota_1(s_1')}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \hypo{s_1 \mathrel{F_1} r_C}
+%    \infer1{\iota_1(s_1) \mathrel{F} r_C}
+%  \end{prooftree}
+%\]
+%When $L_1$ makes an outgoing call in $B$,
+%its current state is saved and
+%the question activates $L_2$.
+%The execution then
+%operates on the state of $L_2$
+%until a final state of $L_2$ is reached
+%and $L_1$ is resumed:
+%\[
+%  \small
+%  \begin{prooftree}
+%    \hypo{s_1 \mathrel{X_1} q_B}
+%    \hypo{q_B \mathrel{I_2} s_2}
+%    \infer2{\iota_1(s_1) \rightarrow \iota_2(s_2, s_1)}
+%  \end{prooftree}
+%  \quad
+%  \begin{prooftree}
+%    \hypo{s_2 \rightarrow_2 s_2'}
+%    \infer1{\iota_2(s_2, s_1) \rightarrow \iota_2(s_2', s_1)}
+%  \end{prooftree}
+%  \quad
+%  \begin{prooftree}
+%    \hypo{s_2 \mathrel{X_2} q_A}
+%    \infer1{\iota_2(s_2, s_1) \mathrel{X} q_A}
+%  \end{prooftree}
+%  \quad
+%  \begin{prooftree}
+%    \hypo{r_A \mathrel{Y_2^{s_2}} s_2'}
+%    \infer1{r_A \mathrel{Y^{\iota_2(s_2, s_1)}} \iota_2(s_2', s_1)}
+%  \end{prooftree}
+%  \quad
+%  \begin{prooftree}
+%    \hypo{s_2 \mathrel{F_2} r_B}
+%    \hypo{r_B \mathrel{Y_1^{s_1}} s_1'}
+%    \infer2{\iota_2(s_2, s_1) \rightarrow \iota_1(s_1')}
+%  \end{prooftree}
+%\]
+%\end{definition}
+%%}}}
+%
+%%\begin{example} \label{ex:base:lcomp} %{{{
+%%Referring back to Example~\ref{ex:base:clightsem},
+%%consider the transition system:
+%%\[
+%%  \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c}) :
+%%  \mathcal{C}@\kw{mem} \twoheadrightarrow \mathcal{C}@\kw{mem}
+%%  \,.
+%%\]
+%%There,
+%%the calls of $\kw{bq.c}$ into $\kw{rb.c}$
+%%are turned into internal steps,
+%%triggering a switch between executions of the two components.
+%%For example,
+%%the call to $\kw{inc1}$ from $\kw{deq}$
+%%may proceed as follows:
+%%\begin{align*}
+%%  \kw{deq}()@m[\kw{c_1} \mapsto 5] \mathrel{I} \iota_1(u_0)
+%%  \rightarrow \cdots &\rightarrow \iota_1(u_1)
+%%  \rightarrow \iota_2(s_0, u_1)
+%%  \rightarrow \cdots \\ \cdots &\rightarrow \iota_2(s_k, u_1)
+%%  \rightarrow \iota_1(u_2) \rightarrow \cdots
+%%  \rightarrow \iota_1(u_5) \mathrel{F} v@m[\kw{c1} \mapsto 6]
+%%  \,.
+%%\end{align*}
+%%\end{example}
+%%%}}}
+%
+%%}}}
+
+
+
+
+\begin{color}{gray}
+\section*{Old material} %{{{
+
+\paragraph{Initial algebra} %{{{
+
+Because $\mathbf{Sup}$ has all colimits,
+every endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
+induces an initial $F$-algebra $(\mu F, c_F) \in \mathbf{Alg}(F)$
+\citep{dcpoalg}.
+This means there exists a unique $F$-algebra homomorphism
+$[ \alpha ] : (\mu F, c_F) \rightarrow (S, \alpha)$
+into every $F$-algebra $(S, \alpha) \in \mathbf{Alg}(F)$.
+%\[
+%  \begin{tikzcd}
+%    F (\mu F) \ar[r, "c_F"] \ar[d, "F \langle \alpha \rangle"'] &
+%    \mu F \ar[d, dashed, "!"', "\langle \alpha \rangle"] \\
+%    F S \ar[r, "\alpha"] & S
+%  \end{tikzcd}
+%\]
+When $F$ corresponds to an algebraic signature,
+$\mu F$ often takes the form of a term algebra,
+$c_F$ takes the role of a term constructor,
+and $[\alpha]$ uses $\alpha$ to interpret
+the function symbols in a term.
+In $\mathbf{Sup}$,
+if there is a poset endofunctor $G : \mathbf{Pos} \rightarrow \mathbf{Pos}$
+such that $F \mathcal{D} \cong \mathcal{D} G$,
+then per \citet[\S 2.5]{hjsic}
+the initial algebra is carried by the free sup-lattice $\mathcal{D}(\mu G)$
+and given by
+\[
+  c_F \quad := \quad
+    F (\mu F) \cong
+    F \mathcal{D}(\mu G) \cong % \xrightarrow{\cong}
+    \mathcal{D} G(\mu G) \xrightarrow{\mathcal{D}(c_G)}
+    \mathcal{D}(\mu G) \cong
+    \mu F
+\]
+For effect signatures,
+the corresponding poset functor
+and its initial algebras are given by
+\[
+  \ddot{E} P \: := \:
+    \sum_{m \in E} \biggl(
+      \sum_{n \in \kw{ar}(m)} P
+    \biggr)_\bot
+  \qquad
+  s \in \mu \ddot{E} ::=
+    \underline{m} \mid \underline{m} n s
+  \qquad
+  \begin{array}{c}
+    c_{\ddot{E}}(\iota_m(\bot)) := \underline{m} \\
+    c_{\ddot{E}}(\iota_m(\iota_n(s)_\bot) := \underline{m} n s
+  \end{array}
+%  \begin{prooftree}
+%    \hypo{s \sqsubseteq t}
+%    \infer1{\underline{m}ns \sqsubseteq \underline{m}nt}
+%  \end{prooftree}
+%  \qquad
+%  \begin{prooftree}
+%    \infer0{\underline{m} \sqsubseteq \underline{m}ns}
+%  \end{prooftree}
+\]
+where the sequences in $\mu\ddot{E}$ are ordered under the prefix relation
+recursively induced by $\underline{m} \sqsubseteq \underline{m}ns$.
+In other words,
+the initial algebra in $\mathbf{Sup}$
+for an effect signature $E$
+can be constructed as a lattice $\mu \hat{E} := \mathcal{D}(\mu \ddot{E})$
+of prefix-closed set of odd-length plays
+of the form $\underline{m}_1 n_1 \underline{m}_2 n_2 \cdots \underline{m}_k$.
+
+%}}}
+
+\begin{example} % Peano initial algebra %{{{
+For $E_\kw{nat}$ plays take the form
+$
+  s \in \mu \ddot{E}_\kw{nat} \cong
+    \{
+(\underline{\kw{succ}} \, {*})^n \, \underline{\kw{zero}} \,, \:
+(\underline{\kw{succ}} \, {*})^n \, \underline{\kw{succ}}
+\: \mid \: n \in \mathbb{N} \}
+$.
+The initial algebra
+$c_{\hat{E}_\kw{nat}} : \hat{E}(\mu\hat{E}) \rightarrow \mu\hat{E}$
+is carried by the lattice
+$\mu_{\hat{E}_\kw{nat}} = \mathcal{D}(\mu_{\ddot{E}_\kw{nat}})$
+and defined by
+\[
+  c_{\hat{E}_\kw{nat}} \bigl(
+    \underline{\kw{zero}}\langle \rangle
+  \bigr) := \bigl\{ \underline{\kw{zero}} \bigr\}
+  \qquad
+  c_{\hat{E}_\kw{nat}} \bigl(
+    \underline{\kw{succ}} \langle \sigma \rangle
+  \bigr) := \bigl\{
+    \underline{\kw{succ}} \, , \:
+    \underline{\kw{succ}} \, {*} \, s \mathrel\big| s \in \sigma
+  \bigr\}
+\]
+This model combines the features of $\mathcal{P}(\mathbb{N})$ and $\bar{\mathbb{N}}$
+as it allows partial observations of both finite and infinite computations.
+The catamorphisms
+$[ \alpha ] : \mu \hat{E}_\kw{nat} \rightarrow \mathcal{P}(\mathbb{N})$ and
+$[ \beta ] : \mu \hat{E}_\kw{nat} \rightarrow \bar{\mathbb{N}}$
+collapse these features back into what the target models allow,
+and can be described by
+\begin{align*}
+  [ \alpha ]
+    \bigl( {\downarrow} \, \underline{zero} \bigr) &:=
+    \{0\} &
+  [ \alpha ]
+    \bigl( {\downarrow} \, \underline{succ} \bigr) &:=
+    \varnothing &
+  [ \alpha ]
+    \bigl( {\downarrow} \, \underline{succ} \, {*} \, s \bigr) &:=
+    \{ n+1 \mid n \in [ \alpha ](s) \} \\
+  [ \beta ]
+    \bigl( {\downarrow} \, \underline{zero} \bigr) &:=
+    \bar{0} &
+  [ \beta ]
+    \bigl( {\downarrow} \, \underline{succ} \bigr) &:=
+    \bar{1} &
+  [ \beta ]
+    \bigl( {\downarrow} \, \underline{succ} \, {*} \, s \bigr) &:=
+    [ \beta ](s) + \bar{1}
+\end{align*}
+Note that $[ \alpha ]$ drops partial plays
+and $[\beta]$ flattens angelic choices into
+$[ \beta ] \bigl( \bigvee_{i \in I} \sigma_i \bigr) =
+ \max_{i \in I} [ \beta ](\sigma_i)$.
+\end{example}
+%}}}
+
+\begin{example} \label{ex:coalgebras} %{{{
+Consider the coalegebras
+$\delta_1 : \mathcal{P}(\mathbb{N}) \rightarrow
+ \hat{E}_\kw{nat} \mathcal{P}(\mathbb{N})$
+and
+$\delta_2 : \mathbf{1} \rightarrow \hat{E}_\kw{nat} \mathbf{1}$
+defined by:
+\[
+  \delta_1(\{n+1\}) := \underline{\kw{succ}}\langle \{n\} \rangle \,,
+  \quad
+  \delta_1(\{0\}) := \underline{\kw{zero}}\langle \rangle \,,
+  \qquad \text{and} \quad
+  \delta_2(*) := \kw{succ}\langle * \rangle \,.
+\]
+The corresponding anamorphisms into $\mu \hat{E}_\kw{nat}$
+give the sets of traces generated by a state:
+\[
+  \langle \delta_1 \rangle(\{n\}) =
+    {\downarrow} \, (\underline{\kw{succ}} \, *)^n \, \underline{\kw{zero}}
+  \,,
+  \qquad
+  \langle \delta_2 \rangle(*) =
+    \bigvee_{n \in \mathbb{N}} {\downarrow} \, (\underline{\kw{succ}} \, {*})^n \,\underline{\kw{succ}}
+  \,.
+\]
+The coalgebra homomorphism property
+$d_F \circ \langle \delta \rangle = F\langle \delta \rangle \circ \delta$
+allows us to establish:
+\[
+  d \bigl( \langle \delta_1 \rangle(\{n+1\}) \bigr) =
+    \underline{\kw{succ}}\bigl\langle
+      \langle \delta_1 \rangle(\{n\})
+    \bigr\rangle \,,
+  \quad
+  d \bigl( \langle \delta_1 \rangle(\{0\}) \bigr) =
+    \underline{\kw{zero}}\langle\rangle \,,
+  \quad
+  d \bigl( \langle \delta_2 \rangle(*) \bigr) =
+    \underline{\kw{succ}}\langle * \rangle
+  \,.
+\]
+\end{example}
+%}}}
+
+\subsection{Free monad} %{{{
+
+The initial algebra construction can be generalized
+to incorporate a generating lattice.
+Given endofunctor $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$
+and a sup-lattice $X \in \mathbf{Sup}$,
+we can construct
+\[
+  F^* X := \mu Y \cdot F Y \oplus X \in \mathbf{Sup}
+  \,,
+\]
+which both contains a copy of $X$ and is closed under $F$,
+as demonstrated by the morphisms:
+\begin{align*}
+  \eta_F^X &:= c_{F(-)\oplus X} \circ \iota_2 : X \rightarrow F^* X \in \mathbf{Sup}
+  \,,
+  \\
+  c_F^X &:= c_{F(-)\oplus X} \circ \iota_1 : F(F^*X) \rightarrow F^*X \in \mathbf{Sup}
+  \,.
+\end{align*}
+More precisely,
+the lattice
+$F^*X$ carries the \emph{free algebra} $\bigl(F^*X, c_F^X \bigr)$
+generated by $X$.
+
+\paragraph{Algebraic interpretation}
+
+When $F$ corresponds to a signature, 
+Like the initial algebra, when $F$ corresponds to a signature
+
+Algebraically, compared with the term algebra $\mu \hat{E}$
+the free monad $\hat{E}^*(X)$ incorporates \emph{variables} from the space $X$
+into the term algebra for $E$,
+
+For effect signatures,
+we will sometimes use the notations
+\[
+  \underline{x} := \eta_{\hat{E}}^X(x) \in \hat{E}^*X
+  \qquad \text{and} \qquad
+  \underline{m}(\sigma_n)_n :=
+    c_{\hat{E}}^X \bigl( \underline{m}\langle \sigma \rangle_n \bigr)
+    \in \hat{E}^*X
+  \,.
+\]
+
+\paragraph{Formal definition}
+The free algebra functor $\bigl(F^* (-), c_F^{(-)}\bigr) : \mathbf{Sup} \rightarrow \mathbf{Alg}(F)$
+is the left adjoint to the forgetful functor $U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
+which takes an algebra $(S, \alpha)$ to its carrier sup-lattice $S$.
+This means that for an assignment $\rho : X \rightarrow S$ of the generators
+into a target algebra $(S, \alpha)$,
+there is a unique algebra homomorphism
+$\rho^* : \bigl(F^*X, c_F^X\bigr) \rightarrow (S, \alpha) \in \mathbf{Alg}(F)$
+which interprets the elements of $F^*X$ into $S$ using $\rho$ and $\alpha$.
+
+Given $F : \mathbf{Sup} \rightarrow \mathbf{Sup}$,
+the forgetful functor $U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
+which takes an $F$-algebra $(S, \alpha)$ to its carrier $S$
+has a left adjoint
+which takes the sup-lattice $X \in \mathbf{Sup}$ to
+the \emph{free algebra} $(F^* X, c_F^X) \in \mathbf{Alg}(F)$
+generated by $X$,
+defined by:
+\[
+  F^*X := \mu Y \cdot F Y \oplus X \,,
+  \qquad \text{and} \quad
+  c_F^X := c_{F(-) \oplus X} \circ \iota_1
+  : F (F^* X) \rightarrow F^* X
+  \,.
+\]
+The adjunction's unit $\eta_F^X$
+embeds the generators into the free algebra $F^*X$.
+The counit
+uses the algebra $\alpha : F S \rightarrow S$
+to evaluate instances of $c_F^S$ and
+provide an interpretation of the free algebra into the sup-lattice $S$.
+The can be defined as
+\[
+  \eta_F^X : X \rightarrow F^*X \in \mathbf{Sup}
+  \,, \qquad \text{and} \quad
+  \epsilon_F^\alpha : (F^* S, c_F^S) \rightarrow (S, \alpha)
+  \,.
+\]
+
+The counit
+$\epsilon_F^{\alpha} := \bigl[ [\alpha, \kw{id}_S] \bigr]_F
+ : \bigl( F^* S, c_F^S \bigr) \rightarrow (S, \alpha) \in \mathbf{Alg}(F)$
+uses the algebra $\alpha : F S \rightarrow S$
+
+As usual, the adjunction
+$F^* \dashv U : \mathbf{Alg}(F) \rightarrow \mathbf{Sup}$
+defines a monad $(UF^*, \eta_F, \mu_F)$
+called the \emph{free monad} associated with $F$.
+As we have done above,
+we will omit $U$ from $UF^*$
+and write $F^* : \mathbf{Sup} \rightarrow \mathbf{Sup}$.
+
+%}}}
+
+%}}}
+\end{color}
+
 
 \section{Cut String Diagrams Material} %{{{
 
