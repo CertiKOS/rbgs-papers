@@ -4945,18 +4945,14 @@ CompCertO
 uses a notion of \emph{open} transition system
 to describe interactions across component boundaries.
 The boundaries are specified as
-language interfaces,
+language interfaces $A := \langle A^\que, A^\ans \rangle$,
 as shown in Example~\ref{ex:compcertosig},
-which classify interactions
+which classify questions and answers
 in a coarse-grained form.
-In particular,
-unlike effect signatures,
-the type of answers
-is not dependent on the questions.
-Thus,
-a language interface $A := \langle A^\que, A^\ans \rangle$
-has its corresponding
-effect signature $\llbracket A \rrbracket := \{ q : A^\ans \mid q \in A^\que \}$.
+Within the boundaries,
+a CompCertO component executes
+by updating an internal state
+of the transition system.
 
 A \emph{transition system} $L : A \twoheadrightarrow B$
 is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
@@ -5038,42 +5034,120 @@ but it makes outgoing calls which may have that effect:
 \end{example}
 %}}}
 
-We define the following transitions
-to simulate the execution
-of a CompCertO transition system.
-Notably, the transitions
-hide the internal steps.
+Now we consider
+the corresponding strategy
+of a CompCertO transition system $L: A \twoheadrightarrow B$.
+We first note
+in a language interface $A := \langle A^\que, A^\ans \rangle$
+every question uses the same of answers,
+which translates to
+effect signature $\llbracket A \rrbracket := \{ q : A^\ans \mid q \in A^\que \}$.
+Similarly, every incoming question $q \in B^\que$
+is followed by
+the same set of events,
+so we write $P^{\star}_{\llbracket A \rrbracket, \llbracket B \rrbracket}$
+for the plays
+following an incoming question.
+Then we define the following relation
+to exhibit the event traces
+starting from a transition state:
 \[
-  \delta : S \rightarrow \mathcal{P}(\ddot{A}(S) + B^\ans) \qquad
+  \Vdash \: : \: S \rightarrow \mathcal{P}(P^\star_{\llbracket A \rrbracket, \llbracket B \rrbracket})
+  \qquad
   \begin{prooftree}
-    \hypo{s \rightarrow^* s' \: X \: m \leadsto n \: Y^{s} \: s''}
-    \infer1{\iota_1(\underline{m}n\underline{s''}) \in \delta(s)}
+    \hypo{s \rightarrow^* s' \: X \: m \leadsto n \: Y^{s'} \: s''}
+    \hypo{s'' \Vdash w}
+    \infer2{s \Vdash mnw}
   \end{prooftree}
   \qquad
   \begin{prooftree}
     \hypo{s \rightarrow^* s' \: F \: r}
-    \infer1{\iota_2(r) \in \delta(s)}
+    \infer1{s \Vdash r}
   \end{prooftree}
 \]
-Using the well-known adjunction
-$(\epsilon, \eta) : \mathcal{P} \dashv |{-}| : \mathbf{Set} \rightarrow \mathbf{Pos}$,
-the above state transition generates
-a coalgebra $(\mathcal{P}(S), \delta')$ where
+Since the state is discarded
+after the transition terminates with an outgoing answer,
+the following regular closure
+characterizes the corresponding strategy:
 \[
-  \delta' : \mathcal{P}(S) \rightarrow \hat{A}(\mathcal{P}(S)) \oplus \mathcal{P}(B^\ans) \qquad
-  \delta' :=  \mathcal{P}(\delta) \circ \epsilon_{\mathcal{P}(\ddot{A}(S) + B^\ans)}
-\]
-The CompCertO transition systems are stateless,
-so we define the strategy
-$\llbracket {L} \rrbracket := \hat{\sigma}$
-by promoting the following regular strategy
-\[
-  \sigma(q) := \delta'(\{ s \mid q \: I\: s \})
+  \llbracket L \rrbracket \: := \:
+  \Big(\bigcup_{q \in B^\que} \{ qw \mid \exists s \cdot q \: I \: s \wedge s \Vdash w \} \Big)^*
+  \,.
 \]
 
 \paragraph{Simulation Convention}
 
-\paragraph{Simulation}
+To establish a simulation
+of a transition system $L_1: A_1 \twoheadrightarrow B_1$
+by a transition system $L_2: A_2 \twoheadrightarrow B_2$,
+CompCertO uses a notion of \textit{simulation convention}
+$\mathbf{R}_B : B_1 \leftrightarrow B_2$
+for their incoming calls,
+and a simulation convention
+$\mathbf{R}_A : A_1 \leftrightarrow A_2$
+for their outgoing calls.
+The simulation can then be stated as
+\[
+  \phi : L_1 \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L_2
+  \,.
+\]
+
+\begin{definition} \label{def:sconv} %{{{
+A \emph{simulation convention}
+$\mathbf{R} : A \Leftrightarrow B = \langle W, R^\que, R^\ans \rangle$
+from $A$ to $B$ is specified by:
+\begin{itemize}
+  \item a set $W$ of worlds;
+  \item a Kripke relation $R^\que \in \mathcal{R}_W\big(A^\que,\, B^\que\big)$
+    between the language interfaces' questions, and
+  \item a Kripke relation $R^\ans \in \mathcal{R}_W\big(A^\ans,\, B^\ans\big)$
+    between their answers.
+\end{itemize}
+\end{definition}
+%}}}
+Kripke worlds are used to ensure that
+questions and answers for a given call
+are related consistently.
+However, every pair of calls
+is related in isolation,
+independently of any past or future calls.
+Thus, the following
+regular strategy
+captures the simulation convention $\mathbf{R} : A \Leftrightarrow B$
+as a refinement convention:
+\[
+  \llbracket \mathbf{R} \rrbracket :=
+  \Big( \bigcup_{w \in W} \{ m_1m_2 \mid m_1 \mathbf{R}^\que_w m_2 \}
+  \cup \bigcup_{w \in W} \{ m_1m_2n_1n_2 \mid m_1 \mathbf{R}^\que_w m_2
+  \wedge n_1 \mathbf{R}^\ans_w n_2 \}
+  \Big)^*
+\]
+The embedding preserves
+the ordering, the composition,
+and crucially,
+the simulation relation:
+\[
+  \begin{prooftree}
+    \hypo{\mathbf{R} \sqsubseteq \mathbf{S} \Leftrightarrow
+      \llbracket \mathbf{R} \rrbracket
+      \le \llbracket \mathbf{S} \rrbracket}
+    \infer[no rule]1{\llbracket \mathbf{id} \rrbracket = \mathbf{id}
+      \qquad
+      \mathbf{R} \fatsemi \mathbf{S} =
+      \llbracket \mathbf{R} \rrbracket
+      \fatsemi \llbracket \mathbf{S} \rrbracket}
+  \end{prooftree}
+  \qquad \qquad
+  \begin{prooftree}
+    \hypo{\phi : L_1 \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L_2}
+    \infer1{\llbracket \phi \rrbracket :
+      \llbracket L_1 \rrbracket
+      \le_{\llbracket \mathbf{R}_A \rrbracket
+        \twoheadrightarrow \llbracket\mathbf{R}_B\rrbracket}
+      \llbracket L_2 \rrbracket}
+  \end{prooftree}
+  \,.
+\]
 
 \paragraph{Composition}
 CompCertO comes with a notion of
@@ -5084,8 +5158,7 @@ in the following sense:
   \ell :
   \kw{Asm}(p_1) \oplus \kw{Asm}(p_2) \le
   \kw{Asm}(p_1 + p_2)
-\]
-
+\]%
 The embedding is compatible
 with CompCertO's horizontal composition,
 meaning
@@ -5093,24 +5166,9 @@ the composition of strategies
 \emph{under-approximates}
 the $\oplus$ combinator:
 \[
-  \mathit{z}: \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
+  \mathit{e}: \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
     \le  \llbracket L_1 \oplus L_2 \rrbracket
   \qquad \forall \; L_1, L_2 \in A \twoheadrightarrow A
-\]
-
-When two Clight programs $p_1$ and $p_2$
-compile into the assembly programs $p_1'$ and $p_2'$,
-we can characterize the behavior of the linked assembly program
-$p_1' + p_2'$ using the refinement
-\[
-  \theta_{p_1, p_2} :=
-  \mathit{z} \fatsemi (\phi^\kw{cc}_{p_1} \odot \phi^\kw{cc}_{p_2}) \fatsemi \ell
-  \: : \:
-  \llbracket \kw{Clight}(p_1) \rrbracket \odot
-  \llbracket \kw{Clight}(p_2) \rrbracket
-  \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
-  \llbracket \kw{Asm}(p_1' + p_2') \rrbracket
-  \,.
 \]
 %}}}
 
@@ -5444,8 +5502,12 @@ we can then give the following proof:
 \[
   \phi_1'
   \:\vcomp\:
+  \big(
   (\phi_\kw{bq}' \vcomp \phi^\kw{cc}_\kw{bq}) \odot
   (\phi_\kw{rb}' \vcomp \phi^\kw{cc}_\kw{rb}) \odot z
+  \big)
+  \:\vcomp\:
+  \textit{e}
   \:\vcomp\:
   \ell
   \quad : \quad
