@@ -2779,6 +2779,218 @@ as shown in the proof term
 
 %}}}
 
+\subsection{Encapsulated State} \label{sec:overview:encap} %{{{
+
+%The constructions we have introduced so far
+%make it possible to manage global state
+%and control interference between components,
+%but do not support true encapsulation.
+Finally,
+in \S\ref{sec:encap}
+we show how our model can be extended
+with persistent component-local state.
+%
+%inspired by \citet{feedback,caots}.
+%Concretely,
+%a component $\Sigma : A \rightarrow B$
+%consists of a set $U$ of \emph{private states},
+%an underlying transition system of type
+%$L : A \twoheadrightarrow B \mathbin@ U$,
+%and an initial state $u \in U$.
+%When $\Sigma$ is activated for the first time,
+%the initial state is adjoined to incoming question
+%to activate $L$.
+%When $L$ terminates,
+%the updated state is saved
+%to be used with the next activation.
+%
+%\paragraph{Encapsulation Primitive} %{{{
+
+The compositional structure and constructions we have described
+embed into the extended model.
+%
+In addition,
+the model supports an \emph{encapsulation} primitive
+$
+  [ u \rangle : U \lensarrow \mathbbm{1}
+$.
+When this component is activated
+by an incoming question $* \in \mathbbm{1}$,
+the initial state $u \in U$ is used
+as an outgoing question.
+When an answer $u' \in U$ is received,
+the component stores $u'$ as the next state
+and returns control to the caller.
+This allows $[ u \rangle$ to act
+as a state encapsulation primitive.
+
+%}}}
+
+\paragraph{Representation Independence} %{{{
+
+The hallmark of state encapsulation is
+the idea that two component which exhibit
+the same externally observable behavior
+should be indistinguishable,
+even if their internal details differ.
+Within our framework,
+this follows from the property:
+\[
+  \zeta : u \mathbin{R} v
+  \quad\Longrightarrow\quad
+  [\zeta\rangle : [u\rangle \le_{R \twoheadrightarrow \mathbbm{1}} [v\rangle
+\]
+[XXX: incorporate explanation from POPL author response]
+
+%}}}
+
+\paragraph{Implementing Encapsulated State} %{{{
+
+Encapsulated state must eventually be realized as global state.
+The conjoint simulation convention
+$[u\rangle_* : \mathbbm{1} \leftrightarrow U$
+can be used to express this.
+Concretely, $[u\rangle_*$ requires the first target question
+to carry the value $u$.
+When the question is answered with a new state~$u'$,
+this new state replaces $u$.
+The next question is
+expected to carry the value $u'$,
+and so on.
+In other words,
+the simulation convention $[u\rangle_*$
+requires the target system to be provided with a state component of type $U$,
+maintained across successive activations and
+initially set to the value $u$.
+
+%}}}
+
+%}}}
+
+\begin{example} %{{{
+The component
+$\Gamma'_\kw{bq} :=
+ (\mathcal{C} \mathbin@ [\epsilon\rangle) \odot \Gamma_\kw{bq} :
+ \top \twoheadrightarrow \mathcal{C}$
+describes the behavior of an initially empty bounded queue.
+The set of abstract states $D_\kw{bq}$ is used to define it,
+but is not exposed as part of its interface,
+so that client code will only observe call traces
+where state is implicit:
+\[
+  \Gamma'_\kw{bq} \: \vDash \:
+    \kw{enq}(v_1) \cdot
+    {*} \cdot
+    \kw{enq}(v_2) \cdot
+    {*} \cdot
+    \kw{deq}() \cdot
+    v_1 \cdot
+    \kw{enq}(v_3) \cdot
+    {*} \cdot
+    \kw{deq}() \cdot
+    v_2 \, \cdots
+\]
+Likewise,
+we can use
+$d_0 := (\{{*},{*},\ldots\}, 0, 0) \in D_\kw{rb}$
+to define
+$\Gamma'_\kw{rb} :=
+ (\mathcal{C} \mathbin@ [d_0\rangle) \odot \Gamma_\kw{rb} :
+ \top \twoheadrightarrow \mathcal{C}$
+as an encapsulated specification for
+the ring buffer data structure.
+Representation independence, together with the fact
+$\zeta_\kw{bq} : \epsilon \mathbin{R_\kw{bq}} d_0$
+that the initial states are related,
+means that we can prove:
+\[
+  \phi_1' \: := \:
+  (\mathcal{C} \mathbin@ [\zeta_\kw{bq}\rangle) \odot \phi_1
+  \: : \:
+  \Gamma'_\kw{bq} \: \le \: \Sigma_\kw{bq} \odot \Gamma'_\kw{rb}
+\]
+That is,
+state encapsulation not only makes it easier
+to interface $\Sigma : \mathcal{C} \twoheadrightarrow \mathcal{C}$
+with $\Gamma'_\kw{rb} : \top \twoheadrightarrow \mathcal{C}$,
+but it also means the simulation
+$\phi_1'$ can be stated in terms of the identity simulation convention.
+
+Next, consider the implementation
+of $\Gamma'_\kw{rb}$
+by $\kw{rb.c}$
+in terms of concrete memory.
+The initial memory share $m_0 := \kw{init\_mem}(\kw{rb.c})$
+associated with $\kw{rb.c}$ satisfies
+$\zeta_\kw{rb} : d_0 \mathrel{R_\kw{rb}} m_0$.
+This allows us to prove:
+\[
+  \phi_\kw{rb}' \: := \:
+    \Big(
+      \mathcal{C} \mathbin@
+      \langle \kw{mem} ]^* \sepconj
+      \big(
+        [\zeta_\kw{rb} \rangle \vcomp [m_0\rangle_\triangledown
+      \big)
+    \Big) \odot \phi_\kw{rb}
+  \: : \:
+  \Gamma'_\kw{rb}
+    \le_{\varnothing \twoheadrightarrow
+      \mathcal{C} \mathbin@
+        \langle m_0 \rangle}
+    \kw{Clight}(\kw{rb.c})
+  \,,
+\]
+where the simulation convention component
+$\langle m_0 \rangle :=
+ \langle \kw{mem} ]^* \sepconj [m_0\rangle_* :
+ \mathbbm{1} \leftrightarrow \kw{mem}$
+expresses the idea that
+the memory state introduced at the target level is split into two halves.
+One half will contain $\kw{buf}$, $\kw{c1}$ and $\kw{c2}$;
+it must be initialized to $m_0$
+and preserved by the environment from one call to the next.
+The other half is unconstrained
+but is guaranteed to be left unchanged by $\kw{rb.c}$.
+
+Since the client component
+$\Sigma_\kw{bq} \mathbin@ \kw{mem}$,
+by construction,
+does not affect the memory at all,
+this incoming simulation convention
+can easily be incorporated into the property:
+\[
+  \phi_2' \: := \:
+    (\Sigma_\kw{bq} \mathbin@ \langle m_0 \rangle)
+    \vcomp
+    \phi_2
+  \: : \:
+  \Sigma_\kw{bq}
+    \le_{\mathcal{C} \mathbin@ \langle m_0 \rangle
+         \twoheadrightarrow
+         \mathcal{C} \mathbin@ \langle m_0 \rangle}
+    \kw{Clight}(\kw{bq.c})
+\]
+Revisiting the challenge articulated in Example~\ref{ex:abspec},
+we can then give the following proof:
+\[
+  \phi_1'
+  \:\vcomp\:
+  (\phi_2' \vcomp \pi_\kw{bq}) \odot
+  (\phi_\kw{rb}' \vcomp \pi_\kw{rb}) \odot z
+  \:\vcomp\:
+  \ell
+  \quad : \quad
+  \Gamma_\kw{bq}'
+  \:
+  \le_{\varnothing \twoheadrightarrow
+       (\mathcal{C} \mathbin@ \langle m_0 \rangle) \vcomp \mathbb{C}}
+  \:
+  \kw{Asm}(\kw{bq.s} + \kw{rb.s})
+\]
+\end{example}
+%}}}
+
 %}}}
 
 \section{Strategy Model} \label{sec:model} %{{{
@@ -6657,217 +6869,6 @@ $.
 \end{example}
 %}}}
 
-\subsection{Encapsulated State} \label{sec:overview:encap} %{{{
-
-%The constructions we have introduced so far
-%make it possible to manage global state
-%and control interference between components,
-%but do not support true encapsulation.
-Finally,
-in \S\ref{sec:encap}
-we show how our model can be extended
-with persistent component-local state.
-%
-%inspired by \citet{feedback,caots}.
-%Concretely,
-%a component $\Sigma : A \rightarrow B$
-%consists of a set $U$ of \emph{private states},
-%an underlying transition system of type
-%$L : A \twoheadrightarrow B \mathbin@ U$,
-%and an initial state $u \in U$.
-%When $\Sigma$ is activated for the first time,
-%the initial state is adjoined to incoming question
-%to activate $L$.
-%When $L$ terminates,
-%the updated state is saved
-%to be used with the next activation.
-%
-%\paragraph{Encapsulation Primitive} %{{{
-
-The compositional structure and constructions we have described
-embed into the extended model.
-%
-In addition,
-the model supports an \emph{encapsulation} primitive
-$
-  [ u \rangle : U \lensarrow \mathbbm{1}
-$.
-When this component is activated
-by an incoming question $* \in \mathbbm{1}$,
-the initial state $u \in U$ is used
-as an outgoing question.
-When an answer $u' \in U$ is received,
-the component stores $u'$ as the next state
-and returns control to the caller.
-This allows $[ u \rangle$ to act
-as a state encapsulation primitive.
-
-%}}}
-
-\paragraph{Representation Independence} %{{{
-
-The hallmark of state encapsulation is
-the idea that two component which exhibit
-the same externally observable behavior
-should be indistinguishable,
-even if their internal details differ.
-Within our framework,
-this follows from the property:
-\[
-  \zeta : u \mathbin{R} v
-  \quad\Longrightarrow\quad
-  [\zeta\rangle : [u\rangle \le_{R \twoheadrightarrow \mathbbm{1}} [v\rangle
-\]
-[XXX: incorporate explanation from POPL author response]
-
-%}}}
-
-\paragraph{Implementing Encapsulated State} %{{{
-
-Encapsulated state must eventually be realized as global state.
-The conjoint simulation convention
-$[u\rangle_* : \mathbbm{1} \leftrightarrow U$
-can be used to express this.
-Concretely, $[u\rangle_*$ requires the first target question
-to carry the value $u$.
-When the question is answered with a new state~$u'$,
-this new state replaces $u$.
-The next question is
-expected to carry the value $u'$,
-and so on.
-In other words,
-the simulation convention $[u\rangle_*$
-requires the target system to be provided with a state component of type $U$,
-maintained across successive activations and
-initially set to the value $u$.
-
-%}}}
-
-%}}}
-
-\begin{example} %{{{
-The component
-$\Gamma'_\kw{bq} :=
- (\mathcal{C} \mathbin@ [\epsilon\rangle) \odot \Gamma_\kw{bq} :
- \top \twoheadrightarrow \mathcal{C}$
-describes the behavior of an initially empty bounded queue.
-The set of abstract states $D_\kw{bq}$ is used to define it,
-but is not exposed as part of its interface,
-so that client code will only observe call traces
-where state is implicit:
-\[
-  \Gamma'_\kw{bq} \: \vDash \:
-    \kw{enq}(v_1) \cdot
-    {*} \cdot
-    \kw{enq}(v_2) \cdot
-    {*} \cdot
-    \kw{deq}() \cdot
-    v_1 \cdot
-    \kw{enq}(v_3) \cdot
-    {*} \cdot
-    \kw{deq}() \cdot
-    v_2 \, \cdots
-\]
-Likewise,
-we can use
-$d_0 := (\{{*},{*},\ldots\}, 0, 0) \in D_\kw{rb}$
-to define
-$\Gamma'_\kw{rb} :=
- (\mathcal{C} \mathbin@ [d_0\rangle) \odot \Gamma_\kw{rb} :
- \top \twoheadrightarrow \mathcal{C}$
-as an encapsulated specification for
-the ring buffer data structure.
-Representation independence, together with the fact
-$\zeta_\kw{bq} : \epsilon \mathbin{R_\kw{bq}} d_0$
-that the initial states are related,
-means that we can prove:
-\[
-  \phi_1' \: := \:
-  (\mathcal{C} \mathbin@ [\zeta_\kw{bq}\rangle) \odot \phi_1
-  \: : \:
-  \Gamma'_\kw{bq} \: \le \: \Sigma_\kw{bq} \odot \Gamma'_\kw{rb}
-\]
-That is,
-state encapsulation not only makes it easier
-to interface $\Sigma : \mathcal{C} \twoheadrightarrow \mathcal{C}$
-with $\Gamma'_\kw{rb} : \top \twoheadrightarrow \mathcal{C}$,
-but it also means the simulation
-$\phi_1'$ can be stated in terms of the identity simulation convention.
-
-Next, consider the implementation
-of $\Gamma'_\kw{rb}$
-by $\kw{rb.c}$
-in terms of concrete memory.
-The initial memory share $m_0 := \kw{init\_mem}(\kw{rb.c})$
-associated with $\kw{rb.c}$ satisfies
-$\zeta_\kw{rb} : d_0 \mathrel{R_\kw{rb}} m_0$.
-This allows us to prove:
-\[
-  \phi_\kw{rb}' \: := \:
-    \Big(
-      \mathcal{C} \mathbin@
-      \langle \kw{mem} ]^* \sepconj
-      \big(
-        [\zeta_\kw{rb} \rangle \vcomp [m_0\rangle_\triangledown
-      \big)
-    \Big) \odot \phi_\kw{rb}
-  \: : \:
-  \Gamma'_\kw{rb}
-    \le_{\varnothing \twoheadrightarrow
-      \mathcal{C} \mathbin@
-        \langle m_0 \rangle}
-    \kw{Clight}(\kw{rb.c})
-  \,,
-\]
-where the simulation convention component
-$\langle m_0 \rangle :=
- \langle \kw{mem} ]^* \sepconj [m_0\rangle_* :
- \mathbbm{1} \leftrightarrow \kw{mem}$
-expresses the idea that
-the memory state introduced at the target level is split into two halves.
-One half will contain $\kw{buf}$, $\kw{c1}$ and $\kw{c2}$;
-it must be initialized to $m_0$
-and preserved by the environment from one call to the next.
-The other half is unconstrained
-but is guaranteed to be left unchanged by $\kw{rb.c}$.
-
-Since the client component
-$\Sigma_\kw{bq} \mathbin@ \kw{mem}$,
-by construction,
-does not affect the memory at all,
-this incoming simulation convention
-can easily be incorporated into the property:
-\[
-  \phi_2' \: := \:
-    (\Sigma_\kw{bq} \mathbin@ \langle m_0 \rangle)
-    \vcomp
-    \phi_2
-  \: : \:
-  \Sigma_\kw{bq}
-    \le_{\mathcal{C} \mathbin@ \langle m_0 \rangle
-         \twoheadrightarrow
-         \mathcal{C} \mathbin@ \langle m_0 \rangle}
-    \kw{Clight}(\kw{bq.c})
-\]
-Revisiting the challenge articulated in Example~\ref{ex:abspec},
-we can then give the following proof:
-\[
-  \phi_1'
-  \:\vcomp\:
-  (\phi_2' \vcomp \pi_\kw{bq}) \odot
-  (\phi_\kw{rb}' \vcomp \pi_\kw{rb}) \odot z
-  \:\vcomp\:
-  \ell
-  \quad : \quad
-  \Gamma_\kw{bq}'
-  \:
-  \le_{\varnothing \twoheadrightarrow
-       (\mathcal{C} \mathbin@ \langle m_0 \rangle) \vcomp \mathbb{C}}
-  \:
-  \kw{Asm}(\kw{bq.s} + \kw{rb.s})
-\]
-\end{example}
-%}}}
 
 \subsection*{Encapsulated State} \label{sec:encap} %{{{
 
