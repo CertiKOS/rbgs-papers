@@ -1970,11 +1970,11 @@ simulations.
 
 We start by
 outlining how the construction ${-} \mathbin@ U$
-acts on transition systems
+acts on strategies
 in the case of a fixed set $U$.
 Namely,
 given $L : A \twoheadrightarrow B$,
-the transition system
+the strategy
 $
   L \mathbin@ U : A \mathbin@ U \twoheadrightarrow B \mathbin@ U
 $
@@ -3346,9 +3346,6 @@ obeys the rules in Fig.~\ref{fig:fcomp}.
 
 %}}}
 
-\vspace{1em}
-\hrule
-
 %\subsection{Kripke Relators} %{{{
 %
 %We will rely on the Kripke relator framework
@@ -4036,6 +4033,246 @@ obeys the rules in Fig.~\ref{fig:fcomp}.
 %}}}
 
 \section{Compositional State} \label{sec:scomp} %{{{
+
+\subsection{Stateful Lenses}
+
+\begin{definition}
+A \emph{stateful lens} between the sets $U$ and $V$,
+written $f : U \leftrightarrows V$,
+is given by a set $P$ of \emph{persistent states},
+an \emph{initial state} $p_0 \in P$,
+and a lens $f$ from $V \times P$ to $U$.
+
+The identity lens $\kw{id}_U : U \leftrightarrows U$
+uses persistent states in $\mathbbm1$ and is defined by:
+\[
+  \kw{get}_{\kw{id}_U}(u, *) := u
+  \,,
+  \qquad
+  \kw{set}_{\kw{id}_U}(u, *, u') := (u', *)
+  \,.
+\]
+The composite $g \circ f$ of
+$f : U \leftrightarrows V$ and
+$g : V \leftrightarrows W$
+uses pairs of persistent states of $f$ and $g$ and
+is given by:
+\[
+  p_0 := {*}
+  \,,
+  \qquad
+  \kw{get}_{g \circ f}(w, (p, q)) := \kw{get}_f(\kw{get}_g(w, p), q)
+  \,,
+  \qquad
+  \begin{prooftree}
+    \hypo{\kw{get}_f(w, p) = v}
+    \hypo{\kw{set}_g(v, q, u) = (v', q')}
+    \hypo{\kw{set}_f(w, p, v') = (w', p')}
+    \infer3{\kw{set}_{g \circ f}(w, p, q, u) := (w', p', q') \,.}
+  \end{prooftree}
+\]
+\end{definition}
+
+\begin{theorem}[Properties of Stateful Lens Composition]
+The composition of stateful lenses is associative
+and admits identity lenses as units.
+\end{theorem}
+
+\begin{definition}[Strategy Interpretation of Stateful Lenses]
+A stateful lens $f : U \leftrightarrows V$ with states in $P$
+can be given a strategy interpretation
+$[f] : [U] \twoheadrightarrow [V]$
+using simple effect signatures of the form
+$[U] := \{u : U \mid u \in U\}$.
+For a state $p \in P$,
+the strategy $[f]_p : [U] \twoheadrightarrow [P]$ is defined by
+\begin{gather*}
+  \epsilon \in [f]_p \\
+  vs \in [f]_p \::\Leftrightarrow\: s \in [f]_p^v \\
+  \underline{u}s \in [f]_p^v \::\Leftrightarrow\:
+    \kw{get}_f(v, p) = u \wedge s \in [f]_p^{vu} \\
+  \underline{v'}s \in [f]_p^v \::\Leftrightarrow\:
+    v = v' \wedge s \in [f]_p \\
+  \epsilon \in [f]_p^{vu} \\
+  u's \in [f]_p^{vu} \::\Leftrightarrow\:
+    \kw{set}_f(v, p, u') = (v', p') \wedge
+    s \in [f]_{p'}^{v'}
+\end{gather*}
+\end{definition}
+
+Notice that the definition above
+includes an angelic choice,
+after the lens is activated by an incoming question $v$,
+between returning $v$ unchanged
+or passing on the $u$ component as an outgoing questions
+and updating it based on the corresponding answer.
+This underlines that the interpretation $[f]$
+is not meant to be used as is
+but is expected to be combined with a ``real'' strategy
+from which it will inherit these scheduling choices.
+
+At the same time,
+the strategy interpretation
+is quite useful as an intermediate construction.
+In particular,
+it allows us to reuse
+refinement conventions of type
+$\mathbf{R} : [U] \leftrightarrow [V]$
+and refinement squares of type
+$[f] \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} [g]$
+in order to complement the horizontal structure
+defined for stateful lenses
+with the same vertical constructions we used for strategies.
+The following definition will be useful in this context.
+
+\begin{definition}[Refinement convention interpretation of relations]
+A relation $R \subseteq U \times V$ defines
+a refinement convention $[R] : [U] \leftrightarrow [V]$ given by:
+\begin{align*}
+  (u, v)\bot \in [R] &\::\Leftrightarrow\:
+    u \mathrel{R} v \\
+  (u,v)(u',v')\top \in [R] &\::\Leftrightarrow\:
+    u \mathrel{R} v \wedge \lnot u' \mathrel{R} v' \\
+  (u,v)(u',v')\,s \in [R] &\::\Leftrightarrow\:
+    u \mathrel{R} v \wedge (u' \mathrel{R} v' \Rightarrow s \in [R]) \,.
+\end{align*}
+\end{definition}
+
+\subsection{Spatial Composition}
+
+We will define spatial composition as a special case of tensor products,
+defined as follows.
+
+\begin{definition}
+The tensor product
+$\sigma_1 \otimes \sigma_2 : E_1 \otimes E_2 \twoheadrightarrow F_1 \otimes F_2$
+of the strategies
+$\sigma_1 : E_1 \twoheadrightarrow F_1$ and
+$\sigma_2 : E_2 \twoheadrightarrow F_2$
+is defined by pairing up their plays pairwise
+when they exhibit a similar structure, on a move-by-move basis.
+The process can be described by the rules:
+\begin{gather*}
+  \qquad
+  \begin{prooftree}
+    \infer0{\epsilon \otimes \epsilon &\ni \epsilon}
+  \end{prooftree}
+  \qquad\qquad
+  \begin{prooftree}
+    \hypo{s_1 \otimes s_2 \ni s}
+    \infer1{
+      \underline{r}_1 s_1 \otimes^{q_1,q_2} \underline{r}_2 s_2 \ni
+      \underline{(r_1, r_2)} s
+    }
+  \end{prooftree}
+  \qquad\qquad
+  \begin{prooftree}
+    \infer0{\epsilon \otimes^{q_1m_1,q_2m_2} \epsilon \ni \epsilon}
+  \end{prooftree}
+  \qquad
+  \\[1ex]
+  \begin{prooftree}
+    \hypo{s_1 \otimes^{q_1,q_2} s_2 \ni s}
+    \infer1{q_1 s_1 \otimes q_2 s_2 \ni (q_1, q_2) s}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \otimes^{q_1m_1,q_2m_2} s_2 \ni s}
+    \infer1{
+      \underline{m}_1 s_1 \otimes^{q_1,q_2} \underline{m}_2 s_2 \ni
+      \underline{(m_1, m_2)} s
+    }
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s_1 \otimes^{q_1,q_2} s_2 \ni s}
+    \infer1{n_1s_1 \otimes^{q_1m_1,q_2m_2} n_2s_2 \ni (n_1,n_2)s}
+  \end{prooftree}
+\end{gather*}
+The resulting strategy can be given as
+$\sigma_1 \otimes \sigma_2 :=
+ \bigcup_{(s_1, s_2) \in \sigma_1 \times \sigma_2} s_1 \otimes s_2$.
+\end{definition}
+
+A similar construction can be defined for
+refinement conventions and refinement squares.
+
+\begin{definition}
+The tensor product
+$\mathbf{R} \otimes \mathbf{S} :
+ E_1 \otimes F_1 \leftrightarrow E_2 \otimes F_2$
+of the refinement conventions
+$\mathbf{R} : E_1 \leftrightarrow E_2$ and
+$\mathbf{S} : F_1 \leftrightarrow F_2$
+is defined by the rules:
+\begin{gather*}
+  \begin{prooftree}
+    \hypo{(m_1, m_2)\bot \in \mathbf{R}}
+    \hypo{(q_1, q_2)\bot \in \mathbf{S}}
+    \infer2{
+      \bigl( (m_1,q_1), (m_2,q_2) \bigr)\bot \in \mathbf{R} \otimes \mathbf{S}
+    }
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{(m_1,m_2)(n_1,n_2)\top \in \mathbf{R} \:\vee\:
+          (q_1,q_2)(r_1,r_2)\top \in \mathbf{S}}
+    \infer1{
+      \bigl( (m_1,q_1), (m_2,q_2) \bigr)
+      \bigl( (n_1,r_1), (n_2,r_2) \bigr)\top 
+      \in \mathbf{R} \otimes \mathbf{S}
+    }
+  \end{prooftree}
+  \\[1ex]
+  \begin{prooftree}
+    \hypo{
+      (m_1,m_2)(n_1,n_2)\top \in \mathbf{R} \: \vee \:
+      (q_1,q_2)(r_1,r_2)\top \in \mathbf{S} \: \vee \:
+      s \in \bigl( (m_1,m_2)(n_1,n_2) \backslash \mathbf{R} \bigr) \otimes
+            \bigl( (q_1,q_2)(r_1,r_2) \backslash \mathbf{S} \bigr)
+    }
+    \infer1{
+      \bigl( (m_1,q_1), (m_2,q_2) \bigr)
+      \bigl( (n_1,r_1), (n_2,r_2) \bigr) \,s
+      \in \mathbf{R} \otimes \mathbf{S}
+      \,.
+    }
+  \end{prooftree}
+\end{gather*}
+\end{definition}
+
+The tensor product of strategies
+is not well-behaved in general,
+because layered composition may affect how plays
+synchronize under the tensor product.
+However, the following special case
+enjoys the expected properties.
+
+\begin{definition}
+The spatial composition operator $\mathbin@$ is defined:
+\begin{itemize}
+  \item for an effect signature $E$ and a set $U$,
+    as $E \mathbin@ U := E \otimes [U]$;
+  \item for a strategy $\sigma$ and a stateful lens $f$,
+    as $\sigma \mathbin@ f := \sigma \otimes [f]$;
+  \item for the refinement conventions $\mathbf{R}$ and $\mathbf{S}$
+    as $\mathbf{R} \mathbin@ \mathbf{S} := \mathbf{R} \otimes \mathbf{S}$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}
+Spatial composition
+enjoys the properties described in Fig.~\ref{fig:xcomp}.
+\end{theorem}
+
+
+
+\subsection{State Encapsulation}
+
+
+
+\vspace{1em}
+\hrule
 
 In the previous section
 we introduced a generalization of CompCertO semantics,
