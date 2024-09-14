@@ -1,0 +1,215 @@
+> POPL 2025 Paper #239 Reviews and Comments
+> ===========================================================================
+> Paper #239 Unifying compositional verification and certified compilation
+> with a three-dimensional refinement algebra
+> 
+> 
+> Review #239A
+> ===========================================================================
+> 
+> Overall merit
+> -------------
+> 3. Weak accept
+> 
+> Reviewer expertise
+> ------------------
+> 4. Expert
+> 
+> Paper summary
+> -------------
+> This paper systematizes some recent results in modular verification of software, producing a unified framework for proving interactive systems with modules written in different languages and compiled by verified compilers.  The central ideas are very much in the vein of interaction trees, but there are a lot of details to get right.
+> 
+> Comments for authors
+> --------------------
+> This sort of unified theory is critical to application at scale of the most rigorous formal methods, and I'm impressed at the thoroughness of the design effort reported in the paper.  One strange thing is that the paper doesn't include an evaluation section; we don't get a clear description of which verifications have been carried out, which is handy to validate design choices.  The previous papers that this project built on were notable for significant mechanized case studies of software artifacts of inherent interest, and the lack of such validation here gives the work less appeal.  I also think the paper oversells the novelty of addressing this particular combination of problems.
+> 
+> # Crisply formulating what new problem is being solved
+> 
+> At line 38, there is one bullet list of aspects that are important to address in a single reasoning system: *compilation*, *several different languages*, and *external interactions*.  Then line 166 gives a separate list: program-module correctness, compiler correctness, separation logic-style memory modularity, and data abstraction.  Fig. 1 also shows a motivating example that includes mixing C and assembly and calling I/O system routines.  I agree there is very little work that ties all of these challenges together, but there is at least one project that checks all of those boxes.  See:
+> 
+> - Andres Erbsen, Jade Philipoom, Dustin Jamner, Ashley Lin, Samuel Gruetter, Clément Pit-Claudel, Adam Chlipala. Foundational Integration Verification of a Cryptographic Server. PLDI'24.
+> - Andres Erbsen, Samuel Gruetter, Joonwon Choi, Clark Wood, Adam Chlipala. Integration Verification Across Software and Hardware for a Simple Embedded System. PLDI'21.
+> 
+> That line of work is centered around the Bedrock2 framework.  There are a few advantages that could be argued for it over the framework presented in this paper:
+> 1. Mechanized, modular reasoning is pushed lower, to include connection to verified hardware (and perhaps also compilation to machine code rather than assembly code counts as a difference, though I'm not sure if this paper uses any of the work on generating binaries from CompCert).
+> 2. Mechanized, modular reasoning starts higher, with several different verified and proof-generating compilers from a functional source language (Gallina).
+> 3. Total correctness is proved for all modules, ruling out unintended divergence or memory exhaustion.
+> 4. The shared formal framework is arguably simpler: every imperative programming language gets a weakest-precondition semantics in terms of a common notion of memory and traces of external interactions, and module-correctness theorems are stated directly in terms of such semantics, with no fixed program logic *or* algebra of components like in the present paper.  Higher-order logic does the job directly, adopting design patterns from separation logic as convenient.
+> 
+> I can also think of some advantages for this paper vs. work with Bedrock2:
+> 1. The framework is much more general, with nothing remotely language-specific fixed in the basic definitions, whereas the common specification style in the work with Bedrock2 fixes a particular state type of memory plus log of external interactions.  We never see one (software) module implement the methods that are being logged in the trace of another.
+> 2. This paper and the ones it builds most closely on work with CompCert and roughly full-ISO-standard C, while Bedrock2 fixes a simple C subset with a simple semantics (e.g., assembly-style flat memory model).
+> 3. The formalism supports a flexible notion of refinement even for infinitely reactive modules, which may allow well-structured proof of more interestingly interactive systems than in Bedrock2, which has only been shown to support interactive systems as event loops where each event handler terminates.
+> 4. It seems that some higher-level results about multiple programs piped together UNIX-style can be proved, though it is unclear, from the writing of the paper, if those mechanized proofs have been completed.  (An example like Fig. 1's is easily verified modularly [down to program binaries with their separate specifications] with the techniques that the cited papers demonstrated, though I don't think they demonstrated reasoning about groups of processes running simultaneously.  I would not be surprised either way if an extra layer to reason about process compositions turned out to be simple or to require serious new research.)
+> 
+> Though actually, real UNIX process compositions involve concurrent executions that synchronize through byte streams, while this paper seems to study a restricted notion of piping that looks like method calls across processes, where only one process runs instructions at a time.  In that sense, Fig. 1 may be misleading when it comes to what class of systems can be verified with the new ideas.  Presumably generalization to truly concurrent process execution is nontrivial future work.
+> 
+> So, overall, I think the framework presented here may represent a strong contribution, but the conditions of its novelty and payoff over other ideas should be reformulated, in my opinion.
+> 
+> One more question about limits of the framework: refinement conventions seem to enforce one-to-one matching of events.  Wouldn't it often happen that one event in a higher-level system is compiled to multiple events in a lower-level system?  Or these conventions really deal only with events at the rough semantic granularity of function calls, where lock-step bisimulation holds throughout compilation?  One example would be that what looks like a monolithic system call at the source level looks like multiple memory-mapped-IO accesses in compiled code, with each memory access a separate event.
+> 
+> # More minorly...
+> 
+> Section 4 introduces a backslash operator, which I had trouble interpreting.  Line 626 finally explains through an example.
+> 
+> I think "ie." is properly written "i.e.".
+> 
+> L211: "Layered composition (...) acts horizontally": that's a surprising sentence!  I'm used to thinking of vertical composition as being all about layered interfaces, like in the past CAL work cited here.
+> 
+> L265: "is value": add "the" in the middle.
+> 
+> L335: At this point, I don't remember what $\mathcal S$ and $\mathcal P$ are, so I get lost interpreting the explanation.
+> 
+> L423: careful with "single-file"; it means something else colloquially in English, which led me to expect that we were talking about sequentializing a process that began as more parallel.
+> 
+> L499: "that same way": probably "the same way" is what you meant?
+> 
+> L617: "pays": should be "plays"?
+> 
+> L641: "rediduals"?
+> 
+> L750: "a sequence values": make it "of values".
+> 
+> L977: "Also, The": rogue capital letter
+> 
+> L988: "mange": should be "manage"
+> 
+> L988: "shared passed": probably don't want both of these words
+> 
+> L1016: "from the CompCertO's": remove "the".  Happens twice; same issue with "the RAX".
+> 
+> L1048: "Reasoning the process behavior": missing "about"
+> 
+> L1050: "Therefore, We": rogue capital letter
+> 
+> L1072: "the CompCertO's": remove "the"
+> 
+> L1180: "languauges"
+> 
+> L1202: "consist solely events": missing "of"
+> 
+> 
+> 
+> Review #239B
+> ===========================================================================
+> 
+> Overall merit
+> -------------
+> 3. Weak accept
+> 
+> Reviewer expertise
+> ------------------
+> 3. Knowledgeable
+> 
+> Paper summary
+> -------------
+> This paper presents a refinement system that allows the combination of various proofs at different levels of abstraction.  The system uses an almost game semantics like approach with traces over questions and answers.  The program receives questions from its context and can provide an answer or a question in response. If it questions the context, then the context must provide an answer before the program continues.  This is like the modelling of higher-order functions in game semantics.
+> 
+> The system provides operations to compose components by
+> * routing questions from one component to another component, and
+> * by allowing two components to handle the questions.
+> 
+> It also provides refinement on components by relating actions of one component to actions of another component, and by allowing internal state access to be hidden.
+> 
+> The overall system seems quite compelling, however, I found the paper hard to follow in places, and do not feel confident that I fully understood the results.  I would love to read an improved version of this paper.
+> 
+> Comments for authors
+> --------------------
+> # Understanding
+> 
+> At a high-level I really like the ideas in the paper, but I found I got stuck a lot of times reading it.  I have provide a detailed suggestion here, and lots of minor suggestions below. I really hope you will improve the presentations of the maths, as I would really like to understand the paper better.
+> 
+> My biggest stumbling block on reading the paper was the description of a strategy (defn 3.1).  It took more a long time to realise what this meant, and how to read it in subsequent definitions.  $s^q$ is not a modified version of $s$, but a different syntactic category that ranges over strategies expecting an answer to $q$.  Using the superscript in this way is very compact, but I found difficult to read.  The $q$ in $s^q$ is effectively a parameter to the syntactic category.  I think this might be easier to understand if you have defined it with rules:
+> 
+> $\frac{}{epsilon \in P_{E,F}}$
+> 
+> $\frac{s \in P^q_{E,F}   \quad q \in F}
+> {q\, s \in P_{E,F} }$
+> 
+> $\frac{s \in P^{qm}_{E,F}   \quad m \in E}
+> {\underline{m}\, s \in P^q_{E,F} }$
+> 
+> The parameterised syntactic categories I found extremely hard to read. They are expressing dependencies as well, that similarly is challenging.
+> 
+> If you did it the other way, you probably just use $s$ every where in Definition 3.3, and I think it would be much easier to follow.
+> 
+> Your current definition also leads to complexity for instance line 525-534.  Here you are using t instead of s. But you haven't defined this.  If you defined the sets, then you could just say $t \in P_{E,F}$.  After a while of trying to understand I got this, but the presentation really confused me.
+> 
+> 
+> 
+> # Related work
+> 
+> The model feels very close to the models of game semantics, and I would have like the paper to contain a deeper comparison.  There is also the refinement calculus that has very similar aims to this work, and I think should be compared with.  There is also the Concurrent Kleene Algebra of Hoare et al.  2011 which provides various trace like composition operations. 
+> 
+> Overall, I was quite surprised how few references to other works were contained in this paper.  I think relating to some of these other approaches would help the reader to set context, and understand how your operators can be viewed.
+> 
+> # Minor comments
+> 
+> Line 275: _strategy_ it is not clear what this is at this point.  You don't provide enough information here to get an intuition of what a strategy is.  I think you need to give more semantic definition at this point.   I was wondering is it a state machine, a set of traces/trees of actions, a game?
+> 
+> Fig 5.  This ring buffer can overflow.  You should say why this doesn't matter.
+> 
+> Line 389 "$E_1$ and $E_1$"
+> 
+> Line 417: $\iota$ what is this?  Is it an injection into a sum type?
+> 
+> Line 567 $\underline{m}n\setminus \sigma$ is this all the traces in $\sigma$ which begin $\underline{m}n$ with that part removed from the trace?  You need to explain this here.
+> 
+> Line 579: $\underline{m}_1 \in \sigma$ means there exists a starting with $\underline{m}_1$.  This works because the strategies are prefix closed?
+> 
+> Line 579 $\underline{m}_1$ I think really you should have $\underline{m_1}$ as you have really defined underlining as part of the syntax, so you are applying it to the $m_1$ identifier.
+> 
+> Line 617: "until pays of"  should be "plays"
+> 
+> Line 644 $q_2 \setminus \tau$ I guess it is okay for this to be the empty set, as this will never match one of the $epsilon$ cases?
+> 
+> Line 693: $\iota$ assuming this is some form of injection into a sum type, why is it only required on the first sum type. Why are their no injections on $m_2$, $n_1$ and $n_2$?
+> 
+> Line 705: "in the Appendix A", drop either "the" or "A".
+> 
+> Line 718: $@$ is this just syntax for pairing here?
+> 
+> Line 900: $Y^{s_1}$: here $s_1$ is from $S$, but I was expecting the superscript to be from $A$ based on the type?
+> 
+> Line 989: "mange" 
+> 
+> Line 989: "memory shared passed"
+> 
+> 
+> 
+> Review #239C
+> ===========================================================================
+> 
+> Overall merit
+> -------------
+> 3. Weak accept
+> 
+> Reviewer expertise
+> ------------------
+> 3. Knowledgeable
+> 
+> Paper summary
+> -------------
+> This paper proposes a new compositional semantics framework, which allows us to reason about multi-language systems, where each language has its own (operational) semantics and may or may not be compiled to another language, and where programs in various languages interact with each other.  The problem is that although we know how to reason about one language in isolation, or about a compiler from one language to another, or even about interactions between abstract processes, there is no universal formalism that allows us to do all these uniformly.  In that vein, the paper introduces a generic semantic model based on refinement squares, which combines horizontal, vertical and spatial composition.  The model is shown to be versatile enough to capture / embed various semantics and verification proofs in the context of the CompCert certified compilation framework.  The work has been formalized in Coq (but the reviewers cannot see it).
+> 
+> To describe interfaces between components, the paper uses effect signatures, which are essentially sets E of questions with predefined sets of answers, ar: E -> Set, which can be regarded as black-boxes that one can interact with through a given interface.
+> 
+> To describe the behavior of program components, strategies are used, where a strategy L connects two effect signatures, say L : E -->> F.  The intuition is that a strategy abstractly captures what a program component does by telling how to model operations / questions of F using operations of E.  Strategies can be naturally composed.
+> 
+> To capture the fact that a component can be viewed at different levels of abstraction by other components in the system, a new notion of refinement convention between effect signatures is introduced, which generalizes an existing notion of simulation convention used in CompCertO.
+> 
+> The three ingredients above lead to a natural notion of refinement square / property / proof, which says that two strategies at two different levels of abstraction are strongly connected, in that no matter if one of the strategies is applied first followed by the other refinement abstraction, or viceversa, we get the same behavior.
+> 
+> Now refinement squares can combine horizontally along refinement edges, or vertically along strategy edges, or spatially by adding structural / state framing, and this way have a uniform way to capture various formal verification properties of interest and compose them.
+> 
+> The work is formalized in Coq, which supposedly means that all the theorems about CompCert, CompCertO, CompCertX, and CLight claimed in the paper are mechanically proved.  If I understand it correctly, one particular aspect of this work is that the existing operational semantics of the involved languages does not need to be modified.  If this is indeed true, then this is a major benefit.
+> 
+> Comments for authors
+> --------------------
+> The paper was pleasant to read initially, but it became heavier and heavier later on.  That is expected normally, but what made it heavier to digest, I believe, is the lack of motivation once the technical details started.  The example in Fig 1 is very simple and can be handled many different ways using existing solutions.  There may not be any one particular approach that handles the example completely, but combinations of approaches and tools can certainly work together to prove it, even modulo acceptable assumptions.  Then the discussion jumped to CompCertO and CLight and claimed that the same approach applies to those. This creates a gap for the reader who does not know those semantics and their challenges.  For example, I am not convinced that their simulation convention was not good enough and required to be generalized into a refinement convention.
+> 
+> Once the gap happened, then it was harder and harder to build a mental model for the refinement squares that stayed for the rest of the paper.  Since there are so many different ways to construct such refinement squares, one wonders what is the benefit of enforcing them first place.  Why not let formal verification engineers formalize the various levels of abstraction in their adhoc way, on a case by case basis.  For the example in Fig 1, then one can certainly formalize the semantics of read/write buffers and external interaction, etc., and then still prove the desired property somehow compositionally, using the existing semantics of x86 and C and the guarantees offered by CompCert.  Yes, it could be a bit more tedious, but it gives the verification engineer full freedom of choice for abstractions, without having to obey the required formalism with refinement squares, refinement conventions, etc. 
+> 
+> I give the paper a positive score because I believe this line of work is important and generalizations like those proposed are important.  I have reservations, though, because: 1. the Coq code was not available, so we don't know how complex the integration with CompCert was and how non-intrusive wrt the existing operational semantics; and 2. other applications outside of C were not attempted.  Also, at a very high level, I am not convinced that formal verification is not more broadly used because of missing types of compositionality that the paper resolves; lack of automation and heavy formalisms trump compositionality, I believe.
+> 
+> Finally, I have a curiosity question: does the framing property really hold for the actual C language?  Functions like malloc have different behaviors depending on how much memory is available, no?
