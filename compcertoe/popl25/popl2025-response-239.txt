@@ -2,6 +2,17 @@
 > ===========================================================================
 > Paper #239 Unifying compositional verification and certified compilation
 > with a three-dimensional refinement algebra
+
+Things to do in the response:
+
+  1. Situate vs interaction trees and game semantics
+  2. Reassure wrt Coq implementation
+  3.
+
+Things to do in the paper:
+
+  4. Discuss more related work
+
 > 
 > 
 > Review #239A
@@ -18,11 +29,54 @@
 > Paper summary
 > -------------
 > This paper systematizes some recent results in modular verification of software, producing a unified framework for proving interactive systems with modules written in different languages and compiled by verified compilers.  The central ideas are very much in the vein of interaction trees, but there are a lot of details to get right.
-> 
+
+[TODO item #1: comparison with interaction trees]
+
 > Comments for authors
 > --------------------
-> This sort of unified theory is critical to application at scale of the most rigorous formal methods, and I'm impressed at the thoroughness of the design effort reported in the paper.  One strange thing is that the paper doesn't include an evaluation section; we don't get a clear description of which verifications have been carried out, which is handy to validate design choices.  The previous papers that this project built on were notable for significant mechanized case studies of software artifacts of inherent interest, and the lack of such validation here gives the work less appeal.  I also think the paper oversells the novelty of addressing this particular combination of problems.
-> 
+> This sort of unified theory is critical to application at scale of the most rigorous formal methods, and I'm impressed at the thoroughness of the design effort reported in the paper.  One strange thing is that the paper doesn't include an evaluation section; we don't get a clear description of which verifications have been carried out, which is handy to validate design choices.
+
+We intend §6
+to demonstrate the suitability of our framework
+for a range of practical verification tasks
+and serve as an evaluation of sorts.
+We have fully mechanized in Coq the framework described in the paper
+and will submit a polished artifact covering all of our results,
+including the applications discussed in §6.
+The preliminary artifact we submitted
+shows that our framework's compositional structures
+can be used to facilitate them.
+
+With that said,
+we acknowledge that the paper should go into more details
+regarding the actual Coq development,
+both regarding the framework itself
+and when it comes to the applications discussed in §6.
+As a start, we can mention the following:
+
+  * The framework described in §2--5 can be mechanized in approximately
+    X,000 lines of Coq definitions and Y,000 lines of proof, per `coqwc`.
+  * As we stated in the paper, CompCertO does not require any change.
+    [XXX Yu how true is that?]
+    We deliberately sought to design a framework whose capabilities
+    would encompass those of the CompCertO model.  As a result the
+    language interfaces, language semantics, simulation conventions and
+    correctness results provided by CompCertO can embedded
+    as effect signatures, strategies, refinement conventions and
+    refinement squares in a structure-preserving way,
+    and used in the context of our framework.
+  * ...
+
+> The previous papers that this project built on were notable for significant mechanized case studies of software artifacts of inherent interest, and the lack of such validation here gives the work less appeal.  I also think the paper oversells the novelty of addressing this particular combination of problems.
+
+We have tried to articulate in the two paragraph ll. 85--97 that
+existing work does address this combination of problem
+(certainly the Bedrock work you reference should be mentioned there),
+and to explain why we believe a more systematic approach
+would be beneficial.
+However it is true that the framing could be improved
+and [.... more accurate ...]
+
 > # Crisply formulating what new problem is being solved
 > 
 > At line 38, there is one bullet list of aspects that are important to address in a single reasoning system: *compilation*, *several different languages*, and *external interactions*.  Then line 166 gives a separate list: program-module correctness, compiler correctness, separation logic-style memory modularity, and data abstraction.  Fig. 1 also shows a motivating example that includes mixing C and assembly and calling I/O system routines.  I agree there is very little work that ties all of these challenges together, but there is at least one project that checks all of those boxes.  See:
@@ -43,11 +97,83 @@
 > 4. It seems that some higher-level results about multiple programs piped together UNIX-style can be proved, though it is unclear, from the writing of the paper, if those mechanized proofs have been completed.  (An example like Fig. 1's is easily verified modularly [down to program binaries with their separate specifications] with the techniques that the cited papers demonstrated, though I don't think they demonstrated reasoning about groups of processes running simultaneously.  I would not be surprised either way if an extra layer to reason about process compositions turned out to be simple or to require serious new research.)
 > 
 > Though actually, real UNIX process compositions involve concurrent executions that synchronize through byte streams, while this paper seems to study a restricted notion of piping that looks like method calls across processes, where only one process runs instructions at a time.  In that sense, Fig. 1 may be misleading when it comes to what class of systems can be verified with the new ideas.  Presumably generalization to truly concurrent process execution is nontrivial future work.
-> 
+
+Thank you for this detailed comparison.
+We will be sure to incorporate the work you reference
+and the points you raise into
+the relevant parts of the *Introduction* and *Related Work* sections.
+
+It is true that supporting concurrency would be necessary
+to provide a complete and accurate model of Unix processes.
+Our goal with Fig. 1 is to illustrate some of the issues that come up
+when the horizon of verification is pushed beyond the boundary
+of a fixed language or model,
+yet have an example that remains simple and that
+most reader will be familiar with.
+
 > So, overall, I think the framework presented here may represent a strong contribution, but the conditions of its novelty and payoff over other ideas should be reformulated, in my opinion.
 > 
 > One more question about limits of the framework: refinement conventions seem to enforce one-to-one matching of events.  Wouldn't it often happen that one event in a higher-level system is compiled to multiple events in a lower-level system?  Or these conventions really deal only with events at the rough semantic granularity of function calls, where lock-step bisimulation holds throughout compilation?  One example would be that what looks like a monolithic system call at the source level looks like multiple memory-mapped-IO accesses in compiled code, with each memory access a separate event.
-> 
+
+Indeed, refinement conventions
+are intended mainly to deal with changes in data representation.
+They are very flexible in this regard and can handle:
+
+  * *relational* ($n$-to-$m$) abstraction relationships between
+    source- and target-level moves (questions and answers),
+    which are needed in particular to formulate
+    the CompCertO calling convention;
+  * relationships that evolve through time and take into account
+    the history of the computation;
+  * different degrees of state encapsulation between the source
+    and target;
+
+but as you note they can only deal with synchronized
+source- and target- external interactions.
+
+With that said,
+a transformation like the one you suggest
+can still be dealt with through a combination of
+horizontal composition and refinement conventions.
+Suppose we have a source-level strategy
+$\sigma : \mathcal{S} \twoheadrightarrow \{* : \mathbf{1}\}$
+which uses an abstract system call interface $\mathcal{S}$,
+whereas in the target-level implementation
+$\tau : \mathcal{M} \twoheadrightarrow \{* : \mathbf{1}\}$
+each system call is expanded into multiple memory-mapped accesses
+represented as operations in the signature $\mathcal{M}$.
+It may be possible to first represent this expansion
+using a strategy $x : \mathcal{M}' \twoheadrightarrow \mathcal{S}$,
+then (if necessary)
+further translate the data representation of memory-mapped accesses
+using a refinement convention $R : \mathcal{M}' \leftrightarrow \mathcal{M}$.
+The correctness property would then be formulated as:
+$$\sigma \odot x \:\le_{R \twoheadrightarrow \{* : \mathbf{1}\}}\: \tau .$$
+
+In principle,
+it should be possible to design a framework where
+horizontal strategies and vertical refinement conventions
+would be subsumed by a single notion of
+dually non-deterministic *strategy specifications*,
+as is attempted in [Koenig & Shao, LICS 2020].
+In such a framework,
+refinement conventions would become
+formal adjunctions of strategy specifications
+and would be capable of representing the kind of transformations
+you are getting at.
+However we have found that general dual nondeterminism
+(represented using sets of sets of traces)
+brings subtle issues of commutation between angelic and demonic choices
+that are very difficult to deal with
+and significantly increase complexity.
+By contrast,
+our refinement conventions represent a kind of "sweet spot" where
+in exchange for restricting the shape of the correspondence,
+we can incorporate both the angelic and demonic choices
+necessary for relational abstraction
+while remaining within the bounds of a "set of traces" approach
+and escape the need for full-blown dual nondeterminism.
+
 > # More minorly...
 > 
 > Section 4 introduces a backslash operator, which I had trouble interpreting.  Line 626 finally explains through an example.
@@ -134,15 +260,38 @@
 > If you did it the other way, you probably just use $s$ every where in Definition 3.3, and I think it would be much easier to follow.
 > 
 > Your current definition also leads to complexity for instance line 525-534.  Here you are using t instead of s. But you haven't defined this.  If you defined the sets, then you could just say $t \in P_{E,F}$.  After a while of trying to understand I got this, but the presentation really confused me.
-> 
-> 
-> 
+
+Thank you for articulating this and for your suggestion in how to address it.
+We agree this would improve the presentation significantly
+and will adopt this approach in any revision.
+
 > # Related work
 > 
 > The model feels very close to the models of game semantics, and I would have like the paper to contain a deeper comparison.  There is also the refinement calculus that has very similar aims to this work, and I think should be compared with.  There is also the Concurrent Kleene Algebra of Hoare et al.  2011 which provides various trace like composition operations. 
 > 
 > Overall, I was quite surprised how few references to other works were contained in this paper.  I think relating to some of these other approaches would help the reader to set context, and understand how your operators can be viewed.
-> 
+
+We acknowledge that the discussion of related work and the broader context
+is insufficient and we would need to improve this aspect in the final version.
+
+In regards to the specific lines of work you mention:
+
+  * We would indeed consider the horizontal fragment of our framework
+    a simple form of game semantics, where effect signatures serve as
+    a very restricted form of game (one question followed by one answer).
+    Future work could explore whether the vertical and spatial components
+    of our framework could be extended to support more complex games.
+  * The refinement calculus is very relevant as well, and part of our
+    motivation is indeed to explore how some of the ideas transpose to the
+    richer / more interactive world of game semantics. As discussed above,
+    in formulating refinement conventions we have gone to some length to
+    figure out how to retain the relational abstraction capabilities of the
+    refinement calculus while avoiding the unrestricted forms of dual
+    nondeterminism found in the predicate transformer and
+    multirelation-based models.
+
+[XXX say something about CKA?]
+
 > # Minor comments
 > 
 > Line 275: _strategy_ it is not clear what this is at this point.  You don't provide enough information here to get an intuition of what a strategy is.  I think you need to give more semantic definition at this point.   I was wondering is it a state machine, a set of traces/trees of actions, a game?
@@ -211,5 +360,40 @@
 > Once the gap happened, then it was harder and harder to build a mental model for the refinement squares that stayed for the rest of the paper.  Since there are so many different ways to construct such refinement squares, one wonders what is the benefit of enforcing them first place.  Why not let formal verification engineers formalize the various levels of abstraction in their adhoc way, on a case by case basis.  For the example in Fig 1, then one can certainly formalize the semantics of read/write buffers and external interaction, etc., and then still prove the desired property somehow compositionally, using the existing semantics of x86 and C and the guarantees offered by CompCert.  Yes, it could be a bit more tedious, but it gives the verification engineer full freedom of choice for abstractions, without having to obey the required formalism with refinement squares, refinement conventions, etc. 
 > 
 > I give the paper a positive score because I believe this line of work is important and generalizations like those proposed are important.  I have reservations, though, because: 1. the Coq code was not available, so we don't know how complex the integration with CompCert was and how non-intrusive wrt the existing operational semantics; and 2. other applications outside of C were not attempted.  Also, at a very high level, I am not convinced that formal verification is not more broadly used because of missing types of compositionality that the paper resolves; lack of automation and heavy formalisms trump compositionality, I believe.
-> 
+ 
 > Finally, I have a curiosity question: does the framing property really hold for the actual C language?  Functions like malloc have different behaviors depending on how much memory is available, no?
+
+The CompCert memory model does not enforce any availability constraints
+and as a result `malloc` always succeeds, so this was not an issue in our
+implementation. We should also not that this issue is a broader concern which
+applies to separation logic and separation algebra as well as our framework.
+With that said, there multiple ways in which this could be handled.
+
+In a more accurate model, a memory state $(m, k)$ could incorporate
+a number $k$ of bytes that remain to be allocated
+(or perhaps the size of the largest contiguous memory region available,
+to take fragmentation into account),
+and have `malloc` trigger an undefined behavior
+if the user attempts to allocate a region of size ${} > k$.
+This would still work since the separation algebra
+could be defined along the lines
+$$(m_1, k_1) \bullet (m_2, k_2) = (m_1 \circ m_2, k_1 + k_2),$$
+and incorporating an additional memory share could only
+increase the amount of memory available.
+Consequently the behavior of `malloc` on the larger share
+would refine that of the original one,
+validating our frame rule.
+
+Another option would be to model memory allocation as a permission,
+for example by constraining $k_1 = 0 \vee k_2 = 0$ in the definition above,
+so that only one share at a time would be able to allocate new memory
+and so that additional shares could never increase the available amount.
+This would make it possible to model an "out of memory" error as an additional
+positive behavior rather than treating it as an undefined behavior.
+
+In either case, reasoning about memory allocation would probably require some
+kind of ownership transfer (of the available memory or OF the "allocation"
+permission). This could likely be modeled in our framework without difficulty.
+For example our refinement convention $\mathbf{Y}$ allows source-level
+shares to migrate across time between the two branches.
+
