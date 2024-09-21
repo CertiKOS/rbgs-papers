@@ -4,6 +4,6 @@ PANDOPTS = --standalone --css=buttondown.css --webtex=https://latex.codecogs.com
 
 all: popl2025-response-239.html
 
-%.html: %.txt
+%.html: %.mdwn
 	pandoc -f markdown -t html $(PANDOPTS) $< > $@.n
 	mv $@.n $@
