@@ -1,3 +1,5 @@
+FLAGS = -shell-escape
+
 .PHONY: all clean distclean diff
 
 all: proposal.pdf 
@@ -10,7 +12,9 @@ distclean: clean
 	rm -f *.tfm *.*pk
 
 %.pdf: %.tex *.tex shao.bib 
-	pdflatex $< && (bibtex $(basename $<) || true) && pdflatex $< && pdflatex $<  # NO LONGER works with PSTricks
+	pdflatex $(FLAGS) $< && (bibtex $(basename $<) || true) && \
+	  pdflatex $(FLAGS) $< && \
+          pdflatex $(FLAGS) $<  # NO LONGER works with PSTricks
 
 PARTS := $(patsubst %.tex,%,$(shell echo *.tex))
 COMMIT = c9ae005287ef901a44d30bfe96855b85a78d9811

@@ -1,1148 +1,726 @@
 \section{Unifying Compostional Verification and Certified Compilation}
 \label{sec:compcerto}
 
-In this section we briefly describe CompCertO~\cite{compcerto},
-a solution which the two PIs developed recently 
-to support compositional compiler correctness in CompCert,
-and discuss some of the challenges involved in
-incorporating more high-level compositional \emph{verification} techniques
-into this framework,
-We then propose several improvements which will
-allow CompCertO to serve as a cornerstone
-in our approach to large-scale heterogeneous system verification.
+In this section we briefly describe the core semantic framework
+we propose to use for our approach to compositional verification.
+%
+Our framework consists of four kinds of objects,
+each subject to some or all of four
+different composition principles
+(layered $\odot$,
+ vertical $\fatsemi$,
+ flat $\oplus$,
+ spatial $\mathbin@$).
+We start with a brief overview of how these constructions fit together,
+then examine each one in more detail.
 
-\subsection{Game Semantics} \label{sec:gamesem} %{{{
+\subsection{Overview} %{{{
 
-% preamble {{{
+%{{{
 
-Game semantics is a form of denotational semantics which
-incorporates some operational aspects,
-and which heavily informs the design of CompCertO.
-We start with an exposition of its basic tenets,
-and how we deploy them to prove the compositional correctness of CompCert.
-
-%An early success of this approach was
-%the formulation of the first fully abstract models
-%of the programming language PCF \cite{pcfajm,pcfho}.
-%In this section,
-%we give an overview of this line of research
-%and how it can be applied in the context of CompCert.
-Typically,
-game semantics interpret
-\emph{types} as two-player games
-and \emph{terms} as strategies for these games.
-The games describe the form of the interaction
-between a program component %of the corresponding type
-(the \emph{system})
-and its execution context
-(the \emph{environment}).
+Our model starts with a simple form of game semantics
+built around the notion of \emph{effect signature} ($E, F\ldots$).
+We use these signatures to describe the
+interfaces between the components of a software system.
+Effect signatures serve
+as horizontal endpoints for \emph{strategies}
+and vertical endpoints for \emph{refinement conventions}.
 Strategies
-specify which move the system plays
-for each possible configuration of the game.
-Configurations are usually identified with sequences of moves
-(\emph{plays}),
-and strategies with the set of configurations
-a component can reach.
-
-%This representation makes
-%game semantics similar to
-%the trace semantics of process algebras,
-%but game semantics is distinguished
-%by a strong polarization between
-%the actions of the system and those of the environment.
-%%and between outputs and inputs.
-%This confers an inherent ``rely-guarantee'' flavor
-%to games which facilitates compositional reasoning
-%\cite{cspgs}.
+($L : E \twoheadrightarrow F$)
+describe the behaviors of program components.
+Refinement conventions
+($\mathbf{R} : E_1 \leftrightarrow E_2$)
+model relationships between
+views of the system at different levels of abstraction.
+Finally,
+\emph{refinement proofs}
+($\phi : L_1 \le_{\mathbf{R} \rightarrow \mathbf{S}} L_2$)
+connect the three kinds of objects above
+in the shape of a square (Fig.~\ref{fig:hvcomp}).
 
 %}}}
 
-\vspace*{-2ex}
-\paragraph{Games} \label{sec:mainideas:gs:games} %{{{
-A game is defined by a set of moves
-players will choose from,
-as well as a stipulation of which
-sequences of moves are valid.
-We focus on two-player, alternating games
-where the environment plays first and
-where the players
-each contribute every other move.
-When typesetting examples,
-we underline the moves of the system.
-For example, a valid play for Black in the game of chess may look like:
-%For chess,
-%moves are taken in the set $\{a1 \ldots h8\} \times \{a1 \ldots h8\}$,
-%and a valid sequence of moves may look like:
-\[ e2e4 \cdot \underline{c7c5} \cdot c2c3 \cdot \underline{d7d5} \cdots \]
-The games we use to model low-level components
-will rely on the following constructions.
+\paragraph{Composition principles} %{{{
+
+Our framework uses
+refinement squares as the building blocks of compositional proofs.
+They are assembled in the manner of puzzle pieces
+alongside matching edges:
+\begin{itemize}
+\item Layered composition ($\odot$) acts horizontally.
+  It connects strategies at a common endpoint (\emph{ie.}~effect signature)
+  over which they are made to interact,
+  and connects refinement squares alongside a common
+  vertical edge (\emph{ie.}~refinement convention),
+  which ensures that the refinement properties
+  are based on compatible abstractions and constraints.
+  %assumptions of one refinement proof
+  %are established as guarantees by the other.
+\item Vertical composition ($\fatsemi$)
+  combines successive refinement steps,
+  connecting refinement conventions alongside an intermediate signature,
+  and refinement squares along a common strategy,
+  which serves as an intermediate specification.
+\end{itemize}
+This basic framework is made more expressive
+by the introduction of two additional forms of composition,
+which coherently act on all objects from effect signatures to refinement squares:
+\begin{itemize}
+\item Flat composition ($\oplus$)
+  serves as an alternative form of horizontal composition
+  where components are laid out side by side
+  instead of being made to interact.
+\item Spatial composition ($\mathbin@$)
+  equips our framework with a sophisticated infrastructure
+  for compositional state.
+\end{itemize}
+We examine each of these constructions below.
 
 %}}}
 
-\vspace*{-2ex}
-\paragraph{Type Structure} \label{sec:mainideas:gs:types} %{{{
-Game semantics allows
-simple games to be combined into more sophisticated ones,
-which can then be used
-to interpret compound types.
-For example,
-in the game $A \times B$
-the environment initially chooses whether to play
-an instance of $A$ or an instance of $B$.
-The game $A \rightarrow B$ usually consists of
-an instance of $B$ played
-together with instances of $A$
-started at the discretion of the system,
-where the roles of the players are reversed.
-%and which correspond to
-%the multiple accesses to the argument values
-%allowed by most $\lambda$-calculi.
+%}}}
 
-The games we start from are particularly simple. %have a particularly simple structure.
-We call each one a \emph{language interface}.
-Their moves are partitioned into
-questions and answers,
-where
-questions correspond to function invocations
-and answers return control to the caller.
-%Formally,
-%a language interface is defined as follows.
-
-\begin{definition} \label{def:li}
-A \emph{language interface}
-$A = \langle A^\que, A^\ans \rangle$;
-is a set $A^\que$ of \emph{questions} and
-a set $A^\ans$ of \emph{answers}.
-\end{definition}
-
-We focus on games of the form $A \rightarrow B$,
-where $A$ and $B$ are language interfaces.
-Plays are sequences
-\[
-  q\ph{qpos} \cdot
-    \underline{m_1}\ph{m1pos} \cdot \pt{m1pos}n_1 \cdots
-    \underline{m_k}\ph{m2pos} \cdot \pt{m2pos}n_k \cdot
-    \pt{qpos}\underline{r} \:\in\:
-  B^\que ( {A^\que} A^\ans )^* {B^\ans}
+\begin{figure} % fig:hvcomp {{{
+  \[
+  \begin{array}{c}
+    \begin{tikzcd}[sep=0.5ex]
+      E_1 \ar[dd, leftrightarrow, "\mathbf{R}"']
+	  \ar[rr, "L_1"] &&
+      F_1 \ar[dd, leftrightarrow, "\mathbf{S}"] \\
+      & \phi & \\
+      E_2 \ar[rr, "L_2"'] &&
+      F_2
+    \end{tikzcd}
+  \end{array}
+  \quad
+  \begin{array}{c}
+    \begin{prooftree}
+      \hypo{L_1 : F \twoheadrightarrow G}
+      \hypo{L_2 : E \twoheadrightarrow F}
+      \infer2[\kw{ts}-$\odot$]{L_1 \odot L_2 : E \twoheadrightarrow G}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\phi: L_1 \le_{\mathbf{S} \twoheadrightarrow \mathbf{T}} L_1'}
+      \hypo{\psi: L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2'}
+      \infer2[\kw{sim}-$\odot$]{\phi \odot \psi :
+	L_1 \odot L_2 \le_{\mathbf{R} \twoheadrightarrow \mathbf{T}} L_1' \odot L_2'}
+    \end{prooftree}
+    \\[1.5em]
+    \begin{prooftree}
+      \hypo{\mathbf{R} : E_1 \leftrightarrow E_2}
+      \hypo{\mathbf{R}' : E_2 \leftrightarrow E_3}
+      \infer2[\kw{sc}-$\vcomp$]{\mathbf{R} \vcomp \mathbf{R}' : E_1 \leftrightarrow E_3}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2}
+      \hypo{\psi : L_2 \le_{\mathbf{R'} \twoheadrightarrow \mathbf{S'}} L_3}
+      \infer2[\kw{sim}-$\vcomp$]{\phi \vcomp \psi : L_1 \le_{\mathbf{R} \vcomp \mathbf{R'} \twoheadrightarrow
+	\mathbf{S} \vcomp \mathbf{S'}} L_3}
+    \end{prooftree}
+  \end{array}
 \]
-and all their prefixes.
-They describes a program component responding to
-an incoming call $q$.
-The component performs a series of external calls $m_1 \ldots m_k$
-which yield the results $n_1 \ldots n_k$.
-Finally, the component returns from the incoming call
-with the result~$r$.
-The arrows show the correspondence between questions and answers
-but are not part of the model.
-
-\begin{example} \label{ex:abc} %{{{
-We use a simplified version of C and assembly
-to illustrate some of the principles behind our model.
-Consider the program components in Fig.~\ref{fig:abc}.
-The behavior of $\textsf{B.c}$
-as it interacts with $\textsf{A.c}$
-is described by plays of the form:
-\begin{equation} \label{eqn:cplay}
-  \mathsf{sqr}(3)\ph{q} \cdot
-    \underline{\mathsf{mult}(3,3)}\ph{m} \cdot \pt{m}9 \cdot \pt{q}\underline{9}
-\end{equation}
-This corresponds to the game
-$\tilde{\mathcal{C}} \rightarrow \tilde{\mathcal{C}}$
-for a language interface
-$\tilde{\mathcal{C}} :=
- \langle \kw{ident} \times \kw{val}^*, \kw{val} \rangle$.
-Questions specify the function to invoke
-and its arguments;
-answers carry the return value.
-
-To describe the behavior of \texttt{A.s} and \texttt{B.s},
-we use a set of registers
-$R := \{ \kw{pc}, \kw{eax}, \kw{ebx}, \kw{ecx} \}$
-($\kw{pc}$ is the program counter)
-together with a stack of pending return addresses.
-The corresponding language interface can be defined as
-$\tilde{\mathcal{A}} :=
- \langle \kw{val}^R \times \kw{val}^*, \,
-         \kw{val}^R \times \kw{val}^* \rangle$.
-A possible execution of \texttt{B.s}
-is: % described by the play:
-\begin{equation} \label{eqn:splay}
-{
-  \footnotesize
-  \left[
-    \begin{array}{l@{{} \mapsto {}}r}
-      \kw{pc}  & \kw{sqr} \\
-      \kw{eax} & 42 \\
-      \kw{ebx} & 3 \\
-      \kw{ecx} & 7 \\
-      \multicolumn{2}{r}{\textit{stack: } x \vec{k}}
-    \end{array}
-  \right] %\cdot
-  \underline{
-    \left[
-      \begin{array}{l@{{} \mapsto {}}r}
-        \kw{pc}  & \kw{mult} \\
-        \kw{eax} & 42 \\
-        \kw{ebx} & 3 \\
-        \kw{ecx} & 3 \\
-        \multicolumn{2}{r}{\textit{stack: } \kw{L} x \vec{k}}
-      \end{array}
-    \right]} %\cdot
-  \left[
-    \begin{array}{l@{{} \mapsto {}}r}
-      \kw{pc}  & \kw{L} \\
-      \kw{eax} & 9 \\
-      \kw{ebx} & 3 \\
-      \kw{ecx} & 3 \\
-      \multicolumn{2}{r}{\textit{stack: } x \vec{k}}
-    \end{array}
-  \right] %\cdot
-  \underline{
-    \left[
-      \begin{array}{l@{{} \mapsto {}}r}
-        \kw{pc}  & x \\
-        \kw{eax} & 9 \\
-        \kw{ebx} & 3 \\
-        \kw{ecx} & 3 \\
-        \multicolumn{2}{r}{\textit{stack: } \vec{k}}
-      \end{array}
-    \right]}
-}
-\end{equation}
-The correspondence between (\ref{eqn:cplay}) and (\ref{eqn:splay})
-is determined by the C calling convention in use.
-\end{example}
-%}}}
-
-\begin{figure} % fig:abc {{{
-  \figsize
-  \centering
-  \tt
-  {\footnotesize
-  \begin{tabular}{ll lr@{\ }l}
-    \hline
-    \underline{A.c} & int mult(n, p) \{ &
-    \underline{A.s} & mult: & \%eax := \%ebx \\
-                    & \quad return n * p; &
-                    & & \%eax *= \%ecx \\
-                    & \} &
-                    & & ret \\
-    \hline
-    \underline{B.c} & int sqr(n) \{ &
-    \underline{B.s} & sqr: & \%ecx := \%ebx \\
-                    & \quad return mult(n, n); &
-                    & & call mult \\
-                    & \} &
-                    & L: & ret \\
-    \hline
-  \end{tabular}
-  }
-  \caption{Two simple C compilation units and corresponding assembly code.
-    For this example,
-    the calling convention stores arguments in
-    the registers
-    \texttt{\%ebx} and \texttt{\%ecx}
-    and return values in
-    the register
-    \texttt{\%eax}.}
-  \label{fig:abc}
+  \caption{Horizontal ($\odot$) and vertical ($\vcomp$)
+    composition principles in our model.}
+  \label{fig:hvcomp}
 \end{figure}
 %}}}
 
-%}}}
+\subsection{Effect Signatures} \label{sec:esig} %{{{
 
-%}}}
+Like interaction trees \cite{itrees},
+our model uses \emph{effect signatures}
+%\citep{some-algebraic-effects-ref}
+to describe interfaces between the components of a system.
+An effect signature enumerates
+the external operations which
+a component can invoke or implement,
+and describes for each one
+the set of possible outcomes.
 
-\subsection{CompCertO} \label{sec:mainideas:compcerto} %{{{
-
-%Under the traditional CompCert semantics,
-%programs are interpreted as transition systems
-%which define strategies for the game
-%$\mathcal{E} \rightarrow \mathcal{W}$.
-%They are run without any parameters
-%and produce a single integer denoting their exit status;
-%the corresponding language interface is
-%$\mathcal{W} := \langle \unitset, \kw{int} \rangle$,
-%where $\unitset = \{ * \}$ is the unit set
-%and $\kw{int}$ is the set of machine integers.
-%Interaction with the environment
-%is captured as a sequence of events from a predefined set.
-%%each with an output and input component.
-%These events,
-%which can be described by a language interface $\mathcal{E}$,
-%correspond mainly to system calls and accesses to volatile variables.
-
-These ideas are used in CompCertO
-to provide compositional semantics and
-correctness theorems.
-
-\vspace*{-2ex}
-\paragraph{Semantic Model} %{{{
-To model components and their interactions,
-a transition system $L : A \twoheadrightarrow B$
-describes a strategy
-for the game
-$A \rightarrow B$.
-The language interface $B$ describes how a component can be activated,
-and the ways in which it can return control to the caller.
-The language interface $A$ describes the external calls that the component
-may perform during its execution.
-
-This flexibility allows us to treat interactions at a level of
-abstraction adapted to each language.  For example, the semantics of
-the source language \kw{Clight} has type \mbox{$\mathcal{C}
-  \twoheadrightarrow \mathcal{C}$}.  The questions of $\mathcal{C}$
-specify a function to call, argument values, and the state of the
-memory at the time of invocation; the answers specify a return value
-and an updated memory state.  On the other hand, the target language
-\kw{Asm} uses $\mathcal{A} \twoheadrightarrow \mathcal{A}$, where
-$\mathcal{A}$ describes control transfers in terms of processor
-registers rather than function calls.
-
-%This allows to accurately model assembly-level control transfers,
-%which is important when verifying system code
-%incorporating hand-written assembly components
-%which may not follow the C calling convention.
-
-%}}}
-
-\vspace*{-2ex}
-\paragraph{Simulations} %{{{
-CompCert uses simulation proofs
-to build a correspondence between
-the externally observable behaviors of
-the source and target programs of each compilation pass.
-The internal details of simulation relations
-have no bearing on this correspondence,
-so these details can remain hidden
-to fit a uniform and transitive notion of pass correctness.
-This makes it easy to derive the correctness
-of the whole compiler
-from the correctness of each pass.
-%
-Unfortunately,
-to achieve compositionality across compilation units,
-our model must reveal details
-about component interactions
-which were previously internal.
-Since many passes transform
-%the memory states and runtime values which constitute
-these interactions in
-%non-trivial and
-specialized ways,
-this breaks the uniformity
-of pass correctness properties.
-
-Existing work attempts to recover this uniformity
-by using more general notions of correctness
-covering all passes
-\cite{compcompcert,compcertm}
-or by delaying pass composition so that
-it operates on closed semantics only
-\cite{sepcompcert,compcertm}.
-Unfortunately, these techniques either
-conflict with our requirement~\#2,
-make proofs more complex,
-or cascade into subtle ``impedance mismatch'' problems
-requiring their own solutions.
-%
-By contrast,
-we capture the particularities of each simulation proof
-by introducing a notion of \emph{simulation convention}
-expressing the correspondence between
-source- and target-level interactions.
-%To describe simulation conventions
-%and reason about them,
-%compositionally,
-%we use logical relations.
-
-%}}}
-
-%\subsection{Logical Relations} \label{sec:logrel} %{{{
-%
-%Logical relations are structure-preserving relations
-%in the way homomorphisms are structure-preserving maps.
-%However,
-%logical relations are more compositional than homomorphisms,
-%because they do not suffer from the same problems
-%in the presence of mixed-variance constructions
-%like the function arrow %$\rightarrow$
-%\cite{lrp}.
-%In the context of typed languages,
-%this means that type-indexed logical relations
-%can be defined by recursion over the structure of types.
-%
-%%Logical relations have found widespread use in programming language theory.
-%%Unary logical relations can be used to establish
-%%various properties of type systems:
-%%a type-indexed predicate expressing a property of interest
-%%is shown to be compatible with the language's reduction,
-%%and to contain all of the well-typed terms of the language.
-%%Binary logical relations can be used to capture
-%%contextual equivalence between terms,
-%%as well as notions such as non-interference or compiler correctness.
-%%Relational models of type quantification yield
-%%Reynold's well-known theory of relational parametricity,
-%%and can be used to prove \emph{free theorems} that
-%%all terms of a given parametric type must satisfy.
-%
-%Logical relations can be of any arity,
-%but
-%we restrict our attention to
-%binary logical relations.
-%Given an algebraic structure $\mathcal{S}$,
-%a \emph{logical relation}
-%between two instances $S_1, S_2$ of $\mathcal{S}$
-%is a relation $R$
-%between their carrier sets,
-%such that the corresponding operations of $S_1$ and $S_2$
-%take related arguments to related results.
-%We write $R \in \mathcal{R}(S_1, S_2)$.
-%
-%\begin{example}%[Logical relation of monoids] %{{{
-%\label{ex:monoid}
-%A monoid is a set with
-%an associative operation $\cdot$ and
-%a unit $\epsilon$.
-%A~\emph{logical relation of monoids} between
-%$\langle A, \cdot_A, \epsilon_A \rangle$ and
-%$\langle B, \cdot_B, \epsilon_B \rangle$
-%is a relation $R \subseteq A \times B$
-%such that:
-%\begin{equation}
-%\label{eqn:monoidrel}
-%(u \mathrel{R} u' \wedge v \mathrel{R} v' \: \Rightarrow \:
-% u \cdot_A v \: \mathrel{R} \: u' \cdot_B v')
-%\: \wedge \:
-%\epsilon_A \mathrel{R} \epsilon_B
-%\end{equation}
-%\end{example}
-%%}}}
-%
-%Logical relations between multisorted structures
-%consist of one relation for each sort,
-%between the corresponding carrier sets.
-%In the case of structures which include type operators,
-%we can associate to each base type $A$
-%a relation over its carrier set $\llbracket A \rrbracket$,
-%and to each type operator $T(A_1, \ldots, A_n)$
-%a corresponding \emph{relator}:
-%given relations $R_1, \ldots, R_n$ over
-%the carrier sets $\llbracket A_1 \rrbracket, \ldots, \llbracket A_n \rrbracket$,
-%the relator for $T$
-%will construct a relation $T(R_1, \ldots, R_n)$
-%over $\llbracket T(A_1, \ldots, A_n) \rrbracket$.
-%Relators for some common constructions are shown in \ref{fig:relators}.
-%In this framework, the proposition (\ref{eqn:monoidrel}) can be reformulated as:
-%\[
-%  \cdot_A \ifr{R \times R \rightarrow R} \cdot_B
-%  \: \wedge \:
-%  \epsilon_A \mathrel{R} \epsilon_B \,.
-%\]
-%
-%\begin{example} \label{ex:simrel} %{{{
-%%Simulation relations are
-%%logical relations of transition systems.
-%A simulation relation
-%between the transition systems
-%$\alpha : A \rightarrow \mathcal{P}(A)$ and
-%$\beta : B \rightarrow \mathcal{P}(B)$
-%is a relation $R \subseteq A \times B$
-%satisfying the following property:
-%\[
-%  \begin{tikzcd}[scale=0.8]
-%    s_1 \arrow[r, "\alpha"]
-%        \arrow[d, dash, "R"'] &
-%    s_1' \arrow[d, dashed, dash, "R"] \\
-%    s_2 \arrow[r, dashed, "\beta"] &
-%    s_2'
-%  \end{tikzcd}
-%  \qquad
-%  \label{eqn:simrel}
-%  \begin{array}{r@{\,.\,}l}
-%    \forall s_1 \, s_2 \, s_1' &
-%      \alpha(s_1) \ni s_1' \wedge s_1 \mathrel{R} s_2 \Rightarrow
-%    \\[0.25ex]
-%    \exists s_2' &
-%      \beta(s_2) \ni s_2' \wedge s_1' \mathrel{R} s_2'
-%  \end{array}
-%\]
-%Using the relators in \ref{fig:relators},
-%we can express the same property
-%concisely and compositionally as
-%$
-%  \alpha \ifr{R \rightarrow \mathcal{P}^\le(R)} \beta
-%$.
-%\end{example}
-%%}}}
-%
-%\begin{figure} % fig:relators {{{
-%  \figsize
-%  \begin{align*}
-%    x \ifr{R_1 \times R_2} y \ \Leftrightarrow\  &
-%      \pi_1(x) \ifr{R_1} \pi_1(y) \wedge
-%      \pi_2(x) \ifr{R_2} \pi_2(y) \\
-%    x \ifr{R_1 + R_2} y \ \Leftrightarrow\  &
-%      (\exists \, x_1 \, y_1 \,.\,
-%        x_1 \ifr{R_1} y_1 \wedge
-%        x = i_1(x_1) \wedge
-%        y = i_1(y_1)) \\ \vee\ &
-%      (\exists \, x_2 \, y_2 \,.\,
-%        x_2 \ifr{R_2} y_2 \wedge
-%        x = i_2(x_2) \wedge
-%        y = i_2(y_2)) \\
-%    f \ifr{R_1 \rightarrow R_2} g \ \Leftrightarrow\  &
-%      \forall \, x \, y \,.\,
-%        x \ifr{R_1} y \Rightarrow
-%        f(x) \ifr{R_2} g(y) \\
-%    A \ifr{\mathcal{P}^\le(R)} B \ \Leftrightarrow\  &
-%      \forall \, x \in A \,.\,
-%      \exists \, y \in B \,.\,
-%      x \ifr{R} y
-%  \end{align*}
-%  \caption{A selection of relators}
-%  \label{fig:relators}
-%\end{figure}
-%%}}}
-%
-%%Logical relations used to reason about contextual equivalence
-%%are often partial equivalence relations (PER).
-%%By contrast, since we mainly focus on refinement,
-%%most of the relations we consider will not be symmetric.
-%
-%\paragraph{Kripke Relations} %{{{
-%
-%Since relations for stateful languages
-%often depend on the current state,
-%Kripke logical relations
-%are parametrized over a set of state-dependent \emph{worlds}.
-%Components related at the same world
-%are guaranteed to be related in compatible ways.
-%We use the following notations.
-%
-%\begin{definition} \label{def:klr} %{{{
-%A \emph{Kripke} relation is
-%a family of relations $(R_w)_{w \in W}$.
-%We write $R \in \mathcal{R}_W(A, B)$
-%for a $W$-indexed Kripke relation between the sets $A$ and $B$.
-%For $w \in W$ we write:
-%\[
-%\begin{array}{c@{\qquad}c}
-%    [w \Vdash R] \: := \: R_w &
-%    [\Vdash R] \: := \: \bigcap_{w} R_w
-%\end{array}
-%\]
-%\end{definition}
-%%}}}
-%
-%A simple relation $R \in \mathcal{R}(A, B)$
-%can be promoted to a Kripke relation
-%$\lceil R \rceil \in \mathcal{R}_W(A, B)$
-%by defining $\lceil R \rceil_w := R$ for all $w \in W$.
-%More generally, for an $n$-ary relator $F$ we have:
-%\[
-%  \AxiomC{$
-%    F :
-%      \mathcal{R}(A_1, B_1) \,\times\,\cdots\,\times\,\mathcal{R}(A_n, B_n)
-%      \rightarrow \mathcal{R}(A, B)$}
-%  \UnaryInfC{$
-%    \lceil F \rceil :
-%      \mathcal{R}_W(A_1, B_1) \times \cdots \times \mathcal{R}_W(A_n, B_n)
-%      \rightarrow \mathcal{R}_W(A, B)$}
-%  \DisplayProof
-%\]
-%where for the Kripke relations $R_i \in \mathcal{R}_W(A_i, B_i)$,
-%\[
-%  [w \Vdash \lceil F \rceil (R_1, \ldots, R_n)] \: := \:
-%    F(w \Vdash R_1, \ldots, w \Vdash R_n)
-%  \,.
-%\]
-%We use $\lceil - \rceil$ implicitly
-%when a relator appears in a context where
-%a Kripke logical relation is expected.
-%Since reasoning with logical relations
-%often involves self-relatedness,
-%we use the notation
-%$x :: R$ to denote $x \mathrel{R} x$.
-%For legibility, we will also write
-%$w \Vdash x \mathrel{R} y$ for $x \ifr{w \Vdash R} y$
-%and $\Vdash x \mathrel{R} y$ for $x \ifr{\Vdash R} y$.
-%
-%%}}}
-%}}}
-
-\vspace*{-2ex}
-\paragraph{Simulation Conventions} \label{sec:simconv} %{{{
-
-A simulation convention establishes a correspondence between
-a source language interface and
-a target language interface.
-For example,
-the C calling convention is formalized as a 
-simulation convention between
-the language interface $\mathcal{C}$ and
-the language interface $\mathcal{A}$.
-This is achieved
-by specifying relations between their questions and between their answers.
-To ensure that questions and answers are related in consistent ways,
-the relations are indexed by a world $w$ chosen by the caller.
-
-\begin{definition} \label{def:simconv} % Simulation convention %{{{
-A \emph{simulation convention} between the language interfaces
-$A_1 = \langle A_1^\que, A_1^\ans \rangle$ and
-$A_2 = \langle A_2^\que, A_2^\ans \rangle$
-is a tuple $\mathbb{R} = \langle W, \mathbb{R}^\que, \mathbb{R}^\ans \rangle$,
-where $W$ is a set,
-and where
-$\mathbb{R}^\que \subseteq W \times A_1^\que \times A_2^\que$
-and $\mathbb{R}^\ans \subseteq W \times A_1^\ans \times A_2^\ans$
-are ternary relations.
-We will write $\mathbb{R} : A_1 \Leftrightarrow A_2$.
-The \emph{identity} simulation convention
-for a language interface $A$
-is defined as
-$\kw{id}_A := \langle \unitset, {=}, {=} \rangle
-  : A \Leftrightarrow A$.
-We usually omit the subscript~$A$.
+\begin{definition} \label{def:esig}
+An \emph{effect signature} is a set $E$ of \emph{questions}
+together with an assignment $\kw{ar} : E \rightarrow \mathbf{Set}$
+associating to each question $m \in E$
+a set of \emph{answers} $n \in \kw{ar}(m)$.
+We will often present them together as the set of bindings
+$\{ (m \mathbin: N) \mid m \in E \wedge N = \kw{ar}(m) \}$.
+%$\{ m \mathbin: \kw{ar}(m) \}_{m \in E}$.
 \end{definition}
+
+%In the algebraic effects literature,
+%a question $m \mathbin: N$ in a signature $E$ is interpreted as
+%an algebraic operation of arity $N$, representing a possible effect.
+%The term $m(k_i)_{i \in N}$ is then a computation
+%which triggers the effect $m$ with possible continuations $k_i$.
+%In our case,
+%%We revisit this algebraic interpretation in~\S\ref{sec:model},
+%%but for now
+%we will focus on effect signatures as elementary games.
+
+\begin{example} \label{ex:fdsig} %{{{
+Consider the execution environment
+for the programs \kw{secret} and \kw{encode}
+shown in \autoref{fig:readwritehello} and
+described in Example~\ref{ex:readwritehello}.
+Since our programs
+do not use any command-line arguments or environment variables,
+we can model their invocation with a single question:
+\[
+  \mathcal{P} \, := \,
+    \{ \kw{run} : \mathbb{N} \}
+  \,.
+\]
+The answer $x \in \mathbb{N}$ is the exit status of the process.
+%which in our cases is expected to be zero.
+Moreover, in the course of its execution
+each process can invoke the \kw{read} and \kw{write} system calls.
+We can describe this interface with the signature
+\[
+  \mathcal{S} \, := \, \{
+    \kw{read}_i[n] \mathbin: \Sigma^* , \,
+    \kw{write}_i[s] \mathbin: \mathbb{N} \, \mid \,
+    i \in \mathbb{N}, \,
+    n \in \mathbb{N}, \,
+    s \in \Sigma^*
+  \}
+  \,,
+\]
+where $\Sigma := \{0,1\}^8$ is the alphabet of possible byte values.
+In this formalism,
+the program \kw{secret} will invoke
+the operation
+$\kw{write}_1[\texttt{"uryyb, jbeyq!\textbackslash{}n"}]
+ \in \mathcal{S}$,
+where $i := 1$ is the file descriptor associated with the standard output;
+the outcome should be $14 \in \mathbb{N}$
+if the operation succeeds.
+\end{example}
 %}}}
 
-A simulation between the transition systems
-$L_1 : A_1 \twoheadrightarrow B_1$ and
-$L_2 : A_2 \twoheadrightarrow B_2$
-is then assigned a type $\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B$,
-where %the expressions
-$\mathbb{R}_A : A_1 \Leftrightarrow A_2$ and
-$\mathbb{R}_B : B_1 \Leftrightarrow B_2$
-relate the corresponding language interfaces;
-we write
-$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$.
-%These notations are summarized in \ref{tbl:notations}
-%and will be used extensively throughout the paper.
+\begin{example}[CompCertO language interfaces] \label{ex:compcertosig} %{{{
 
-%\begin{table} % tbl:notations {{{
-%  \caption{Summary of notations}
-%  \label{tbl:notations}
-%  \figsize
-%  \begin{tabular}{l@{\hspace{1ex}}cl}
-%    \toprule
-%    Notation & Examples & Description \\
-%    \midrule
-%    $R \in \mathcal{R}(S_1, S_2)$ &
-%      $\vref$ &
-%      Simple relation \\
-%    $R \in \mathcal{R}_W(S_1, S_2)$ &
-%      $\hookrightarrow_\kw{m}$ &
-%      Kripke relation (Def.~\ref{def:klr}) \\
-%    $w \Vdash R$ & &
-%      Kripke relation at world $w$ \\
-%    $w \Vdash x \mathrel{R} y$ & &
-%      $x$ and $y$ related at world $w$ \\
-%    $\mathbf{R} \in \kw{CKLR}$ & $\kw{injp}$ &
-%      CompCert KLR (\S\ref{sec:cklrdef}) \\
-%    \midrule
-%    $A, B, C$ &
-%      $\mathcal{C}, \mathcal{A}, \mathbf{1}$ &
-%      Language interface (Def.~\ref{def:li}) \\
-%    %$M_A^\que, M_A^\ans$ & &
-%    %  Questions and answers of $A$ \\
-%    $\mathbb{R} : A_1 \Leftrightarrow A_2$ &
-%      $\cc{C}{L}$ &
-%      Simulation convention (Def.~\ref{def:simconv}) \\
-%    $L : A \twoheadrightarrow B$ &
-%      $\kw{Clight}(p)$ &
-%      LTS for $A \twoheadrightarrow B$ (Def.~\ref{def:lts}) \\
-%    $L_1 \oplus L_2$ & &
-%      Horizontal composition (Def.~\ref{def:hcomp}) \\
-%    $L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$ &
-%      Thm.~\ref{thm:compc} &
-%      Simulation property (Def.~\ref{def:fsim}) \\
-%    %$p_1 + p_2$ & &
-%    %  Program linking \\
-%    %$\mathbf{R}$ &
-%    %  $\kw{ext}, \kw{inj}$ &
-%    %  CKLR (Def.~\ref{def:cklr}) \\
-%    \bottomrule
-%  \end{tabular}
-%\end{table}
-%%}}}
-
-\begin{example} %{{{
-The calling convention used in Example~\ref{ex:abc}
-can be formalized as %a simulation convention
-$\tilde{\mathbb{C}} :=
-  \langle \kw{val}^*, \tilde{\mathbb{C}}^\que, \tilde{\mathbb{C}}^\ans \rangle :
-    \tilde{\mathcal{C}} \Leftrightarrow \tilde{\mathcal{A}}$.
-We use the set of worlds $\kw{val}^*$
-to relate the stack component of
-assembly questions to that of the corresponding answers.
-The relations $\tilde{\mathbb{C}}^\que, \tilde{\mathbb{C}}^\ans$
-are defined by:
-%can be expressed using the rules:
+The CompCertO semantics for the C language
+rely on an effect signature $\mathcal{C} \mathbin@ \kw{mem}$.
+Questions are function calls;
+they take the form of a (stylized) tuple $f(\vec{v})@m$, where
+$f$ identifies the function to be called,
+$\vec{v} \in \kw{val}^*$ are the actual parameters, and
+$m \in \kw{mem}$ is the memory state at the time of invocation;
+answers take the form $v'@m'$ where
+$v' \in \kw{val}$ is value returned by the function~$f$ and
+$m' \in \kw{mem}$ is the new state of the memory.
+This is captured by the effect signature
 \[
-  \figsize
-  \AxiomC{$\mathit{rs}[\kw{pc}] = f$}
-  \AxiomC{\hspace{-1em} $\vec{v} \sqsubseteq \mathit{rs}[\kw{ebx}, \kw{ecx}]$}
-  \BinaryInfC{$
-    x \vec{k} \Vdash
-    f(\vec{v}) \mathrel{\tilde{\mathbb{C}}^\que} \mathit{rs}@ x \vec{k}
-  $}
-  \DisplayProof
-  \quad
-  \AxiomC{$\mathit{rs}[\kw{eax}] = v'$}
-  \AxiomC{\hspace{-1em} $\mathit{rs}[\kw{pc}] = x$}
-  \BinaryInfC{$
-    x \vec{k} \Vdash
-    v' \mathrel{\tilde{\mathbb{C}}^\ans} \mathit{rs}@\vec{k}
-  $}
-  \DisplayProof
+  \mathcal{C} \mathbin@ \kw{mem} \:=\:
+  \{ f(\vec{v})@m \mathbin: \kw{val} \times \kw{mem} \mid
+     f \in \kw{val}, \:
+     \vec{v} \in \kw{val}^*, \:
+     m \in \kw{mem} \}
+  \,.
 \]
-For a C-level function invocation $f(\vec{v})$,
-we expect the register $\kw{pc}$ to point to
-the beginning of the function $f$,
-and the registers $\kw{ebx}$ and $\kw{ecx}$
-to contain the first and second arguments (if applicable).
-The register $\kw{eax}$ can contain an arbitrary value.
-The stack $x \vec{k}$ has no relationship to the C question,
-however the assembly answer is expected to pop the return address $x$
-and branch to it, setting the program counter $\kw{pc}$ accordingly.
-In addition,
-the register $\kw{eax}$
-must store
-the return value $v'$.
+We will elucidate the structure of
+the spatial decomposition $\mathcal{C} \mathbin@ \kw{mem}$ below.
 \end{example}
 %}}}
 
 %}}}
 
-\begin{wrapfigure}[8]{r}{0.67\textwidth} % fig:simcomp {{{
-  \centering
-  \figsize
-  $\begin{array}{c}
-    \kw{id} : A \Leftrightarrow A
-    \qquad
-    L \le_{\kw{id} \twoheadrightarrow \kw{id}} L
-    \\[1.5em]
-    \AxiomC{$\mathbb{R} : A_1 \Leftrightarrow A_2$}
-    \AxiomC{$\mathbb{S} : A_2 \Leftrightarrow A_3$}
-    \BinaryInfC{$\mathbb{R} \cdot \mathbb{S} : A_1 \Leftrightarrow A_3$}
-    \DisplayProof
-    \\[1.5em]
-    \AxiomC{$L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2$}
-    \AxiomC{$L_2 \le_{\mathbb{S}_A \twoheadrightarrow \mathbb{S}_B} L_3$}
-    \BinaryInfC{$
-      L_1 \le_{\mathbb{R}_A \cdot \mathbb{S}_A \twoheadrightarrow
-               \mathbb{R}_B \cdot \mathbb{S}_B} L_3$}
-    \DisplayProof
-  \end{array}
-  \qquad
-  \begin{tikzpicture}[baseline=0.6mm,xscale=0.75,yscale=0.65]
-    \node (A1) at (-1,  2) {$A_1$};
-    \node (A2) at (-1,  0) {$A_2$};
-    \node (A3) at (-1, -2) {$A_3$};
-    \node (B1) at ( 1,  2) {$B_1$};
-    \node (B2) at ( 1,  0) {$B_2$};
-    \node (B3) at ( 1, -2) {$B_3$};
-    \draw (A1) edge[->>] node[auto] {$L_1$} (B1);
-    \draw (A2) edge[->>] node[auto] {$L_2$} (B2);
-    \draw (A3) edge[->>] node[auto] {$L_3$} (B3);
-    \begin{scope}[double equal sign distance, {Implies[]}-{Implies[]}]
-      \draw (A1) edge[double] node[auto,swap] {$\mathbb{R}_A$} (A2);
-      \draw (B1) edge[double] node[auto] {$\mathbb{R}_B$} (B2);
-      \draw (A2) edge[double] node[auto,swap] {$\mathbb{S}_A$} (A3);
-      \draw (B2) edge[double] node[auto] {$\mathbb{S}_B$} (B3);
-    \end{scope}
-  \end{tikzpicture}
-  $
-  \caption{Simulation identity and vertical composition}
-  \label{fig:simcomp}
-\end{wrapfigure}
+\begin{figure} % fig:overview:ts {{{
+  \begin{subfigure}{0.35\textwidth}
+    \centering
+    \begin{tikzpicture}[yscale=0.15,xscale=0.30]
+      \draw (1,-1) rectangle (5,11) node[midway] {$L$};
+      \scriptsize
+      \draw[->] (0,10) node[left] {$q \in F$} -- (1,10)
+          node[above=1.5em,midway] (B) {\normalsize $F$};
+        \draw[->] (5,10) -- (6,10) node[right] {$q_1 \in E$}
+          node[above=1.5em,midway] (A) {\normalsize $E$};
+        \draw[->] (6,8) node[right] {$r_1 \in \kw{ar}(q_1)$} -- (5,8) ;
+        \node[right] at (6,5.5) {$\:\vdots$};
+        \draw[->] (5,2) -- (6,2) node[right] {$q_n \in E$};
+        \draw[->] (6,0) node[right] {$r_n \in \kw{ar}(q_n)$} -- (5,0);
+      \draw[->] (1,0) -- (0,0) node[left] {$r \in \kw{ar}(q)$};
+      \draw[->>] (A) -- (B);
+    \end{tikzpicture}
+    \subcaption{General shape}
+    \label{fig:overview:ts:shape}
+  \end{subfigure}
+  \begin{subfigure}{0.30\textwidth}
+    \centering
+    \begin{tikzpicture}[yscale=0.15,xscale=0.30]
+      \draw (1,-1) rectangle (4,11) node[midway] {$L_1$};
+      \draw (5,-1) rectangle (8,11) node[midway] {$L_2$};
+      %\draw (5,-1) rectangle (8,4) node[midway] {$L_2$};
+      \draw[->] (0,10) -- (1,10) node[above=1em,midway] (C) {$G$};
+        \draw[->] (4,10) -- (5,10) node[above=1em,midway] (B) {$F$};
+          \draw[->] (8,10) -- (9,10) node[above=1em,midway] (A) {$E$};
+          \draw[->] (9,9) -- (8,9);
+          \draw[->] (8,8) -- (9,8);
+          \draw[->] (9,7) -- (8,7);
+        \draw[->] (5,7) -- (4,7);
+        \draw[->] (4,3) -- (5,3);
+          \draw[->] (8,3) -- (9,3);
+          \draw[->] (9,2) -- (8,2);
+          \draw[->] (8,1) -- (9,1);
+          \draw[->] (9,0) -- (8,0);
+        \draw[->] (5,0) -- (4,0);
+      \draw[->] (1,0) -- (0,0);
+      \draw[->>] (A) -- (B);
+      \draw[->>] (B) -- (C);
+    \end{tikzpicture}
+    \subcaption{Composition}
+    \label{fig:overview:ts:comp}
+  \end{subfigure}
+  \begin{subfigure}{0.25\textwidth}
+    \centering
+    \begin{tikzpicture}[yscale=0.15,xscale=0.30]
+      \draw (5,-1) rectangle (8,4) node[midway] {$\kw{id}_E$};
+      \draw[->] (4,3) node[left] {\scriptsize $q \in E$}
+             -- (5,3) node[above=2em,midway] (A2) {$E$};
+        \draw[->] (8,3) -- (9,3) node[above=2em,midway] (A1) {$E$}
+                                 node[right] {\scriptsize $q$};
+        \draw[->] (9,0) node[right] {\scriptsize $r \in \kw{ar}(q)$} -- (8,0);
+      \draw[->] (5,0) -- (4,0) node[left] {\scriptsize $r$};
+      \draw[->>] (A1) -- (A2);
+    \end{tikzpicture}
+    \vspace{1ex}
+    \subcaption{Identity}
+    \label{fig:overview:ts:id}
+  \end{subfigure}
+  \caption{Informal description of our strategy model
+    under \emph{layered} composition}  
+  \label{fig:overview:ts}
+\end{figure}
 %}}}
 
-Simulation conventions
-simplify the adaptation of the pass correctness proofs of CompCert.
-Instead of forcing all passes into the same mold,
-we can choose conventions matching
-the simulation relation and invariants
-used in each pass.
-Proofs can then be composed
-as shown in Figure~\ref{fig:simcomp}.
+\subsection{Strategies} \label{sec:strat} %{{{
 
-%Unfortunately,
-%the simulation convention obtained
-%when we vertically compose the updated simulation properties
-%suffers two serious problems.
-%First,
-%it is overly specific to the construction of CompCert
-%and the exact sequence of passes included in the compiler.
-%%This complicates the use of the correctness theorem
-%%in different contexts,
-%%for instance linking with assembly code produced
-%%manually or by using a different compiler.
-%Second,
-%because the correctness proofs in CompCert
-%sometimes assume more guarantees on outgoing calls
-%than they provide for incoming calls,
-%outgoing and incoming calls use different simulation conventions.
-%This asymmetry breaks %the simulation's
-%horizontal compositionality. % (\ref{thm:fsim-hcomp}).
-%
-%In CompCertO,
-%we rectify this imbalance \emph{outside}
-%of the simulation proof itself.
-%The requirements of most passes
-%on their outgoing calls
-%are met using the properties
-%of the source language $\kw{Clight}$,
-%encoded as self-simulations
-%and inserted as a pseudo-pass.
-%We can then perform algebraic manipulations
-%on simulation statements
-%to rewrite the overall simulation convention
-%used by the compiler.
-%
-%This is achieved using a notion of
-%simulation convention refinement ($\screfd$)
-%allowing a simulation convention
-%to replace another in all simulation statements.
-%We construct a typed Kleene algebra \cite{tka}
-%based on this ordering,
-%and use it to derive a simple,
-%compositional simulation convention
-%for the whole compiler.
+We use effect signatures to assign coarse types
+to program components and to their behaviors.
+Specifically,
+a~\emph{strategy} $L : E \twoheadrightarrow F$
+models the behavior of a component which
+uses operations of the signature $E$ to
+implement the operations enumerated in $F$.
 
-%}}}
-
-\vspace*{3ex}
-\subsection{New Fundamental Research Challenges} %{{{
-
-Simulation conventions are a powerful tool,
-which extend the simple notion of simulation used in CompCert
-into a compositional, two-dimensional algebra of refinement.
-Beyond correctness properties,
-simulation conventions can be used to formulate \emph{as simulations}
-properties of language semantics such as
-stability under memory injections.
-CompCertO uses such properties as glue
-for establishing the final correctness theorem.
-
-We seek to push this approach further,
-and to take advantage of this gain in expressivity
-to bridge the broader gap between
-compositional \emph{certified compilation} on one hand, and
-compositional \emph{verification} on the other hand.
-Unfortunately,
-doing so presents a number of challenges
-not addressed by the state of the art.
-
-\vspace*{-2ex}
-\paragraph{Ad-hoc Specifications} %{{{
-
-Program logics and other verification tools
-usually come with their own specification languages,
-designed to accommodate specific reasoning principles.
-In other cases,
-static analyses can be used to establish specific properties.
-The overarching challenge we seek to tackle
-is to determine how to express such specifications
-within our refinement algebra,
-so that they can be combined with other correctness results.
-
-%}}}
-
-\vspace*{-2ex}
-\paragraph{Compositional State} %{{{
-
-A central issue addressed by
-separation logic,
-rely--guarantee reasoning, or
-concurrent object linearizability
-is to
-control the interference between
-in-memory data structures,
-or between threads.
-State is partitioned into components
-which can only be accessed by a particular
-pointer, principal, thread, module or object.
-%
-By contrast,
-%despite their compositional nature,
-CompCertO %language semantics
-treats memory as a global and uniform store
-whose entire state is continuously passed between components.
-This makes
-state encapsulation
-difficult to express.
-
-%}}}
-
-\vspace*{-2ex}
-\paragraph{Concretization} %{{{
-
-To interface high-level verification tools with
-low-level compiler correctness results,
-providing a model flexible enough
-to accomodate them both is not sufficient.
-We must elucidate the correspondence between
-high-level views of a program
-which rely on a compositional and abstract treatment of state,
-and their concrete, C-level representation
-described by the CompCertO semantics.
-
-%}}}
-
-\vspace*{-2ex}
-\paragraph{Case Study} %{{{
-
-Our prior work on the certified operating system kernel CertiKOS \cite{dscal15}
-%produced one of few large certified artifacts
-%whose proof of correctness incorporates a certified compiler
-%to provide assembly-level guarantees.
-combines CompCert
-with a verification technique
-known as \emph{certified abstraction layers} (CAL).
-%
-The idea behind CAL is to verify code layer by layer,
-and to specify the interface provided by each successive layer
-(and ultimately by the entire kernel)
-in terms of an abstract representation of the system's state.
-This ensures that code
-can be verified in terms of
-data representations and primitive operations
-formulated at an appropriate level of abstraction.
-Unfortunately,
-interfacing CAL and CompCert is non-trivial.
-It required modifying CompCert
-language semantics to treat certain external calls
-as abstract primitive invocations,
-and to keep track of the system's abstract state,
-which affected the entire compiler correctness proof.
-Conversely,
-our implementation of CAL
-had to take into account
-many CompCert-specific details.
-
-We seek to make CompCertO's semantic model
-expressive enough to accommodate
-compositional verification techniques such as CAL.
-Interfacing the resulting proofs
-with the compiler correctness theorem
-should not require changes to the compiler
-or force the verification framework
-to be overly specialized.
-
-%}}}
-
-%}}}
-
-\subsection{Overview of Our Solution} \label{sec:mainideas:solution}
-
-To tackle the challenges outlined above,
-we will investigate several extensions to CompCertO's model.
-%we will streamline the notion of horizontal composition used in CompCertO;
-%we will then introduce a notion of \emph{spatial} composition
-%to serve as a basis for our treatment of state.
-%We will then demonstrate how high-level resoning principles
-%such as state encapsulation or the frame rule of separation logic
-%can be captures as refinement properties within this framework.
-
-\vspace*{-2ex}
-\paragraph{Spatial Composition} %{{{
-
-As described in \S\ref{sec:mainideas:compcerto},
-CompCertO supports a notion of vertical composition ($\cdot$)
-for simulation conventions and simulation properties.
-Likewise, as a compositional compiler,
-it supports a notion of horizontal composition of program modules ($\oplus$),
-which is compatible with simulation properties as well.
-
-The key to our approach will be the introduction of a third dimension of compositionality
-in the form of of a \emph{spatial} composition principle ($\otimes$)
-operating at the level of language interfaces.
-Specifically, the construction
-$ A \otimes B = \langle A^\que \times B^\que, \, A^\ans \times B^\ans \rangle $
-will allow us to decompose
-the questions and answers of language interfaces
-into different fields.
-In particular the language interface component $[U] = \langle U,U \rangle$
-can be used in conjunction with $\otimes$
-to annotate the questions and answers of another language interface
-with a state component of type $U$;
-for example,
-the language interface used for C programs in CompCertO
-can be described as $\mathcal{C} := \tilde{\mathcal{C}} \otimes [\kw{mem}]$.
-In the context of certified abstraction layers,
-we can also use $\otimes$ to incorporate abstract state.
-
-%Building on the categorical framework established by Task~1a, 
-%this construction can be extended
-%to transition systems and simulation conventions
-%to obtain a \emph{symmetric monoidal} structure \cite{rosetta},
-%with the trivial language interface $I = \langle \{*\}, \{*\} \rangle$
-%as its unit.
-%This adds a dimension of compositionality to our framework
-%and will serve as the basis for our treatment of state.
-
-Importantly,
-although $\otimes$ acts primarily on language interfaces,
-it is compatible with transition systems, simulation conventions, and
-simulations. For example, the following constructions can be defined:
+As depicted in Fig.~\ref{fig:overview:ts}a,
+the environment can activate $L$ by asking a question $q \in F$,
+which the component $L$ is expected to eventually answer
+with a reply $r \in \kw{ar}(q)$.
+In the process,
+$L$ can perform an arbitrary number of queries $q_i \in E$,
+which the environment answers with a response $r_i \in \kw{ar}(q_i)$.
+The process can then begin anew with a question $q' \in F$,
+and so on indefinitely.
+We will write
 \[
-  \AxiomC{$L : A \twoheadrightarrow B$}
-    \UnaryInfC{$L \otimes [U] : A \otimes [U] \twoheadrightarrow B \otimes [U]$}
-    \DisplayProof
-  \quad
-  \AxiomC{$\mathbb{R} : A \Leftrightarrow B$}
-    \AxiomC{$R \subseteq U \times V$}
-    \BinaryInfC{$\mathbb{R} \otimes [R] : A \otimes [U] \Leftrightarrow B \otimes [V]$}
-    \DisplayProof
-  \quad
-  \AxiomC{$L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2$}
-    \UnaryInfC{$L_1 \otimes [U]
-      \le_{\mathbb{R} \otimes [U] \twoheadrightarrow \mathbb{S} \otimes [U]}
-      L_2 \otimes [U]$}
-    \DisplayProof
+  L \:\vDash\: \big(q
+    \rightarrowtail (m_1 \leadsto n_1)
+    \rightarrowtail (m_2 \leadsto n_2)
+    \rightarrowtail \cdots
+    \rightarrowtail (m_k \leadsto n_k)
+    \rightarrowtail r \big)
+  \leadsto \big(q'
+    \rightarrowtail \cdots
+    \rightarrowtail r' \big)
+  \leadsto \cdots
 \]
-Here, $L \otimes [U]$ is a transition system which acts like $L$
-but accepts and passes through an additional state component taken in the set $U$.
-The simulation convention $\mathbb{R} \otimes [R]$
-relates the original questions and answers according to $\mathbb{R}$, and
-the state annotations according to the relation $R \subseteq U \times V$.
-The third and last rule illustrates one way in which
-simulation properties are compatible with spatial composition:
-extending the transition systems $L_1$ and $L_2$
-with a $U$ state component
-preserves a simulation between them,
-where the simulation convention written as $\mathbb{R} \otimes [U]$
-expects the source and target state annotations in $U$ to be equal.
+to mean that $L$ accepts an execution trace of this kind.
+Note that $\rightarrowtail$ denotes a part of the execution
+where $L$ is in control,
+whereas $\leadsto$ denotes a part of the execution
+controlled by the environment.
 
+\begin{example}[Command specifications] \label{ex:decodespec} %{{{
+We can use strategies $\Gamma_\kw{secret}, \Gamma_\kw{decode} : \mathcal{S} \rightarrow \mathcal{P}$
+to formulate specifications for the commands $\kw{secret}$ and $\kw{decode}$.
+The processes admit the execution traces
+{\small\begin{align*}
+  \Gamma_\kw{secret} &\vDash \kw{run}
+    \rightarrowtail (\kw{write}_1[\texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto 14)
+    \rightarrowtail 0
+  \\
+  \Gamma_\kw{decode} &\vDash \kw{run}
+    \rightarrowtail (\kw{read}_0[100] \leadsto \texttt{"uryyb, jbeyq!\textbackslash{}n"})
+    \rightarrowtail (\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}] \leadsto 14)
+    \rightarrowtail 0
+  \,.
+\end{align*}}
+\end{example}
 %}}}
 
-\vspace*{-2ex}
-\paragraph{Memory Separation and Abstraction} %{{{
-
-Spatial composition will allow
-various high-level reasoning techniques
-to be formulated in terms of refinement.
+\begin{example}[CompCertO semantics] \label{ex:compcertosem} %{{{
+We explained in Example~\ref{ex:compcertosig} that
+CompCertO language interfaces can be translated to effect signatures,
+and described the signature $\mathcal{C} \mathbin@ \kw{mem}$
+used for C-level function calls and returns.
+By the same token, CompCertO language semantics
+can be translated to strategies as well.
 For example,
-in order to support certified abstraction layers,
-the C semantics of a translation unit $M$ can be extended to
-$\kw{Clight}(M) \otimes [D] :
- \mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes [D] \twoheadrightarrow
- \mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes [D]$,
-so that it maintains an abstract state of type $D$
-in addition to CompCert's global memory state of type $\kw{mem}$.
-The result can then be composed
-with a specification $\Sigma$ of abstract primitives
-expressed in terms of $D$.
-
-When $\Sigma$ is implemented as a program $N$,
-this abstract state component will be replaced by
-a concrete memory state of type $\kw{mem}$
-and the context $M$ will take on the type
-$\mathcal{\tilde{C}} \otimes [\kw{mem}] \otimes [\kw{mem}]$.
-How can we relate this intermediate result
-to the semantics of the linked program
-$\kw{Clight}(M + N) :
- \mathcal{\tilde{C}} \otimes [\kw{mem}]
- \twoheadrightarrow
- \mathcal{\tilde{C}} \otimes [\kw{mem}]$?
-
-Spatial composition allows us to incorporate
-tools from separation logic into our framework
-and use them to address this question.
-Separation algebras \cite{sepalg}
-provide a useful tool to formalize the ways in which
-memory states of various kinds can be
-split and recombined into \emph{shares}.
-Within our framework,
-a separation algebra on the CompCert memory model
-would allow us to define
-a simulation convention
-$\kw{Y} : [\kw{mem}] \otimes [\kw{mem}] \Leftrightarrow [\kw{mem}]$
-allowing state components,
-once refined into concrete memory shares,
-to be merged together.
-Going further,
-a local action property (or \emph{frame rule})
-for the Clight semantics can be expressed as:
+the source language used by CompCertO
+is a simplified version of~C called Clight,
+and its semantics for a program $M$ can be used to define:
 \[
-  \kw{Clight}(M) \otimes [\kw{mem}]
-  \:
-  \le_{\mathcal{\tilde{C}} \otimes [\kw{Y}] \twoheadrightarrow
-       \mathcal{\tilde{C}} \otimes [\kw{Y}]}
-  \:
-  \kw{Clight}(M)
+  \kw{Clight}(M) : \mathcal{C} \mathbin@ \kw{mem}
+    \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}
   \,.
 \]
-Here the left-hand side component executes the program $M$,
-but in addition carries around an extra $\kw{mem}$ fragment
-originally provided by the environment.
-The use of $\kw{Y}$ ensures that in the right-hand side,
-this memory share has been merged into the global memory state
-used by the Clight semantics.
-The simulation ensures that
-any Clight execution can always be extended with an additional memory share,
-and that furthermore if the original execution is safe,
-this additional share will not be modified.
-
-%We will address defining a separation algebra
-%for the CompCert memory model in \S\ref{sec:nominal}.
+The resulting strategies will exhibit traces such as:
+{\scriptsize
+\begin{align*}
+  \kw{Clight}(\kw{decode.c}) \:\vDash\:
+  \kw{main}()@m &\rightarrowtail
+  (\kw{read}(0, b, 100)@m[b \mapsto \textit{unspecified}] \leadsto
+   14@m[b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}]) \\& \rightarrowtail
+  (\kw{rot13}(b, 14)@m[b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}] \leadsto
+   {*}@m[b \mapsto \texttt{"hello, world!\textbackslash{}n"}]) \\& \rightarrowtail
+  (\kw{write}(1, b, 14)@m[b \mapsto \texttt{"hello, world!\textbackslash{}n"}] \leadsto
+    14@m[b \mapsto \texttt{"hello, world!\textbackslash{}n"}]) \\& \rightarrowtail
+  0@m[b \mapsto \textit{deallocated}]
+\end{align*}
+}%
+This trace is more complicated than the one shown in Example~\ref{ex:decodespec};
+among other things it involves low-level considerations regarding
+the C memory model.
+Nevertheless,
+we will eventually use the CompCertO semantics of C and assembly
+as a building block to model the scenario in Example~\ref{ex:readwritehello},
+and connect them to the kind of high-level specifications we have seen so far.
+\end{example}
+%}}}
 
 %}}}
 
-\vspace*{-2ex}
-\paragraph{State Encapsulation} %{{{
+\subsection{Layered Composition} %{{{
 
-Another important high-level reasoning technique
-which can be formulated in terms of spatial composition and refinement
-is \emph{state encapsulation}.
-CompCertO's transition system model can be extended
-to incorporate a notion of persistent local state.
-This functionality can then be exposed in terms of
-a state encapsulation primitive $[ u \rangle : [U] \twoheadrightarrow I$,
-where $I := \langle \{*\}, \{*\} \rangle$ is a trivial language interface.
+When a component $L_1 : F \twoheadrightarrow G$
+uses an interface $F$ implemented by
+another component $L_2 : E \twoheadrightarrow F$,
+we can direct the questions asked by $L_1$ in $F$ to $L_2$
+(Fig.~\ref{fig:overview:ts}b).
+The result is the composite strategy
+$L_1 \odot L_2 : E \twoheadrightarrow G$. %(Def.~X.Y).
+This is the main form of horizontal composition which we will be using.
 
-The component $[u\rangle$ maintains an internal state of type $U$.
-Upon its first activation with a trivial question ${*} \in I^\que$,
-it uses the initial state $u \in U$
-as an outgoing question.
-The answer $u' \in U$ is then used to update the internal state
-and is again erased from the component's top-level answer.
-By pre-composing $[u\rangle$ onto a transition system
-$L : A \twoheadrightarrow B \otimes [U]$,
-we can hide from the environment
-the explicit state component of type $U$ expected by $L$.
-Moreover,
-the property
+\begin{example}[Layer Interfaces] \label{ex:calcomp} %{{{
+The \emph{certified abstraction layers} methodology used to verify CertiKOS
+involves a notion of \emph{underlay interface},
+which provides specifications for the primitives which
+code at a certain level of abstraction is able to rely on.
+In our framework, a layer interface is a strategy of type:
+\[
+  L : \emptysig \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
+  \,,
+\]
+where the signature $\mathcal{C} \mathbin@ \kw{mem} \mathbin@ D$
+extends the CompCert memory model $\kw{mem}$
+with an \emph{abstract state} component of type $D$.
+The CompCertO C semantics of a program component $M$ can be extended as
+\[
+  \kw{Clight}(M) \mathbin@ D \: : \:
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D \: \twoheadrightarrow \:
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
+\]
+to keep track of of this additional state component. 
+We can then evaluate the effect of running $M$
+on top of the underlay interface $L$ as the strategy:
+\[
+  (\kw{Clight}(M) \mathbin@ D) \odot L \: : \:
+    \emptysig \: \twoheadrightarrow \:
+    \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
+    \,,
+\]
+which directs any outgoing call of $M$ to be handled by $L$.
+\end{example}
+%}}}
+
+%}}}
+
+\subsection{Refinement Conventions and Refinement Squares} \label{sec:sconv} %{{{
+
+High-level specifications given in abstract terms
+are often implemented in lower-level terms.
+For example, the specification of a NAND logic gate
+is usually given as a truth table,
+but its realization as an integrated circuit
+deals in voltages and currents.
+This is possible because some kind of \emph{convention}
+establishes the connection between
+the high- and low-level views of a component---%
+for example, a logic family like TTL or CMOS
+will specify which voltage ranges correspond
+to the logical level 0 and 1.
+
+In our setting, this idea is formalized
+as the notion of \emph{refinement convention} between effect signatures.
+Then a refinement property
+$\phi : L_1 \le_{\mathbf{R} \rightarrow \mathbf{S}} L_2$,
+which asserts that the high-level specification $L_1$
+is realized by the low-level implementation $L_2 : E_2 \twoheadrightarrow F_2$,
+is parameterized by two refinement conventions
+$\mathbf{R} : E_1 \leftrightarrow E_2$ and
+$\mathbf{S} : F_1 \leftrightarrow F_2$.
+The corresponding refinement property assumes that incoming
+source- and target-level questions in $F_1$ and $F_2$
+will be related according to the convention $\mathbf{S}$,
+and guarantees that outgoing questions in $E_1$ and $E_1$
+will be related according to $\mathbf{R}$.
+Conversely, it assumes that
+the environment's answers in $E$
+will be related according to $\mathbf{R}$
+and guarantees that the components' answers in $F$
+will be related according to $\mathbf{S}$.
+
+\begin{example}[Semantics preservation of CompCert] %{{{
+\label{ex:bq-proof}
+Compilers operate in the context of a \emph{calling convention},
+which specify how C-level calls are realized
+in terms of low-level, architecture-specific assembly language constructs.
+In CompCertO,
+the compiler's correctness theorem involves
+a convention
+$\mathbb{C} : \mathcal{C} \leftrightarrow \mathcal{A}$,
+which is used to express the way in which
+C-level function calls ($\mathcal{C}$) are encoded
+as assembly-level interactions ($\mathcal{A}$).
+the correctness proof of CompCertO
+can then be put in the form of a refinement square:
+\[
+  \kw{CompCert}(p) = p'
+  \quad \Longrightarrow \quad
+    \phi^\kw{cc}_p :
+      \kw{Clight}(p) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(p')
+\]
+where %the refinement convention
+$\mathbb{C} : \mathcal{C} \leftrightarrow \mathcal{A}$
+models the calling convention used by CompCert.
+\end{example}
+%}}}
+
+\begin{example}[Layer Implementations] %{{{
+In the context of CAL,
+code running on an \emph{underlay} interface
+$L : \emptysig \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D$
+is ultimately shown to implement an \emph{overlay} interface
+$L' : \emptysig \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D'$.
+To this end, we must first provide a relation
+$R \subseteq (\kw{mem} \times D) \times (\kw{mem} \times D')$
+which establishes a correspondence between
+the more abstract overlay states and more concrete underlay states.
+This relation can be used to define a refinement convention
+$\mathcal{C} \mathbin@ R : \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D
+ \leftrightarrow \mathcal{C} \mathbin@ \kw{mem} \mathbin@ D'$
+and express the layer correctness property as a refinement square
+\[
+  L \vdash_R M : L' \quad :\Longleftrightarrow \quad
+  L' \, \le_{\emptysig \twoheadrightarrow \mathcal{C} \mathbin@ R} \,
+    (\kw{Clight}(M) \mathbin@ D) \odot L
+  \,.
+\]
+The composition properties of our framework can then be used to establish that
+two successive layer implementations
+$L \vdash_R M : L' \vdash_S N : L''$ can be combined into a single layer
+$L \vdash_{R \mathbin; S} M N : L''$.
+Note that we have used $\emptysig$ to denote the identity refinement convention
+for the effect signature of the same name. 
+\end{example}
+%}}}
+
+%}}}
+
+\subsection{Spatial Composition} %{{{
+
+The notation $X \mathbin@ Y$ which we have used informally
+denotes \emph{spatial composition}.
+For an effect signature $E$ and a set $U$
+we can define the composite effect signature:
+\[
+  E \mathbin@ U \: := \:
+    \{ m @ u : N \times U \mid (m : N) \in E \}
+  \,,
+\]
+which annotates every question and every answer of $E$
+with an additional component of type $U$.
+Spatial composition extends to strategies,
+refinement conventions and refinement squares
+as depicted in Fig.~\ref{fig:xcomp}.
+
+\begin{figure} % fig:xcomp {{{
+  \begin{gather*}
+    \begin{prooftree}
+      \hypo{L : A \twoheadrightarrow B}
+      \hypo{f : U \lensarrow V}
+      \infer2[\kw{ts}-$\mathbin@$]{
+        L \mathbin@ f : A \mathbin@ U \twoheadrightarrow B \mathbin@ V
+      }
+    \end{prooftree}
+    \hspace{8em}
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A \leftrightarrow B}
+      \hypo{\mathbf{S} : U \leftrightarrow V}
+      \infer2[\kw{sc}-$\mathbin@$]{
+        \mathbf{R} \mathbin@ \mathbf{S} : A \mathbin@ U \leftrightarrow B \mathbin@ V
+      }
+    \end{prooftree}
+    \\[1em]
+    \begin{array}{r@{}l}
+      (L_1 \odot L_2) \mathbin@ (f \circ g) & {} \equiv
+      (L_1 \mathbin@ f) \odot (L_2 \mathbin@ g) \\
+      \kw{id}_A \mathbin@ \kw{id}_U & {} \equiv \kw{id}_{A \mathbin@ U}
+    \end{array}
+    \quad
+    \begin{array}{r@{}l}
+      (\mathbf{R}_1 \vcomp \mathbf{R}_2) \mathbin@ (\mathbf{S}_1 \vcomp \mathbf{S}_2)
+      & {} \equiv
+      (\mathbf{R}_1 \mathbin@ \mathbf{S}_1) \vcomp (\mathbf{R}_2 \mathbin@ \mathbf{S}_2)
+      \\
+      \idsc_A \mathbin@ \idsc_U & {} \equiv \idsc_{A \mathbin@ U}
+    \end{array}
+    \\[1em]
+    \begin{prooftree}
+      \hypo{\phi: L \le_{\mathbf{R}_1 \twoheadrightarrow \mathbf{S}_1} L'}
+      \hypo{\psi: f \le_{\mathbf{R}_2 \twoheadrightarrow \mathbf{S}_2} f'}
+      \infer2[\kw{sim}-$\mathbin@$]{\phi \mathbin@ \psi :
+	L \mathbin@ f
+        \le_{\mathbf{R}_1 \mathbin@ \mathbf{R}_2 \twoheadrightarrow
+             \mathbf{S}_1 \mathbin@ \mathbf{S}_2}
+	L' \mathbin@ f'}
+    \end{prooftree}
+  \end{gather*}
+  \caption{Spatial composition ($\mathbin@$) for strategies,
+    simulation conventions and simulation proofs.}
+  \label{fig:xcomp}
+\end{figure}
+%}}}
+
+\paragraph{Strategies}
+
+A strategy of type $\sigma : E \twoheadrightarrow F$
+can be extended to act on an additional state component
+by specifying a transformation $f : U \lensarrow V$
+between two sets $U$ and $V$
+(such transformations are specified using a form of stateful \emph{lenses}).
+The result is a strategy
+$\sigma \mathbin@ f : E \mathbin@ U \twoheadrightarrow F \mathbin@ V$.
+The special case
+$\sigma \mathbin@ U : E \mathbin@ U \twoheadrightarrow F \mathbin@ U$
+used in Example~\ref{ex:calcomp}
+relies on the identity transformation for the set $U$,
+and simply passes along a state component of type $U$
+in the questions and answers handled by $\sigma$
+without modifying it directly.
+
+\paragraph{Refinement Conventions and Refinement Squares}
+
+The refinement convention
+$\mathbf{R} \mathbin@ S : E \mathbin@ U \leftrightarrow F \mathbin@ V$
+extends the convention $\mathbf{R} : E \leftrightarrow F$
+with a plain relation $S \subseteq U \times V$
+(more sophisticated forms of history-dependent relations can be used as well).
+It expects the original part of questions and answers
+to be related according to $\mathbf{R}$,
+while the additional state components are related according to $S$.
+A strategy and an associated state transformation 
+can be refined independently
+using two different refinement squares,
+which can then be combined using the rule $\kw{sim}$-$@$
+shown in Fig.~\ref{fig:xcomp}.
+
+\paragraph{State Encapsulation}
+
+One particularly interesting form of state transformation
+is the \emph{encapsulation primitive}
+$[u\rangle : U \lensarrow \mathbbm1$,
+which can be used to hide a state component of type $U$.
+On its first activation with a question component ${*} \in \mathbbm{1}$,
+the encapsulation primitive reveals the initial state $u \in U$.
+When an updated state $u' \in U$ is received,
+the primitive stores the updated state for the next activation
+and hides it again behind the trivial value ${*} \in \mathbbm{1}$.
+
+\begin{example}[Hiding abstract state]
+This allows us to hide the abstract state $D$
+used by a layer interface $L$ by providing and initial value $d_0$
+in the composite
 $
-  u \mathrel{R} v
-  \Rightarrow
-  [u\rangle \le_{[R] \twoheadrightarrow I} [v\rangle
-$
-establishes a form of representation independence:
-a simulation of type
-$L_1 \le_{\mathbb{R} \otimes [R] \twoheadrightarrow \mathbb{S}} L_2$,
-which accounts for explicit state
-using a simulation relation $R$,
-can be composed with the property above to obtain a simulation
-$[u\rangle \odot L_1
- \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}}
- [v\rangle \odot L_2$
-between the encapsulated components
-(see \textbf{Task~1a} below for a description of the horizontal composition operator $\odot$).
+  (\mathcal{C} \mathbin@ \kw{mem} \mathbin@ [d_0\rangle) \odot L :
+  \emptysig \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}
+$.
+The properties of our framework allow us to show that
+hiding the abstract data first, then composing with $\kw{Clight}(M)$,
+or composing first with $\kw{Clight}(M)\mathbin@ D$ then hiding the data,
+yield equivalent results.
+\end{example}
 
-%In conjunction with
-%the composition operator $\odot$ and
-%the monoidal structure $\otimes$,
-%this primitive can then be used to selectively hide
-%a field of type $U$ from the language interface exposed
-%by another component.
+Moreover, a form of \emph{representation independence}
+can be expressed in the form of a refinement square.
+Specifically,
+when then initial states $d_0 \mathrel{R} d_0'$
+are related by $R \subseteq D \times D'$,
+we can derive the property
+$
+  [d_0 \rangle \le_{R \twoheadrightarrow \mathbbm1} [d_0'\rangle
+$,
+which allows a refinement to take place between components
+using different kinds of internal, hidden states
+as long as a simulation relation can be established between them.
+
+\paragraph{Memory Separation}
+
+Spatial composition can also be used to formalize
+certain \emph{memory separation} properties found in separation logic.
+Specifically,
+we were able to define a separation algebra for the CompCert memory model $\kw{mem}$,
+and derive from it a refinement convention
+$\mathbf{Y} : \kw{mem} \times \kw{mem} \leftrightarrow \kw{mem}$.
+This convention can in turn be use to express the frame rule
+for CompCert languages using refinement squares such as:
+\[
+  \kw{Clight}(M) \mathbin@ \kw{mem} \le_{\mathcal{C} \mathbin@ \mathbf{Y} \twoheadrightarrow
+  \mathcal{C} \mathbin@ \mathbf{Y}} \kw{Clight}(M)
+\]
+Here, a view of the system where an additional memory share
+is transparently passed alongside the execution of $M$ (but does not interact with it)
+is refined by a lower-level view where this share
+has been merged into the global memory state used by $\kw{Clight}$. 
+The refinement shows that incorporating this additional memory share
+does not alter any executions which were already possible without it,
+in which case the additional share will moreover be left unchanged by $M$.
+In the context of CAL,
+this allows components of the abstract state
+to be progressively refined into additional memory shares
+to be incorporated into the global concrete memory state.
 
 %}}}
 
 \subsection{Proposed Work}
 
+We have outlined the main features of a compositional framework
+capable of capturing under a uniform notion of refinement square
+a wide variety of properties:
+\begin{itemize}
+  \item code verification properties used to construct certified abstraction layers;
+  \item the correctness property of the certified compiler CompCertO;
+  \item representation independence properties associated with state encapsulation;
+  \item the frame rule of separation logic.
+\end{itemize}
+In preliminary work,
+we have shown that these different properties
+can be fruitfully interfaced and assembled in the manner of puzzle pieces
+to construct sophisticated refinement proofs.
+For example,
+a specification's encapsulated state
+can be made visible and refined into a concrete memory share,
+in order to prove a C program correct in the context of a particular data representation.
+The CompCertO correctness theorem can then be incorporated
+in order to transfer this property to the level of assembly code.
+
+We seek to push this approach
+to bridge the broader gap between
+compositional \emph{certified compilation} on one hand, and
+compositional \emph{verification} on the other hand.
 When all is said and done,
 our work will provide a three-dimensional algebra of refinement,
 where correctness properties and high-level reasoning principles
@@ -1153,123 +731,55 @@ Below we outline the work required to establish this foundation.
 \vspace*{-2ex}
 \paragraph*{Task 1a: Formalizing Categorical Structures}
 
-To support mutual recursion,
-the horizontal composition operator
-${\oplus_A} : (A \twoheadrightarrow A) \times (A \twoheadrightarrow A)
-  \rightarrow (A \twoheadrightarrow A)$
-used in CompCertO
-must be restricted to components with homogeneous types.
-To place our framework on a stronger algebraic foundation,
-we will study the more fundamental operator
-${\odot_{A,B,C}} : (B \twoheadrightarrow C) \times (A \twoheadrightarrow B)
-  \rightarrow (A \twoheadrightarrow C)$,
-which lets its left-hand side argument call into
-the right-hand side over the language interface $B$,
-but does not allow calls in the other direction.
-Under $\odot$,
-transition systems, simulation conventions and simulation proofs
+Under $\odot$ and $\vcomp$,
+strategies, simulation conventions and simulation proofs
 constitute a \emph{double category},
 a well-known structure equipped with a formal string diagram algebra
 \cite{dcsd}.
-
 By making explicit the underlying categorical structures
-of CompCertO's model,
+of our model,
 we hope to facilitate connections with more theoretical work,
 gain reasoning tools such as string diagrams,
 and facilitate the modeling of heterogeneous systems
 of the kind illustrated by Example~\ref{ex:nicdriver}.
+A categorical characterization of our framework
+would also provide a clean foundation for its mechanization
+as a Coq library.
 
 \vspace*{-2ex}
-\paragraph*{Task 1b: Compositional State and State Encapsulation}
+\paragraph*{Task 1b: Mechanizing our Compositional Semantics Framework}
 
-Placing horizontal and vertical composition principles
-on a stronger footing will make it easier to incorporate
-spatial composition ($\otimes$) into the framework as well.
-While $\otimes$-composition of
-language interfaces and simulation conventions is very straightforward,
-the main difficulty is that
-the composition $L_1 \otimes L_2$ of transition systems
-cannot be defined in general.
-This is because there is no way to guarantee that
-the external interactions of $L_1$ and $L_2$
-will synchronize in a meaningful way.
+We were able in preliminary work to mechanize the material presented here
+into the Coq proof assistant.
 However,
-it is possible to restrict components appearing on the right of $\otimes$
-to avoid issues of this kind,
-while retaining a powerful compositional structure
-for the management of state.
-
-With this framework in place,
-it will become possible to incorporate state encapsulation
-into the CompCertO semantic model in the way that we have outlined above.
-While this will require changes to the underlying definitions of
-transition system, simulation convention and simulation proof,
-these changes will remain backward-compatible,
-so that the existing
-language semantics and correctness properties provided by CompCertO
-will remain immediately available within the new framework.
+work remains to be done to obtain a production-quality Coq library
+and provide a solid foundation for the extensions and applications
+we intend to build on top of it,
+as described in the remainder of this document.
+We intend to release this library as open source code,
+allowing other researchers to reuse and build on our work.
 
 \vspace*{-2ex}
-\paragraph*{Task 1c: Trace Semantics for Open Components}
+\paragraph*{Task 1c: Integrate CompCertO into the framework}
 
-Although CompCert uses transition systems and simulations
-to define language semantics and establish correctness proofs,
-they are not necessarily a good choice
-as a ``ground truth'' definition for
-the notions of component behavior and refinement,
-as they involve details such as internal states and branching
-which are not externally observable.
-Therefore,
-it may be useful to provide a version of our model
-which retains its compositional structure
-but uses a more canonical representation of behaviors,
-such as a trace semantics of strategy model.
-However,
-simulation conventions present a particular challenge
-to adapt the this kind of setting.
-
-Our work on \emph{refinement-based game semantics} \cite{koenig20}
-offers a solution,
-in the form of a simple game model
-with arbitrary angelic and demonic choices.
-We will mechanize this model in the Coq proof assistant,
-embed CompCertO semantics into it,
-and transpose to it the compositional structures uncovered by Tasks 1a and 1b.
-Because trace semantics
-get rid of unobservable internal states and transitions,
-this representation will be more amenable to uniform algebraic manipulation
-and easier to interface with different models.
-
-%[TODO: explain why this is useful]
+We have verified that the open transition system model used in CompCertO,
+and the associated correctness proof,
+can be embedded into the framework outlined in this section.
+Once Task 1b is complete,
+we will need to to ensure that CompCertO is integrated into our library
+such that its language semantics and correctness theorem can be used
+as easily as possible.
+As part of this task,
+we will seek to provide facilities
+to help users connect high-level, abstract signatures and specifications
+to lower-level C calls and their corresponding implementations.
 
 \vspace*{-2ex}
-\paragraph*{Task 1d: Engineering Improvements}
+\paragraph*{Task 1d: Port the CertiKOS proof to this new setting}
 
-In addition to the conceptual developments above,
-we will also improve engineering aspects of CompCertO.
-This will include an improved management of symbol tables
-addressing some issues with the \textsf{Unusedglob} compilation pass
-explained in our technical report \cite[\S{}A.3]{compcerto21tr},
-as well as a better integration with the original CompCert
-and support for all of its backend architectures.
-
-\ignore{
-As it stands, CompCertO exists as a modified version of CompCert,
-incompatible with the original code base.  To keep our development
-current, we must update it with each new release of CompCert.
-This creates an unsustainable maintenance burden, and could hinder the
-adoption of CompCertO as a key component in future system verification
-frameworks.
-However, because our changes are extremely minimal,
-it may be possible to redesign CompCertO
-as an \emph{add-on} to CompCert, rather than as a modified version.
-
-This would also
-allow us to establish a formal correspondence between the two: the
-loading process encoded in CompCert's closed semantics could be
-formulated for CompCertO as an operator over its extended open
-semantics.  It would then be possible to show that the semantics used
-in CompCertO, once closed using this operator, are identical to
-the original CompCert semantics.
-}
+Finally,
+to both validate Tasks 1a--c and serve as a base
+for the applications described in the remainder of this document,
+we will adapt the CertiKOS correctness proof \cite{dscal15}
+to use an implementation of the CAL methodology based on our framework.
 
