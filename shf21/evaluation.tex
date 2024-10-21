@@ -1,38 +1,18 @@
 \section{Evaluation and Integration}
 
 To evaluate and demonstrate the power and real-world applicability of
-our new verified compiler, we will apply it to enhance existing and
+our new verification and verified compilation framework,
+we will apply it to enhance existing and
 build more advanced certified systems and programming tools.
+In particular,
+we will use the extended capabilities of our
+certified toolchain to expand the scope and capabilities
+of the correctness proof for the CertiKOS operating system kernel,
+and demonstrate applications to the construction of
+end-to-end certified heterogeneous systems.
 
-\vspace*{-2ex}
-\paragraph*{Task 4a: Use CompCertO in a heterogeneous context}
+\subsection{Concurrent Certified Abstraction Layers}
 
-In Example~\ref{ex:nicdriver},
-we outlined a possible scenario where C components
-are made to interact with components of different kinds
-to build heterogeneous certified systems.
-We will use this approach to
-mechanize the verification of a simple heterogeneous system
-in the Coq proof assistant,
-incorporating certified compilation using CompCertO's correctness theorem.
-
-\vspace*{-2ex}
-\paragraph*{Task 4b: Use CompCertO to implement Certified Abstraction Layers}
-
-The original formulation of certified abstraction layers
-we used to verify the CertiKOS kernel \cite{popl15}
-was very tightly coupled with CompCertX,
-an extension of CompCert specifically designed for this application.
-By contrast,
-our more recent work establishes a theory of certified abstraction layers
-within refinement-based game semantics
-which is independent of any compiler
-or language semantics.
-We will show that CompCertO can be interfaced with this new formulation
-and used to implement certified abstraction layers within this framework.
-
-\vspace*{-2ex}
-\paragraph*{Task 4c: Compiling and composing CCAL layers.}
 CertiKOS~\cite{certikos-osdi16} is a certified concurrent OS kernel
 that supports fine-grained locking and can boot Linux in its guest VM
 running on stock multicore x86 hardware.  CertiKOS is built from a
@@ -65,25 +45,153 @@ security proof all the way to the assembly level.  We plan to explore
 a similar approach in Normal CompCertO so it can also build end-to-end
 security proofs for CertiKOS and SeKVM.
 
-\vspace*{-2ex}
-\paragraph*{Task 4d: Connecting and enhancing certified programming tools.}
-The process of manually connecting the C and assembly semantics from
-CompCert with the Certified Abstraction Layers framework in the
-original development of CertiKOS led to the development of the DeepSEA
-programming language~\cite{deepsea19}.  The DeepSEA code is compiled
-into C (and then compiled to assembly using CompCert) plus a deep
-specification of its behavior in Coq and an automatically generated
-proof of refinement between them. The DeepSEA platform has been
-revamped so that it now follows the compositional semantics described
-in \S\ref{sec:compcerto}. We will connect our new compositional
-verified compiler with DeepSEA and enhance DeepSEA with better support
-to concurrency and name-space management (based on the nominal techniques).
+\subsection{More Accurate Process Model for CertiKOS} \label{sec:userspace}
 
-The verified software toolchain VST~\cite{appel11:vst}) is another
-certified programming tool that supports a rich separation logic for C
-and also connects with CompCert. Connecting VST with our end-to-end
-compositional verified compiler would allow user-level programs
-verified using VST to be compiled into ELF object files and loaded
-into the certified OS kernel to establish an end-to-end assurance case
-that covers both the OS kernel and user-level applications.
+In the CompCert assembly semantics which
+the correctness proof of CertiKOS relies on,
+the program is fixed and kept separate from the memory state.
+As a result,
+the correctness of CertiKOS is proved with respect to
+an arbitrary but fixed, pre-loaded user-space program.
+
+By contrast,
+CompCertELF models CPU instruction decoding
+and assigns semantics to concrete, binary machine code.
+This means
+we will be able to offer a much more complete and accurate model
+of process execution in CertiKOS,
+including system calls such as \texttt{exec}
+which load binary process images from the file system.
+In this context,
+the CertiKOS specification could be given as a strategy
+$
+  \kw{CertiKOS} : \mathcal{E} \twoheadrightarrow \top \mathbin@ \mathcal{F}
+$,
+where the signature
+$\top := \{ * : \varnothing \}$ contains a single operation
+use to initiate the system's execution,
+the set $\mathcal{F}$ describes the possible file system states,
+and $\mathcal{E}$ describes the way the system interacts
+with its environment (such as messages printed on the console).
+A user of the specification could then
+evaluate the behavior of a CertiKOS machine
+started with certain commands stored as ELF binaries
+on its file system,
+formalizes as:
+\[
+  (\top \mathbin@ [ \mathtt{/sbin/init} \mapsto \cdots,
+                   \mathtt{/bin/sh} \mapsto \cdots \rangle)
+  \odot \kw{CertiKOS}
+  : \mathcal{E} \twoheadrightarrow \top
+  \,.
+\]
+and the correctness proof would allow this specification
+to be replaced by the kernel's implementation.
+
+\subsection{More Accurate Hardware Model for CertiKOS} \label{sec:hwm}
+
+In the same vein,
+the facilities offered by CompCertELF would allow us to formulate
+a more accurate hardware model against which CertiKOS would be proven correct.
+The low-level machine semantics in CompCertELF could be used to define
+a component
+$
+  \kw{CPU} : \kw{IO} \twoheadrightarrow \top \mathbin@ \mathcal{M}
+$.
+This component would model the machine in terms of
+an initial physical memory state in $\mathcal{M}$,
+containing for example the kernel image initialized by a bootloader.
+A UART model of the kind outlined in Example~\ref{ex:nicdriver}
+could be used to complement this hardware model,
+and a situation where CertiKOS runs on this hardware could be described as:
+\[
+  (\top \mathbin@ [\kw{certikos.elf}\rangle) \odot 
+  \kw{CPU} \odot \kw{UART} : \kw{Ser} \twoheadrightarrow \top
+  \,.
+\]
+The resulting strategy would describe communication with the machine
+over its serial line
+when it is started with the CertiKOS binary as its kernel image.
+In the process,
+the techniques described in Example~\ref{ex:nicdriver}
+could be used to verify the UART driver in CertiKOS and
+remove it from the trusted computing base.
+
+\subsection{Proposed Work}
+
+\paragraph*{Task 4a: Port the CertiKOS proof to this new setting}
+
+We will be to adapt our CertiKOS work
+to the setting of our new framework and compilation toolchain,
+starting with the sequential version of the correctness proof.
+Because our new framework can be used express
+the certified abstraction layer constructions found in \cite{dscal15},
+this task should be relatively straightforward.
+In a second phase,
+we will formalize the CCAL proof techniques \cite{ccal18}
+in the context of our framework,
+using the extensions provided by Nominal CompCertO.
+
+\vspace*{-2ex}
+\paragraph*{Task 4b: Build a more realistic machine model to verify CertiKOS against}
+
+We will formalize the hardware model discussed above in \S\ref{sec:hwm}
+and use it to extend the correctness proof of CertiKOS
+all the way to its binary ELF image.
+%Compared with Task~4b,
+%this task should be relatively easier,
+%as it will likely consist only of \emph{adding} more steps
+%to the proof,
+%as enabled by CompCertELF,
+%but should not require modifying the existing base proof extensively.
+
+\vspace*{-2ex}
+\paragraph*{Task 4c: Build a more realistic user process model for CertiKOS}
+
+We have outlined above the ways in which
+the facilities provided by CompCertELF and the work described in
+\S\ref{sec:compcertelf}
+would bring new possibilities for the way in which
+the CertiKOS proof handles user processes.
+We will investigate
+enhancing the CertiKOS specification and correctness proof
+along the lines described in \S\ref{sec:userspace}.
+
+%This task would be moderately difficult,
+%as it would require modeling some kind of file system
+%and incorporating the certified ELF loader developed in Task~3c
+%into the kernel itself.
+%However,
+%a simple in-memory read-only file system
+%incorporated directly into the \texttt{certikos.elf} image
+%would be sufficient for this purpose.
+%An interesting aspect of this task would also be
+%to investigate what abstract, high-level view of the file system
+%and its binary commands would be most convenient
+%when reasoning about shell scripts for example,
+%and how our refinement convention infrastructure and compilation toolchain
+%could participate in connecting it
+%to the actual low-level, binary version being run.
+
+\vspace*{-2ex}
+\paragraph*{Task 4d: Verify the UART console driver}
+
+To complete the task of providing a more realistic hardware model,
+we will also formally describe the operation of a standard UART
+as suggested in Example~\ref{ex:nicdriver},
+and verify the CertiKOS UART console driver against it.
+
+\vspace*{-2ex}
+\paragraph*{Task 4e: Model a situation involving multiple machines}
+
+As a final challenge,
+we will attempt to model and reason about
+a situation where multiple machines running CertiKOS
+and specific user space program
+would communicate and interact with each other,
+for example over their serial consoles.
+This grand challenge will exercise every part of our work,
+and would set the stage for future research
+where the operation of entire networks 
+could be modeled and proven correct.
 
