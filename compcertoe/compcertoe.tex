@@ -4755,7 +4755,7 @@ initially set to the value $u$.
     \midrule
     %
     % Includes: coqrel/*.v
-    $\kw{coqrel}$ library \cite{coqrel} & 2,382 & 959 &
+    $\kw{coqrel}$ library & 2,382 & 959 &
     %
     % Includes: examples/CompCertStrat.v
       CompCertO embedding (\S\ref{sec:application:compcerto}) 
@@ -5305,70 +5305,6 @@ we will use the notation:
   \,.
 \]
 
-\begin{remark}[Allocation permission]
-Defining a partial commutative monoid $\bullet$
-which satisfies the properties above
-is largely straightforward,
-but some subtleties arise when it comes to memory allocation.
-In a real-world scenario,
-memory is a finite resource and calls to $\kw{malloc}$ can fail
-contingent upon the amount of memory available.
-Under an accurate model of memory as a finite resource,
-this would have to be taken into account by our notion of memory share
-and the definition of $\bullet$.
-For example,
-memory states $(m, k)$ could incorporate a number of bytes $k \in \mathbb{N}$
-which remain to be allocated
-(or perhaps the size of the largest contiguous memory region available,
-to take fragmentation into account),
-and $\kw{malloc}$ would trigger an undefined behavior
-when the program attempts to allocate a region of size greater than $k$.
-In this case the partial monoid $\bullet$
-could be defined along the lines
-\[
-  (m_1, k_1) \bullet (m_2, k_2) :=
-  (m_1 \circ m_2, \, k_1 + k_2)
-  \,.
-\]
-In this setting,
-incorporating an additional memory share
-could only increase the amount of memory available;
-the behavior of $\kw{malloc}$ on the larger, composite share
-would refine that of the original one,
-validating the frame property.
-
-Since in CompCert,
-memory is modeled as an infinite resource
-and $\kw{malloc}$ always succeeds,
-this was not an issue in our implementation.
-However,
-CompCert memory states maintain a $\kw{nextblock}$
-counter which is used to assign identifiers
-to newly allocated memory blocks.
-Since this counter increases as the program executes,
-in order to enable the frame property
-we must allow the $\kw{nextblock}$ counters of the two shares
-$m_1 \bullet m_2$ to become out of sync.
-But in this case, allocating a new block in the ``stale'' share
-would result in a naming conflict.
-
-To work around this,
-we model memory allocation as a permission,
-such that at any given time, only one of the two shares
-is able to allocate new blocks
-and carries the up-to-date $\kw{nextblock}$ counter.
-This requires a slight modification to the CompCert memory model
-to incorporate this permission flag and allow $\kw{Mem.alloc}$ to fail
-when the flag is not set.
-This flag is subject to
-ownership transfer reasoning
-and similar techniques used in the context of separation logic---%
-in our framework this can be accomodated by the
-refinement convention $\mathbf{Y}$,
-which allows partial memory shares to migrate between the two
-source-level branches at any time.
-\end{remark}
-
 \begin{example} %[Correctness of rb.c]
 To show that $\kw{rb.c}$
 faithfully implements $\Gamma_\kw{rb}$,
@@ -5559,6 +5495,72 @@ we now give the complete proof:
   \,.
 \]
 %}}}
+
+\begin{remark}[Allocation permission] %{{{
+Defining a partial commutative monoid $\bullet$
+which satisfies the properties above
+is largely straightforward,
+but some subtleties arise when it comes to memory allocation.
+In a real-world scenario,
+memory is a finite resource and calls to $\kw{malloc}$ can fail
+contingent upon the amount of memory available.
+Under an accurate model of memory as a finite resource,
+this would have to be taken into account by our notion of memory share
+and the definition of $\bullet$.
+For example,
+memory states $(m, k)$ could incorporate a number of bytes $k \in \mathbb{N}$
+which remain to be allocated
+(or perhaps the size of the largest contiguous memory region available,
+to take fragmentation into account),
+and $\kw{malloc}$ would trigger an undefined behavior
+when the program attempts to allocate a region of size greater than $k$.
+In this case the partial monoid $\bullet$
+could be defined along the lines
+\[
+  (m_1, k_1) \bullet (m_2, k_2) :=
+  (m_1 \circ m_2, \, k_1 + k_2)
+  \,.
+\]
+In this setting,
+incorporating an additional memory share
+could only increase the amount of memory available;
+the behavior of $\kw{malloc}$ on the larger, composite share
+would refine that of the original one,
+validating the frame property.
+
+Since in CompCert,
+memory is modeled as an infinite resource
+and $\kw{malloc}$ always succeeds,
+this was not an issue in our implementation.
+However,
+CompCert memory states maintain a $\kw{nextblock}$
+counter which is used to assign identifiers
+to newly allocated memory blocks.
+Since this counter increases as the program executes,
+in order to enable the frame property
+we must allow the $\kw{nextblock}$ counters of the two shares
+$m_1 \bullet m_2$ to become out of sync.
+But in this case, allocating a new block in the ``stale'' share
+would result in a naming conflict.
+
+To work around this,
+we model memory allocation as a permission,
+such that at any given time, only one of the two shares
+is able to allocate new blocks
+and carries the up-to-date $\kw{nextblock}$ counter.
+This requires a slight modification to the CompCert memory model
+to incorporate this permission flag and allow $\kw{Mem.alloc}$ to fail
+when the flag is not set.
+This flag is subject to
+ownership transfer reasoning
+and similar techniques used in the context of separation logic---%
+in our framework this can be accomodated by the
+refinement convention $\mathbf{Y}$,
+which allows partial memory shares to migrate between the two
+source-level branches at any time.
+\end{remark}
+%}}}
+
 
 \subsection{Modeling loading and the execution environments}
 \label{sec:application:loader}  %{{{
