@@ -1098,11 +1098,14 @@ the spatial decomposition $\mathcal{C} \mathbin@ \kw{mem}$ below.
 
 We use effect signatures to assign coarse types
 to program components and to their behaviors.
-Specifically,
+We use a game semantics approach where
 a~\emph{strategy} $L : E \twoheadrightarrow F$
 models the behavior of a component which
 uses operations of the signature $E$ to
 implement the operations enumerated in $F$.
+The strategy can specify actions taken by the component
+in response to the possible actions of the environment,
+and is represented as a set of traces.
 
 As depicted in Fig.~\ref{fig:overview:ts}a,
 the environment can activate $L$ by asking a question $q \in F$,
@@ -1227,10 +1230,12 @@ To this end,
 we will need to model the way in which
 $\kw{decode.c}$ and $\kw{rot13.c}$ behave together
 \emph{as a process}.
-Assuming for now that such a model
+Assuming for now the existence of
 $\llbracket \kw{decode} \rrbracket :
- \mathcal{S} \rightarrow \mathcal{P}$
-exists,
+ \mathcal{S} \rightarrow \mathcal{P}$,
+which models the response of the combined program
+to the trigger $\kw{run} \in \mathcal{P}$
+in terms of system calls performed over the interface $\mathcal{S}$,
 our goal will be to establish a refinement
 $
   \Sigma_\kw{decode}
@@ -1290,8 +1295,9 @@ V deq() { return get(inc1()); }
   \end{subfigure}
   \caption{Running example, adapted from \citet{rbgs-cal}.
     The component $\kw{rb.c}$
-    implements a ring buffer by encapsulating an array
-    and two counters. It is used by the component
+    implements a ring buffer of capacity $N$
+    by encapsulating an array
+    and two counters. It is used by %the component
     $\kw{bq.c}$ to implement a
     bounded queue.}
   \label{fig:code}
@@ -1506,7 +1512,7 @@ $\mathbf{S} : F_1 \leftrightarrow F_2$.
 The corresponding refinement property assumes that incoming
 source- and target-level questions in $F_1$ and $F_2$
 will be related according to the convention $\mathbf{S}$,
-and guarantees that outgoing questions in $E_1$ and $E_1$
+and guarantees that outgoing questions in $E_1$ and $E_2$
 will be related according to $\mathbf{R}$.
 Conversely, it assumes that
 the environment's answers in $E$
@@ -1573,17 +1579,20 @@ A family $(E_i)_{i \in I}$ of effect signatures can be combined into
 \[
   \bigoplus_{i \in I} E_i \, := \,
     \{ \iota_i(m) \mathbin: N \mid i \in I,\, (m \mathbin: N) \in E_i \}
-  \,.
+  \,,
 \]
-We will often encounter the binary case where $i \in \{1, 2\}$,
-which we write $E_1 \oplus E_2$.
+which uses the set of operations $\iota_i(m) \in \sum_i E_i$
+and uses for each one the arity assigned to it
+in its signature of origin $E_i$.
+The binary case where $i \in \{1, 2\}$
+will be written as $E_1 \oplus E_2$.
 \end{definition}
 
 The signature $E \oplus F$ contains the combined questions of $E$ and $F$.
 Each question retains the same set of answers.
 Many of the signatures we have seen can be decomposed using $\oplus$.
 
-\begin{example}[Single-file interfaces]
+\begin{example}[Per-file interfaces]
 We have seen that processes can be modeled as
 strategies of type $P : \mathcal{S} \rightarrow \mathcal{P}$,
 where the signature $\mathcal{S}$ contains questions for
@@ -2795,19 +2804,19 @@ compose into
 $\mathbf{R}_1 \oplus \mathbf{R}_2 : E_1 \oplus E_2 \leftrightarrow F_1 \oplus F_2$,
 defined by:
 \begin{align*}
-  \bigl(\iota_i(m_1), m_2\bigr)\bot \in \mathbf{R}_1 \oplus \mathbf{R}_2
+  \bigl(\iota_i(m_1), \iota_i(m_2)\bigr)\bot \in \mathbf{R}_1 \oplus \mathbf{R}_2
   \:&:\Leftrightarrow\:
   (m_1,m_2)\bot \in \mathbf{R}_i
 \\
-  \bigl(\iota_i(m_1), m_2\bigr)(n_1,n_2)\top \in \mathbf{R}_1 \oplus \mathbf{R}_2
+  \bigl(\iota_i(m_1), \iota_i(m_2)\bigr)(n_1,n_2)\top \in \mathbf{R}_1 \oplus \mathbf{R}_2
   \:&:\Leftrightarrow\:
   (m_1,m_2)(n_1,n_2)\top \in \mathbf{R}_i
 \\
-  \bigl(\iota_1(m_1), m_2 \bigr)(n_1,n_2) \, s \in \mathbf{R}_1 \oplus \mathbf{R}_2
+  \bigl(\iota_1(m_1), \iota_1(m_2) \bigr)(n_1,n_2) \, s \in \mathbf{R}_1 \oplus \mathbf{R}_2
   \:&:\Leftrightarrow\:
   s \in \bigl( (m_1,m_2)(n_1,n_2) \backslash \mathbf{R}_1 \bigr) \oplus \mathbf{R}_2
 \\
-  \bigl(\iota_2(m_1), m_2 \bigr)(n_1,n_2) \, s \in \mathbf{R}_1 \oplus \mathbf{R}_2
+  \bigl(\iota_2(m_1), \iota_2(m_2) \bigr)(n_1,n_2) \, s \in \mathbf{R}_1 \oplus \mathbf{R}_2
   \:&:\Leftrightarrow\:
   s \in \mathbf{R}_1 \oplus \bigl( (m_1,m_2)(n_1,n_2) \backslash \mathbf{R}_2 \bigr)
 \end{align*}
@@ -3556,8 +3565,10 @@ we start from the effect signature construction
 \[
   E \mathbin@ U \::=\: E \otimes \{ u : U \mid u \in U \} \:=\:
     \{ m @ u : N \times U \,\mid\, (m \mathbin: N) \in E, \, u \in U \}
+   \,,
 \]
-It will play an important role
+where $m @ u$ is a stylized version of the pair $(m, u)$.
+This construction will play an important role
 in our treatment of spatial composition and state encapsulation.
 
 \begin{example} % CompCertO language interface decomposition {{{
