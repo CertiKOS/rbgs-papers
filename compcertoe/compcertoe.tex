@@ -243,7 +243,7 @@ and we showcase its capabilities with multiple use cases.
 
 \maketitle
 
-\section{Introduction} %{{{
+\section{Introduction} \label{ref:intro} %{{{
 
 % Preamble {{{
 
@@ -2058,7 +2058,7 @@ the composite strategy $\sigma \odot \tau : E \twoheadrightarrow G$.
 Layered composition can be defined
 at the level of individual plays.
 
-\begin{definition}[Layered Composition of Strategies] %{{{
+\begin{definition}[Layered Composition of Strategies] \label{def:lcomp} %{{{
 The \emph{identity} strategy $\kw{id}_E : E \twoheadrightarrow E$
 is defined as:
 \[
@@ -4733,10 +4733,98 @@ as well as several possible applications.
 This paper is accompanied by an artifact%
 \footnote{\url{https://zenodo.org/records/13939081}}
 which demonstrates a number of them.
-Its components are outlined in \autoref{tbl:artifact}
-and discussed below.
+The components of our artifact
+are outlined in \autoref{tbl:artifact} and discussed below.
 
 \subsection{Mechanization in the Coq Proof Assistant} \label{sec:application:impl} %{{{
+
+Our code uses a library called $\kw{coqrel}$ \cite{coqrel}
+for relational reasoning
+and the relevant parts interface with CompCertO as well.
+In addition,
+our goal is eventually to incorporate our model
+into a broader library for compositional semantics
+and heterogeneous system verification%
+\footnote{\url{https://github.com/CertiKOS/rbgs}}\!,
+and we rely (``other support code'') on this library's formalization of
+downward-closed sets.
+
+With these dependencies,
+the definitions and theorems 
+given in \S\ref{sec:overview}--\ref{sec:scomp}
+can be mechanized in $2,198$ lines of Coq definitions and
+$3,252$ lines of proofs, as counted by $\kw{coqwc}$.
+The mechanization
+is straightforward and closely follows the definitions we have given.
+Below we discuss two aspects which are particularly interesting.
+
+\paragraph{Use of Dependent Types} %{{{
+
+As suggested by the inductive grammar given in Definition~\ref{def:strat},
+we use dependent types to enforce the structure of plays, defining
+$\kw{play}\ E\ F : \kw{position}\ E\ F \rightarrow \kw{Type}$ and
+$\kw{strat}\ E\ F : \kw{position}\ E\ F \rightarrow \kw{Type}$
+as families indexed by the type:
+\begin{quote}\footnotesize
+\verb!Variant position E F := ready | running (q : op F) | suspended (q : op F) (m : op E).!
+\end{quote}
+This way,
+rather than defining plays as simple lists of moves and
+separately demanding that they satisfy some validity criterion,
+we can use the type system to enforce their expected shape
+and avoid having to deal with a proliferation of side-conditions.
+
+At the same time,
+under this approach,
+definitions and proofs which involve
+plays and strategies in different positions
+require a way to express the combinatorial constraints
+which tie them together.
+Our solution is to define a new \emph{position} type
+for each of these constructions,
+with fully unbundled projections onto
+the corresponding positions of their components.
+For example,
+our formalization of layered composition (Definition~\ref{def:lcomp})
+involves the type:
+\begin{quote}\footnotesize
+\verb!Variant cpos : position F G -> position E F -> position E G -> Type :=! \\
+\verb!  | cpos_ready : cpos ready ready ready! \\
+\verb!  | cpos_left q : cpos (running q) ready (running q)! \\
+\verb!  | cpos_right q m : cpos (suspended q m) (running m) (running q)! \\
+\verb!  | cpos_suspended q m u : cpos (suspended q m) (suspended m u) (suspended q u).!
+\end{quote}
+where the first two parameters specify compatible positions for
+the strategies or plays being composed,
+and the third specifies the position for the result.
+The same principle is applied for higher-level constructions;
+for example the proof of
+\[
+  (\sigma_1 \oplus \sigma_2) \odot (\tau_1 \oplus \tau_2) =
+  (\sigma_1 \odot \tau_1) \oplus (\sigma_2 \odot \tau_2)
+\]
+involves a position type whose parameters project onto
+the four simple positions for the strategies involved,
+as well as the $\odot$ and $\oplus$ composite positions
+for each intermediate expression.
+The fully unbundled approach allows us to use the type system
+to encode the complex synchronization constraints involved.
+
+For many proofs of that nature,
+laying down those constraints was the most complex part of the job,
+and once the cases were enumerated
+the proof itself became more or less self-evident.
+It would be interesting to compare them with
+the definitions and proofs that would be obtained
+under a more traditional approach.
+
+%}}}
+
+\paragraph{Vertical Composition Proof} %{{{
+
+[Refinement square rules for $\wedge$, $\vee$ in refinement conventions, etc]
+
+%}}}
 
 %}}}
 
@@ -5170,8 +5258,8 @@ would result in a naming conflict.
 
 To work around this,
 we model memory allocation as a permission,
-such that only one of the two shares
-is able to allocate new blocks at any given time,
+such that at any given time, only one of the two shares
+is able to allocate new blocks
 and carries the up-to-date $\kw{nextblock}$ counter.
 This requires a slight modification to the CompCert memory model
 to incorporate this permission flag and allow $\kw{Mem.alloc}$ to fail
