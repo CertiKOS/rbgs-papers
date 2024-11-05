@@ -1,4 +1,6 @@
 MAIN = compcertoe
+LDIFREF = compcertoe-popl25-revised
+LDIFOPTS = --packages=amsmath,hyperref,biblatex
 
 $(MAIN).pdf: $(MAIN).bbl
 compcertoe-with-appendix.pdf: compcertoe-with-appendix.bbl
@@ -26,17 +28,19 @@ compcertoe-diff.aux: compcertoe-diff.tex
 	# to run 'make $*.bbl' when citing new papers.
 
 compcertoe-ref.tex:
-	git show compcertoe-popl25-submitted:compcertoe/compcertoe.tex >$@.n
+	git show $(LDIFREF):compcertoe/compcertoe.tex >$@.n
 	mv $@.n $@
 
 compcertoe-diff.tex: compcertoe.tex compcertoe-ref.tex
-	latexdiff compcertoe-ref.tex compcertoe.tex > $@.n
+	latexdiff $(LDIFOPTS) compcertoe-ref.tex compcertoe.tex > $@.n
 	mv $@.n $@
 
 clean:
 	rm -f $(patsubst %,$(MAIN).%,aux aux~ log pdf nav out bbl blg toc pyg)
-	rm -f compcertoe-ref.tex
 	rm -rf _minted-$(MAIN)
+	rm -f compcertoe-ref.tex compcertoe-diff.tex
+	rm -f $(patsubst %,$(MAIN)-diff.%,aux aux~ log pdf nav out bbl blg toc pyg)
+	rm -rf _minted-$(MAIN)-diff
 
 .PRECIOUS: %.aux %.aux~
 ALWAYS:
