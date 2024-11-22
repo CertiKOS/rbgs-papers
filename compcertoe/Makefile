@@ -1,6 +1,7 @@
 MAIN = compcertoe
 LDIFREF = compcertoe-popl25-revised
 LDIFOPTS = --packages=amsmath,hyperref,biblatex
+SOURCES = acmart.cls ACM-Reference-Format.bst references.bib $(MAIN).tex $(MAIN).bbl Makefile
 
 $(MAIN).pdf: $(MAIN).bbl
 compcertoe-with-appendix.pdf: compcertoe-with-appendix.bbl
@@ -34,6 +35,10 @@ compcertoe-ref.tex:
 compcertoe-diff.tex: compcertoe.tex compcertoe-ref.tex
 	latexdiff $(LDIFOPTS) compcertoe-ref.tex compcertoe.tex > $@.n
 	mv $@.n $@
+
+source.zip: $(SOURCES)
+	rm -f $@
+	zip $@ $(SOURCES)
 
 clean:
 	rm -f $(patsubst %,$(MAIN).%,aux aux~ log pdf nav out bbl blg toc pyg)
