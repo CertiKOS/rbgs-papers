@@ -42,10 +42,13 @@ source.zip: $(SOURCES)
 
 clean:
 	rm -f $(patsubst %,$(MAIN).%,aux aux~ log pdf nav out bbl blg toc pyg)
-	rm -rf _minted-$(MAIN)
+	rm -rf _minted-$(MAIN) comment.cut
 	rm -f compcertoe-ref.tex compcertoe-diff.tex
+	rm -f $(patsubst %,$(MAIN)-with-appendix.%,aux aux~ log pdf nav out bbl blg toc pyg)
 	rm -f $(patsubst %,$(MAIN)-diff.%,aux aux~ log pdf nav out bbl blg toc pyg)
 	rm -rf _minted-$(MAIN)-diff
+	rm -rf _minted-$(MAIN)-with-appendix
+	rm -f source.zip
 
 .PRECIOUS: %.aux %.aux~
 ALWAYS:
