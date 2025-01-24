@@ -239,16 +239,18 @@ int main()
 %}}}
 
 \begin{frame}{Refinement in a Heterogeneous Context}
-  We propose to use generic refinement frameworks
-  to implement this approach:
+  We propose to use semantic-level refinement frameworks
+  to implement this approach.
+
+  \pause
   \begin{itemize}
-    \pause \item We connect a high-level specification
+    \item We want to connect a high-level specification
        \[ \Gamma_\kw{hello} \: \vDash \:
           \kw{run} \cdot
         \underline{\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}]} \cdot
         14 \cdot \underline{0} \]
 
-    \pause \item to a flexibly defined model
+    \pause \item to a flexibly-defined model
        \[ M_\kw{encdec} :=
           \kw{load}(\kw{secret.s} + \kw{rot13.s})
           \:\mathbin{\mathtt{|}}\:
@@ -305,7 +307,7 @@ int main()
          \only<4>{\ar[dd, dash, dotted, "{?}"']}
          \only<5>{\ar[dd, leftrightarrow, "\mathbb{C}"]}
        \\
-       & \le &
+       & \only<4>{\le} \only<5>{\text{CC}} &
        \\
        \mathcal{A} \mathbin@ \kw{mem}
          \ar[rr, "\kw{Asm}(\kw{decode.s})", twoheadrightarrow]
@@ -371,12 +373,12 @@ int main()
 \begin{frame}{Contributions} %{{{
   We designed a generic refinement framework for low-level components supporting:
   \begin{itemize}
-    \item Horizontal composition ($\odot, \oplus$): \\
-      between parts of a system
-    \item Vertical composition ($\fatsemi$): \\
-      transitive refinement, data abstraction, certified compilation
-    \item Spatial composition ($\mathbin@$): \\
-      to manage different parts of the \emph{state}
+    \item Horizontal composition ($\odot, \oplus$) %\\
+      %between parts of a system
+    \item Vertical composition ($\fatsemi$) %\\
+      %transitive refinement, data abstraction, certified compilation
+    \item Spatial composition ($\mathbin@$) %\\
+      %to manage different parts of the \emph{state}
   \end{itemize}
 
 %  \pause \vfill
@@ -403,7 +405,7 @@ int main()
 %      to establish correctness
 %  \end{itemize}
 
-  \pause
+  \pause\vfill
   Our framework is mechanized in Rocq and incorporates CompCertO
   \begin{itemize}
     \item Languages semantics for C and assembly;
@@ -947,40 +949,128 @@ int main()
 \end{frame}
 %}}}
 
-\begin{frame}{Encapsulating State} %{{{
-  \begin{example}[Invoking $\kw{main}$]
-    A component
-    $\kw{entry} : \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow \mathcal{P}$
-    can be constructed as follows:
-    \pause
-    \begin{itemize}
-      \item Call the main function using a component
-      $L_\kw{invoke} : \mathcal{C} \twoheadrightarrow \mathcal{P}$
-      \[ L_\kw{invoke} \: \vDash \:
-         \kw{run} \cdot \underline{\kw{main}(\epsilon)} \cdot
-         \kw{Vint}(n) \cdot n \]
+%\begin{frame}{Encapsulating State} %{{{
+%  \begin{example}[Invoking $\kw{main}$]
+%    A component
+%    $\kw{entry} : \mathcal{C} \mathbin@ \kw{mem} \twoheadrightarrow \mathcal{P}$
+%    can be constructed as follows:
+%    \pause
+%    \begin{itemize}
+%      \item Call the main function using a component
+%      $L_\kw{invoke} : \mathcal{C} \twoheadrightarrow \mathcal{P}$
+%      \[ L_\kw{invoke} \: \vDash \:
+%         \kw{run} \cdot \underline{\kw{main}(\epsilon)} \cdot
+%         \kw{Vint}(n) \cdot n \]
+%
+%      \pause
+%      \item Hide the memory state using a component
+%        $[m_0\rangle : \kw{mem} \leftrightarrows \mathbbm1$
+%      \[ \kw{entry} \: := \:
+%         L_\kw{invoke} \mathbin@ [m_0\rangle \: : \:
+%         \mathcal{C} \mathbin@ \kw{mem} \: \twoheadrightarrow \:
+%         \mathcal{P} \mathbin@ \mathbbm1 \pause \: \cong \:
+%         \mathcal{P} \]
+%    \end{itemize}
+%  \end{example}
+%
+%  \pause
+%  The \textbf{encapsulation primitive}
+%  $[u_0 \rangle : U \leftrightarrows \mathbbm1$
+%  can be defined for any $u_0 \in U$.
+%  \\
+%  \pause
+%  Refinement squares capture \emph{simulation} arguments
+%  for representation independence.
+%\end{frame}
+%%}}}
 
-      \pause
-      \item Hide the memory state using a component
-        $[m_0\rangle : \kw{mem} \leftrightarrows \mathbbm1$
-      \[ \kw{entry} \: := \:
-         L_\kw{invoke} \mathbin@ [m_0\rangle \: : \:
-         \mathcal{C} \mathbin@ \kw{mem} \: \twoheadrightarrow \:
-         \mathcal{P} \mathbin@ \mathbbm1 \pause \: \cong \:
-         \mathcal{P} \]
-    \end{itemize}
+\begin{frame}[fragile]{Example: Simple Counter} %{{{
+  \begin{example}[Implementing a counter]
+    Consider the simple specification
+    $\Gamma_\kw{count} : \varnothing \twoheadrightarrow E_\kw{count} = \{ \kw{inc} : \mathbb{N} \}$
+    given by
+    \[
+      \Gamma_\kw{count} \: \vDash \: \kw{inc} \cdot \underline{0} \cdot \kw{inc} \cdot
+         \underline{1} \cdots
+    \]
+    and implemented by the C library:
+  \begin{verbatim}
+    int c = 0;
+    int inc() { return c++; }
+\end{verbatim}
   \end{example}
 
-  \pause
-  The \textbf{encapsulation primitive}
+ \pause
+  Note that
+  \begin{itemize}
+  \item the specification $\Gamma_\kw{count} : \varnothing \twoheadrightarrow E_\kw{count}$
+  uses \emph{implicit} state, whereas
+  \item
+  the implementation $\kw{Clight}(\kw{count.c}) : \mathcal{C} \mathbin@ \kw{mem}
+     \twoheadrightarrow \mathcal{C} \mathbin@ \kw{mem}$
+    uses
+     an \emph{explicit}, \emph{concrete} and \emph{global} state of type  $\kw{mem}$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{State Encapsulation}
+  We use an \textbf{encapsulation primitive}
   $[u_0 \rangle : U \leftrightarrows \mathbbm1$
-  can be defined for any $u_0 \in U$.
-  \\
+  to connect \\ the implicit and explicit views of the state.
+
+  \pause\vfill
+  For example, from the explicit state specification
+  $\Gamma'_\kw{count} : \varnothing \twoheadrightarrow E_\kw{count} \mathbin@ \mathbb{N}$
+  defined by
+  \[
+    \Gamma'_\kw{count} \: \vDash \: \bigl( \kw{inc}@n \cdot \underline{n@(n+1)} \bigr)^*
+   \,,
+  \]
+  we can recover
+  \[
+    \Gamma_\kw{count} = (E_\kw{count} \mathbin@ [0 \rangle) \odot \Gamma'_\kw{count}
+       : \varnothing \twoheadrightarrow E_\kw{count}
+   \,.
+  \]
   \pause
-  Refinement squares capture \emph{simulation} arguments
-  for representation independence.
+  In detail:
+  \[
+    \varnothing
+    \xrightarrow{\Gamma'_\kw{count}}
+    E_\kw{count} \mathbin@ \mathbb{N}
+    \xrightarrow{E_\kw{count} \mathbin@ [0\rangle}
+     E_\kw{count} \mathbin@ \mathbbm1
+    \cong
+     E_\kw{count}
+  \]
+
+  \pause \vfill
+  $[u_0\rangle$
+  comes with a refinement-based version of representation independence.
 \end{frame}
 %}}}
+
+\begin{frame}[fragile]{Data Abstraction}
+  If we define a relation $R : \mathbb{N} \times \kw{mem}$
+  \[
+    c \mathrel{R_\kw{count}} m \: :\Leftrightarrow \:
+       m[\kw{c}] = \kw{Vint}(n)
+  \]
+  we can express the concretization of state that occurs in:
+  \[
+    \begin{tikzcd}
+      \varnothing \ar[rr, twoheadrightarrow, "\Gamma'_\kw{count}"]
+        \ar[dd, leftrightarrow, "\bot"'] &&
+      E_\kw{count} \mathbin@ \mathbb{N}
+      \ar[dd, leftrightarrow, "\mathbf{R} \mathbin@ R_\kw{count}"] \\
+      & \le & \\
+      \mathcal{C} \mathbin@ \kw{mem} \ar[rr, twoheadrightarrow, "\kw{Clight}(\kw{count.c})"] &&
+      \mathcal{C} \mathbin@ \kw{mem}
+    \end{tikzcd}
+  \]
+  \pause\vfill
+  But how to prevent other components from interfering?
+\end{frame}
 
 %\begin{frame}{Manipulating state components} %{{{
 %To act on state components,
@@ -1058,30 +1148,24 @@ int main()
   By combining these ingredients,
   we were able to apply the framework in various ways:
   \begin{itemize}
-    \pause
     \item Incorporate \textbf{CompCertO} semantics and correctness results
-    \pause
     \item Define a new language ClightP with \textbf{private variables}
-    \pause
     \item Construct a theory of \textbf{certified abstraction layers}
-    \pause
     \item Model the example from the introduction
   \end{itemize}
 
   \pause
-  I hope to have convinced you that
-    Such frameworks can be a
+  Hope:
+  use such frameworks as
     \textbf{coarse-grained glue} for heterogeneous verification, \\
-    and become the basis for
+    and as the basis for
     \textbf{reusable certified software components}.
 
   \pause
   To pursue this further we would like to:
   \begin{itemize}
-    \item Integrate ITrees, program logics, \ldots
-    \pause
+    \item Incorporate more \textbf{existing tools} (ITrees, program logics, \ldots)
     \item Add \textbf{concurrency} to the model
-    \pause
     \item Make more explicit connections to \textbf{higher category theory}
   \end{itemize}
 \end{frame}
