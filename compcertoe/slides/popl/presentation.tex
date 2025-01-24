@@ -238,41 +238,177 @@ int main()
 \end{frame}
 %}}}
 
+\begin{frame}{Refinement in a Heterogeneous Context}
+  We propose to use generic refinement frameworks
+  to implement this approach:
+  \begin{itemize}
+    \pause \item We connect a high-level specification
+       \[ \Gamma_\kw{hello} \: \vDash \:
+          \kw{run} \cdot
+        \underline{\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}]} \cdot
+        14 \cdot \underline{0} \]
+
+    \pause \item to a flexibly defined model
+       \[ M_\kw{encdec} :=
+          \kw{load}(\kw{secret.s} + \kw{rot13.s})
+          \:\mathbin{\mathtt{|}}\:
+          \kw{load}(\kw{decode.s} + \kw{rot13.s}) \]
+
+    \pause \item by using intermediate specifications and refinement steps:
+      \begin{align*}
+        \Gamma_\kw{hello}
+           \:\le\: \Gamma_\kw{secret} \mathbin| \Gamma_\kw{decode}
+          &\:\le\: \kw{load}(\kw{secret.s} + \kw{rot13.s}) \mathbin| \Gamma_\kw{decode} \\
+          &\:\le\: \kw{load}(\kw{secret.s} + \kw{rot13.s}) \mathbin| \kw{load}(\kw{decode.s} + \kw{rot13.s})
+           \:=\: M_\kw{encdec}
+      \end{align*}
+  \end{itemize}
+  \pause
+  But what's involved in proving properties like
+  $\Gamma_\kw{secret} \le \kw{load}(\kw{secret.s} + \kw{rot13.s})$?
+%  \pause
+%  However, in a heterogeneous context,
+%  we have to contend with a huge variety of component types,
+%  views of the system,
+%  and refinement properties.
+\end{frame}
+
+\begin{frame}[fragile]{Generalizing Refinement Steps to Refinement Squares}
+  To deal with heterogeneous components,
+  \begin{itemize}
+    \item We use \textbf{effect signatures} to type components of the form $L : E \twoheadrightarrow F$;
+    \pause
+    \item We generalize refinement steps to \textbf{refinement squares}.
+  \end{itemize}
+
+  \pause \vfill
+  \[
+    \begin{tikzcd}
+      \mathcal{S} \ar[rr, "\Gamma_\kw{hello}", twoheadrightarrow]
+                  \ar[dd, equal]
+      &&
+      \mathcal{P} \ar[dd, equal]
+      \\
+      & \le &
+      \\
+      \mathcal{S} \ar[rr, "M_\kw{encdec}"', twoheadrightarrow] &&
+      \mathcal{P}
+    \end{tikzcd}
+    \qquad \qquad \pause
+    \begin{tikzcd}
+       \mathcal{C} \mathbin@ \kw{mem}
+         \ar[rr, "\kw{Clight}(\kw{decode.c})", twoheadrightarrow]
+         \only<4>{\ar[dd, dash, dotted, "{?}"']}
+         \only<5>{\ar[dd, leftrightarrow, "\mathbb{C}"']}
+       &&
+       \mathcal{C} \mathbin@ \kw{mem}
+         \only<4>{\ar[dd, dash, dotted, "{?}"']}
+         \only<5>{\ar[dd, leftrightarrow, "\mathbb{C}"]}
+       \\
+       & \le &
+       \\
+       \mathcal{A} \mathbin@ \kw{mem}
+         \ar[rr, "\kw{Asm}(\kw{decode.s})", twoheadrightarrow]
+       &&
+       \mathcal{A} \mathbin@ \kw{mem}
+    \end{tikzcd}
+  \]
+\end{frame}
+
+\begin{frame}[fragile]
+  \[
+    \begin{tikzcd}[row sep=small,column sep=small]
+      \mathcal{S} \ar[rr,equal] \ar[dddddd, equal]
+      &&
+      \mathcal{S} \ar[rrrr, twoheadrightarrow, "\Gamma_\kw{decode}"]
+         \ar[dd, leftrightarrow, "\kw{runtime}_\mathcal{C}"']
+      &&
+      &&
+      \mathcal{P} \ar[rr, equal]
+        \ar[dd, "\kw{entry}_\mathcal{C}", leftrightarrow]
+      &&
+      \mathcal{P} \ar[dddddd,equal]
+      \\
+      && && \text{Code proof} && &&
+      \\
+      &&
+      \mathcal{C} \mathbin@ \kw{mem} \ar[rr, "\kw{Clight}(\kw{decode.c})"]
+      \ar[dd, leftrightarrow, "\mathbb{C}"']
+      &&
+      \mathcal{C} \mathbin@ \kw{mem} \ar[rr, "\kw{Clight}(\kw{rot13.c})"]
+      \ar[dd, leftrightarrow, "\mathbb{C}"]
+      &&
+      \mathcal{C} \mathbin@ \kw{mem}
+      \ar[dd, leftrightarrow, "\mathbb{C}"]
+      \\
+      &  & & \text{CC} & &\text{CC} & & &
+      \\
+      &&
+      \mathcal{A} \mathbin@ \kw{mem} \ar[rr, "\kw{Asm}(\kw{decode.s})"']
+        \ar[dd, equal]
+      &&
+      \mathcal{A} \mathbin@ \kw{mem} \ar[rr, "\kw{Asm}(\kw{rot13.s})"']
+      &&
+      \mathcal{A} \mathbin@ \kw{mem}
+        \ar[dd, equal]
+      \\
+      && && \text{Linking} && &&
+      \\
+      \mathcal{S} \ar[rr, "\kw{runtime}"', twoheadrightarrow] \ar[dd,equal] &&
+      \mathcal{A} \mathbin@ \kw{mem} \ar[rrrr, "\kw{Asm}(\kw{decode.s} + \kw{rot13.s})"'] &&&&
+      \mathcal{A} \mathbin@ \kw{mem} \ar[rr, "\kw{entry}"', twoheadrightarrow] &&
+      \mathcal{P} \ar[dd,equal]
+      \\
+      && && \text{Def.} && &&
+      \\
+      \mathcal{S} \ar[rrrrrrrr, "\kw{load}(\kw{decode.s} + \kw{rot13.s})"']
+      && && && &&
+      \mathcal{P}
+    \end{tikzcd}
+  \]
+\end{frame}
+
 \begin{frame}{Contributions} %{{{
   We designed a generic refinement framework for low-level components supporting:
   \begin{itemize}
     \item Horizontal composition ($\odot, \oplus$): \\
       between parts of a system
-    \pause
     \item Vertical composition ($\fatsemi$): \\
       transitive refinement, data abstraction, certified compilation
-    \pause
     \item Spatial composition ($\mathbin@$): \\
       to manage different parts of the \emph{state}
   \end{itemize}
 
-  \pause \vfill
-  Using our framework,
-  we can address the example by \pause
-  \begin{itemize}
-    \item Constructing a specification $\Gamma_\kw{hello}$
-      expressing the desired result;
-    \pause
-    \item Building a model of the system we wish to verify:
-      \[
-        M_\kw{encdec} :=
-        \kw{load}(\kw{secret.s} + \kw{rot13.s})
-        \:\mathbin{\mathtt{|}}\:
-        \kw{load}(\kw{decode.s} + \kw{rot13.s})
-      \]
+%  \pause \vfill
+%  Using our framework,
+%  we can address the example by \pause
+%  \begin{itemize}
+%    \item Constructing a specification $\Gamma_\kw{hello}$
+%      expressing the desired result;
+%    \pause
+%    \item Building a model of the system we wish to verify:
+%      \[
+%        M_\kw{encdec} :=
+%        \kw{load}(\kw{secret.s} + \kw{rot13.s})
+%        \:\mathbin{\mathtt{|}}\:
+%        \kw{load}(\kw{decode.s} + \kw{rot13.s})
+%      \]
+%
+%    \pause
+%    \item Proving the refinement
+%      $
+%        \Gamma_\kw{hello} \le
+%        M_\kw{encdec}
+%      $
+%      to establish correctness
+%  \end{itemize}
 
-    \pause
-    \item Proving the refinement
-      $
-        \Gamma_\kw{hello} \le
-        M_\kw{encdec}
-      $
-      to establish correctness
+  \pause
+  Our framework is mechanized in Rocq and incorporates CompCertO
+  \begin{itemize}
+    \item Languages semantics for C and assembly;
+    \item Compiler correctness theorem;
+    \item Assembly linking proof.
   \end{itemize}
 
 %  Our model is mechanized in Coq and supports
@@ -296,7 +432,7 @@ int main()
 \tableofcontents
 \end{frame}
 
-\section{Horizontal fragment}
+\section{Two-dimensional Refinement}
 
 %\begin{frame}{Overview} %{{{
 %  [Refinement diagram explaining:
@@ -467,122 +603,127 @@ int main()
     \]
   \end{example}
 
+%  \pause
+%  Together,
+%  $\odot$ and $\oplus$ form a
+%  symmetric monoidal category.
+\end{frame}
+%}}}
+
+%\begin{frame}[fragile]{Refinement Conventions and Refinement Squares} %{{{
+%Our framework comes with a simple notion of refinement:
+%\[
+%  \Gamma_\kw{hello} \le M_\kw{encdec}
+%  \qquad \qquad
+%  \begin{tikzcd}[sep=large]
+%    \mathcal{S} \ar[d,equal] \ar[r,"\Gamma_\kw{hello}", twoheadrightarrow] &
+%    \mathcal{P} \ar[d,equal] \\
+%    \mathcal{S} \ar[r, "M_\kw{encdec}"', twoheadrightarrow] & \mathcal{P}
+%  \end{tikzcd}
+%\]
+%\pause
+%To model abstraction relationships,
+%we introduce a notion of
+%\textbf{refinement conventions}:
+%\[
+%  \begin{tikzcd}[sep=huge]
+%    \mathcal{S} \ar[d,"\kw{runtime}_*"', leftrightarrow]
+%      \ar[r, "\Gamma_\kw{decode}", twoheadrightarrow] &
+%    \mathcal{P} \ar[d,"\kw{entry}^*", leftrightarrow] \\
+%    \mathcal{C} \mathbin@ \kw{mem} \ar[r, "\kw{Clight}(\kw{decode.c})"', twoheadrightarrow] &
+%    \mathcal{C} \mathbin@ \kw{mem}
+%  \end{tikzcd}
+%  \qquad \pause
+%  \begin{tikzcd}[sep=huge]
+%    \mathcal{C} \mathbin@ \kw{mem} \ar[d, "\mathbb{C}"', leftrightarrow]
+%      \ar[r, "\kw{Clight}(\kw{decode.c})", twoheadrightarrow] &
+%    \mathcal{C} \mathbin@ \kw{mem} \ar[d, "\mathbb{C}", leftrightarrow] \\
+%    \mathcal{A} \mathbin@ \kw{mem} \ar[r, "\kw{Asm}(\kw{decode.s})"', twoheadrightarrow] &
+%    \mathcal{A} \mathbin@ \kw{mem}
+%  \end{tikzcd}
+%\]
+%\end{frame}
+%%}}}
+
+\begin{frame}[fragile]{Refinement Squares} %{{{
+  \begin{definition}[Refinement Convention]
+    A refinement convention $\mathbf{R} : E_1 \leftrightarrow E_2$
+    formalizes a stateful relationship \\ between the operations and outcomes
+    of $E_1$ and $E_2$.
+  \end{definition}
+
   \pause
-  Together,
-  $\odot$ and $\oplus$ form a
-  symmetric monoidal category.
-\end{frame}
-%}}}
-
-\begin{frame}[fragile]{Combining layered and flat composition} %{{{
-  \begin{example}[Pipe operator]
-    Given two commands $P, Q : \mathcal{F} \oplus \mathcal{F} \twoheadrightarrow \mathcal{P}$
-    we can define:
-    \[
-      P \mathbin| Q \: := \:
-        \kw{seq} \odot (P \oplus Q)
-             \odot (\mathcal{F} \oplus (\Delta \odot \kw{fifo}) \oplus \mathcal{F})
-      \quad \text{where} \quad
-      \mathcal{S} \cong \mathcal{F} \oplus \mathcal{F}
-    \]
-    \[
-      \includegraphics[scale=0.10]{pipe}
-    \]
-  This is how we define:
+  Refinement squares are refinements \emph{up to}
+  specified conventions:
   \[
-        M_\kw{encdec} \::=\:
-        \kw{load}(\kw{secret.s} + \kw{rot13.s})
-        \:\mathbin{\mathtt{|}}\:
-        \kw{load}(\kw{decode.s} + \kw{rot13.s})
+    \phi : L_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} L_2
+    \qquad \qquad
+    \begin{tikzcd}
+       E_1 \ar[rr, "L_1", twoheadrightarrow]
+           \ar[dd, "\mathbf{R}"', leftrightarrow]
+       &&
+       F_1 \ar[dd, "\mathbf{S}", leftrightarrow]
+       \\
+       & \phi &
+       \\
+       E_2 \ar[rr, "L_2"', twoheadrightarrow] && F_2
+    \end{tikzcd}
   \]
-  \end{example}
+
+  \pause
+  Note that for $\mathbf{R} = \mathbf{S} = \kw{id}$
+  we recover a simple notion of refinement.
 \end{frame}
 %}}}
 
-\section{Vertical Composition and Refinement}
-
-\begin{frame}[fragile]{Refinement Conventions and Refinement Squares} %{{{
-Our framework comes with a simple notion of refinement:
-\[
-  \Gamma_\kw{hello} \le M_\kw{encdec}
-  \qquad \qquad
-  \begin{tikzcd}[sep=large]
-    \mathcal{S} \ar[d,equal] \ar[r,"\Gamma_\kw{hello}", twoheadrightarrow] &
-    \mathcal{P} \ar[d,equal] \\
-    \mathcal{S} \ar[r, "M_\kw{encdec}"', twoheadrightarrow] & \mathcal{P}
-  \end{tikzcd}
-\]
-\pause
-To model abstraction relationships,
-we introduce a notion of
-\textbf{refinement conventions}:
-\[
-  \begin{tikzcd}[sep=huge]
-    \mathcal{S} \ar[d,"\kw{runtime}_*"', leftrightarrow]
-      \ar[r, "\Gamma_\kw{decode}", twoheadrightarrow] &
-    \mathcal{P} \ar[d,"\kw{entry}^*", leftrightarrow] \\
-    \mathcal{C} \mathbin@ \kw{mem} \ar[r, "\kw{Clight}(\kw{decode.c})"', twoheadrightarrow] &
-    \mathcal{C} \mathbin@ \kw{mem}
-  \end{tikzcd}
-  \qquad \pause
-  \begin{tikzcd}[sep=huge]
-    \mathcal{C} \mathbin@ \kw{mem} \ar[d, "\mathbb{C}"', leftrightarrow]
-      \ar[r, "\kw{Clight}(\kw{decode.c})", twoheadrightarrow] &
-    \mathcal{C} \mathbin@ \kw{mem} \ar[d, "\mathbb{C}", leftrightarrow] \\
-    \mathcal{A} \mathbin@ \kw{mem} \ar[r, "\kw{Asm}(\kw{decode.s})"', twoheadrightarrow] &
-    \mathcal{A} \mathbin@ \kw{mem}
-  \end{tikzcd}
-\]
-\end{frame}
-%}}}
-
-\begin{frame}[fragile]{Vertical Composition} %{{{
+\begin{frame}<1,3,5,6>[fragile]{Vertical Composition} %{{{
   \begin{columns}
     \begin{column}{0.7\textwidth}
       As expected, refinement $\le$ is transitive:
       \[
         \begin{prooftree}
-          \hypo{\only<2->{\phi : } L_1
+          \hypo{\phi :  L_1
             \le\only<5->{_{\mathbf{R} \twoheadrightarrow \mathbf{S} }}
             L_2}
-          \hypo{\only<2->{\psi : } L_2
+          \hypo{\psi :  L_2
             \le\only<5->{_{\mathbf{R'} \twoheadrightarrow \mathbf{S'} }} L_3}
-          \infer2{\only<3->{\phi \vcomp \psi : }
+          \infer2{\phi \vcomp \psi :
             L_1
-              \le\only<6->{_{\mathbf{R} \vcomp \mathbf{R'} \twoheadrightarrow
+              \le\only<5->{_{\mathbf{R} \vcomp \mathbf{R'} \twoheadrightarrow
                 \mathbf{S} \vcomp \mathbf{S'} }}
             L_3}
         \end{prooftree}
       \]
 
+      \vspace{2em}
       \uncover<4->{%
         The \emph{vertical composition} principle $\vcomp$ \\
         applies to refinement conventions as well.
       }
 
-      \vspace{1em}
-      \uncover<7->{%
-        \begin{example}[Correctness and compilation]
-          We can combine C code verification
-          and compiler correctness properties
-          to relate spec and assembly code directly:
-          \[
-            \begin{prooftree}
-              \hypo{
-                \Gamma_\kw{decode}
-                \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}}
-                \kw{Clight}(\kw{decode.c})
-                \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
-                \kw{Asm}(\kw{decode.s})}
-              \infer1{
-                \Gamma_\kw{decode}
-                \le_{\mathbf{R} \vcomp \mathbb{C} \twoheadrightarrow
-                     \mathbf{S} \vcomp \mathbb{C}}
-                \kw{Asm}(\kw{decode.s})}
-            \end{prooftree}
-          \]
-        \end{example}
-      }
+%      \vspace{1em}
+%      \uncover<7->{%
+%        \begin{example}[Correctness and compilation]
+%          We can combine C code verification
+%          and compiler correctness properties
+%          to relate spec and assembly code directly:
+%          \[
+%            \begin{prooftree}
+%              \hypo{
+%                \Gamma_\kw{decode}
+%                \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}}
+%                \kw{Clight}(\kw{decode.c})
+%                \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+%                \kw{Asm}(\kw{decode.s})}
+%              \infer1{
+%                \Gamma_\kw{decode}
+%                \le_{\mathbf{R} \vcomp \mathbb{C} \twoheadrightarrow
+%                     \mathbf{S} \vcomp \mathbb{C}}
+%                \kw{Asm}(\kw{decode.s})}
+%            \end{prooftree}
+%          \]
+%        \end{example}
+%      }
     \end{column}
     \begin{column}{0.25\textwidth}
       \[
@@ -599,7 +740,7 @@ we introduce a notion of
               \only<5>{\ar[dd, "\mathbf{S}", leftrightarrow]}
               \only<6->{\ar[dddd, "\mathbf{S} \vcomp \mathbf{S}'", leftrightarrow]}
           \\
-          & \only<1,3-4,6->{\color{white}} \phi &
+          & \only<3-4,6->{\color{white}} \phi &
           \\
           \only<-2,5>{
           E\only<5->{_2} \ar[rr, "L_2", twoheadrightarrow]
@@ -616,7 +757,7 @@ we introduce a notion of
             \only<3->{\ar[dd, "\mathbf{S}'", leftrightarrow]}
           }
           \\
-          & \only<1,3-4,6->{\color{white}} \psi &
+          & \only<3-4,6->{\color{white}} \psi &
           \\
           E\only<5->{_3} \ar[rr, "L_3", twoheadrightarrow]
               &&
@@ -961,6 +1102,31 @@ we introduce a notion of
 %}}}
 
 \appendix
+
+\begin{frame}[fragile]{Combining layered and flat composition} %{{{
+  \begin{example}[Pipe operator]
+    Given two commands $P, Q : \mathcal{F} \oplus \mathcal{F} \twoheadrightarrow \mathcal{P}$
+    we can define:
+    \[
+      P \mathbin| Q \: := \:
+        \kw{seq} \odot (P \oplus Q)
+             \odot (\mathcal{F} \oplus (\Delta \odot \kw{fifo}) \oplus \mathcal{F})
+      \quad \text{where} \quad
+      \mathcal{S} \cong \mathcal{F} \oplus \mathcal{F}
+    \]
+    \[
+      \includegraphics[scale=0.10]{pipe}
+    \]
+%  This is how we define:
+%  \[
+%        M_\kw{encdec} \::=\:
+%        \kw{load}(\kw{secret.s} + \kw{rot13.s})
+%        \:\mathbin{\mathtt{|}}\:
+%        \kw{load}(\kw{decode.s} + \kw{rot13.s})
+%  \]
+  \end{example}
+\end{frame}
+%}}}
 
 \begin{frame}[fragile]{Representation Independence} %{{{
   When the initial states $u_0 \in U$ and $v_0 \in V$
