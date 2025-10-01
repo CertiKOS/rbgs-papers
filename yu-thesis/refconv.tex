@@ -1,0 +1,1648 @@
+\chapter{Strategy Refinement}
+\label{ch:rc}
+
+The notion of simple refinement cannot handle
+components at different levels of abstraction.
+To address this challenge,
+the notion of simulation convention used in CompCertO
+is adapted to the setting of effect signatures and game semantics.
+A simulation convention connects
+the ways an interface is viewed at different levels of abstraction.
+In CompCertO,
+the compiler's correctness theorem involves
+a simulation convention
+$\mathbb{C} : \mathcal{C} \twoheadleftrightarrow \mathcal{A}$,
+which is used to express the way in which
+C-level function calls ($\mathcal{C}$) are encoded
+as assembly-level interactions ($\mathcal{A}$).
+
+Building on this idea,
+a richer notion of \emph{refinement convention} between effect signatures is defined.
+Then a refinement property
+$\phi : L_1 \le_{\mathbf{R} \rightarrow \mathbf{S}} L_2$
+between
+$L_1 : E_1 \rightarrow F_1$ and
+$L_2 : E_2 \rightarrow F_2$
+is parameterized by two simulation conventions
+$\mathbf{R} : E_1 \leftrightarrow E_2$ and
+$\mathbf{S} : F_1 \leftrightarrow F_2$.
+The corresponding refinement property assumes that incoming
+source- and target-level questions in $F_1$ and $F_2$
+will be related according to the convention $\mathbf{S}$,
+and guarantees that outgoing questions in $E_1$ and $E_2$
+will be related according to $\mathbf{R}$.
+Conversely, it assumes that
+the environment's answers in $E$
+will be related according to $\mathbf{R}$
+and guarantees that the components' answers in $F$
+will be related according to $\mathbf{S}$.
+
+%The resulting compositional structure is shown in Fig.~\ref{fig:hvcomp}.
+%While program components compose \emph{horizontally} through linking ($\odot$),
+%refinement conventions compose \emph{vertically}
+%in the manner of simulation relations ($\vcomp$).
+%Refinement proofs are compatible with both $\odot$ and $\vcomp$
+%so that they constitute a two-dimensional notion.
+%We can also define the identity convention
+%$\idsc_E : E \leftrightarrow E$;
+%when $\mathbf{R}$ and $\mathbf{S}$ are both $\idsc$,
+%refinement squares reduce to simple refinements.
+
+% \begin{example}[Semantics preservation of CompCert]
+%   \label{ex:bq-proof}
+%   We will see in \S\ref{sec:app}
+%   that the correctness proof of CompCertO
+%   can be put in the form of a refinement square:
+%   \[
+%     \kw{CompCert}(p) = p'
+%     \quad \Longrightarrow \quad
+%     \phi^\kw{cc}_p :
+%     \kw{Clight}(p) \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(p')
+%   \]
+%   where %the refinement convention
+%   $\mathbb{C} : \mathcal{C} \leftrightarrow \mathcal{A}$
+%   captures the calling convention used %by the compiler
+%   to represent C calls at the level of assembly.
+% \end{example}
+
+%DimSum follows the approach used in the refinement calculus
+%and uses dual nondeterminism to express similar
+%abstraction relationship as a dynamic ``translation''
+%between interacting components which use
+%incompatible representations.
+%Our own approach is closer to the one used in CompCertO
+%but the notions of \emph{companion} and \emph{conjoint}
+%introduced in \S{}X.Y %XXX
+%suggest ways in which these two approaches could be unified.
+
+%}}}
+
+\begin{table}
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    Notation & Description\\
+    \midrule
+    $\mathbf{R} : E \leftrightarrow F$ & Refinement Convention\\
+    $(m_1, m_2)(n_1, n_2)\backslash \mathbf{R}$ & Residual Refinement Convention after $(m_1, m_2)(n_1, n_2)$\\
+    $\sigma \le_{\mathbf{R} \rightarrow \mathbf{S}} \tau$ & Refinement Square\\
+    $\mathbf{R} \fatsemi \mathbf{S}$ & Vertical Composition of Refinement Conventions\\
+    $\mathbf{R} \oplus \mathbf{S}$ & Flat Composition of Refinement Conventions\\
+    $\mathbf{R} \at \mathbf{S}$ & Spatial Composition of Refinement Conventions\\
+    \bottomrule
+  \end{tabular}
+  \caption{Summary of notations}
+  \label{tab:rc:notations}
+\end{table}
+
+Section~\ref{sec:rc:overview} provides
+a high-level overview of refinement squares,
+introducing their central ideas in an intuitive manner.
+Section~\ref{sec:rc:refconv}
+then gives the formal definition of refinement conventions,
+illustrates them with examples,
+and establishes their key properties.
+Section~\ref{sec:rc:refsq} defines refinement squares,
+demonstrates how they capture the refinement property of strategies,
+and explains how they integrate with the simulation framework of CompCertO.
+Finally, Section~\ref{sec:rc:cal}
+presents an instance of CAL formulated
+within the strategy model.
+
+For reference, Table~\ref{tab:rc:notations} summarizes the notations for refinement conventions and refinement squares used throughout this chapter.
+
+\section{Overview}
+\label{sec:rc:overview}
+The inclusion order induces a simple notion of strategy refinement.
+For example,
+consider the strategies
+$\sigma \subseteq \tau : E \rightarrow \{ {*} : \varnothing \}$,
+where they only exhibit meaningful moves
+to interact with the handlers
+via the signature $E$.
+Ignoring the initial move $*$,
+plays of $\sigma$ and $\tau$ take the form
+$
+\underline{m_1} n_1 \underline{m_2} n_2 \cdots \underline{m_k}
+$.
+Operationally,
+inclusion induces the following coinductive simulation property,
+where $\underline{m}n \backslash \sigma$ is written
+for the residual strategy $\{ s \mid \underline{m}ns \in \sigma \}$:
+\begin{equation} \label{eqn:sim}
+  \begin{array}{r@{\:}l}
+    \sigma \le \tau :\Leftrightarrow {} &
+    \forall m \cdot
+    \underline{m} \in \sigma \Rightarrow
+    \underline{m} \in \tau \wedge {} \\ &
+    \forall n \cdot
+    (\underline{m} n \backslash \sigma) \le
+    (\underline{m} n \backslash \tau)
+    \,.
+  \end{array}
+  \qquad
+  \begin{tikzcd}
+    \sigma \ar[r,dash] \ar[d, dash, "\le"'] &
+    m \ar[r,dotted,dash] \ar[d,equal] &
+    n \ar[r] \ar[d,equal] &
+    (\underline{m} n \backslash \sigma) \ar[d, dash, dashed, "\le"]
+    \\
+    \tau \ar[r,dash, dashed] &
+    m \ar[r,dotted,dash] &
+    n \ar[r,dashed] &
+    (\underline{m} n \backslash \tau)
+  \end{tikzcd}
+\end{equation}
+In other words,
+any behavior prescribed by the specification $\sigma$
+must be mirrored by the refinement~$\tau$.
+
+Refinement conventions and refinement squares
+generalize this notion of refinement
+to cover situations where the source $\sigma$ and target $\tau$
+differ in their interactions with the environment.
+
+Building on the example above, suppose
+$\sigma : E_1 \rightarrow \{* : \varnothing\}$ and
+$\tau : E_2 \rightarrow \{* : \varnothing\}$
+now differ in the type of their outgoing interactions.
+To relate them,
+a notion of \emph{refinement convention}
+$\mathbf{R} : E_1 \leftrightarrow E_2$
+will be defined, establishing a correspondence between
+the questions and answers of $E_1$ and $E_2$.
+A~refinement \emph{up to} $\mathbf{R}$,
+written in this case
+$\sigma \le_{\mathbf{R} \rightarrow \{*:\varnothing\}} \tau$,
+will correspond to the property
+\begin{equation} \label{eqn:simupto}
+  \begin{array}{l}
+    \forall m_1 \cdot \underline{m_1} \in \sigma \Rightarrow {}
+    %\\[0.66ex]
+    \exists m_2 \cdot \underline{m_2} \in \tau \:\wedge\:
+    m_1 \mathrel{\mathbf{R}^\circ} m_2 \:\wedge\: {}
+    \\[0.66ex]
+    \forall \, n_1 \, n_2 \cdot \:
+    n_1 \mathrel{\mathbf{R}^\bullet_{m_1,m_2}} n_2 \Rightarrow
+    \\[0.66ex] \quad
+    \bigl(\underline{m_1} n_1 \backslash \sigma \bigr)
+    %\le_{(m_1,m_2)(n_1,n_2) \backslash R \twoheadrightarrow \{*:\varnothing\}}
+    \le_{\mathbf{R}_{m_1,m_2}^{n_1,n_2} \rightarrow \{*:\varnothing\}}
+    \bigl(\underline{m_2} n_2 \backslash \tau \bigr)
+  \end{array}
+  \hspace{-1ex} %\quad
+  \begin{tikzcd}
+    \sigma \ar[r,dash] \ar[d, dash, "\le_\mathbf{R}"'] &
+    m_1 \ar[r,dotted,dash] \ar[d,dash,dashed,"\mathbf{R}^\circ"'] &
+    n_1 \ar[r] \ar[d,dash, "\mathbf{R}^\bullet_{m_1m_2}"'] &
+    \bigl(\underline{m_1} n_1 \backslash \sigma \bigr)
+    \ar[d, dash, dashed, "\le_{\mathbf{R}_{m_1m_2}^{n_1n_2}}"']
+    \\
+    \tau \ar[r,dashed,dash] &
+    m_2 \ar[r,dotted,dash] &
+    n_2 \ar[r,dashed] &
+    \bigl(\underline{m_2} n_2 \backslash \tau \bigr)
+  \end{tikzcd}
+\end{equation}
+Here,
+the refinement convention provides a relation
+$\mathbf{R}^\circ \subseteq E_1 \times E_2$
+between the questions of $E_1$ and the questions of $E_2$;
+furthermore, for related questions $m_1 \mathrel{\mathbf{R}^\circ} m_2$
+the refinement convention provides a relation on answers
+$\mathbf{R}^\bullet_{m_1,m_2} \subseteq \kw{ar}(m_1) \times \kw{ar}(m_2)$
+and an updated refinement convention
+$\mathbf{R}_{m_1m_2}^{n_1n_2}$ to be used for the next question
+whenever the answers $n_1 \mathrel{\mathbf{R}^\bullet_{m_1m_2}} n_2$
+are received.
+
+As this example illustrates,
+one source of complexity is
+the \emph{alternating} character of (\ref{eqn:simupto}).
+The strategies $\sigma$ and $\tau$
+primarily exhibit moves to their handlers
+as they make questions and receive answers from the environment.
+While the \emph{client} is free to choose
+matching questions $m_1$ and $m_2$,
+it must be ready to accept for every answer $n_1$
+any related $n_2$ which the handler could return.
+In other words,
+the kind of data abstraction realized by refinement conventions
+inherently involves nondeterministic choices
+from both the component and its environment.
+In the literature on dual nondeterminism,
+these are referred to as \emph{demonic} and \emph{angelic} choices~\citep{dndf}.
+The refinement relation
+$\le_\mathbf{R}$
+exhibits opposite variance with respect to its two components:
+it becomes larger
+when $\mathbf{R}^\circ$ relates more questions,
+but smaller when $\mathbf{R}^\bullet$
+introduces additional constraints on answers.
+
+This variance pattern is further complicated by the fact that
+strategies simultaneously play
+dual roles as both client and handler
+on their outgoing and incoming interfaces respectively.
+Consequently,
+general refinement squares
+must accommodate two different refinement conventions
+with opposite variances.
+From the handler's perspective,
+this duality manifests as a complementary requirement:
+when interacting with clients,
+the handler must be robust enough
+to handle all possible choices of matching questions
+while retaining the flexibility to choose any valid answer.
+
+\section{Refinement Conventions}
+\label{sec:rc:refconv}
+
+The construction of refinement conventions
+follows the same general spirit as that of strategies.
+However,
+to address the challenges outlined above,
+an essential technical innovation is required.
+In particular,
+to accommodate
+the alternation between client and handler choices
+inherent in refinement conventions,
+the standard prefix ordering on plays must be extended.
+
+\begin{definition} \label{def:refconv}
+  \emph{Refinement conventions} of type $\mathbf{R} : E \leftrightarrow F$
+  are constructed using plays of the form
+  \[
+    s \in P_{E \leftrightarrow F} \: ::= \:
+    (m_1, m_2) \bot \: \mid \:
+    (m_1, m_2) (n_1, n_2) \, s \: \mid \:
+    (m_1, m_2) (n_1, n_2) \top
+    \quad
+    \left(
+      \begin{array}{c@{\:}c}
+        m_1 \in E \,, & n_1 \in \kw{ar}(m_1) \\
+        m_2 \in F \,, & n_2 \in \kw{ar}(m_2)
+      \end{array}
+    \right)
+    \,.
+  \]
+  As suggested by the notation,
+  the plays are ordered by the smallest relation $\preceq$
+  such that
+  \[
+    s_1 \preceq s_2 \:\Longrightarrow\:
+    (m_1, m_2) \bot \:\preceq\:
+    (m_1, m_2) (n_1, n_2) s_1 \:\preceq\:
+    (m_1, m_2) (n_1, n_2) s_2 \:\preceq\:
+    (m_1, m_2) (n_1, n_2) \top
+    \,.
+  \]
+  Then refinement conventions are elements of
+  \[
+    S_{E \leftrightarrow F} \: := \:
+    \mathcal{D} \big( P_{E \leftrightarrow F}, {\preceq} \big) \: = \:
+    \{ \mathbf{R} \subseteq P_{E \leftrightarrow F} \mid
+      \forall s \, t \cdot s \preceq t \wedge t \in \mathbf{R} \Rightarrow
+    s \in \mathbf{R} \}
+    \,.
+  \]
+\end{definition}
+
+The plays of $P_{E \leftrightarrow F}$, interpreted as follows,
+allow more simulations to succeed as
+more and larger plays are added to the convention:
+\begin{itemize}
+  \item The play $(m_1, m_2)\bot$
+    allows the questions $m_1$ and $m_2$
+    to be related by $\mathbf{R}^\circ$.
+    By default,
+    \emph{all possible pairs of answers} $(n_1, n_2)$
+    are permitted by $\mathbf{R}^\bullet_{m_1m_2}$.
+    However, no questions are allowed beyond that point
+    until plays of the following kind are added to the refinement convention.
+  \item The play $(m_1, m_2)(n_1,n_2) s$
+    extends the ``next'' convention $\mathbf{R}^{n_1,n_2}_{m_1,m_2}$
+    with the play $s$.
+    Importantly, it does \emph{not} modify
+    the ``answers'' relation $\mathbf{R}^\circ$.
+    As explained above, the pair $(n_1, n_2) \in \mathbf{R}^\circ_{m_1m_2}$
+    was already---and remains---permitted.
+    However,
+  \item the play $(m_1,m_2)(n_1,n_2) \top$ \emph{disallows} the pair
+    $(n_1, n_2) \notin \mathbf{R}^\circ_{m_1m_2}$ as related answers.
+    Since this restricts the \emph{handler},
+    simulations between client computations become easier to prove,
+    which is why plays of the form $(m_1,m_2)(n_1,n_2)\top$ are the ``largest''.
+\end{itemize}
+Based on this interpretation,
+the components $R^\circ$, $R^\bullet$
+and $R_{m_1m_2}^{n_1n_2}$ could be defined as follows:
+\begin{gather*}
+  m_1 \mathrel{\mathbf{R}^\circ} m_2 \::\Leftrightarrow\:
+  (m_1,m_2)\bot \in \mathbf{R}
+  \,, \qquad
+  n_1 \mathrel{\mathbf{R}^\bullet_{m_1m_2}} n_2 \::\Leftrightarrow\:
+  (m_1,m_2)(n_1,n_2)\top \notin \mathbf{R}
+  \,, \\[0.5ex]
+  \mathbf{R}_{m_1m_2}^{n_1n_2} \: := \:
+  (m_1,m_2)(n_1,n_2) \backslash \mathbf{R} \: = \:
+  \{ s \mid (m_1,m_2)(n_1,n_2)s \in \mathbf{R} \}
+  \,.
+\end{gather*}
+Note the negative involvement of $(m_1,m_2)(n_1,n_2)\top$
+in the definition of $\mathbf{R}^\bullet$.
+When this play appears in $\mathbf{R}$,
+then by construction $\mathbf{R}$ must contain
+all plays of the form $(m_1,m_2)(n_1,n_2)s$ as well.
+However, they become meaningless
+as a simulation can never proceed
+in a way that they could influence.
+
+\subsection{Ordering Refinement Conventions}
+
+The root source of complexity
+in the ordering of plays within the refinement convention lies in
+the alternation of choices
+between the client and the handler
+as described in \autoref{sec:rc:overview}.
+To illustrate this phenomenon more concretely,
+consider the following refinement conventions,
+presented in increasing order:
+\begin{align*}
+  \mathbf{R}_1 & : E \leftrightarrow E' := \varnothing \\
+  \mathbf{R}_2 & := \mathbf{R}_1\ \cup\ \{(m_1, m'_1)\bot, (m_2, m'_2)\bot\} \\
+  \mathbf{R}_3 & := \mathbf{R}_2\ \cup\ \{(m_1, m'_1)(n_1, n'_1)s_1, (m_1, m'_1)(n_2, n'_2)s_2\}\quad \text{where $s_1$ and $s_2$ are non-empty}  \\
+  \mathbf{R}_4 & := \mathbf{R}_3\ \cup\ \downarrow\{(m_1, m'_1)(n_1, n'_1)\top\}
+\end{align*}
+where the signatures $E$ and $E'$ are defined as follows:
+\[
+  E  := \{ m_1 : \{n_1, n_2\},\ m_2 : \{ n_1, n_2 \} \} \quad
+  E' := \{ m'_1 : \{n'_1, n'_2\},\ m'_2 : \{ n'_1, n'_2 \} \}
+\]
+From the client's perspective,
+the relation $\mathbf{R}^\circ$ determines
+which pairs of questions
+it is permitted to initiate,
+while $\mathbf{R}^\bullet$ determines
+which pairs of answers it must be able to respond to.
+As the refinement convention enlarges,
+the client gains more flexibility in its choice of questions
+and faces fewer obligations with respect to answers.
+Consequently, larger conventions are more permissive for the client,
+making the refinement proof easier to establish.
+
+\begin{itemize}
+  \item The proof fails with $\mathbf{R}_1$
+    immediately,
+    as the empty set leaves no valid choice of questions.
+  \item With $\mathbf{R}_2$,
+    the client may choose $(m_1, m'_1)$, or $(m_2, m'_2)$
+    as questions.
+    However, the handler is unconstrained
+    in its choice of answers,
+    and the client cannot further proceed
+    upon receiving the answer.
+  \item With $\mathbf{R}_3$,
+    if the client selects $(m_1, m'_1)$ as questions,
+    the handler's choice is restricted to $(n_1, n'_1)$ or $(n_2, n'_2)$.
+    This restriction simplifies the client's proof obligation,
+    since fewer cases need to be considered.
+    The refinement then proceeds along $s_1$ or $s_2$,
+    depending on the handler's choice.
+  \item Once
+    $(m_1, m'_1)(n_1, n'_1) \top$ is added,
+    the handler is barred from choosing $(n_1, n'_1)$.
+    The client's proof obligation is further simplified,
+    as one potential branch is eliminated.
+\end{itemize}
+
+Dually, from the handler's perspective,
+$\mathbf{R}^\circ$ specifies the pairs of questions
+for which it must be ready to provide answers,
+and $\mathbf{R}^\bullet$ specifies the answers
+it is allowed to return.
+As the refinement convention expands,
+the handler faces stricter obligations,
+since it must cover more possible questions
+while being constrained to fewer admissible answers.
+Thus, larger conventions are more restrictive
+for the handler,
+making the refinement proof harder to establish.
+
+\begin{itemize}
+  \item The proof trivially succeeds with $\mathbf{R}_1$,
+    since no obligations exist.
+  \item With $\mathbf{R}_2$,
+    the handler must provide answers for
+    $(m_1, m'_1)$ and $(m_2, m'_2)$,
+    but fortunately,
+    the client's freedom of choice ensures
+    that the proof can still complete easily.
+  \item The task becomes harder with $\mathbf{R}_3$:
+    if the client chooses $(m_1, m'_1)$ as questions,
+    the handler is restrained to answering either $(n_1, n'_1)$ or $(n_2, n'_2)$,
+    after which,
+    the proof continues along $s_1$ or $s_2$.
+  \item $\mathbf{R}_4$ makes the situation more challenging,
+    since the handler is no longer allowed
+    to choose $(n_1, n'_1)$
+    as a response to $(m_1, m'_1)$.
+    This further restricts its strategy
+    and increases the difficulty of the proof.
+\end{itemize}
+
+This ordering of refinement conventions
+parallels the refinement order of simulation conventions
+in CompCertO.
+Formally,
+the refinement relation $\mathbb{R} \sqsubseteq \mathbb{S}$ is defined as follows:
+\begin{align*}
+  \forall w\ m_1\ m_2.\ w \Vdash m_1 \mathbin{S^\que} m_2
+  \rightarrow \exists v.\ (v \Vdash m_1 \mathbin{R^\que} m_2 \wedge
+    \forall n_1\ n_2.\ v \Vdash n_1 \mathbin{R^\bullet} n_2 \rightarrow
+  w \Vdash n_1 \mathbin{S^\bullet} n_2)
+\end{align*}
+Intuitively,
+a more refined simulation convention $\mathbb{R}$
+admits a broader range of questions
+while restricting the admissible answers.
+This asymmetry makes the simulation proof easier
+for the client
+(since it has more choices and fewer obligations)
+but harder for the handler
+(since it must cover more cases under tighter constraints).
+As a consequence, CompCertO establishes the following property:
+\begin{equation}\label{eq:convention-ordering}
+  \begin{prooftree}
+    \hypo{\mathbb{R} \sqsubseteq \mathbb{R}'}
+    \hypo{L_1 \le_\kw{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2}
+    \hypo{\mathbb{S} \sqsubseteq \mathbb{S}'}
+    \infer3{L_1 \le_\kw{\mathbb{R'} \twoheadrightarrow \mathbb{S'}} L_2}
+  \end{prooftree}
+\end{equation}
+In this rule, the handler's simulation convention $\mathbb{S}$
+may be replaced by a less refined one $\mathbb{S}'$,
+and the client's refinement convention $\mathbb{R}$
+may be replaced by a more refined one $\mathbb{R}'$.
+Both substitutions reduce the proof burden,
+thereby ensuring that the simulation property is preserved.
+In the next section,
+an analogous property will be established
+for strategy refinement under refinement conventions,
+extending this intuition beyond simulation conventions.
+
+\subsection{Example of Refinement Conventions}
+
+Four examples of refinement conventions are given.
+
+\subsubsection{Deriving a Refinement Convention from a Relation}
+
+A set $U$ defines a signature $[U] := \{ u : U \mid u \in U \}$,
+where both questions and answers are elements of $U$.
+A relation $R \subseteq U \times V$
+defines a refinement convention between $[U]$ and $[V]$,
+where
+the questions and answers
+are permitted
+as long as they are related by $R$.
+\begin{definition}[Refinement convention interpretation of relations]
+  A relation $R \subseteq U \times V$ defines
+  a refinement convention $[R] : [U] \leftrightarrow [V]$ given by:
+  \begin{align*}
+    (u, v)\bot \in [R] &\::\Leftrightarrow\:
+    u \mathrel{R} v \\
+    (u,v)(u',v')\top \in [R] &\::\Leftrightarrow\:
+    u \mathrel{R} v \wedge \lnot u' \mathrel{R} v' \\
+    (u,v)(u',v')\,s \in [R] &\::\Leftrightarrow\:
+    u \mathrel{R} v \wedge (u' \mathrel{R} v' \Rightarrow s \in [R]) \,.
+  \end{align*}
+\end{definition}
+It is straightforward to show that
+$[R]$ is downward closed
+and prove that when when questions or answers
+are admitted by the refinement convention,
+they must be related by the underlying relation $R$:
+\[
+  u \mathbin{[R]^\que} v \:\Leftrightarrow\: u \mathbin{R} v\qquad
+  u' \mathbin{[R]^\ans_{uv}} v' \:\Leftrightarrow\: u' \mathbin{R} v'
+\]
+
+\subsubsection{Stateful Refinement Conventions}
+
+Like strategies
+where the history of the events
+can determine the next move,
+refinement conventions
+can also be history sensitive.
+This capability becomes essential
+when relating implementations
+that maintain state differently,
+as the appropriate refinement relationship
+may depend on the current system state.
+
+Consider again the counter example (Example~\ref{ex:decodespec}),
+where the specification
+encapsulates the state internally
+while the implementation uses external state.
+\begin{align*}
+  \sigma_\kw{cnt} : \mathbf{0} \rightarrow E_\kw{cnt}
+  & \vDash \big(\kw{inc}() \sysstep 0\big) \envstep
+  \big(\kw{inc}() \sysstep 1\big) \envstep \cdots\\
+  \sigma'_\kw{cnt} : \mathbf{0} \rightarrow E_\kw{cnt} \at \mathbb{N}
+  & \vDash \big(\kw{inc}() \at 0 \sysstep 0 \at 1\big) \envstep
+  \big(\kw{inc}() \at 1 \sysstep 1 \at 2\big) \envstep \cdots
+\end{align*}
+To relate these two implementations,
+we need a refinement convention
+that tracks the counter's current value,
+since the validity of moves depends on
+whether the external state matches the expected internal state.
+The following history-sensitive refinement convention accomplishes this:
+\begin{align*}
+  (\kw{inc}, \kw{inc}\at i) \bot \in \mathbf{R}_k
+  & \::\Leftrightarrow\: k = i\\
+  (\kw{inc}, \kw{inc}\at i)(j, j'\at i') \top \in \mathbf{R}_k
+  & \::\Leftrightarrow\: k = i \wedge (k \neq j \vee j \neq j' \vee i' \neq i + 1 )\\
+  (\kw{inc}, \kw{inc}\at i)(j, j'\at i') s \in \mathbf{R}_k
+  & \::\Leftrightarrow\: k = i \wedge
+  (k = j \wedge j = j' \wedge i' = i + 1 \rightarrow s \in \mathbf{R}_{k+1})
+\end{align*}
+Here $\mathbf{R}_k$
+represents the refinement convention when the counter state is $k$,
+and the convention evolves as operations modify the counter state.
+Particularly, question events are only matched
+when the explicit state in the implementation matches
+the hidden state,
+and the returned answer must be the same
+with the next state properly updated according to the answer.
+The overall refinement convention is initialized at the initial state:
+\[
+  \mathbf{R}_\kw{cnt} \::= \: \mathbf{R}_0
+\]
+
+\subsubsection{Refinement Conventions for a Lens}
+\label{sec:rc:refconv-lens}
+
+Consider a stateful lens
+$f: U \rightleftarrows V$
+with states in $P$.
+The refinement conventions
+$f^* : [U] \leftrightarrow [V]$
+and
+$f_* : [V] \leftrightarrow [U]$
+can be derived from the lens,
+and are dual to each other.
+The questions $u$ and $v$
+are related if $u$ can be obtained from $v$
+via the lens;
+the answers $u'$ and $v'$ are related
+if $v'$ is the result of updating $v$ with $u'$,
+and the state is updated accordingly.
+\begin{align*}
+  (u, v)\bot \in f^*_p
+  & \::\Leftrightarrow\:
+  \kw{get}_{|f|} (v, p) = u \\
+  (u, v)(u', v')\top \in f^*_p
+  & \::\Leftrightarrow\:
+  \kw{get}_{|f|} (v, p) = u \:\wedge\:
+  \forall p'.\ \kw{set}_{|f|} ((v, p), u') \neq (v', p')\\
+  (u, v)(u', v') s \in f^*_p
+  & \::\Leftrightarrow\:
+  \kw{get}_{|f|} (v, p) = u \:\wedge\:
+  \forall p'.\ \kw{set}_{|f|} ((v, p), u') = (v', p') \rightarrow
+  s \in f^*_{p'}
+\end{align*}
+The refinement convention $f^*$
+is given by $f^*_{p_0}$,
+and its dual $f_*$ is defined
+by flipping the questions and answers.
+
+\subsubsection{Refinement Convention from Simulation Convention}
+\label{sec:rc:refconv-simconv}
+
+The simulation conventions used in CompCertO
+can likewise be translated to the richer notion of
+refinement convention.
+Recall that
+a simulation convention
+$\mathbb{R} : A \twoheadleftrightarrow B := \langle W, \sysstep, R^\que, R^\ans \rangle$
+between the CompCertO language interfaces $A$ and $B$ is specified by
+a set $W$ of worlds,
+a Kripke relation $R^\que \subseteq \mathcal{R}_W (A^\que, B^\que)$
+between questions
+and
+a Kripke relation $R^\ans \subseteq \mathcal{R}_W (A^\ans, B^\ans)$
+between answers.
+
+Kripke worlds are used to ensure that
+questions and answers for a given call
+are related consistently.
+However, every pair of calls
+is related in isolation,
+independently of any past or future calls.
+Thus, the following
+refinement convention
+embeds the simulation convention $\mathbb{R} : A \Leftrightarrow B$:
+\begin{align*}
+  (m_1, m_2) \bot \in \llbracket \mathbb{R} \rrbracket \: :\Leftrightarrow \: {}
+  &\exists w \cdot m_1 \mathbb{R}^\que_w m_2
+  \\
+  (m_1, m_2) (n_1, n_2) \top \in \llbracket \mathbb{R} \rrbracket \::\Leftrightarrow\: {}
+  &\exists w \cdot m_1 \mathbb{R}^\que_w m_2 \:\wedge\:
+  \neg n_1 \mathbb{R}^\ans_w n_2
+  \\
+  (m_1, m_2) (n_1, n_2) s \in \llbracket \mathbb{R} \rrbracket \::\Leftrightarrow\: {}
+  &\exists w \cdot m_1 \mathbb{R}^\que_w m_2 \:\wedge\:
+  (n_1 \mathbb{R}^\ans_w n_2 \Rightarrow s \in \llbracket \mathbb{R} \rrbracket)
+  \,.
+\end{align*}
+
+% \begin{prooftree}
+%   \hypo{\mathbf{R} \sqsubseteq \mathbf{S} \Leftrightarrow
+%     \llbracket \mathbf{R} \rrbracket
+%   \le \llbracket \mathbf{S} \rrbracket}
+%   \infer[no rule]1{\llbracket \mathbf{id} \rrbracket = \mathbf{id}
+%     \qquad
+%     \mathbf{R} \fatsemi \mathbf{S} =
+%     \llbracket \mathbf{R} \rrbracket
+%   \fatsemi \llbracket \mathbf{S} \rrbracket}
+% \end{prooftree}
+% \qquad \qquad
+% \begin{prooftree}
+%   \hypo{\phi : L_1 \le_{\mathbf{R}_A \twoheadrightarrow \mathbf{R}_B} L_2}
+%   \infer1{\llbracket \phi \rrbracket :
+%     \llbracket L_1 \rrbracket
+%     \le_{\llbracket \mathbf{R}_A \rrbracket
+%     \twoheadrightarrow \llbracket\mathbf{R}_B\rrbracket}
+%   \llbracket L_2 \rrbracket}
+% \end{prooftree}
+
+The simulation convention used here is CompCertO's original one,
+rather than the stateful simulation convention (Def.~\ref{def:oe:ssc}).
+The reason is that the stateful variant
+was specifically designed to
+accommodate the ad-hoc encapsulation
+employed in CompCertO's semantics.
+By contrast,
+in the strategy model,
+state encapsulation is built in as a primitive feature.
+Thus, for transition systems with encapsulated state in OpenTE,
+the underlying transition system is simply embedded
+into a strategy and
+composed with the strategy model's native encapsulation primitive.
+
+\subsection{Regular Refinement Conventions}
+
+Similar to the notion of regular strategies,
+a refinement convention is said to be regular
+if the relation between the questions and between answers
+is independent of the preceding questions and answers.
+
+\begin{definition}[Regular refinement conventions]
+  A refinement convention $\mathbf{R} : E \leftrightarrow F$
+  is regular
+  if the residual refinement convention,
+  after any sequence of questions $(m_1, m_2)$
+  and answers $(n_1, n_2)$,
+  coincides with the original one.
+  Formally,
+  \[
+    \mathbf{R}\ \kw{regular} \::\Leftrightarrow\:
+    \forall m_1 m_2 n_1 n_2.\
+    m_1 \mathbf{R}^\que m_2 \rightarrow
+    n_1 \mathbf{R}^\ans_{m_1m_2} n_2 \rightarrow
+    \mathbf{R} = \mathbf{R}^{n_1n_2}_{m_1m_2}
+  \]
+\end{definition}
+Among the examples of the refinement conventions
+given in the last section,
+the ones derived from relations and simulation conventions
+are regular.
+
+\subsection{Composition of Refinement Conventions}
+
+Having established the basic structure of refinement conventions,
+this section turns to their compositional properties.
+Just as strategies compose in multiple dimensions,
+refinement conventions must also support various forms of composition
+to enable modular reasoning about complex systems.
+
+\subsubsection{Vertical Composition}
+
+Vertical composition allows refinement conventions
+to be chained
+in a transitive manner,
+much like composing ordinary relations.
+However, the alternating nature of client and handler interactions
+requires careful treatment of the mixed variance patterns
+that I discussed earlier.
+
+Before defining vertical composition,
+I introduce the notion of an identity refinement convention,
+which serves as the neutral element for composition.
+The identity convention relates only identical questions and answers,
+essentially expressing that no translation is needed.
+
+\begin{definition}
+  The \emph{identity refinement convention} $\idsc_E$
+  associated with a signature $E$ is defined by:
+  \begin{align*}
+    (m_1, m_2) \bot \in \idsc_E &\::\Leftrightarrow\:
+    m_1 = m_2 \\
+    (m_1, m_2) (n_1, n_2) \top \in \idsc_E &\::\Leftrightarrow\:
+    m_1 = m_2 \wedge n_1 \neq n_2 \\
+    (m_1, m_2) (n_1, n_2) s \in \idsc_E &\::\Leftrightarrow\:
+    m_1 = m_2 \wedge (n_1 = n_2 \Rightarrow s \in \idsc_E)
+  \end{align*}
+\end{definition}
+Intuitively, the identity convention permits questions
+and answers to be related
+only when they are identical,
+and similarly for answers.
+The recursive structure maintains this property throughout the interaction.
+
+Now I define vertical composition.
+Conceptually, vertical composition works like relational composition:
+$\mathbf{R} \fatsemi \mathbf{S}$ relates
+questions $m_1$ and $m_3$
+when there exists an intermediate question $m_2$ such that
+$m_1$ is related to $m_2$ by $\mathbf{R}$
+and $m_2$ is related to $m_3$ by $\mathbf{S}$.
+However, the presence of answers and the need to track interaction history
+significantly complicate the definition.
+
+\begin{definition}[Vertical composition of refinement conventions] \label{def:vcomp}
+  For the refinement conventions
+  $\mathbf{R} : E_1 \leftrightarrow E_2$ and
+  $\mathbf{S} : E_2 \leftrightarrow E_3$,
+  the refinement convention
+  $\mathbf{R \fatsemi S} : E_1 \leftrightarrow E_3$
+  is defined as follows:
+  \begin{align*}
+    (m_1, m_3) \bot \in \mathbf{R} \fatsemi \mathbf{S} \: :\Leftrightarrow \: {}
+    &\exists m_2 \cdot
+    (m_1, m_2)\bot \in \mathbf{R} \:\wedge\:
+    (m_2, m_3)\bot \in \mathbf{S}
+    \\%[1.2ex]
+    (m_1, m_3) (n_1, n_3) \top \in \mathbf{R} \fatsemi \mathbf{S} \::\Leftrightarrow\: {}
+    &\exists m_2 \cdot
+    (m_1, m_2)\bot \in \mathbf{R} \:\wedge\:
+    (m_2, m_3)\bot \in \mathbf{S} \:\wedge\: {} \\
+    &\,\forall n_2 \cdot
+    (m_1, m_2)(n_1, n_2)\top \in \mathbf{R} \:\vee\:
+    (m_2, m_3)(n_2, n_3)\top \in \mathbf{S}
+    \\%[1.2ex]
+    (m_1, m_3) (n_1, n_3) \, s \in \mathbf{R} \fatsemi \mathbf{S} \::\Leftrightarrow\: {}
+    &\exists m_2 \cdot
+    (m_1, m_2)\bot \in \mathbf{R} \:\wedge\:
+    (m_2, m_3)\bot \in \mathbf{S} \:\wedge\: {} \\
+    &\,\forall n_2 \cdot
+    (m_1, m_2)(n_1, n_2)\top \in \mathbf{R} \:\vee\:
+    (m_2, m_3)(n_2, n_3)\top \in \mathbf{S} \:\vee\: {} \\
+    &\qquad \:\:\: s \,\in\,
+    \bigl( (m_1, m_2) (n_1, n_2) \backslash \mathbf{R} \bigr) \fatsemi
+    \bigl( (m_2, m_3) (n_2, n_3) \backslash \mathbf{S} \bigr)
+    \,.
+  \end{align*}
+\end{definition}
+
+The definition captures the essential idea that
+answers $(n_1, n_3)$ are forbidden in the composition
+if either the first step ($\mathbf{R}$) or the second step ($\mathbf{S}$) would forbid them.
+This reflects the contravariant nature of answer relations:
+restrictions from either component must be respected in the composition.
+The third clause handles the recursive case,
+where the interaction continues according to
+the composition of the residual conventions.
+
+\begin{remark}[Associativity of vertical composition] \label{rem:vcomp-assoc}
+  It should be noted that the vertical composition
+  of refinement conventions
+  is not associative in general
+  (although associativity holds
+  in most practical cases that have been encountered).
+  This limitation arises from the complex interplay
+  between the variance patterns of questions and answers.
+  A more detailed discussion on
+  this phenomenon and a counter-example can be found
+  in Appendix~A of \citep{compcertoe-tr}.
+\end{remark}
+
+\subsubsection{Spatial Composition}
+
+In addition to vertical composition,
+spatial composition is used to handle
+refinement conventions that operate on
+different parts of a compound interface.
+Spatial composition allows us to combine
+refinement conventions in parallel,
+much like the tensor product of strategies.
+
+For two refinement conventions
+that operate on disjoint parts of an interface,
+their spatial composition should combine them
+in a way that preserves the structure of both.
+The tensor product construction achieves this
+by requiring that both component conventions
+agree on their respective parts of any interaction.
+
+\begin{definition}
+  The tensor product
+  $\mathbf{R} \otimes \mathbf{S} :
+  E_1 \otimes F_1 \leftrightarrow E_2 \otimes F_2$
+  of the refinement conventions
+  $\mathbf{R} : E_1 \leftrightarrow E_2$ and
+  $\mathbf{S} : F_1 \leftrightarrow F_2$
+  is defined by the rules:
+  \begin{align*}
+    \bigl( (m_1,q_1), (m_2,q_2) \bigr)\bot \in \mathbf{R} \otimes \mathbf{S}
+    \::\Leftrightarrow\: &
+    (m_1, m_2)\bot \in \mathbf{R}
+    \:\wedge\:
+    (q_1, q_2)\bot \in \mathbf{S}
+    \\
+    \bigl( (m_1,q_1), (m_2,q_2) \bigr)
+    \bigl( (n_1,r_1), (n_2,r_2) \bigr)\top
+    \in \mathbf{R} \otimes \mathbf{S}
+    \::\Leftrightarrow\: &
+    (m_1, m_2)\bot \in \mathbf{R}
+    \:\wedge\:
+    (q_1, q_2)\bot \in \mathbf{S}
+    \:\wedge\: \\
+    & \bigl( (m_1,m_2)(n_1,n_2)\top \in \mathbf{R} \:\vee\:
+    (q_1,q_2)(r_1,r_2)\top \in \mathbf{S} \bigr)
+    \\
+    \bigl( (m_1,q_1), (m_2,q_2) \bigr)
+    \bigl( (n_1,r_1), (n_2,r_2) \bigr) \,s
+    \in \mathbf{R} \otimes \mathbf{S}
+    \::\Leftrightarrow\: &
+    (m_1, m_2)\bot \in \mathbf{R}
+    \:\wedge\:
+    (q_1, q_2)\bot \in \mathbf{S} \: \wedge\: \\
+    & \large\bigl( (m_1,m_2)(n_1,n_2)\top \in \mathbf{R} \: \vee \:
+      (q_1,q_2)(r_1,r_2)\top \in \mathbf{S} \: \vee \:\\
+      & s \in \bigl( (m_1,m_2)(n_1,n_2) \backslash \mathbf{R} \bigr) \otimes
+    \bigl( (q_1,q_2)(r_1,r_2) \backslash \mathbf{S} \bigr)\large\bigr)
+  \end{align*}
+\end{definition}
+
+The tensor product follows a straightforward pattern:
+questions are related in the product if they are related
+in both component conventions,
+while answers are forbidden if they are forbidden
+in either component convention.
+This preserves the contravariant nature of answer relations
+while maintaining the covariant nature of question relations.
+
+The tensor product of strategies
+is not well-behaved in general,
+because layered composition may affect how plays
+synchronize under the tensor product.
+However, for refinement conventions,
+the tensor product behaves more predictably
+because it operates at the level of individual question-answer pairs
+rather than full interaction sequences.
+
+For notational convenience,
+I will also use $\at$
+to denote the spatial composition of refinement conventions,
+as $\mathbf{R} \at \mathbf{S} := \mathbf{R} \otimes \mathbf{S}$.
+This notation aligns with the spatial composition of strategies
+and emphasizes the parallel nature of the operation.
+
+\subsubsection{Flat Composition}
+
+The third mode of composition is flat composition,
+which extends the flat composition operation $\oplus$
+from effect signatures and strategies to refinement conventions.
+Flat composition is particularly useful for
+modular development of refinement conventions,
+allowing independent conventions to be combined
+when they operate on disjoint parts of a signature.
+
+Unlike spatial composition,
+which works with tensor products,
+flat composition operates at the level of signature components.
+When two refinement conventions operate on separate components
+of a signature union,
+their flat composition handles each component independently.
+
+\begin{definition}[Flat composition of refinement conventions]
+  The conventions
+  $\mathbf{R}_1 : E_1 \leftrightarrow F_1$ and
+  $\mathbf{R}_2 : E_2 \leftrightarrow F_2$
+  compose into
+  $\mathbf{R}_1 \oplus \mathbf{R}_2 : E_1 \oplus E_2 \leftrightarrow F_1 \oplus F_2$,
+  defined by:
+  \begin{align*}
+    \bigl(\iota_i(m_1), \iota_i(m_2)\bigr)\bot \in \mathbf{R}_1 \oplus \mathbf{R}_2
+    \:&:\Leftrightarrow\:
+    (m_1,m_2)\bot \in \mathbf{R}_i
+    \\
+    \bigl(\iota_i(m_1), \iota_i(m_2)\bigr)(n_1,n_2)\top \in \mathbf{R}_1 \oplus \mathbf{R}_2
+    \:&:\Leftrightarrow\:
+    (m_1,m_2)(n_1,n_2)\top \in \mathbf{R}_i
+    \\
+    \bigl(\iota_1(m_1), \iota_1(m_2) \bigr)(n_1,n_2) \, s \in \mathbf{R}_1 \oplus \mathbf{R}_2
+    \:&:\Leftrightarrow\:
+    s \in \bigl( (m_1,m_2)(n_1,n_2) \backslash \mathbf{R}_1 \bigr) \oplus \mathbf{R}_2
+    \\
+    \bigl(\iota_2(m_1), \iota_2(m_2) \bigr)(n_1,n_2) \, s \in \mathbf{R}_1 \oplus \mathbf{R}_2
+    \:&:\Leftrightarrow\:
+    s \in \mathbf{R}_1 \oplus \bigl( (m_1,m_2)(n_1,n_2) \backslash \mathbf{R}_2 \bigr)
+  \end{align*}
+\end{definition}
+
+The flat composition definition reflects the componentwise nature of the operation.
+Questions and answers are handled independently for each component,
+with the injection function $\iota_i$ indicating which component
+is being addressed.
+The recursive structure ensures that
+interactions within one component remain isolated
+from interactions in the other component,
+preserving the modular structure of the composition.
+
+\subsubsection{Properties}
+
+Having defined the three modes of composition,
+their key algebraic properties can now be established.
+These properties ensure that refinement conventions
+form a well-structured algebraic system
+that supports compositional reasoning.
+
+\begin{theorem}[Properties of Refinement Convention Composition]
+  \begin{gather*}
+    \begin{prooftree}
+      \hypo{\mathbf{R} : E_1 \leftrightarrow F_1}
+      \hypo{\mathbf{S} : E_2 \leftrightarrow F_2}
+      \infer2[\kw{sc}-$\oplus$]{
+        \mathbf{R} \oplus \mathbf{S} : E_1 \oplus E_2 \leftrightarrow F_1 \oplus F_2
+      }
+    \end{prooftree}
+    \hspace{8em}
+    \begin{prooftree}
+      \hypo{\mathbf{R} : A \leftrightarrow B}
+      \hypo{\mathbf{S} : U \leftrightarrow V}
+      \infer2[\kw{sc}-$\mathbin@$]{
+        \mathbf{R} \mathbin@ \mathbf{S} : A \mathbin@ U \leftrightarrow B \mathbin@ V
+      }
+    \end{prooftree}
+    \\
+    \begin{array}{r@{}l}
+      (\mathbf{R}_1 \vcomp \mathbf{R}_2) \mathbin@ (\mathbf{S}_1 \vcomp \mathbf{S}_2)
+      & {} \equiv
+      (\mathbf{R}_1 \mathbin@ \mathbf{S}_1) \vcomp (\mathbf{R}_2 \mathbin@ \mathbf{S}_2)
+      \\
+      \idsc_A \mathbin@ \idsc_U & {} \equiv \idsc_{A \mathbin@ U}
+    \end{array}
+    \quad
+    \begin{array}{r@{}l}
+      (\mathbf{R}_1 \vcomp \mathbf{R}_2) \oplus (\mathbf{S}_1 \vcomp \mathbf{S}_2)
+      & {} \equiv
+      (\mathbf{R}_1 \oplus \mathbf{S}_1) \vcomp (\mathbf{R}_2 \oplus \mathbf{S}_2)
+      \\
+      \idsc_E \oplus \idsc_F & {} \equiv \idsc_{E \oplus F}
+    \end{array}
+  \end{gather*}
+\end{theorem}
+
+The properties show the compatibility
+of the flat composition ($\oplus$) and the spatial composition ($\mathbin@$)
+with respect to the vertical composition ($\fatsemi$).
+Should the vertical composition be associative,
+the flat composition and the spatial composition
+can be viewed as bifunctors.
+
+\section{Refinement Squares}
+\label{sec:rc:refsq}
+
+With refinement conventions defined,
+the formal notion of refinement squares
+can now be established.
+
+Refinement conventions are used
+to express the general notion of a refinement square
+$
+\sigma \le_{\mathbf{R} \rightarrow \mathbf{S}} \tau
+$.
+Specifically,
+$\mathbf{R}$ and $\mathbf{S}$
+will be used to translate each play of $\sigma$ into
+a \emph{challenge} for the strategy $\tau$.
+Because of the alternating nature of refinement,
+this challenge will involve nested $\forall$ and $\exists$ quantifiers
+over the possible choices of questions and answers
+offered by the refinement conventions.
+
+\begin{definition}[Refinement Square]
+  Consider two strategies
+  $\sigma : E_1 \rightarrow F_1$ and
+  $\tau : E_2 \rightarrow F_2$
+  as well as two refinement conventions
+  $\mathbf{R} : E_1 \leftrightarrow E_2$ and
+  $\mathbf{S} : F_1 \leftrightarrow F_2$.
+  It is said that there is a refinement square
+  when the proposition
+  $\sigma \le_{R \rightarrow S} \tau$
+  defined below holds.
+  %
+  To this end,
+  a family of relations
+  $\unlhd^x_{\mathbf{R} \twoheadrightarrow \mathbf{S}}$
+  is recursively defined between the possible plays of $\sigma$
+  and the possible residuals of $\tau$.
+  Using the short-hands
+  $\mathbf{R}' := (m_1,m_2)(n_1,n_2) \backslash \mathbf{R}$ and
+  $\mathbf{S}' := (q_1,q_2)(r_1,r_2) \backslash \mathbf{S}$,
+  we can write:
+  %\[
+  %  \begin{array}{l@{\:}lr@{\:}l@{\:}r@{\:}l}
+  %    {\le_{R \twoheadrightarrow S}} &\subseteq
+  %    P_{E_1 \twoheadrightarrow F_1} \times S_{E_1 \twoheadrightarrow F_2} &
+  %    \Bigl( \mathbf{R} &\in S_{E_1 \leftrightarrow E_2}, &
+  %           \mathbf{S} &\in S_{F_1 \leftrightarrow F_2} \Bigr)
+  %  \\[1.5ex]
+  %    {\le_{R \twoheadrightarrow S}^{q_1,q_2}} &\subseteq
+  %    P_{E_1 \twoheadrightarrow F_1}^{q_1} \times S_{E_1 \twoheadrightarrow F_2}^{q_2} &
+  %    \Bigl( \mathbf{R} &\in S_{E_1 \leftrightarrow E_2}, &
+  %           \mathbf{S} &\in S_{F_1 \leftrightarrow F_2}^{(q_1,q_2)} \Bigr)
+  %  \\[1.5ex]
+  %    {\le_{R \twoheadrightarrow S}^{q_1m_1, q_2m_2}} &\subseteq
+  %    P_{E_1 \twoheadrightarrow F_1}^{q_1m_1} \times S_{E_1 \twoheadrightarrow F_2}^{q_2m_2} &
+  %    \Bigl( \mathbf{R} &\in S_{E_1 \leftrightarrow E_2}^{(m_1,m_2)}, &
+  %           \mathbf{S} &\in S_{F_1 \leftrightarrow F_2}^{(q_1,q_2)} \Bigr)
+  %  \end{array}
+  %\]
+  %corresponding to the different stages of the execution,
+  %as follows:
+  \[
+    \def\arraystretch{1.2}
+    \begin{array}{r@{\:\:\:}l@{\:}l@{\quad:\Leftrightarrow\quad}l}
+      \epsilon &
+      \unlhd_{\mathbf{R} \rightarrow \mathbf{S}} &
+      \tau &
+      \epsilon \in \tau
+      \\
+      q_1 s &
+      \unlhd_{\mathbf{R} \rightarrow \mathbf{S}} &
+      \tau &
+      \forall q_2 \cdot
+      (q_1, q_2)\bot \in \mathbf{S} \Rightarrow
+      s \unlhd_{\mathbf{R} \rightarrow \mathbf{S}}^{q_1,q_2}
+      (q_2 \backslash \tau)
+      \\[1ex]
+      \underline{r}_1 s &
+      \unlhd_{\mathbf{R} \rightarrow \mathbf{S}}^{q_1,q_2} &
+      \tau &
+      \exists r_2 \cdot
+      (q_1, q_2)(r_1, r_2)\top \notin \mathbf{S} \:\wedge\:
+      s \unlhd_{\mathbf{R} \rightarrow \mathbf{S}'}
+      (\underline{r}_2 \backslash \tau )
+      \\
+      \underline{m_1} s &
+      \unlhd_{\mathbf{R} \rightarrow \mathbf{S}}^{q_1,q_2} &
+      \tau &
+      \exists m_2 \cdot
+      (m_1, m_2) \bot \in \mathbf{R} \:\wedge\:
+      s \unlhd_{\mathbf{R} \rightarrow \mathbf{S}}^{q_1m_1,q_2m_2}
+      (\underline{m_2} \backslash \tau )
+      \\[1ex]
+      \epsilon &
+      \unlhd_{\mathbf{R} \rightarrow \mathbf{S}}^{q_1m_1,q_2m_2} &
+      \tau &
+      \epsilon \in \tau
+      \\
+      n_1 s &
+      \unlhd_{\mathbf{R} \rightarrow \mathbf{S}}^{q_1m_1,q_2m_2} &
+      \tau &
+      \forall n_2 \cdot
+      (m_1,m_2)(n_1, n_2)\top \notin \mathbf{R} \Rightarrow
+      s \unlhd_{\mathbf{R}' \rightarrow \mathbf{S}}^{q_1,q_2}
+      (n_2 \backslash \tau)
+    \end{array}
+  \]
+  Then the existence of a refinement square can be formulated as:
+  \[
+    \sigma \le_{\mathbf{R} \rightarrow \mathbf{S}} \tau
+    \::\Leftrightarrow\:
+    \forall s \in \sigma \cdot
+    s \unlhd_{\mathbf{R} \rightarrow \mathbf{S}} \tau
+    \,.
+  \]
+  Similar to a simulation in CompCertO,
+  a refinement square can be visualized as follows:
+  \[
+    \begin{tikzcd}[sep=small]
+      E_1 \ar[rr, "\sigma"] \ar[dd, leftrightarrow, "\mathbf{R}"'] && F_1
+      \ar[dd, leftrightarrow, "\mathbf{S}"]
+      \\
+      & \quad & \\
+      E_2 \ar[rr, "\tau"] && F_2
+    \end{tikzcd}
+  \]
+\end{definition}
+
+\subsection{Composition of Refinement Squares}
+
+Refinement squares are compatible with
+the three fundamental forms of strategy composition:
+horizontal, vertical, and spatial.
+These operations ensure that refinement squares
+fit seamlessly into the three-dimensional algebraic structure
+that underpins the strategy model.
+Flat composition adds further modularity.
+
+\begin{theorem}[Composition of Refinement Squares]
+  The refinement squares compose
+  along the following three dimensions:
+  \begin{itemize}
+    \item Refinement squares compose horizontally
+      as described by the rule $\kw{sim}$-$\odot$:
+      \[
+        \begin{prooftree}
+          \hypo{\phi: \sigma_1 \le_{\mathbf{S} \rightarrow \mathbf{T}} \sigma_1'}
+          \hypo{\psi: \sigma_2 \le_{\mathbf{R} \rightarrow \mathbf{S}} \sigma_2'}
+          \infer2[\kw{sim}-$\odot$]{\phi \odot \psi :
+          \sigma_1 \odot \sigma_2 \le_{\mathbf{R} \rightarrow \mathbf{T}} \sigma_1' \odot \sigma_2'}
+        \end{prooftree}
+        \qquad
+        \begin{tikzcd}[sep=small]
+          E_1 \ar[rr, "\sigma_2"] \ar[dd, leftrightarrow, "\mathbf{R}"]
+          && E_2 \ar[rr, "\sigma_1"] \ar[dd, leftrightarrow, "\mathbf{S}"]
+          && E_3 \ar[dd, leftrightarrow, "\mathbf{T}"]\\
+          & \psi && \phi & \\
+          F_1 \ar[rr, "\tau_2"]
+          && F_2 \ar[rr, "\tau_1"]
+          && F_3
+        \end{tikzcd}
+      \]
+    \item Refinement squares compose vertically
+      as described by the rule $\kw{sim}$-$\vcomp$:
+      \[
+        \begin{prooftree}
+          \hypo{\phi : \sigma_1 \le_{\mathbf{R} \rightarrow \mathbf{S}} \sigma_2}
+          \hypo{\psi : \sigma_2 \le_{\mathbf{R'} \rightarrow \mathbf{S'}} \sigma_3}
+          \infer2[\kw{sim}-$\vcomp$]{\phi \vcomp \psi : \sigma_1 \le_{\mathbf{R} \vcomp \mathbf{R'} \rightarrow
+          \mathbf{S} \vcomp \mathbf{S'}} \sigma_3}
+        \end{prooftree}
+        \qquad
+        \begin{tikzcd}[sep=small]
+          E_1 \ar[rr, "\sigma_1"] \ar[dd, leftrightarrow, "\mathbf{R}"] &&
+          F_1 \ar[dd, leftrightarrow, "\mathbf{S}"] \\
+          & \phi &\\
+          E_2 \ar[rr, "\sigma_2"] \ar[dd, leftrightarrow, "\mathbf{R'}"] &&
+          F_2 \ar[dd, leftrightarrow, "\mathbf{S'}"] \\
+          & \psi & \\
+          E_3 \ar[rr, "\sigma_3"] && F_3
+        \end{tikzcd}
+      \]
+    \item Spatial composition of refinement squares
+      \[
+        \begin{prooftree}
+          \hypo{\phi: L \le_{\mathbf{R}_1 \rightarrow \mathbf{S}_1} L'}
+          \hypo{\psi: f \le_{\mathbf{R}_2 \rightarrow \mathbf{S}_2} f'}
+          \infer2[\kw{sim}-$\mathbin@$]{\phi \mathbin@ \psi :
+            L \mathbin@ f
+            \le_{\mathbf{R}_1 \mathbin@ \mathbf{R}_2 \rightarrow
+            \mathbf{S}_1 \mathbin@ \mathbf{S}_2}
+          L' \mathbin@ f'}
+        \end{prooftree}
+      \]
+      Additionally,
+      refinement squares are compatible with flat composition.
+      \[
+        \begin{prooftree}
+          \hypo{\phi: \sigma_1 \le_{\mathbf{R}_1 \rightarrow \mathbf{S}_1} \sigma_1'}
+          \hypo{\psi: \sigma_2 \le_{\mathbf{R}_2 \rightarrow \mathbf{S}_2} \sigma_2'}
+          \infer2[\kw{sim}-$\oplus$]{\phi \oplus \psi :
+            \sigma_1 \oplus \sigma_2
+            \le_{\mathbf{R}_1 \oplus \mathbf{R}_2 \rightarrow
+            \mathbf{S}_1 \oplus \mathbf{S}_2}
+          \sigma_1' \oplus \sigma_2'}
+        \end{prooftree}
+      \]
+  \end{itemize}
+\end{theorem}
+
+\subsection{Properties of Refinement Squares}
+
+Refinement squares
+allow several key properties
+from CompCertO
+to be reformulated in a uniform and structured way.
+
+Refinement squares
+subsume the usual inclusion orderings
+on the strategies and refinement conventions.
+\begin{theorem}
+  For all strategies $\sigma, \tau : E \rightarrow F$ and
+  for all refinement conventions $\mathbf{R}, \mathbf{S} : E \leftrightarrow F$,
+  the following hold:
+  \[
+    \begin{array}{c@{\qquad\qquad}c}
+      \sigma \subseteq \tau \Rightarrow
+      \sigma \le_{\kw{id}_E \rightarrow \kw{id}_F} \tau
+      &
+      \begin{tikzcd}[sep=small]
+        E \ar[rr, "\sigma"] \ar[dd, leftrightarrow, "\kw{id}"] && F \ar[dd, leftrightarrow, "\kw{id}"] \\
+        & \sigma \subseteq \tau & \\
+        E \ar[rr, "\tau"] && F
+      \end{tikzcd}
+      \\
+      \mathbf{R} \supseteq \mathbf{S} \Rightarrow
+      \kw{id}_E \le_{\mathbf{R} \rightarrow \mathbf{S}} \kw{id}_F
+      &
+      \begin{tikzcd}[sep=small]
+        E \ar[rr, "\kw{id}"] \ar[dd, leftrightarrow, "\mathbf{R}"] && E \ar[dd, leftrightarrow, "\mathbf{S}"] \\
+        & \mathbf{R} \supseteq \mathbf{S} & \\
+        F \ar[rr, "\kw{id}"] && F
+      \end{tikzcd}
+    \end{array}
+  \]
+\end{theorem}
+
+Use the refinement square representing the ordering on refinement conventions,
+the counterpart of \eqref{eq:convention-ordering}
+using refinement squares
+is formulated as follows:
+\[
+  \begin{tikzcd}[sep=small]
+    E_1
+    \ar[rr, rightarrow, "\kw{id}"]
+    \ar[dd, leftrightarrow, "\mathbf{R'}"']
+    && E_1
+    \ar[rr, "\sigma"] \ar[dd, leftrightarrow, "\mathbf{R}"]
+    && F_1
+    \ar[rr, rightarrow, "\kw{id}"]
+    \ar[dd, leftrightarrow, "\mathbf{S}"']
+    && F_1
+    \ar[dd, leftrightarrow, "\mathbf{S'}"]
+    \\
+    & \mathbf{R} \subseteq \mathbf{R'} && \phi && \mathbf{S'} \subseteq \mathbf{S}
+    \\
+    E_2
+    \ar[rr, rightarrow, "\kw{id}"]
+    && E_2 \ar[rr, "\tau"] &&
+    F_2
+    \ar[rr, rightarrow, "\kw{id}"]
+    && F_2
+  \end{tikzcd}
+\]
+
+A further development is
+the notion of companion and conjoint of a strategy.
+\begin{definition}[Companion and Conjoint]
+  We say that a strategy $\sigma : E \rightarrow F$ has
+  \begin{itemize}
+    \item a \emph{companion} $\sigma^* : E \leftrightarrow F$
+      when the following refinement squares hold:
+      \[
+        \begin{tikzcd}[sep=small]
+          E \ar[rr, "\kw{id}"] \ar[dd, leftrightarrow, "\kw{id}"] && E \ar[dd, leftrightarrow, "\sigma^*"] \\
+          & \kw{id}_E \le_{\kw{id}_E \rightarrow \sigma^*} \sigma &
+          \\
+          E \ar[rr, "\sigma"] && F
+        \end{tikzcd}
+        \qquad\qquad
+        \begin{tikzcd}[sep=small]
+          E \ar[rr, "\kw{id}"] \ar[dd, leftrightarrow, "\sigma^*"] && E \ar[dd, leftrightarrow, "\kw{id}"] \\
+          & \sigma \le_{\sigma^* \rightarrow \kw{id}_F} \kw{id}_F &
+          \\
+          F \ar[rr, "\sigma"] && F
+        \end{tikzcd}
+      \]
+    \item a \emph{conjoint} $\sigma_* : F \leftrightarrow E$
+      when the following refinement squares hold:
+      \[
+        \begin{tikzcd}[sep=small]
+          F \ar[rr, "\kw{id}"] \ar[dd, leftrightarrow, "\sigma_*"] && F \ar[dd, leftrightarrow, "\kw{id}"] \\
+          & \kw{id}_F \le_{\sigma_* \rightarrow \kw{id}_F} \sigma &
+          \\
+          E \ar[rr, "\sigma"] && F
+        \end{tikzcd}
+        \qquad\qquad
+        \begin{tikzcd}[sep=small]
+          E \ar[rr, "\sigma"] \ar[dd, leftrightarrow, "\kw{id}"] && F \ar[dd, leftrightarrow, "\sigma_*"] \\
+          & \sigma \le_{\kw{id}_E \rightarrow \sigma_*} \kw{id}_E &
+          \\
+          E \ar[rr, "\kw{id}"] && E
+        \end{tikzcd}
+      \]
+  \end{itemize}
+\end{definition}
+In particular,
+every stateful lens possesses both a companion and a conjoint
+(cf. \autoref{sec:rc:refconv-lens}).
+The encapsulation primitive $\encap{u}$
+comes equipped with the
+companion $\encap{u}^* : \mathbf{1} \leftrightarrow U$
+and conjoint $\encap{u}_* : U \leftrightarrow \mathbf{1}$,
+which serve to ``deencapsulate'' the state.
+
+Finally,
+refinement squares yield a straightforward formulation of
+representation independence at the strategy level.
+Unlike the CompCertO formulation,
+no additional assumptions are needed to
+enforce that the environment cannot mutate private state%
+---this guarantee is intrinsic
+to the strategy and refinement square structure.
+
+\begin{theorem}[Representation Independence for Strategies]
+  Given a relation $R \subseteq U \times V$,
+  \[
+    \zeta : u \mathbin{R} v \quad\Longrightarrow\quad
+    \encap{\zeta} : \encap{u} \le_{R \rightarrow \kw{id}_\mathbf{1}} \encap{v}
+  \]
+\end{theorem}
+
+\subsection{Embedding CompCertO Simulations}
+
+Using the embedding,
+simulations between CompCertO transition systems and simulation conventions
+induce refinement squares between
+the corresponding strategies and refinement conventions
+within the strategy model.
+\[
+  \phi: L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2
+  \quad\Longrightarrow\quad
+  \llbracket \phi \rrbracket :
+  \llbracket L_1 \rrbracket \le_{\llbracket \mathbb{R} \rrbracket
+  \rightarrow \llbracket \mathbb{S} \rrbracket}
+  \llbracket L_2 \rrbracket
+\]
+In particular,
+CompCertO's compiler correctness
+corresponds to the following refinement square:
+\[
+  \llbracket \phi_p^\kw{cc} \rrbracket \: : \:
+  \llbracket \kw{Clight}(\kw{p.c}) \rrbracket
+  \le_{\llbracket \mathbb{C} \rrbracket
+  \rightarrow \llbracket\mathbb{C}\rrbracket}
+  \llbracket \kw{Asm}(\kw{p.s}) \rrbracket
+  \,.
+\]
+
+The simulation considered here
+is that of the original CompCertO,
+rather than the stateful simulation,
+for the same reason as discussed in \autoref{sec:rc:refconv-simconv}.
+
+\subsubsection{The Bounded Queue Example}
+\label{sec:rc:bq}
+
+For the bounded queue example,
+the following strategy-level specification is first defined.
+\[
+  \tau_\kw{bq} : \mathbf{0} \rightarrow E_\kw{bq} \at D_\kw{bq}
+\]
+This specification explicitly passes the abstract state $D_\kw{bq}$
+where $D_\kw{bq} := V^*$ represents a sequence of elements in $V$.
+
+The strategy-level specification $\tau_\kw{bq}$
+is implemented by the CompCertO specification $L_\kw{bq}$ (Section~\ref{sec:ox:application})
+by the following refinement square:
+\[
+  \psi_1 : \tau_\kw{bq} \le_{\mathbf{0} \rightarrow \mathbf{R}_\kw{bq} \at D_\kw{bq}}
+  \llbracket L_\kw{bq} \rrbracket
+  \qquad\qquad
+  \begin{tikzcd}[sep=small]
+    \mathbf{0}
+    \ar[rr, "\tau_\kw{bq}"]
+    \ar[dd, leftrightarrow, "\mathbf{0}"']
+    && E_\kw{bq} \at D_\kw{bq}
+    \ar[dd, leftrightarrow, "\mathbf{R_\kw{bq}} \at D_\kw{bq}"]
+    \\
+    &\psi_1&\\
+    \mathbf{0}
+    \ar[rr, "\llbracket L_\kw{bq} \rrbracket"']
+    && \C \at D_\kw{bq}
+  \end{tikzcd}
+\]
+where the refinement convention $\mathbf{R}_\kw{bq} : E_\kw{bq} \leftrightarrow \C$
+translates the events in the effect signature $E_\kw{bq}$
+into the function calls and return values conforming to the C-level interface $\C$.
+At the same time,
+the strategy-level specification $\tau_\kw{bq}$
+refines the more abstract strategy
+$\sigma_\epsilon$ from \autoref{sec:strat:ex:persistent}
+with intrinsic encapsulation on the state
+by the following refinement square:
+\[
+  \psi_2 : \sigma_\epsilon \le_{\mathbf{0} \rightarrow \encap{\epsilon}_*} \tau_\kw{bq}
+  \qquad\qquad
+  \begin{tikzcd}[sep=small]
+    \mathbf{0}
+    \ar[rr, "\sigma_\epsilon"]
+    \ar[dd, leftrightarrow, "\mathbf{0}"']
+    && E_\kw{bq}
+    \ar[dd, leftrightarrow, "\encap{\epsilon}_*"]
+    \\
+    &\psi_2&
+    \\
+    \mathbf{0}
+    \ar[rr, "\tau_\kw{bq}"']
+    && E_\kw{bq} \at D_\kw{bq}
+  \end{tikzcd}
+\]
+
+Combining the reasoning here
+with the correctness property of $L_\kw{bq}$
+established in Section~\ref{sec:ox:application}
+and CompCertO's correctness and linking theorem,
+a complete proof is obtained from the strategy $\sigma_\epsilon$
+to the compiled assembly programs $\kw{bq.s} + \kw{rb.s}$.
+\[
+  \begin{tikzcd}[row sep=small, column sep=large]
+    \mathbf{0}
+    \ar[rr, "\sigma_\epsilon"]
+    \ar[dd, leftrightarrow, "\mathbf{0}"']
+    && E_\kw{bq}
+    \ar[dd, leftrightarrow, "\encap{\epsilon}_*"]
+    \\
+    & \psi_2 &
+    \\
+    \mathbf{0}
+    \ar[rr, "\tau_\kw{bq}"]
+    \ar[dd, leftrightarrow, "\mathbf{0}"']
+    && E_\kw{bq} \at D_\kw{bq}
+    \ar[dd, leftrightarrow, "\mathbf{R}_\kw{bq} \at D_\kw{bq}"]
+    \\
+    & \psi_1 &
+    \\
+    \mathbf{0}
+    \ar[rr, "\llbracket L_\kw{bq} \rrbracket"]
+    \ar[dd, leftrightarrow, "\mathbf{0}"]
+    && \C \at D_\kw{bq}
+    \ar[dd, leftrightarrow, "(\kw{id} \at R_\kw{bq}) \fatsemi \mathbb{R}_\kw{rb}"]
+    \\
+    & \phi_\kw{\ref{sec:ox:application}} &
+    \\
+    \C \at \kw{mem}
+    \ar[rr, "\llbracket \kw{Clight}(\kw{bq.c}) \odot \kw{Clight}(\kw{rb.c}) \rrbracket"]
+    \ar[dd, "\mathbb{C}"]
+    &&
+    \C \at \kw{mem}
+    \ar[dd, "\mathbb{C}"]
+    \\
+    &\kw{CompCertO}&
+    \\
+    \C \at \kw{mem}
+    \ar[rr, "\llbracket \kw{Asm}(\kw{bq.s} + \kw{rb.c}) \rrbracket"]
+    &&
+    \C \at \kw{mem}
+  \end{tikzcd}
+\]
+
+\subsection{Synchronization of Events}
+
+Refinement conventions enforce a 1-to-1 mapping between
+the moves of the source- and target-level strategies,
+and require that their plays have similar structures.
+However, in some cases
+the relationship between events in the high-level view of the system
+and their realization in low-level terms is more complex;
+for example,
+the high-level view of a TCP/IP connection as a stream of bytes
+could model the transmission of a block of data as a single event,
+whereas its realization in terms of low-level packets
+may involve a complex interaction.
+
+While the strict mapping enforced by refinement conventions
+is a limitation,
+situations like the one described above
+can still be modeled within the formalism.
+Suppose $\sigma : \mathcal{B} \rightarrow E$
+uses the ``byte stream'' interface $\mathcal{B}$
+while its refinement
+$\tau : \mathcal{K} \rightarrow E$
+is implemented in terms of
+a network packet interface $\mathcal{K}$.
+It remains possible to express their relationship
+as a refinement square
+$
+\sigma \odot x \, \le_{\mathbf{R} \rightarrow E} \, \tau
+$
+with the help of auxiliary constructions
+$x : \mathcal{X} \rightarrow \mathcal{B}$ and
+$\mathbf{R} : \mathcal{X} \leftrightarrow \mathcal{K}$,
+proceeding in two steps:
+\begin{itemize}
+  \item the effect signature $\mathcal{X}$ can provide
+    a high-level, abstract representation of the packet interaction,
+    and the strategy $x : \mathcal{X} \rightarrow \mathcal{B}$
+    explains how byte stream operations are expanded into
+    abstract packet interactions with more complex shapes;
+  \item the refinement convention
+    $\mathbf{R} : \mathcal{X} \leftrightarrow \mathcal{K}$
+    can then be used to express the data abstraction component of
+    the relationship, refining high-level abstract packets into
+    their low-level actual representations,
+    and encapsulating details such as TCP sequence numbers.
+\end{itemize}
+
+\section{Implementing CAL}
+\label{sec:rc:cal}
+
+Another instance of the CAL
+is presented within the strategy model.
+This construction closely mirrors
+the OpenTE instance described in \autoref{sec:oe:cal},
+but here the specification is
+expressed as strategies
+and simulations are replaced by refinement squares.
+
+A layer interface consists of a strategy
+together with its abstract state:
+\[
+  L \::=\: \langle S, \sigma : \mathbf{0} \rightarrow \C \at\kw{mem} \rangle
+\]
+If the strategy $\sigma$ is defined directly,
+without first introducing an abstract state $S$
+and then encapsulating it,
+the following
+refinement square is typically appealed to in order to make the hidden state explicit:
+\[
+  \sigma \le_{\mathbf{0} \rightarrow \kw{id}_{\C\at\kw{mem}} \at \encap{s_0}_*} \sigma_s
+\]
+where $s_0$ represents
+the initial state of $S$,
+and $\sigma_s: \mathbf{0} \rightarrow \C \at\kw{mem}\at S$
+is an equivalent version of $\sigma$
+with the state passed explicitly.
+This refinement square effectively ``concretizes''
+the abstract state,
+ensuring that reasoning about $\sigma$
+can be carried out in terms of a concrete state-passing form.
+
+Given a layer interface $\langle S, \sigma \rangle$,
+the interpretation of an implementation $M$
+is defined as:
+\[
+  \llbracket M \rrbracket L \::=\:
+  \langle S, \encap{p_0} \odot \llbracket \kw{ClightP}(M) \rrbracket \odot \sigma \rangle
+\]
+Note here the encapsulation primitive
+is used within the strategy model
+to encapsulate the persistent environment
+of the ClightP program.
+Layer correctness is established by proving
+the following refinement square:
+\[
+  L_1 \vdash M : L_2 \::\Leftrightarrow\:
+  \sigma_2 \le \encap{p_0} \odot \llbracket \kw{ClightP}(M) \rrbracket \odot \sigma_1
+\]
+To discharge such obligations,
+an abstraction relation $R \subseteq S_2 \times (S_1 \times \kw{penv})$
+is typically introduced to connect the state of two layers.
+As in the OpenTE setting,
+vertical composition of layers follows
+directly from the monotonicity of the $\odot$ operator,
+ensuring the compositionality of correctness proofs.
+
+\section{Summary}
+
+This section addressed
+one of the central challenges
+in developing the strategy model:
+how to properly formulate the notion of refinement.
+Unlike simpler settings,
+refinement here must account for
+nondeterminism arising from both the system under consideration
+and its environment.
+In the framework, the key innovation
+is the introduction of refinement conventions.
+By embedding the nondeterministic choices
+directly into the notion of a play and its ordering,
+refinement conventions allow the refinement relation
+to faithfully represent
+both system-level and environment-level behavior.
+This provides a unified account of
+how strategies can be compared while preserving semantic rigor.
+
+Building on this foundation,
+a variety of composition properties
+for refinement were established.
+These results ensure
+that the strategy model
+respects the three-dimensional algebraic structure.
+Such compositionality is crucial,
+as it guarantees that local refinement proofs
+can be assembled into larger correctness arguments
+without sacrificing coherence.
+
+Finally, it was demonstrated that
+the strategy model is expressive enough to embed CompCertO
+and capture its compiler correctness results.
+This embedding highlights
+both the flexibility and the applicability of the framework.
+On one hand, it shows that established verification frameworks
+can be recovered as special cases;
+on the other, it reveals how the strategy model
+extends beyond existing approaches
+by offering finer control
+over state encapsulation and nondeterminism.
+In this way,
+this chapter completes the development of refinement in the strategy setting,
+positioning it as a robust semantic foundation
+for reasoning about realistic software systems.

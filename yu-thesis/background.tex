@@ -1,0 +1,1786 @@
+\chapter{Background}
+\label{ch:bg}
+
+This chapter introduces the background material
+needed to understand the developments in subsequent chapters.
+It covers CompCert and CompCertO for certified compilation and compositional semantics,
+the Certified Abstraction Layer (CAL) framework,
+game semantics for modeling component interactions,
+and relevant concepts from category theory.
+
+\section{Notations}
+
+This section introduces basic mathematical notations
+used throughout the thesis.
+$\varnothing$ denotes the empty set,
+while $\{*\}$ denotes the singleton set
+with $*$ as its only element.
+For sets $S_1$ and $S_2$,
+$S_1 + S_2$ represents their disjoint union,
+with $\iota_1$ and $\iota_2$ denoting the canonical injections.
+
+For relations,
+I will use $\top$ for the universal relation,
+relating every possible pair of elements,
+while $\bot$ denotes the empty relation.
+$R_1 \times R_2$ denotes the product of two relations,
+and $R_1 \cdot R_2$ denotes their composition.
+
+I will use infix notation $x \mathrel{R} y$
+for $(x, y) \in R$ when convenient.
+In addition, I will often write $x \mathrel{R} y \mathrel{S} z$
+to mean $x \mathrel{R} y \mathrel\wedge y \mathrel{S} z$.
+
+To reason about relations
+that may evolve over time or context,
+Kripke relations are used.
+A Kripke relation is a relation parameterized
+by a set of worlds $W$,
+which models how the relation can change as the world evolves.
+Concretely, I will write
+\[
+  R \in \mathcal{R}_W(A, B)
+\]
+for a family of relations $R_{w \in W} \subseteq A \times B$,
+The set $W$ is equipped with
+an accessibility relation $\sysstep$
+to describe possible world evolutions. I write
+\[
+  w \Vdash a \mathbin{R} b
+\]
+to indicate that $a$ and $b$ are related at the world $w$.
+
+\section{CompCert}
+
+As a \emph{certified} compiler,
+CompCert provides a mechanized proof of semantics preservation
+between its source language, Clight,
+and its target language, Asm,
+with the entire development formalized
+in the Rocq proof assistant.
+To make this possible,
+CompCert includes rigorous formalizations of
+the semantics of both languages,
+together with a precise definition of
+what it means for compilation to preserve semantics.
+
+\subsection{Transition Systems and Semantics Preservation}
+
+CompCert defines language semantics
+using \emph{transition systems}
+that abstract over concrete language differences.
+A transition system consists of
+a set of states $S$ and the following components:
+\begin{itemize}
+  \item a distinguished subset of \emph{initial} states $I \subseteq S$;
+  \item a step transition relation ${\rightarrow} \subseteq S \times S$;
+  \item a relation $F \subseteq S \times \kw{int}$ which identifies
+    \emph{final} states along with the exit codes.
+\end{itemize}
+
+For example,
+the semantics $\kw{Clight}[p]$
+is an instance of a transition system.
+An execution of $p$ starts with an initial state $s_0 \in I$,
+performs a number of transitions
+\[
+  I \ni s_0 \rightarrow s_1 \rightarrow \cdots \rightarrow s_n \mathrel{F} x
+  \,,
+\]
+and terminates with status $x$ when the final state $s_n$ is reached.
+States with no $\rightarrow$ or $F$ successors
+\emph{go wrong} and represent undefined behavior.
+
+\begin{remark}
+  \label{rem:compcert-semantics}
+  This overview abstracts away some technical details.
+  For instance, CompCert uses transition labels
+  to capture interactions with the operating system
+  and takes special care in handling infinite executions.
+  However, these aspects are largely orthogonal
+  to the concerns of this thesis.
+  In practice, the relevant behaviors can be
+  recovered through the standard interactions
+  among components via a unified interface.
+  For this reason,
+  I will not discuss them further in depth here.
+\end{remark}
+
+In the Clight semantics,
+a program state consists of
+the current control stack, environments mapping temporary variables to values,
+and a global memory state.
+By contrast,
+states in the Asm semantics are simpler,
+comprising only the machine registers
+together with global memory.
+In addition to these two main languages,
+CompCert also formalizes
+several intermediate languages.
+Although these are not part of the external specification,
+they play a crucial role in structuring the compiler
+and in the construction of its correctness proof.
+
+CompCert formalizes semantics preservation
+as a \emph{simulation} relation $\le$
+between source and target languages.
+In particular,
+the overall correctness theorem of CompCert
+is established as follows:
+\begin{equation}
+  \kw{CompCert}(\kw{p.c}) = \kw{p.s}
+  \quad\Longrightarrow\quad
+  \kw{Clight}[\kw{p.c}] \le \kw{Asm}[\kw{p.s}]
+  \,.
+  \label{eqn:ccc-wp}
+\end{equation}
+
+A simulation between
+two transition systems $L_1$ and $L_2$
+is witnessed by a simulation relation
+$R \subseteq I \times S_1 \times S_2$
+between the states of the source $L_1$
+and the states of the target $L_2$
+that is indexed by a well-founded order $(I, \le)$.
+This relation must satisfy several conditions
+which ensure that
+every execution of $L_1$ gives rise
+to a corresponding execution of $L_2$:
+\begin{itemize}
+  \item For all initial states $s_1 \in I_1$,
+    there exist an index $i\in I$
+    and a related target initial state
+    $s_2 \in I_2$ such that $(i, s_1, s_2) \in \mathrel{R}$;
+  \item For all related states $(i, s_1, s_2) \in \mathrel{R}$
+    and every source transition $s_1 \rightarrow_1 s_1'$,
+    there exist $i' \in I$ and $s_2' \in S_2$
+    such that $(i', s_1', s_2') \in \mathrel{R}$
+    and either $s_2 \rightarrow_2^+ s_2'$
+    or $s_2 = s_2' \wedge i' \le i$;
+  \item For all related states $(i, s_1, s_2) \in \mathrel{R}$
+    and every result $r$ that $s_1 \mathbin{F_1} r$,
+    there exist $s_2'$ such that $s_2 \rightarrow_2^* s_2'$
+    and $s_2' \mathbin{F_2} r$.
+\end{itemize}
+The simulation $L_1 \le L_2$
+holds when such a simulation relation $R$ exists.
+
+\begin{remark}
+  Two points are worth highlighting:
+  \begin{itemize}
+    \item
+      The definition above corresponds to \emph{forward simulation},
+      which roughly states that every execution path in the source language
+      can be matched by some execution path in the target language.
+      Ultimately, forward simulations are often used to
+      establish \emph{backward simulations},
+      which reverse the simulation direction
+      but involve additional subtleties.
+      Under certain conditions---specifically
+      when the target language is deterministic
+      and the source language is receptive---the two notions coincide.
+
+    \item As noted in Remark~\ref{rem:compcert-semantics},
+      CompCert transition systems emit system call events
+      via labels.
+      Consequently, the final semantics-preservation theorem
+      in CompCert is not stated as a simulation,
+      but rather as a behavioral refinement
+      between traces of events.
+  \end{itemize}
+  For a more detailed account of forward and backward simulations,
+  and their connection to angelic and demonic nondeterminism,
+  see \citet{thesis}.
+  In this work,
+  the focus is on compositional verification;
+  therefore, the finer distinctions between simulation styles
+  and the details of labeled events
+  remain largely orthogonal to the development.
+\end{remark}
+
+\subsection{Compositionality}
+
+CompCert's proof strategy relies on compositional simulations.
+The compiler uses multiple compilation phases
+that progressively transform programs:
+$
+p = p_0 \longmapsto p_1 \longmapsto \cdots \longmapsto p_n = p'
+$.
+To derive the correctness theorem,
+a simulation proof is established for each phase:
+\begin{equation}
+  \kw{Clight}[p] \:=\:
+  \kw{Clight}[p_0] \:\le\: \kw{RTL}[p_1] \:\le\: \cdots \:\le\: \kw{Asm}[p_n]
+  \:=\: \kw{Asm}[p']
+  \label{eqn:corrsteps}
+\end{equation}
+When the target $L_2$ of a simulation $\pi : L_1 \le L_2$
+is the source of a simulation $\rho : L_2 \le L_3$,
+the two can be combined, and the composite
+$\pi \vcomp \rho$
+is in turn a simulation of type $L_1 \le L_3$.
+This allows
+the successive simulation proofs in (\ref{eqn:corrsteps})
+to be combined into the correctness property (\ref{eqn:ccc-wp}).
+
+A key limitation of CompCert
+is that its semantics only describe complete programs.
+While CompCert supports separate compilation,
+it uses a \emph{syntactic} approach to correctness
+that can be formulated as:
+\[
+  \begin{prooftree}
+    \hypo{\kw{CompCert}(\kw{a.c}) = \kw{a.s}}
+    \hypo{\kw{CompCert}(\kw{b.c}) = \kw{b.s}}
+    \infer2{\kw{CompCert}(\kw{a.c} + \kw{b.c}) = \kw{a.s} + \kw{b.s}}
+  \end{prooftree}
+\]
+where the $+$ operator links two programs.
+
+Translation units without a $\kw{main()}$ function
+have undefined semantics.
+The CompCert compiler can compile
+these kind of programs,
+but the correctness property (\ref{eqn:ccc-wp})
+does not provide any guarantees.
+To account for this situation
+at the semantic level,
+it is necessary to assign a behavior $\kw{Clight}(\kw{a.c})$
+to individual translation units such as $\kw{a.c}$,
+and to define an operator $\oplus$ to
+model the \emph{semantic} linking process
+which happens before $\kw{a.c}$
+is run as part of a larger program.
+This operator should be compatible with simulations,
+so that for example it is possible to derive the overall correctness property
+\[
+  \kw{Clight}(\kw{a.c}) \oplus \kw{Clight}(\kw{a.c})
+  \:\le\:
+  \kw{Asm}(\kw{a.s}) \oplus \kw{Asm}(\kw{b.s})
+\]
+from the compiler correctness properties
+associated with individual translation units.
+CompCertO addresses this limitation
+by introducing open semantics,
+discussed in \S\ref{sec:bg:compcerto}.
+
+\subsection{The CompCert Memory Model}
+
+All languages in CompCert
+share the same memory model \citep{compcertmm}.
+The internal state that drives the transition steps
+always contains a memory state $m \in \kw{mem}$
+together with other language-specific state.
+
+In essence,
+a CompCert memory state
+assigns to each possible memory address $(b, o) \in \kw{block} \times \mathbb{Z}$
+a memory value $v \in \kw{memval}$
+together with a permission level $p \in \kw{option}\,\kw{perm}$.
+In addition,
+a memory state contains a $\kw{nextblock}$ counter
+which keeps track of the next block identifier to be allocated.
+I will discuss these various components in more detail below.
+
+\subsubsection{Memory Addresses}
+
+The CompCert memory is divided in a number of \emph{blocks}.
+As new blocks are allocated,
+they are assigned a positive identifier $b \in \mathbb{N}^+$
+in sequential order.
+As mentioned above,
+the $\kw{nextblock}$ counter within each memory state
+keeps track of the smallest unallocated block identifier.
+When a new block identifier is needed,
+$\kw{nextblock}$ is incremented and its previous value
+is used for the new block.
+\[
+  (b, o) \in \kw{ptr} = \kw{block} \times \mathbb{Z}
+  \qquad
+  (b, l, h) \in \kw{ptrrange} = \kw{block} \times \mathbb{Z} \times \mathbb{Z}
+\]
+
+Memory blocks represent independent address spaces.
+Within each block,
+a byte can be addressed using an offset $o \in \mathbb{Z}$.
+When a new block is allocated,
+a range of addresses $[\mathit{lo}, \mathit{hi})$ must be provided;
+this range determines which addresses within the block are valid.
+However,
+rather than storing the range directly within the memory state,
+the allocation operation uses it to assign initial permissions
+for each address within the new block.
+
+\subsubsection{Permissions}
+
+Each memory address within a memory state
+is assigned a permission level from the following hierarchy:
+\[
+  p \in \kw{option}\,\kw{perm} ::=
+  \bot \mid
+  \kw{nonempty} \mid
+  \kw{readable} \mid
+  \kw{writable} \mid
+  \kw{freeable}
+\]
+The permissions are listed in increasing order of capability.
+Each permission level encompasses
+all operations allowed by lower levels,
+so that for example the permission level $\kw{writable}$
+represents the set of permissions
+$\{ \kw{nonempty}, \kw{readable}, \kw{writable} \}$.
+
+The $\kw{freeable}$ permission provides
+exclusive access
+and permits all operations
+including load, store, pointer comparison, and deallocation.
+The $\kw{writable}$
+permission allows load, store, and pointer comparison operations
+but prohibits freeing.
+The $\kw{readable}$
+permission restricts access to only load and
+pointer comparison operations.
+The $\kw{nonempty}$
+indicates that the address is valid but permits only pointer comparisons.
+Finally, the empty permission $\bot$
+signifies addresses that are not yet allocated or have been previously freed, and no operations are permitted on such addresses.
+
+When a block is first allocated,
+addresses within the provided range
+are assigned the permission level $\kw{freeable}$,
+while all remaining addresses are assigned
+empty permissions $\bot$.
+Further memory operations may then decrease the permission level,
+but can never increase it.
+Memory operations which access a particular address
+will first check that this address has sufficient permissions,
+and fail if that is not the case.
+
+Permissions play an important role
+in the memory separation relation I will define in \S\ref{sec:ox:separation}.
+
+\subsubsection{Memory Operations}
+
+The memory operations include
+$\kw{alloc}$ and $\kw{free}$
+that allocate and deallocate memory blocks, respectively:
+\begin{align*}
+  \kw{alloc} & \::\: \kw{mem}
+  \rightarrow \mathbb{Z}
+  \rightarrow \mathbb{Z}
+  \rightarrow \kw{mem} \times \kw{block}\\
+  \kw{free} & \::\: \kw{mem}
+  \rightarrow \kw{ptrrange}
+  \rightarrow \kw{option}(\kw{mem})
+\end{align*}
+Each memory value $\kw{memval}$ represents the contents of exactly one byte of memory.
+It may be stored as a concrete byte,
+or may be identified as a particular one-byte fragment
+within a larger, more abstract value
+(for instance, the third byte of a given pointer).
+Sequences of memory values can be loaded from or stored to memory via the following byte-level operations:
+\begin{align*}
+  \kw{loadbytes} & \::\: \kw{mem}
+  \rightarrow \kw{ptr}
+  \rightarrow \mathbb{Z}
+  \rightarrow \kw{option}(\kw{list}(\kw{memval}))\\
+  \kw{storebytes} & \::\: \kw{mem}
+  \rightarrow \kw{ptr}
+  \rightarrow \kw{list}(\kw{memval})
+  \rightarrow \kw{option}(\kw{mem})\\
+\end{align*}
+For greater convenience,
+the memory model also provides
+higher-level operations
+that work with typed values ($\kw{val}$)
+such as integers, floats, and pointers,
+eliminating the need to manipulate raw bytes directly:
+\begin{align*}
+  \kw{load} & \::\: \kw{mem}
+  \rightarrow \kw{ptr}
+  \rightarrow \kw{option}(\kw{val})\\
+  \kw{store} & \::\: \kw{mem}
+  \rightarrow \kw{ptr}
+  \rightarrow \kw{val}
+  \rightarrow \kw{option}(\kw{mem})
+\end{align*}
+
+The exact representation of memory values
+is not essential to the work discussed in this section.
+Therefore
+I will not discuss the specifics further,
+but refer the interested reader to \citet{compcertmmv2}
+for more background on this topic.
+
+\subsubsection{Memory Transformations}
+
+The compilation passes of CompCert
+often transform the structure of the memory state:
+multiple blocks can merged into one;
+new blocks may be introduced in the target memory
+and blocks may be dropped from the source memory.
+To express these transformations,
+CompCert introduces \emph{memory extensions} and \emph{memory injections}
+as possible relations between source- and target-level memory states.
+
+% In CompCertO,
+% these memory transformations are generalized and consolidated
+% into a notion of \emph{CompCert Kripke Logical Relations} (CLKRs),
+% which play an important role in defining simulation conventions.
+% The underlying idea is that
+% if two memory states are related by a CKLR,
+% then memory operations which succeed at the source level
+% should also succeed on at the target level,
+% and their outcomes should in turn be related
+% by the CKLR.
+
+% Unfortunately,
+% these memory transformations are difficult to use
+% to express the relationships between
+% different \emph{fragments} of a single memory state.
+% The notion of \emph{separation relation} introduced below
+% seeks to fill this gap.
+
+\section{Certified abstraction layer}
+\label{sec:bg:cal}
+
+The Certified Abstraction Layer (CAL) framework
+facilitates verification through
+systematic decomposition into abstraction layers.
+Originally developed with CompCertX semantics,
+CAL has since been generalized to work with various semantic models.
+Notable instantiations include
+Interaction Specifications\citep{rbgs-cal},
+free monad semantics\citep{thesis},
+and object-based semantics with non-determinism\citep{popl22}.
+
+At a conceptual level,
+CAL comprises the following components:
+
+\begin{itemize}
+  \item
+    \emph{Layer Interfaces $\mathcal{L}$}:
+    A layer interface $L \in \mathcal{L}$
+    formally specifies the behaviors
+    of a collection of operations defined in a given signature.
+    Each operation may interact with a designated abstract state.
+    The abstraction of state allows for clear specification
+    without revealing internal implementation details.
+
+  \item
+    \emph{Implementations $\mathcal{M}$}:
+    Implementations $M \in \mathcal{M}$
+    realize operations in an overlay layer interface
+    by utilizing operations defined in
+    an underlay interface.
+    The implementations
+    are associated with an operator
+    $+ : \mathcal{M} \times \mathcal{M} \rightarrow \mathcal{M}$
+    that groups two implementations together
+    to form a larger implementation.
+
+  \item
+    \emph{Implementation Interpretation}:
+    The operator $\llbracket\ \rrbracket : \mathcal{M} \times \mathcal{L} \rightarrow \mathcal{L}$
+    interprets an implementation $M \in \mathcal{M}$
+    given an underlay interface $L \in \mathcal{L}$.
+    The underlay interface provides specifications
+    for the uninterpreted calls in the implementation.
+    The interpretation $\llbracket M \rrbracket L$
+    is itself an interface
+    that captures the behavior
+    of operations in the implementation's signature.
+
+  \item
+    \emph{Refinement Ordering}:
+    The partial order $\le \:\subseteq\: \mathcal{L} \times \mathcal{L}$
+    between layer interfaces
+    formally establishes the correctness criteria.
+    Refinement ordering ensures that
+    the behavior provided by one layer interface
+    is fully captured by another,
+    possibly at different abstraction levels.
+    When states differ across abstraction layers,
+    refinement incorporates explicit simulation relationships
+    to manage state transformations coherently.
+
+  \item
+    \emph{Monotonicity of Interpretation}:
+    An important property of the interpretation operator
+    is that it is monotonic with respect to refinement ordering:
+    \[
+      \begin{prooftree}
+        \hypo{L_1 \le_R L_2}
+        \infer1{\llbracket M \rrbracket L_1 \le_R \llbracket M \rrbracket L_2}
+      \end{prooftree}
+    \]
+
+\end{itemize}
+
+These conceptual ingredients
+enable CAL to form a generic and highly flexible framework.
+The correctness of an individual
+abstraction layer is formally expressed
+by asserting that
+an implementation $M$ correctly
+realizes an overlay interface $L_2$
+on top of an underlay interface $L_1$,
+denoted as
+\[
+  L_1 \:\vdash_R\: M : L_2
+  \quad
+  :\Leftrightarrow
+  \quad
+  L_2 \le_R \llbracket M \rrbracket L_1
+\]
+Here $R$
+is an abstract relation
+that specifies how states are related
+between the two interfaces.
+
+The correctness of individual layers
+can be composed to form the correctness
+of the overall system
+by applying the composition property:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \:\vdash_R\: M : L_2}
+    \hypo{L_2 \:\vdash_S\: N : L_3}
+    \infer2{L_1 \:\vdash_{R \cdot S}\: M \mathbin+ N : L_3}
+  \end{prooftree}
+\]
+
+% The generic framework is formalized in Coq as described in
+% Figure~\ref{fig:cal-module-type}.
+
+% \begin{figure}
+%   \centering
+% \begin{minted}{coq}
+% Module Type CAL.
+
+%   Parameter Layer : Type -> Type -> Type.
+%   Parameter Impl : Type -> Type -> Type.
+
+%   Parameter impl_layer : forall {E F S}, Impl E F -> Layer E S -> Layer F S.
+%   Parameter impl_compose : forall {E F G}, Impl E F -> Impl F G -> Impl E G.
+
+%   Parameter ref : forall {E S1 S2} (R: S1 -> S2 -> Prop),
+%       Layer E S1 -> Layer E S2 -> Prop.
+
+%   Definition correct `(L1: Layer E1 S1) `(L2: Layer E2 S2) `(M: Impl E1 E2) :=
+%       exists R, ref R L2 (impl_layer M L1).
+
+% End CAL.
+% \end{minted}
+%   \caption{The CAL}
+%   \label{fig:cal-module-type}
+% \end{figure}
+
+\subsection{CompCertX}
+
+The CompCertX is a variant of CompCert
+designed to support the CAL framework
+that aims to allow CompCert programs
+to play the role of layer implementations.
+
+A layer interface $L$ is a tuple $\langle S, \sigma \rangle$,
+where $S$ is the type of abstract states,
+and $\sigma$ assigns each operation $f$ a primitive
+$\sigma^f$:
+\[
+  \sigma^f \subseteq (\kw{val}^* \times \kw{mem} \times S)
+  \times (\kw{val} \times \kw{mem} \times S)
+\]
+When $\sigma^f(\kw{args}, \kw{res}, \kw{state})$
+holds,
+it means that the primitive $\sigma^f$
+takes the arguments $\kw{args}$,
+the memory $\kw{mem}$,
+and the state $\kw{state}$,
+and returns the result $\kw{res}$
+and the updated state $\kw{state'}$.
+
+The ClightX language has identical syntax
+as the Clight language.
+The difference is that
+the ClightX semantics
+is parameterized over layer interfaces $\mathcal{L}$
+that provides interpretations for
+the calls to the primitives in the layer interface.
+Given a layer interface $L := \langle S, \Sigma \rangle$,
+The semantics of $\kw{ClightX}_L$
+additionally takes the abstract state $S$,
+and when it calls a primitive in $L$,
+$\Sigma$ is used to interpret the call.
+For the CAL interpretation,
+the interpretation of an implementation $M$
+with an underlay interface $L := \langle S, \Sigma \rangle$
+is the layer interface defined as:
+\[
+  \llbracket M \rrbracket L \::=\: \langle S, \kw{ClightX}_L(M) \rangle
+\]
+
+Forward simulation serves
+as the refinement order to establish correctness
+of layer implementations.
+Moreover,
+the abstract states
+are gradually realized in lower layers
+as global variables stored in the memory state.
+To support this,
+the simulation relation is defined
+by two components:
+\[
+  R^r \subseteq S_2 \times S_1 \qquad
+  R^m \subseteq S_2 \times \kw{mem}
+\]
+The overlay abstract state $S_2$
+preserves part of the underlay abstract states $S_1$
+through the relation $R^r$,
+while also introducing new abstract states
+that are stored in the underlay as part of the memory state,
+as described by $R^m$.
+This design
+allows the abstract state to be
+progressively materialized across layers,
+enabling a smooth transition
+from high-level specifications
+to low-level implementations.
+
+I have neglected the details of
+the compilation of ClightX programs,
+and the composition of simulation relations
+across layers.
+Interested readers are referred to \citep{popl15}
+for more details.
+
+% \subsection{Free Monad and Monad Homomorphism}
+
+% Another instance of the CAL is presented in \citep{thesis}
+% by using free monads as the layer interface.
+
+% This instance takes a more rigid type system
+% where the layer interfaces
+% are typed by an effect signature $E$,
+% which is a set of primitive operations.
+% Each element in the signature
+% is a pair of primitive call $m$
+% and its associcated return type $N$,
+% written as $(m: N) \in E$.
+% A layer interface is a tuple
+% \[
+%   L := \langle E, S, \sigma \rangle
+% \]
+% where $S$ is the type of abstract states,
+% and $\sigma$ associates
+% a fallible state monad to each operation $(m: N) \in E$
+% as the interpretation of the primitive call.
+% \[
+%   \sigma^m : S \rightarrow (N \times S)_\bot \,.
+% \]
+
+% The layer implementation $M: E \rightarrow F$ associates a free monad
+% over $E$ to each operation $(m: N) \in F$:
+% \[
+%   M^m : \mathcal{T}_E(N)
+% \]
+
+% The composition is defined in terms of interpreting the effects of
+% free monad as described in Figure~\ref{fig:freer-monad}.
+
+% Refinement
+
+% The CAL instance using free monad is defined in Figure~\ref{fig:freer-monad}. It
+% is worth mentioning that the conventional definition of free monad is not
+% definable in Coq because of the strict positivity requirement\citep{one-monad}.
+% The definition in our formalization is actually called the \textit{freer
+% monad}\citep{freer-monad}.
+
+% \begin{figure}
+%   \centering
+% \begin{minted}{coq}
+%   Record esig := { op :> Type; ar : op -> Type; }.
+%   Definition Spec (E: esig) (S: Type) := forall (n: E), S -> option (ar n * S).
+%   Inductive Free {E: esig} {A: Type} :=
+%     | Pure : A -> Free
+%     | Bind (n: E) : (ar n -> Free) -> Free.
+%   Definition Impl (E: esig) (F: esig) := forall (n: F), Free E (ar n).
+
+%   Fixpoint exec' {E A S} (T: Free E A) (L: Spec E S) (s: S) : option (A * S) :=
+%     match T with
+%     | Pure a => Some (a, s)
+%     | Bind e_op k => match L e_op s with
+%                       | Some (a, s') => exec' (k a) L s'
+%                       | None => None
+%                       end
+%     end.
+%   Definition exec {E F S} (M: Impl E F) (L: Spec E S) : Spec F S :=
+%     fun f_op s => exec' (M f_op) L s.
+
+%   Fixpoint seq {E A B} (T1: Free E A) (T2: A -> Free E B) : Free E B :=
+%     match T1 with
+%     | Pure a => T2 a
+%     | Bind e_op k => Bind e_op (fun a => seq (k a) T2)
+%     end.
+
+%   Fixpoint compose' {E F A} (T: Free F A) (M: Impl E F) : Free E A :=
+%     match T with
+%     | Pure a => Pure a
+%     | Bind f_op k => seq (M f_op) (fun a => compose' (k a) M)
+%     end.
+%   Definition compose {E F G} (M1: Impl E F) (M2: Impl F G) : Impl E G :=
+%     fun g_op => compose' (M2 g_op) M1.
+
+%   Definition ref `(L1: Spec E S1) `(L2: Spec E S2) (R: S1 -> S2 -> Prop) :=
+%     forall m n s1 s1' s2, L1 m s1 = Some (n, s1') -> R s1 s2 ->
+%     exists s2', L2 m s2 = Some (n, s2') -> R s1' s2'.
+% \end{minted}
+%   \caption{The CAL instance using free monad}
+%   \label{fig:freer-monad}
+% \end{figure}
+
+\section{CompCertO}
+\label{sec:bg:compcerto}
+
+Extending CompCert to support compositional verification
+is challenging and has been an active research area.
+CompCertO\citep{compcerto} addresses this challenge
+through open semantics and simulation conventions,
+which form the foundation for this thesis.
+
+\subsection{Open Semantics}
+\label{sec:bg:language-interfaces}
+
+To model translation units and linking,
+CompCertO must describe interactions across component boundaries—function calls and returns.
+It uses \emph{language interfaces}
+to type component boundaries.
+
+\begin{definition}
+  A \emph{language interface} $A = \langle A^\que, A^\ans \rangle$
+  is a set of questions $A^\que$ and a set of answers $A^\ans$.
+\end{definition}
+% For example,
+% the language interface for C is
+% $\langle \kw{ident} \times \kw{val}^* \times \kw{mem}, \kw{val} \times \kw{mem} \rangle$.
+% For example,
+% assembly-level interactions are formulated in terms of
+% low-level register state and code addresses.
+I will write $\mathbf{0}$
+for the empty language interface $\langle \varnothing, \varnothing \rangle$,
+and $\mathbf{1}$
+for the language interface
+with only one possible question and answer,
+$\langle \{*\}, \{*\} \rangle$.
+
+Transition systems
+are then assigned a type $A \twoheadrightarrow B$.
+The following figure
+shows the general shape of interaction of a component
+with the environment.
+The language interface $B$
+is used between the component and its client.
+The component
+receives a question $q \in B^\que$
+and is responsible for answering it
+with an answer $r \in B^\ans$.
+In the course of its execution,
+it may perform outgoing calls
+requiring answers from other components
+using the language interface $A$.
+
+\[
+  \centering
+  \begin{tikzpicture}[yscale=0.25,xscale=0.50]
+    \draw (1,-1) rectangle (5,11) node[midway] {$L$};
+    \scriptsize
+    \draw[<-] (0,10) node[left] {$m_1 \in A^\que$} -- (1,10)
+    node[above=1.5em,midway] (B) {\normalsize $A$};
+    \draw[<-] (5,10) -- (6,10) node[right] {$q \in B^\que$}
+    node[above=1.5em,midway] (A) {\normalsize $B$};
+    \draw[->] (0,8) node[left] {$n_1 \in A^\ans$} -- (1,8) ;
+    \node[right] at (-1,5.5) {$\:\vdots$};
+    \draw[<-] (0,2) node[left] {$m_n \in A^\que$} -- (1,2);
+    \draw[->] (6,0) node[right] {$r \in B^\ans$} -- (5,0);
+    \draw[<-] (1,0) -- (0,0) node[left] {$n_n \in A^\ans$};
+    \draw[<<-] (A) -- (B);
+  \end{tikzpicture}
+\]
+
+\begin{definition}[Transition system]
+  A CompCertO \emph{transition system} $L : A \twoheadrightarrow B$
+  is a tuple
+  \[
+    L = \langle S, {\rightarrow}, I, X, Y, F \rangle \,.
+  \]
+  The relation ${\rightarrow} \subseteq S \times S$
+  is a transition relation on the set of states $S$.
+  The relation $I \subseteq B^\que \times S$
+  assigns to each question of $B$
+  a set of \emph{initial states}.
+  The relation $F \subseteq S \times B^\ans$
+  designates \emph{final states} which terminate the computation
+  with a corresponding answer.
+  External calls are specified
+  by the $X \subseteq S \times A^\que$,
+  which designates \emph{external states}
+  together with a question of $A$,
+  and $Y \subseteq S \times A^\ans \times S$,
+  which selects a \emph{resumption state}
+  based on the external call's answer.
+\end{definition}
+
+An execution can be understood as a sequence
+that begins in an initial state,
+evolves through internal transitions,
+alternates with external calls and responses,
+and eventually reaches a final state.
+In particular, executions take the form
+\[
+  q \mathrel{I} s_0 \rightarrow^*
+  s_1 \mathrel{X} m_1 \envstep
+  n_1 \mathrel{Y^{s_1}} s_1' \rightarrow^*
+  s_2 \mathrel{\cdots}
+  s_n \mathrel{X} m_n \envstep
+  n_n \mathrel{Y^{s_n}} s_n' \rightarrow^*
+  s_f \mathrel{F} r
+  \,.
+\]
+The component is activated by an incoming call,
+described by a question $q \in B^\que$,
+which is used to determine the transition system's initial state.
+As it executes,
+the transition system may perform outgoing calls,
+asking questions
+$m_1, \ldots, m_n \in A^\que$
+and receiving corresponding answers
+$n_1, \ldots, n_n \in A^\ans$.
+Execution terminates with
+the top-level answer $r \in B^\ans$.
+
+The execution of a transition system
+is represented as an interaction trace
+\[
+  t :=
+  q \sysstep
+  (m_1 \envstep n_1) \sysstep
+  \cdots \sysstep
+  (m_n \envstep n_n) \sysstep
+  r
+\]
+when
+the internal transition steps
+are not important.
+Here $\sysstep$ denotes internal execution
+and $\envstep$ denotes environment-controlled steps.
+I will write $L \vDash t$
+to mean that the transition system $L$
+admits the interaction trace $t$.
+
+Under this definition,
+the source and target semantics of CompCertO can be described as
+\[
+  \kw{Clight}(\kw{p.c}) : \mathcal{C}\at\kw{mem} \twoheadrightarrow \mathcal{C}\at\kw{mem}
+  \qquad \text{and} \qquad
+  \kw{Asm}(\kw{p.s}) : \mathcal{A}\at\kw{mem} \twoheadrightarrow \mathcal{A}\at\kw{mem} \,.
+\]
+The language interface
+$\mathcal{C}\at\kw{mem} = \langle \mathcal{C}\at\kw{mem}^\que, \mathcal{C}\at\kw{mem}^\ans \rangle$
+describes the kind of interactions used Example~\ref{ex:overview:clightsem}:
+\begin{align*}
+  \mathcal{C}\at\kw{mem}^\que & :=
+  \{ f(\vec{v})@m \mid f \in \kw{ident}, \vec{v} \in \kw{val}^*, m \in \kw{mem} \}
+  \\
+  \mathcal{C}\at\kw{mem}^\ans & :=
+  \{ v@m \mid v \in \kw{val}, m \in \kw{mem} \}
+\end{align*}
+
+\begin{example}[Clight semantics] \label{ex:overview:clightsem}
+  Consider the translation unit $\kw{rb.c}$ shown in Fig.~\ref{fig:bq-code}.
+  Its semantics is given by
+  the transition system $\kw{Clight}(\kw{rb.c})$,
+  which admits the following interaction trace:
+  \[
+    \kw{Clight}(\kw{rb.c}) \quad \vDash \quad
+    \kw{inc1}()@[\kw{c_1} \mapsto 2]
+    \: \rightarrowtail \:
+    2@[\kw{c_1} \mapsto 3]
+  \]
+  Note that the memory is updated to store the new value of the counter $\kw{c1}$.
+  By contrast, $\kw{bq.c}$
+  does not directly modify the memory,
+  but it makes outgoing calls which may have that effect:
+  \[
+    \kw{Clight}(\kw{bq.c}) \:\: \vDash \:\:
+    \kw{deq}()@m
+    \rightarrowtail
+    \big( \kw{inc_1}()@m \leadsto i@m' \big)
+    \rightarrowtail
+    \big( \kw{get}(i)@m' \leadsto v@m'' \big)
+    \rightarrowtail
+    v@m''
+    \,.
+  \]
+\end{example}
+
+Note here I use round parentheses for
+the \emph{open} transition system $\kw{Clight}(-)$
+as opposed to the original closed semantics $\kw{Clight}[-]$.
+
+\subsection{Simulations}
+
+The types of
+$\kw{Clight}(p) : \C \at \kw{mem} \twoheadrightarrow \C \at \kw{mem}$
+and
+$\kw{Asm}(p') : \A \at \kw{mem} \twoheadrightarrow \A \at \kw{mem}$
+raise the question of the relationship
+between source-level interactions
+in $\C \at \kw{mem}$
+and corresponding target-level interactions
+in $\A \at \kw{mem}$.
+Compositional compiler correctness only makes sense
+with respect to a particular calling convention.
+CompCertO makes this explicit:
+simulations operate in the context of specified
+\emph{simulation conventions},
+which introduce a form of two-dimensional typing for simulations.
+
+\begin{definition}[Simulation convention]
+  \label{def:bg:sc}
+  A \emph{simulation convention}\footnote{
+    The original notation in \cite{compcerto} is $\mathbb{R} : A \Leftrightarrow B$.
+  }
+  between the language interfaces
+  $A: \langle A^\que, A^\ans \rangle$
+  and
+  $B: \langle B^\que, B^\ans \rangle$
+  is a tuple
+  \[
+    \mathbb{R} : A \twoheadleftrightarrow B
+    := \langle W, \sysstep, \mathbb{R}^\que, \mathbb{R}^\ans \rangle
+  \]
+  where $W$ is a set of Kripke worlds
+  together with an accessibility relation $\sysstep$
+  that is reflexive and transitive.
+  $\mathbb{R}^\que \subseteq \mathcal{R}_W (A^\que, B^\que)$
+  and $\mathbb{R}^\ans \subseteq \mathcal{R}_W (A^\ans, B^\ans)$
+  are relations indexed by the Kripke worlds.
+  I will also use the following notation:
+  \[
+    w \Vdash q_a \mathbin{\mathbb{R}^\que} q_b
+    \ :\Leftrightarrow\
+    q_a \mathbin{\mathbb{R}_w^\que} q_b
+    \quad \text{and} \quad
+    w \Vdash r_a \mathbin{\mathbb{R}^\ans} r_b
+    \ :\Leftrightarrow\
+    r_a \mathbin{\mathbb{R}_w^\ans} r_b
+  \]
+\end{definition}
+
+The Kripke worlds are used to enforce invariants
+on the corresponding pairs of questions and answers.
+This is made explicit by the following definition
+of simulations.
+
+\begin{definition}[Simulation]
+  To establish a simulation
+  of a transition system $L_1: A_1 \twoheadrightarrow B_1$
+  by a transition system $L_2: A_2 \twoheadrightarrow B_2$,
+  a simulation convention
+  $\mathbb{R}_B : B_1 \twoheadleftrightarrow B_2$
+  must be first specified
+  for their incoming calls,
+  and a simulation convention
+  $\mathbb{R}_A : A_1 \twoheadleftrightarrow A_2$
+  for their outgoing calls.
+  A simulation between $L_1$ and $L_2$
+  is witnessed by a simulation relation
+  $R_{w \in W_B} \subseteq S_1 \times S_2$
+  between the states of $L_1$ and $L_2$
+  indexed by the Kripke worlds in $\mathbb{R}_B$
+  that satisfies the simulation properties
+  in Figure~\ref{fig:bg:simint}.
+
+  The simulation is written as
+  \[
+    \phi : L_1 \le_{\mathbb{R}_A \twoheadrightarrow \mathbb{R}_B} L_2
+    \qquad\qquad
+    \begin{tikzcd}[row sep=2ex, column sep=2ex]
+      A_1 \ar[rr, twoheadrightarrow, "L_1"]
+      \ar[dd, leftrightarrow, "\mathbb{R}_A"'] &&
+      B_1 \ar[dd, leftrightarrow, "\mathbb{R}_B"] \\
+      & \phi & \\
+      A_2 \ar[rr, twoheadrightarrow, "L_2"'] && B_2
+    \end{tikzcd}
+    \,.
+  \]
+\end{definition}
+
+\begin{figure}
+  \small
+  \[
+    \begin{array}{c@{\qquad}c@{\qquad}c}
+      \begin{tikzcd}[row sep=3.5ex, column sep=3.5ex]
+        q_1 \ar[dd, "w_B \Vdash \mathbb{R}_B^\que"', dash] \ar[rr, dash, "I_1"] &&
+        s_1 \ar[dd, "w'_B \Vdash R", dash, dashed] \\
+        && \\
+        q_2 \ar[rr, "I_2"', dash, dashed] &&
+        s_2
+      \end{tikzcd}
+      &
+      \begin{tikzcd}[row sep=3.5ex, column sep=3.5ex]
+        s_1 \ar[rr] \ar[dd, "w_B \Vdash R"', dash] &&
+        \!\!{}_1 \:\, s_1' \ar[dd, "w_B' \Vdash R", dash, dashed] \\
+        && \\
+        s_2 \ar[rr, dashed] &&
+        \!\!{}_2^* \:\, s_2'
+      \end{tikzcd}
+      %      \begin{tikzcd}[sep=large]
+      %        s_1 \ar[r] \ar[d, "{(w_A, w_B) \Vdash R}"', dash] &
+      %        s_1' \ar[d, "{(w_A,w_B) \Vdash R}", dash, dashed] \\
+      %        s_2 \ar[r, dashed] &
+      %        \!\!\!{}^* \: s_2'
+      %      \end{tikzcd}
+      &
+      \begin{tikzcd}[row sep=3.5ex, column sep=3.5ex]
+        s_1 \ar[rr, "F_1", dash] \ar[dd, "w_B \Vdash R"', dash] &&
+        r_1 \ar[dd, "w_B' \Vdash \mathbb{R}_B^\ans", dash, dashed] \\
+        && \\
+        s_2 \ar[rr, "F_2"', dash, dashed] &&
+        r_2
+      \end{tikzcd}
+      \vspace{1.2ex} \\
+      \text{(a) Initial states} &
+      \text{(b) Internal states} &
+      \text{(c) Final states}
+    \end{array}
+  \]
+  \[
+    \begin{array}{c}
+      \begin{tikzcd}[row sep=4.5ex, column sep=4.5ex]
+        s_1 \ar[rr, "X_1", dash] \ar[dd, "w_B \Vdash R"', dash] &&
+        m_1 \ar[rr, dotted, dash] \ar[dd, "w_A"', "{} \Vdash \mathbb{R}_A^\que", dash, dashed] &&
+        n_1 \ar[rr, "Y_1^{s_1}", dash] \ar[dd, "w_A'"', "{} \Vdash \mathbb{R}_A^\ans", dash] &&
+        s_1' \ar[dd, "w_B' \Vdash R", dash, dashed]
+        \\
+        &&
+        \\
+        s_2 \ar[rr, "X_2"', dash, dashed] &&
+        m_2 \ar[rr, dotted, dash] &&
+        n_2 \ar[rr, "Y_2^{s_2}"', dash, dashed] &&
+        s_2'
+      \end{tikzcd}
+      \vspace{1ex} \\
+      \text{(d) Outgoing calls}
+    \end{array}
+  \]
+  \vspace{1.5ex}
+  \[
+    \begin{array}{c@{\qquad}l}
+      \vspace{2.8ex}
+      (a) &
+      {
+        \begin{aligned}
+          \forall\; w_B, q_1, q_2, s_1 .\;
+          & q_1 \xrightarrow{I_1} s_1
+          \:\wedge\:
+          w_B \Vdash q_1 \mathbin{\mathbb{R}_B^\que} q_2 \:\Rightarrow
+          \\
+          \exists\; w'_B, s_2.\;
+          & q_2 \xrightarrow{I_2} s_2
+          \:\wedge\:
+          w_B \sysstep w'_B
+          \:\wedge\:
+          w'_B \Vdash s_1 \mathbin{R} s_2
+        \end{aligned}
+      }
+      \\
+      \vspace{2.8ex}
+      (b) &
+      {
+        \begin{aligned}
+          \forall\; w_B, s_1, s_2, s_1' .\;
+          & s_1 \rightarrow_1 s_1'
+          \:\wedge\:
+          w_B \Vdash s_1 \mathbin{R} s_2 \:\Rightarrow \\
+          \exists\; w'_B, s_2.\;
+          & \bigl(s_2 \rightarrow^+_2 s_2'
+            \:\vee\:
+            s_2 \rightarrow^*_2 s_2'
+            \:\wedge\:
+            s_2' \le s_2
+          \bigr)
+          \:\wedge\:
+          w'_B \Vdash s_1' \mathbin{R} s_2'
+        \end{aligned}
+      }
+      \\
+      \vspace{2.8ex}
+      (c) &
+      {
+        \begin{aligned}
+          \forall\; w_B, s_1, s_2, r_1 .\;
+          & s_1 \xrightarrow{F_1} r_1
+          \:\wedge\:
+          w_B \Vdash s_1 \mathbin{R} s_2 \:\Rightarrow \\
+          \exists\; w'_B, r_2.\;
+          & r_1 \xrightarrow{F_2} r_2
+          \:\wedge\:
+          w_B \sysstep w'_B
+          \:\wedge\:
+          w'_B \Vdash r_1 \mathbin{\mathbb{R}_B^\ans} r_2
+        \end{aligned}
+      }
+      \\
+      (d) &
+      {
+        \begin{aligned}
+          \forall\; w_B, s_1, s_2, m_1 .\;
+          & s_1 \xrightarrow{X_1} m_1
+          \:\wedge\:
+          w_B \Vdash s_1 \mathbin{R} s_2
+          \:\Rightarrow \\
+          \exists\; w_A, m_2.\;
+          & s_2 \xrightarrow{X_2} m_2
+          \:\wedge\:
+          w_A \Vdash m_1 \mathbin{\mathbb{R}_A^\que} m_2
+          \:\wedge\:\\
+          \forall\; w'_A&, n_1, n_2, s_1'.\;
+          n_1 \xrightarrow{Y_1^{s_1}} s_1'
+          \:\wedge\:
+          w_A \sysstep w'_A
+          \:\wedge\:
+          w'_A \Vdash n_1 \mathbin{\mathbb{R}_A^\ans} n_2
+          \:\Rightarrow \\
+          & \exists\; w'_B, s'_2.\;
+          n_2 \xrightarrow{Y_2^{s_2}} s_2'
+          \:\wedge\:
+          w_B \sysstep w'_B
+          \:\wedge\:
+          w'_B \Vdash s_1' \mathbin{R} s_2'
+        \end{aligned}
+      }
+    \end{array}
+  \]
+  \caption{Simulation properties for internal steps (a,b,c)
+  and outgoing calls (d).}
+  \label{fig:bg:simint}
+\end{figure}
+
+The simulation properties together
+guarantees that each interaction event
+in the source transition system
+is simulated by a corresponding interaction event
+as prescribed by the simulation convention.
+Specifically,
+when the environment
+invokes the transition systems in property (a),
+it chooses world $w_B$
+that relates the incoming questions.
+Ultimately,
+at the final state in property (c),
+the answers must be related
+at world $w_B'$
+that is accessible from $w_B$.
+Although intermediate worlds
+are allowed for the internal steps,
+the transitivity of $\sysstep$
+guarantees that the final world $w_B'$
+is accessible from the original world $w_B$.
+
+Conversely,
+when $L_1$ and $L_2$
+perform outgoing calls,
+the simulation must exhibit
+a world $w_A$ where the questions are related.
+It is then guaranteed by the environment
+that the answers must be related
+at world $w_A'$
+that is accessible from $w_A$
+as in property (c).
+The alternating choice of worlds
+is also reflected in the alternating usage
+of the universal and existential quantifiers.
+
+There is an identity simulation convention $\idsc_A : A \twoheadleftrightarrow A$
+for every language interface $A$;
+given $L_1, L_2 : A \twoheadrightarrow B$,
+I will often write
+a simulation of type $L_1 \le_{\idsc_A \twoheadrightarrow \idsc_B} L_2$
+simply as $L_1 \le L_2$.
+%
+Compiler correctness
+is expressed in terms of a convention
+$\mathbb{C} : \C \at \kw{mem} \leftrightarrow \A \at \kw{mem}$
+and can be stated as follows:
+\[
+  \kw{CompCert}(p) = p'
+  \quad \Rightarrow \quad
+  \phi^{cc} \::\:
+  \kw{Clight}(p)
+  \:\le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}\:
+  \kw{Asm}(p')
+  \:.
+\]
+
+\begin{remark}
+  The definition given here differs slightly
+  from the original one in CompCertO.
+  In the original setting,
+  the Kripke worlds used to relate questions and answers
+  are required to be identical,
+  and world transitions are encoded implicitly
+  within the relation $R^\que$ and $R^\ans$
+  using modal Kripke relators.
+  In contrast,
+  I make these transitions explicit,
+  since later chapters will generalize them further.
+  For a more detailed discussion of
+  how Kripke world transitions are handled in CompCertO, see \cite{compcerto21tr}.
+\end{remark}
+
+\subsection{Compositional Structure}
+\label{sec:bg:compcert-compose}
+
+Compared with the original CompCert,
+CompCertO has a richer compositional structure.
+
+\subsubsection{Vertical Composition}
+% Figure~\ref{fig:compcerto}
+% summarizes the compositional structure of the framework.
+
+Just as in the original CompCert,
+where simulations can be composed vertically
+to combine the correctness of individual compilation phases
+into an overall correctness theorem,
+CompCertO supports the same principle.
+To achieve this, simulation conventions must themselves compose.
+Specifically, given simulation conventions
+$\mathbb{R} : A \twoheadleftrightarrow B$ and
+$\mathbb{R}' : B \twoheadleftrightarrow C$
+they compose into
+$\mathbb{R} \fatsemi \mathbb{R}' : A \twoheadleftrightarrow C$
+\footnote{
+  The original notation in \cite{compcerto} is $\mathbb{R} \cdot \mathbb{R}'$.
+}
+.
+
+\begin{theorem}
+  \label{thm:bg:sc}
+  The composition $\fatsemi$ is associative
+  and admits the identity morphism $\idsc_A : A \twoheadrightarrow A$.
+  In other words,
+  language interfaces together with simulation conventions
+  form a category, denoted $\mathbf{SC}$.
+\end{theorem}
+
+This is used by the vertical composition principle \kw{sim}-$\vcomp$ for simulations,
+which allows simulation squares to be composed vertically,
+as illustrated by the following diagram:
+\[
+  \begin{prooftree}
+    \hypo{\phi: L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{S}} L_2}
+    \hypo{\psi: L_2 \le_{\mathbb{R'} \twoheadrightarrow \mathbb{S'}} L_3}
+    \infer2[\kw{sim}-$\fatsemi$]
+    {\phi \fatsemi \psi: L_1 \le_{
+        \mathbb{R} \fatsemi \mathbb{R'}
+      \twoheadrightarrow \mathbb{S} \fatsemi \mathbb{S'}}
+    L_3}
+  \end{prooftree}
+  \qquad
+  \begin{array}{c}
+    \begin{tikzcd}[row sep=1ex, column sep=2ex]
+      A_1 \ar[rr, twoheadrightarrow, "L_1"]
+      \ar[dd, leftrightarrow, "\mathbb{R}"]
+      && B_1
+      \ar[dd, leftrightarrow, "\mathbb{S}"]
+      \\
+      & \phi &
+      \\
+      A_2 \ar[rr, twoheadrightarrow, "L_2"]
+      \ar[dd, leftrightarrow, "\mathbb{R'}"]
+      && B_2
+      \ar[dd, leftrightarrow, "\mathbb{S'}"]
+      \\
+      & \psi &
+      \\
+      A_3 \ar[rr, twoheadrightarrow, "L_3"] && B_3
+    \end{tikzcd}
+  \end{array}
+\]
+
+\subsubsection{Horizontal Composition}
+\label{bg:compcerto:linking}
+Moreover,
+the \emph{semantic linking} operator $\oplus$
+models the interaction between different program components.
+\[
+  \oplus_A : (A \twoheadrightarrow A) \times
+  (A \twoheadrightarrow A) \rightarrow
+  (A \twoheadrightarrow A)
+\]
+
+The transition system $L_1 \oplus L_2$
+generally mirrors the execution of $L_1$ or $L_2$,
+but when $L_1$ makes an external call
+to a function provided by $L_2$ (and vice versa),
+$L_1 \oplus L_2$ instantiates a new copy of $L_2$ to handle the call internally.
+This copy executes until it reaches a final state,
+at which point its outcome is used to resume
+the suspended execution of $L_1$.
+For example
+$\kw{Clight}(\kw{rb.c}) \oplus \kw{Clight}(\kw{bq.c})$
+admits the trace
+\[
+  \kw{deq}()@[\kw{c1} \mapsto 2, \kw{buf} \mapsto \{v_0, v_1, v_2, v_3\}]
+  \quad\rightarrowtail\quad
+  v_2@[\kw{c1} \mapsto 3, \kw{buf} \mapsto \{v_0, v_1, v_2, v_3\}]
+  \,.
+\]
+
+Importantly,
+the $\oplus$ operator has the following properties:
+\[
+  \begin{prooftree}
+    \hypo{\phi : L_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2}
+    \hypo{\psi : L'_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L'_2}
+    \infer2[\kw{sim}-$\oplus$]
+    {\phi \oplus \psi : L_1 \oplus L'_1 \le_{\mathbb{R} \twoheadrightarrow \mathbb{R}} L_2 \oplus L'_2}
+  \end{prooftree}
+  \quad
+  \text{and}
+  \quad
+  \phi^{asm}: \kw{Asm}(p) \oplus \kw{Asm}(p') \le \kw{Asm}(p + p')
+\]
+where $p + p'$
+represents the linked assembly program.
+These properties
+ensures the horizontal composition
+of the source programs' behavior
+is faithfully implemented
+by the compiled and linked assembly program.
+For example,
+if $\kw{rb.c}$ and $\kw{bq.c}$
+are compiled to $\kw{rb.s}$ and $\kw{bq.s}$,
+respectively,
+then the following simulation holds:
+\[
+  \bigl(\phi^{cc}(\kw{rb.c}) \oplus \phi^{cc}(\kw{bq.c})\bigr)
+  \fatsemi \phi^{asm} \::\:
+  \kw{Clight}(\kw{rb.c}) \oplus \kw{Clight}(\kw{bq.c})
+  \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}}
+  \kw{Asm}(\kw{rb.s} + \kw{bq.s})
+\]
+
+Unfortunately,
+simulations cannot generally be composed horizontally
+using $\kw{sim}$-$\oplus$.
+This limitation arises from semantic linking's symmetric nature,
+which enables mutually recursive interaction between $L_1$ and $L_2$.
+For $\oplus$ composition to be possible,
+the transition systems must operate
+over a single language interface,
+and likewise simulations must operate
+with respect to a single simulation convention
+($\kw{sim}$-$\oplus$).
+
+%To work around this restriction,
+%CompCertO introduces a rich algebra of \emph{simulation convention refinements},
+%which play the role of a second kind of two-dimensional object.
+%These refinements can compose
+%with simulations to modify their types,
+%and are used to massage per-phase
+%simulation proofs with varied conventions into
+%an overall compiler correctness theorem
+%which fits \kw{sim}-$\oplus$.
+
+% \paragraph{Evaluation}
+
+% Example~\ref{ex:compcerto}
+% illustrates the flexibility of the CompCertO semantic model,
+% but also some of its limitations.
+% The language interface $\mathcal{C}_\kw{m}$
+% forces the specifications
+% to be formulated in terms of low-level memory states,
+% and they remained tied to the particular concrete representation
+% used by the code in Fig.~\ref{fig:code}.
+% Moreover,
+% the rigidity inherent $\oplus$ composition
+% makes it difficult in general
+% to handle situations which involve heterogeneous language interfaces.
+
+\subsection{Simulation between C and Asm components}
+\label{sec:bg:simulation-between-c}
+
+The simulation convention $\mathbb{C}$
+plays an important role
+of connecting the C-level programs
+with the assembly-level ones.
+Consider a C-level program $\kw{a.c}$
+that interacts with an assembly-level program $\kw{b.s}$.
+To model this,
+we introduce a C-level specification
+$L_\kw{b}: \mathcal{C} \at \kw{mem} \twoheadrightarrow \mathcal{C} \at \kw{mem}$
+which describes the behavior of $\kw{b.s}$
+at the C-level.
+The connection is established via the following simulation:
+\[
+  \phi_\kw{b} \::\: L_\kw{b} \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\kw{b.s})
+\]
+so that
+if the combined system $\kw{Clight}(\kw{a.c}) \oplus L_\kw{b}$
+satisfies the desired specification,
+then correctness can be transferred to
+the compiled and linked assembly program $\kw{Asm}(\kw{a.s} + \kw{b.s})$.
+
+However,
+the simulation convention $\mathbb{C}$ is
+constructed compositionally,
+using Kleene algebraic operators
+(\cite[Section~5]{compcerto}).
+In outline,
+\[
+  \mathbb{C} := \mathcal{R}^{*} \:\fatsemi \:\kw{wt} \:\fatsemi \:\kw{CA} \:\fatsemi \:\kw{vainj}
+\]
+Here,
+\begin{itemize}
+  \item
+    $\mathcal{R} : \C \at \kw{mem} \twoheadleftrightarrow \C \at \kw{mem}$
+    is a sum of refinement conventions
+    $\mathcal{R} := \kw{injp} + \kw{inj} + \kw{ext} + \kw{vainj} + \kw{vaext}$
+    is a sum of refinement conventions,
+    where the sum operator allows the caller to choose,
+    and the Kleene star enables repeated composition.
+    Each of these conventions
+    is an instance of
+    CompCertO's Kripke logical relation(CKLR)
+    which enjoys the following parametricity property.
+    \begin{theorem}[Parametricity{\cite[Theorem~4.3]{compcerto}}]
+      \label{thm:parametricity}
+
+      For the languages
+      $L \in \{\kw{Clight}, \kw{RTL}, \kw{Asm}\}$,
+      \[
+        \forall\ \mathbb{R} \in \kw{CKLR}.\ L(p) \le_{\mathbb{R} \rightarrow \mathbb{R}} L(p)
+      \]
+    \end{theorem}
+
+  \item $\kw{wt} : \C \at \kw{mem} \twoheadrightarrow \C \at \kw{mem}$
+    ensures the well-typedness of the arguments
+    and the return values.
+  \item $\kw{CA} : \C \at \kw{mem} \twoheadrightarrow \A \at \kw{mem}$
+    formalizes the calling convention,
+    mapping arguments and return values
+    into assembly-level registers and stack.
+  \item $\kw{vainj} : \A \at \kw{mem} \twoheadrightarrow \A \at \kw{mem}$
+    injects memory states,
+    ensuring compatibility between C and assembly-level views of memory.
+\end{itemize}
+
+The simulation $\phi_\kw{b}$
+under $\mathbb{C}$
+is quite complicated,
+because of the intricate structure of the simulation convention.
+However,
+the proof can be significantly simplified
+with the help of the parametricity theorem.
+
+We first show
+the goal can be achieved
+with the following the proof obligations:
+\begin{gather}
+  L_\kw{b} \le_{\mathcal{R} \twoheadrightarrow \mathcal{R}} L_\kw{b}
+  \label{eq:c-asm-1}\\
+  L_\kw{b} \le_{\kw{wt} \twoheadrightarrow \kw{wt}} L_\kw{b}
+  \label{eq:c-asm-2}\\
+  L_\kw{b} \le_{\kw{injp} \cdot \kw{CA} \twoheadrightarrow \kw{inj} \cdot \kw{CA}} \kw{Asm(b.s)}
+  \label{eq:c-asm-3}
+\end{gather}
+By applying {\cite[Theorem~5.6]{compcerto}}
+to (\ref{eq:c-asm-1}), we get:
+\begin{equation}
+  \label{eq:c-asm-4}
+  L_\kw{b} \le_{\mathcal{R}^* \twoheadrightarrow \mathcal{R}^*} L_\kw{b}
+\end{equation}
+At the same time,
+an immediate instance of
+the Theorem~\ref{thm:parametricity} is:
+\begin{equation}
+  \label{eq:c-asm-5}
+  \kw{Asm}(\kw{b.s}) \le_{\kw{vainj} \twoheadrightarrow \kw{vainj}} \kw{Asm}(\kw{b.s})
+\end{equation}
+and by vertical composition
+of (\ref{eq:c-asm-4}),
+(\ref{eq:c-asm-2}), (\ref{eq:c-asm-3}),
+and (\ref{eq:c-asm-5}), we get:
+\begin{equation}
+  L_\kw{b}
+  \le_{\mathcal{R}^{*} \cdot \kw{wt} \cdot \kw{injp} \cdot \kw{CA} \cdot \kw{vainj}
+    \twoheadrightarrow
+  \mathcal{R}^{*} \cdot \kw{wt} \cdot \kw{inj} \cdot \kw{CA} \cdot \kw{vainj}} \kw{Asm(b.s)}
+\end{equation}
+By {\cite[Lemma~5.7, Lemma~5.8]{compcerto}},
+we have the following refinement properties
+between simulation conventions:
+\[
+  \kw{inj} \cdot \kw{CA}
+  \sqsubseteq
+  \kw{CA} \cdot\kw{inj}
+  \qquad
+  \kw{injp} \cdot \kw{wt}
+  \sqsubseteq
+  \kw{wt} \cdot\kw{injp}
+\]
+These commutations allow
+the $\kw{injp}$ to be absorbed into $\mathcal{R}^*$,
+and $\kw{inj}$ to be absorbed into $\kw{vainj}$,
+thus completing the proof.
+
+Although the proof obligations
+(\ref{eq:c-asm-1})--(\ref{eq:c-asm-3})
+remain to be manually verified,
+they are quite straightforward.
+Moreover,
+later work \cite{compcerto-dr}
+investigated the refinement conventions
+in more details,
+and managed to introduce
+a direct simulation convention, $\kw{CA}_\kw{injp}$,
+which is equivalent to $\mathbb{C}$
+but easier to use.
+This makes proving the simulations such as $\phi_\kw{b}$
+considerably easier.
+This approach further
+paves the way toward
+certified compilation of multi-threaded programs
+\cite{compcertoc}.
+
+\section{Game Semantics}
+
+Game semantics\citep{cspgs}
+models computation as an interactive process
+between a component and its environment.
+Unlike traditional operational semantics,
+which focus on internal state transitions,
+game semantics explicitly represents
+interactive aspects of execution,
+making it well-suited for compositional verification
+of multiple interacting components.
+
+Central to this approach is the notion of a \emph{game},
+defined as a structured interaction
+between two distinct players.
+The proponent represents the component or system
+under consideration,
+while the opponent models the environment
+or external context interacting with the proponent.
+Interactions between these two players
+occur as moves that can be categorized as
+questions and answers.
+A sequence of these moves constitutes a \emph{play},
+capturing a particular execution scenario.
+An example of a play have the following form:
+\[
+  \begin{tikzpicture}[baseline=(current bounding box.center)]
+    \node (q) at (0,0) {$\kw{run}$};
+    \node at (0.5,0) {$\cdot$};
+    \node (m1) at (1.25,0) {$\underline{\kw{read}()}$};
+    \node at (2,0) {$\cdot$};
+    \node (n1) at (2.25,0) {$n$};
+    \node at (2.5,0) {$\cdot$};
+    \node (m2) at (3.75,0) {$\underline{\kw{write}(n + 1)}$};
+    \node at (5,0) {$\cdot$};
+    \node (n2) at (5.5,0) {$\kw{ok}$};
+    \node at (6,0) {$\cdot$};
+    \node (r) at (6.75,0) {$\underline{\kw{done}}$};
+
+    \draw[{Latex}-, shorten <=2pt, shorten >=2pt] (q.north).. controls +(0.5cm, 0.7cm) and +(-0.5cm, 0.7cm) .. (r.north);
+    \draw[{Latex}-, bend left=30, shorten <=2pt, shorten >=2pt] (m1.north) to (n1.north);
+    \draw[{Latex}-, bend left=30, shorten <=2pt, shorten >=2pt] (m2.north) to (n2.north);
+  \end{tikzpicture}
+\]
+The underlined moves are those of the system.
+The arrows come from the answer moves
+to their corresponding question moves.
+This play is an example execution of a program
+that reads an integer value from the environment,
+increments it,
+and writes the result back to the environment.
+
+The permissible behaviors of a component
+are characterized by a \emph{strategy},
+which is a set of plays
+that describes how the component
+may react to the environment's moves.
+Typically,
+plays are ordered by the prefix relation.
+An example strategy can be constructed
+from the above play
+by taking the prefix-closed set of plays:
+\[
+  \sigma_n \::=\: \big\downarrow (\kw{run} \cdot \underline{\kw{read}()} \cdot n \cdot \underline{\kw{write}(n + 1)} \cdot \kw{ok} \cdot \underline{\kw{done}})
+\]
+However,
+such a strategy
+only allows the environment to
+respond with the answer $n$.
+A specification of the program's behavior
+is obtained by taking the union over all possible answers:
+\[
+  \sigma \::=\: \bigcup_{n \in \mathbb{N}} \sigma_n
+\]
+
+\subsection{Relation to CompCertO}
+
+CompCertO's open semantics relates closely to game semantics\citep{compcerto21tr}.
+A CompCertO execution trace
+$q \sysstep (m_1 \envstep n_1) \sysstep (m_2 \envstep n_2) \sysstep r$
+corresponds to the following play:
+\[
+  q
+  \cdot
+  \underline{m_1} \cdot n_1 \cdot \underline{m_2} \cdot n_2
+  \cdot
+  \underline{r}
+\]
+However,
+it remains unclear
+how the simulation conventions and simulations
+can be formulated in terms of game semantics.
+In this work,
+I will develop a semantic model
+based on strategies
+and formally reveal the connection
+between the two semantic models.
+
+\section{Category Theory}
+
+Category theory provides
+a mathematical language for describing
+composition and abstraction.
+It captures common structural patterns
+across different semantic models,
+enabling abstract yet principled reasoning.
+
+Category theory is particularly relevant to this thesis
+because the three-dimensional algebraic structure
+developed here—capturing horizontal, vertical, and spatial composition—aligns naturally with categorical concepts
+such as morphisms, functors, and double categories.
+By phrasing our framework in categorical terms,
+we obtain both clarity of expression
+and a set of well-studied algebraic laws
+that guide the design of compositional reasoning principles.
+
+\begin{table}
+  \centering
+  \begin{tabular}{llll}
+    \toprule
+    Category & Object & Morphism & See also\\
+    \midrule
+    $\mathbf{TS}$ & Language Interfaces & Transition Systems & Thm.~\ref{thm:ox:ts}\\
+    $\mathbf{SC}$ & Language Interfaces & Simulation Conventions & Thm.~\ref{thm:bg:sc}\\
+    $\mathbf{Lens}$ & Sets & Lens & Thm.~\ref{ox:def:lens-comp}\\
+    $\mathbf{ETS}$ & Language Interfaces & Encapsulated Transition Systems & Thm.~\ref{ox:def:ets-comp}\\
+    $\mathbf{SSC}$ & Language Interfaces & Stateful Simulation Conventions & Thm.~\ref{ox:def:ssc-comp}\\
+    $\mathbf{Strat}$ & Effect Signatures & Strategies & Thm.~\ref{thm:strat:comp}\\
+    \bottomrule
+  \end{tabular}
+  \caption{A list of categories introduced in this work}
+  \label{bg:tab:cat}
+\end{table}
+
+The following section provides
+a concise overview of several key concepts
+that will be used throughout this work,
+serving mainly as background for later developments.
+For a more comprehensive introduction to category theory,
+readers are encouraged to consult standard references
+such as \cite{awodeyct}.
+
+\subsection{Category and Double Category}
+
+At its core,
+a \emph{category} consists of:
+\begin{itemize}
+  \item Objects, which represents entities of interest
+    such as sets, types, or language interfaces,
+  \item Morphisms, which represent structure-preserving transformations
+    between objects such as functions, or transition systems,
+  \item A notion of composition of morphisms that is associative, and
+  \item An identity morphism for each object that serves as a neutral element for composition.
+\end{itemize}
+
+This basic structure is enough to capture
+many of the compositional operators we use
+in verification frameworks.
+For instance,
+simulation conventions between language interfaces
+form a category under composition.
+A list of categories
+that are introduced in this work
+is given in \autoref{bg:tab:cat}.
+
+A double category enriches this picture
+by supporting
+two different types of morphisms simultaneously
+(horizontal and vertical),
+together with squares that relate them.
+This mirrors precisely the setting of our work:
+horizontal morphisms represent program components,
+vertical morphisms capture refinement relations,
+and squares witness simulations between them.
+The algebra of companions and conjoints
+then expresses how horizontal and vertical dimensions interact
+in a disciplined way.
+This higher-dimensional perspective is critical
+to making our compositional reasoning
+both modular and systematic.
+
+% double category $\mathbf{TSC}$ in \autoref{thm:ox:tsc}
+% category $\mathbf{TS}$ in \autoref{thm:ox:ts}.
+
+\subsection{Functor and Bifunctor}
+
+A functor is a structure-preserving mapping
+between categories:
+it maps objects to objects and morphisms to morphisms
+in a way that respects composition and identities.
+Functors allow us to relate different semantic models systematically.
+For example,
+the embeddings I will present---%
+such as the embedding of CompCertO's open transition systems
+into the strategy model---%
+are functorial in nature.
+That is,
+they translate not only the objects (language interfaces)
+but also the morphisms (transition systems, simulation conventions)
+with their relations (simulation squares)
+in a way that preserves their algebraic structure.
+This functorial perspective ensures that
+results proved in one model can be
+faithfully transported into another without loss of meaning.
+
+A bifunctor generalizes the notion of a functor
+to mappings that take two arguments,
+such as tensor-like operators
+that combine components simultaneously.
+The spatial composition operator naturally
+fits into this perspective.
+More generally,
+spatial composition combines semantic entities---%
+transition systems, simulation conventions,
+or simulation squares---%
+with an auxiliary structure that evolves alongside them.
+Crucially, this
+auxiliary structure (such as external state)
+can itself be organized into a category,
+with states as objects
+and their admissible transitions as morphisms.
+When such a categorical view of the auxiliary structure
+is paired with our semantic models,
+the result is captured precisely by a bifunctor.
+This framing makes explicit
+how spatial composition uniformly lifts
+both semantics and auxiliary structures
+across the framework,
+while preserving their compositional laws.

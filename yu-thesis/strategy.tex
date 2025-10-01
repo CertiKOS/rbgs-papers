@@ -1,0 +1,2102 @@
+\chapter{The Strategy Model}
+\label{ch:strat}
+
+The preceding chapters
+extended the CompCertO semantics
+with stateful structures
+to address data abstraction in verification tasks
+through a modular approach.
+The example of implementing a bounded queue with a ring buffer
+is representative of
+libraries that implement
+specific data structures or algorithms.
+
+In this chapter,
+this chapter further improves the verification framework
+by using traces of events
+to model the behavior of components.
+I will also investigate the approach to
+verify actual executable programs
+with this toolbox.
+
+First,
+notice that the specification language used in the previous chapters
+is still the CompCertO transition system.
+In formal verification,
+generally speaking,
+the specification is expected to be expressed
+in a higher-level language that is more descriptive
+and easier to understand.
+To this end,
+I introduce a strategy-based semantics model
+that centers on the traces of events
+instead of the internal transition steps
+as the language of specifications.
+Recall that
+traces have already been used as a shorthand way
+to describe the behavior of a component
+throughout this dissertation,
+such as:
+\[
+  L \:\vDash\: q \rightarrowtail
+  (q_1 \leadsto r_1) \rightarrowtail
+  \cdots \rightarrowtail
+  (q_n \leadsto r_n) \rightarrowtail
+  r
+\]
+In this chapter,
+I present a formal semantics around the notion of traces,
+and show that
+it can integrate with the CompCertO semantics.
+
+Second,
+I demonstrate the power of this framework
+through an example that,
+while simple in terms of programming,
+poses several nontrivial verification challenges.
+First, the verification must account for
+the process of loading the executable
+as a running process,
+which requires modeling the surrounding execution environment.
+Moreover, programs are rarely standalone;
+they are typically built from multiple components
+whose individual behaviors may be simple
+but whose interactions---especially
+when treated as independent processes---can be subtle
+and complex.
+Finally, these components are not always written
+in the same programming language.
+Real systems often combine code written
+in different languages,
+and a convincing verification
+must bridge these heterogeneous boundaries.
+
+\begin{table}
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    Notation & Description\\
+    \midrule
+    E, F & Effect Signature\\
+    $\sigma : E \rightarrow F$ & Strategy (Def.~\ref{def:strat})\\
+    $\sigma \odot \tau$ & Layered Composition of Strategies (Def.~\ref{def:lcomp})\\
+    $\sigma \oplus \tau$ & Flat Composition of Strategies (Def.~\ref{def:strat:flat-comp})\\
+    $\sigma \at f$ & Spatial Composition of Strategies (Def.~\ref{def:strat:spatial-comp})\\
+    $\sigma^*$ & Regular Closure of Strategies (Def.~\ref{sec:strat:regular-closure})\\
+    $[f] : [U] \rightarrow [V]$ & Lens as Strategy (Def.~\ref{def:strat:stateful-lens})\\
+    $\llbracket L \rrbracket : \llbracket A \rrbracket \rightarrow \llbracket B \rrbracket$ & Transition System as Strategy (Def.~\ref{ox:def:lts-lens})\\
+    \bottomrule
+  \end{tabular}
+  \caption{Summary of notations}
+  \label{tab:strat:notations}
+\end{table}
+
+In the remainder of this chapter,
+I progressively develop the strategy model
+and its supporting machinery.
+Section \ref{sec:strat:overview} begins with an informal overview
+that introduces the central ideas at an intuitive level.
+Section \ref{sec:strat:model} then presents a precise formalization of the model.
+Building on this foundation,
+Sections \ref{sec:strat:composition} and \ref{sec:strat:regular-closure}
+explore different ways of constructing strategies
+and establish their key properties.
+Section \ref{sec:strat:loaders} puts these ideas
+into practice by implementing loaders for executable programs
+and presenting a full formal proof of the running example.
+Finally, Table \ref{tab:strat:notations} summarizes the notations
+used throughout the chapter,
+providing a concise reference for
+the technical development that follows.
+
+\section{Overview}
+\label{sec:strat:overview}
+
+In this section,
+I first introduce
+another verification task
+as a running example
+that is algorithmically simple
+but involves complex interaction among components
+and requires modeling
+the complete cycle of compiling, linking, and executing
+the programs.
+I then demonstrate
+how to approach the verification task
+using the strategy model.
+
+\subsection{Running Example}
+
+In this chapter,
+I use the code shown in \autoref{fig:readwritehello}
+as a running example.
+It consists of two different programs that
+use a common C library and
+are designed to work together.
+As illustrated in the usage scenario shown earlier,
+the 32-bit x86 assembly program \kw{secret.s}
+outputs a coded message
+to be deciphered by \kw{decode.c}.
+In particular,
+the programs together satisfy the following informal specification:
+\begin{equation}
+  \begin{minipage}{.9\textwidth}
+    \it
+    Suppose that,
+    after compilation,
+    \kw{secret.s} and \kw{decode.c}
+    are each linked with \kw{rot13.c}.
+    If the output of the first program
+    is fed as input to the second,
+    ``hello, world!'' will be displayed.
+  \end{minipage}
+  \tag{a}
+  \label{eqn:hellospec}
+\end{equation}
+
+The programs are simple;
+to verify that property (\ref{eqn:hellospec}) holds,
+a reader with the right background
+can mentally execute the code step by step
+and convince themselves that the expected outcome will occur.
+However, this task is complex in its own way
+because it mobilizes implicit knowledge and assumptions regarding
+the C and x86 assembly languages,
+the compiler's correctness with respect to the calling convention in use,
+and some aspects of the Unix execution environment.
+%
+Likewise, any formal account of property (\ref{eqn:hellospec})
+must involve these aspects of the problem as well,
+encompassing all three of the challenges outlined at the beginning of this section.
+%Property~(\ref{eqn:hellospec})
+%also involves \emph{two different} programs.
+To my knowledge,
+there exists no program logic or verification framework
+that can deal with this example.
+
+\subsection{Strategy Model, Informally}
+
+To address these challenges and enable verification of such complex heterogeneous systems,
+the strategy model I present in this chapter
+is built around the notion of
+traces
+that are presented as a sequence of events.
+The events are typed using
+effect signatures ($E, F, \ldots$).
+The signatures also describe
+the interfaces of the software components.
+
+\begin{definition}
+  An \emph{effect signature} is a set $E$ of \emph{questions}
+  together with an assignment $\kw{ar} : E \rightarrow \mathbf{Set}$
+  associating to each question $m \in E$
+  a set of \emph{answers} $n \in \kw{ar}(m)$.
+  They are often presented together as the set of bindings
+  $\{ m \mathbin: N \mid m \in E \wedge N = \kw{ar}(m) \}$.
+\end{definition}
+
+Unlike the conventional algebraic effect literature,
+in the semantics model presented in this chapter,
+triggering effects operates in a manner similar to
+making a regular function call
+instead of
+abruptly terminating the current execution
+with the continuation captured
+in the delimited context.
+The handler is simply the callee
+and it must return an answer to the caller
+who triggered the effect.
+
+\begin{example}
+  Consider the execution environment
+  for the programs \kw{secret} and \kw{encode}
+  shown in \autoref{fig:readwritehello}.
+  Since the programs
+  do not use any command-line arguments or environment variables,
+  their invocation can be modeled with a single question:
+  \[
+    \mathcal{P} \, := \,
+    \{ \kw{run} : \mathbb{N} \}
+    \,.
+  \]
+  The answer $x \in \mathbb{N}$ is the exit status of the process.
+  %which in our cases is expected to be zero.
+  Moreover, in the course of its execution
+  each process can invoke the \kw{read} and \kw{write} system calls.
+  This interface is described with the signature
+  \[
+    \mathcal{S} \, := \, \{
+      \kw{read}_i[n] \mathbin: \Sigma^* , \,
+      \kw{write}_i[s] \mathbin: \mathbb{N} \, \mid \,
+      i \in \mathbb{N}, \,
+      n \in \mathbb{N}, \,
+      s \in \Sigma^*
+    \}
+    \,,
+  \]
+  where $\Sigma := \{0,1\}^8$ is the alphabet of possible byte values.
+  In this formalism,
+  the program \kw{secret} will invoke
+  the operation
+  $\kw{write}_1[\texttt{"uryyb, jbeyq!"}]
+  \in \mathcal{S}$,
+  where $i := 1$ is the file descriptor associated with the standard output;
+  the outcome should be $14 \in \mathbb{N}$
+  if the operation succeeds.
+\end{example}
+
+Strategies $\sigma : E \rightarrow F$
+model the behavior of components
+by specifying the actions
+taken by the component
+in response to the possible actions of the environment,
+and is represented as a set of traces.
+In general,
+the traces have the following shape:
+\[
+  \sigma \:\vDash\:
+  \big(q_1 \sysstep
+    (m_1 \envstep n_1) \sysstep
+    \cdots \sysstep
+    (m_k \envstep n_k) \sysstep
+  r_1\big)
+  \envstep
+  \big(q_2 \sysstep
+    \cdots \sysstep
+  r_2\big)
+  \envstep
+  \cdots
+\]
+where $q_i \in F$ are the events triggered by the environment,
+and the component triggers events $m_i \in E$.
+The arrow $\sysstep$ represents a step in the execution of the component,
+while the arrow $\envstep$ represents a step in the execution of the environment.
+
+It is also worth mentioning that
+the traces can include repeated invocations from the caller environment
+as shown by the $q_2$ following the $r_1$ in the trace.
+This means the traces
+have persistent state intrinsically.
+
+\begin{example}
+  \label{ex:decodespec}
+  The strategies
+  $\Gamma_\kw{secret}, \Gamma_\kw{decode} : \mathcal{S} \rightarrow \mathcal{P}$
+  formulate specifications for the commands $\kw{secret}$ and $\kw{decode}$.
+  The processes admit the execution traces
+  {\small
+    \begin{align*}
+      \Gamma_\kw{secret} &\vDash \kw{run}
+      \sysstep (\kw{write}_1[\texttt{\textnormal{"uryyb, jbeyq!\textbackslash{}n"}}] \envstep 14)
+      \sysstep 0
+      \\
+      \Gamma_\kw{decode} &\vDash \kw{run}
+      \sysstep (\kw{read}_0[100] \envstep \texttt{"uryyb, jbeyq!"})
+      \sysstep (\kw{write}_1[\texttt{"hello, world!"}] \envstep 14)
+      \sysstep 0
+      \,.
+  \end{align*}}
+  For the counter mentioned in \autoref{sec:oe:persistent-state},
+  the following strategy can be used:
+  \[
+    \sigma_\kw{cnt} \vDash \big(\kw{inc}() \sysstep 0\big) \envstep
+    \big(\kw{inc}() \sysstep 1\big) \envstep \cdots
+  \]
+\end{example}
+
+The space of strategies
+is equipped with a least element $\bot$
+and a refinement relation $\le$.
+The $\bot$ element represents the undefined behavior.
+The refinement relation
+\[
+  \rho \::\: L_1 \le L_2
+\]
+holds when the target strategy $L_2$
+exhibits at least the behavior
+of the source strategy $L_1$.
+This can be used for modeling
+the correctness of a program
+in terms of a specification.
+
+To show that the program $\kw{decode}$
+satisfies the specification $\Sigma_\kw{decode}$
+given in \autoref{fig:readwritehello}
+requires modeling the way in which
+$\kw{decode.c}$ and $\kw{rot13.c}$ behave together
+\emph{as a process}.
+Assuming that
+$\llbracket \kw{decode} \rrbracket :
+\mathcal{S} \rightarrow \mathcal{P}$,
+models the response of the combined program
+to the trigger $\kw{run} \in \mathcal{P}$
+in terms of system calls performed over the interface $\mathcal{S}$,
+the goal will be to establish a refinement
+$
+\Sigma_\kw{decode}
+\le
+\llbracket \kw{decode} \rrbracket
+$.
+The model $\llbracket - \rrbracket$ will involve CompCertO semantics
+and take into account the way the program is
+compiled, linked and loaded.
+%As a first step,
+%we will show how to account for the source-level interaction
+%between the components $\kw{decode.c}$ and $\kw{rot13.c}$.
+
+The refinement relation between strategies
+is a simplified notion
+because it does not take into account
+the data abstraction.
+For that, a counterpart to the simulation conventions is needed
+and it will be the main topic in the next chapter.
+
+\subsection{Compare with CompCertO Semantics}
+
+Before proceeding to the formal development,
+it is instructive to compare the strategy model
+with the CompCertO semantics to understand their relationship
+and respective strengths. The strategy model is
+similar to the CompCertO semantics.
+I compare the two semantics models
+in the following aspects.
+
+\subsubsection{Compositional Semantics}
+
+The open transition system of CompCertO
+excels at verifying the correctness of compiler passes.
+Its design focuses on faithfully capturing execution steps,
+making it highly effective for
+reasoning about compiler transformations.
+However,
+for broader software verification tasks,
+this operational orientation becomes a limitation.
+Real software systems are typically compositions of heterogeneous components,
+each governed by its own semantics.
+One approach would be to translate all components
+into CompCertO's transition system semantics
+so that all proofs can be carried out there.
+While feasible, this is often cumbersome.
+
+A more systematic solution is to adopt a compositional semantics
+that serves as glue between components.
+Compositional semantics emphasize observable events and structured interactions
+rather than internal execution steps,
+thereby enabling heterogeneous components to be reasoned about together.
+In fact,
+CompCertO's open transition system already
+incorporates some aspects of compositional semantics,
+but its operational bias reflects
+its primary goal of compiler verification.
+
+The strategy model,
+by contrast,
+shifts the balance decisively toward compositional reasoning.
+As a hybrid between operational and denotational semantics,
+strategies deemphasize low-level execution details
+and instead highlight observable behaviors and interactions.
+This balance makes the strategy model a sweet spot:
+operational enough to remain concrete and mechanizable,
+but denotational enough to support modularity, abstraction, and scalability.
+As such, it offers broader applicability than CompCertO,
+serving not only compiler correctness
+but also the verification of heterogeneous, interacting systems.
+
+\subsubsection{Language Interfaces and Effects Signatures}
+
+The semantic model of CompCertO uses \emph{language interfaces}
+of the form $A = \langle A^\circ, A^\bullet \rangle$
+as the basis for component interactions.
+These interfaces resemble effect signatures
+in that they describe the possible questions and answers exchanged
+between a component and its environment.
+However,
+CompCertO's interfaces are comparatively coarse,
+every question $q \in A^\circ$ is associated with the same set of answers $r \in A^\bullet$.
+
+Effect signatures,
+by contrast,
+are more typed and structured.
+They not only specify, for each operation,
+the precise type of its result,
+but also rigorously constrain
+the set of possible operations
+in the first place.
+In other words,
+effect signatures capture both
+what operations are admissible and
+how their results must be shaped,
+whereas CompCertO's language interfaces treat all operations uniformly.
+
+For the C language,
+for example,
+questions are function calls of the form $f(\vec{v})@m$, where
+$f$ identifies the function to be called,
+$\vec{v} \in \kw{val}^*$ are the actual parameters, and
+$m \in \kw{mem}$ is the memory state at the time of invocation;
+answers take the form $v'@m'$ where
+$v' \in \kw{val}$ is the value returned by the function~$f$ and
+$m' \in \kw{mem}$ is the new state of the memory.
+This is captured by the effect signature
+\[
+  \mathcal{C} \mathbin@ \kw{mem} \:=\:
+  \{ f(\vec{v})@m \mathbin: \kw{val} \times \kw{mem} \mid
+    f \in \kw{val}, \:
+    \vec{v} \in \kw{val}^*, \:
+  m \in \kw{mem} \}
+  \,.
+\]
+I will show that CompCertO language interfaces
+can be systematically mapped to effect signatures.
+
+\subsubsection{Transition Systems and Traces}
+
+When the internal state transitions
+are ignored,
+the execution of a transition system
+can be represented as a single-use trace:
+an execution begins with a question from environment
+and terminates with an answer to that question.
+For instance,
+the program $\kw{decode.c}$ will exhibit traces such as:
+{\scriptsize
+  \begin{align*}
+    \kw{Clight}(\kw{decode.c}) \:\vDash\:
+    \kw{main}()@m &\rightarrowtail
+    (\kw{read}(0, b, 100)@m[b \mapsto \textit{unspecified}] \leadsto
+    14@m[b \mapsto \texttt{\textnormal{"uryyb, jbeyq!\textbackslash{}n"}}]) \\& \rightarrowtail
+    (\kw{rot13}(b, 14)@m[b \mapsto \texttt{\textnormal{"uryyb, jbeyq!\textbackslash{}n"}}] \leadsto
+    {*}@m[b \mapsto \texttt{\textnormal{"hello, world!\textbackslash{}n"}}]) \\& \rightarrowtail
+    (\kw{write}(1, b, 14)@m[b \mapsto \texttt{\textnormal{"hello, world!\textbackslash{}n"}}] \leadsto
+    14@m[b \mapsto \texttt{\textnormal{"hello, world!\textbackslash{}n"}}]) \\& \rightarrowtail
+    0@m[b \mapsto \textit{deallocated}]
+  \end{align*}
+}%
+
+In contrast,
+the strategy model
+generalizes this notion.
+A trace in the strategy model
+may involve repeated invocations from the caller environment,
+and, crucially,
+the behavior of later invocations
+can depend on the execution of earlier ones.
+This endows the strategy model
+with persistent state as an intrinsic feature.
+From this perspective,
+a transition system can be seen as
+a special case of the strategy model,
+suitable when internal state transitions are irrelevant
+or need not be tracked explicitly.
+
+The trace above is notably more complicated than
+the high-level one given in Example~\ref{ex:decodespec}.
+This complexity stems from low-level details of
+the C memory model,
+which must be faithfully represented in the CompCertO semantics.
+Nevertheless,
+these semantics of C and assembly will eventually
+serve as building blocks for modeling the scenario in Fig~\ref{fig:readwritehello},
+where they will be connected to the kind of high-level specifications
+that have been presented so far.
+
+\section{Strategy Model}
+\label{sec:strat:model}
+
+In this section,
+I give a formal characterization of the strategy model.
+
+\subsection{Strategies}
+
+Preceding sections have already informally described many strategies
+using interaction traces of the form
+\[
+  q \rightarrowtail
+  (m_1 \leadsto n_1) \rightarrowtail
+  (m_2 \leadsto n_2) \rightarrowtail
+  \cdots \rightarrowtail
+  (m_k \leadsto n_k) \rightarrowtail
+  r
+  \leadsto
+  q' \rightarrowtail
+  \cdots
+  \,.
+\]
+Such traces will also be represented more compactly as
+$
+q \underline{m_1} n_1
+\underline{m_2} n_2 \cdots
+\underline{m_k} n_k \underline{r}
+q' \cdots
+$,
+where underlined actions
+are those of the components,
+alternating with the actions of the environment.
+Beyond the requirement of alternation
+between the component and the environment actions,
+the traces of interest
+must also be well-bracketed~\citep{gamesemantics}.
+The corresponding constraints
+are formalized using the notion of position,
+as illustrated in the following diagram.
+\[
+  \begin{tikzcd}
+    P_{E,F} \ar[r, bend left, "q \in F"] &
+    P_{E,F}^q \ar[r, bend left, "m \in E"] \ar[l, bend left, "r \in \kw{ar}(q)"] &
+    P_{E,F}^{qm} \ar[l, bend left, "n \in \kw{ar}(m)"]
+  \end{tikzcd}
+  % \qquad
+  % \begin{array}{r@{}ll}
+  %   s \in P_{E,F} &{} ::= \epsilon \mid q s^q &
+  %   \bigl( q \in F \bigr)
+  %   \\[1ex]
+  %   s^q \in P_{E,F}^q &{} ::= \underline{m} s^{qm} \mid \underline{r} s &
+  %   \bigl( m \in E, r \in \kw{ar}(q) \bigr)
+  %   \\[1ex]
+  %   s^{qm} \in P_{E,F}^{qm} &{} ::= \epsilon \mid n s^q &
+  %   \bigl( n \in \kw{ar}(m) \bigr)
+  % \end{array}
+\]
+Consider a component
+that interacts with its handler via the effect signature $E$,
+and with its client via the effect signature $F$.
+The component progresses through a sequence of positions,
+governed by the structure of the interaction:
+\begin{itemize}
+  \item It starts at the position $P_{E,F}$,
+    where the only permissible event is
+    an incoming question $q \in F$,
+    resulting in a transition to the position $P_{E,F}^q$;
+  \item At position $P_{E,F}^q$,
+    the next move is either:
+    \begin{itemize}
+      \item an outgoing question $m \in E$,
+        in which case the position transitions to $P_{E,F}^{qm}$;
+      \item an outgoing answer $r \in \kw{ar}(q)$,
+        in which case the position transitions to $P_{E,F}^q$.
+    \end{itemize}
+  \item At position $P_{E,F}^{qm}$,
+    the only allowed move is
+    an incoming answer $n \in \kw{ar}(m)$,
+    after which the position returns to $P_{E,F}^q$.
+\end{itemize}
+
+\begin{definition}[Strategy] \label{def:strat}
+  A \emph{play} in the game $E \rightarrow F$
+  is an element $s \in P_{E,F}$
+  in the set generated by the grammar:
+  \[
+    \begin{array}{cccc}
+      \begin{prooftree}
+        \hypo{q \in F}
+        \hypo{s \in P_{E,F}^q}
+        \infer2{qs \in P_{E,F}}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \hypo{m \in E}
+        \hypo{s \in P_{E,F}^{qm}}
+        \infer2{\underline{m}s \in P_{E,F}^q}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \hypo{n \in \kw{ar}(m)}
+        \hypo{s \in P_{E,F}^q}
+        \infer2{ns \in P_{E,F}^{qm}}
+      \end{prooftree}
+      \\[2em]
+      \begin{prooftree}
+        \infer0{\epsilon \in P_{E,F}}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \hypo{r \in \kw{ar}(q)}
+        \hypo{s \in P_{E,F}}
+        \infer2{\underline{r}s \in P_{E,F}^q}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \infer0{\epsilon \in P_{E,F}^{qm}}
+      \end{prooftree}
+    \end{array}
+  \]
+  The plays are ordered by the prefix relation $\sqsubseteq$
+  following the rules:
+  \[
+    \begin{prooftree}
+      \hypo{s_q \sqsubseteq_q s_q'}
+      \infer1{q s_q \sqsubseteq q s_q'}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \infer0{\underline{m} \sqsubseteq_q \underline{m}n s_q}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{s_q \sqsubseteq_q s_q'}
+      \infer1{\underline{m}n s_q \sqsubseteq_q \underline{m}n s_q'}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \infer0{\underline{r} \sqsubseteq_q \underline{r} s}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{s \sqsubseteq s'}
+      \infer1{\underline{r} s \sqsubseteq_q \underline{r} s'}
+    \end{prooftree}
+  \]
+  % We will write
+  % \[
+  %   \sigma \subseteq P_{E\twoheadrightarrow F}
+  %   \qquad \text{such that} \qquad
+  %   \forall s\ t.
+  %   s \sqsubseteq t \wedge t \in \sigma \Rightarrow s \in \sigma
+  %   \,.
+  % \]
+  Then a \emph{strategy} $\sigma : E \rightarrow F$
+  is a prefix-closed subset of $P_{E,F}$.
+  % where any two $s_1, s_2 \in \sigma$ satisfy $s_1 \coh s_2$.
+\end{definition}
+
+When using sets of traces as semantics,
+prefix closure is essential
+for establishing a meaningful comparison between strategies.
+Consider two trace sets $\{ s, t \}$ and $\{ t \}$,
+where $s \sqsubseteq t$.
+These sets are conventionally identified
+as equivalent because they convey the same information.
+Without enforcing this identification through prefix closure,
+the natural ordering on trace sets yields
+only a preorder rather than a partial order,
+since distinct sets can be mutually comparable.
+The standard resolution is to take equivalence classes
+under this preorder,
+where the prefix-closed completion naturally emerges
+as the canonical representative of each equivalence class,
+thereby restoring the desired partial order structure.
+
+\subsection{Example of Strategy}
+
+In the previous section,
+the behavior of various components
+was described informally
+through representative execution traces.
+Now that we have formally introduced
+the definition of strategies,
+these informal descriptions can be transformed
+into rigorous formal strategies
+using the constructions presented above.
+
+\subsubsection{Strategy with Persistent State}
+\label{sec:strat:ex:persistent}
+
+The behavior of a queue with infinite capacity
+can be modeled as follows.
+For a starting state $\vec{q} \in V^*$,
+the strategy $\sigma_{\vec{q}} : \emptysig \rightarrow E_\kw{bq}$
+is defined by the following rules:
+\[
+  \begin{prooftree}
+    \infer0{\epsilon \in \sigma_{\vec{q}} }
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s \in \sigma_{\vec{q}} }
+    \infer1{\kw{deq} \cdot \underline{v} \cdot s \, \in \, \sigma_{v \vec{q}} }
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s \in \sigma_{\vec{q} v}}
+    \infer1{\kw{enq}[v] \cdot \underline{*} \cdot s \, \in \, \sigma_{\vec{q}} }
+  \end{prooftree}
+\]
+Note that as expected, the strategy never performs any outgoing calls
+but only interacts over $E_\kw{bq}$.
+The behavior of a queue that is initially empty
+is described by $\sigma_\epsilon : \emptysig \rightarrow E_\kw{bq}$,
+where $\epsilon$ is the empty queue.
+And the state is retained from one execution to the next.
+
+\subsubsection{Strategy from Downset}
+
+The behavior of the process $\kw{./secret}$
+as a strategy $\Gamma\kw{secret} : \mathcal{S} \rightarrow \mathcal{P}$
+can be defined as:
+\[
+  \Gamma_\kw{secret} :=
+  \bigcup_{n \in \mathbb{N}}
+  {\downarrow} \,
+  \kw{run} \cdot \underline{\kw{write}}_1[\texttt{"uryyb, jbeyq!"}]
+  \cdot n \cdot \underline{*}
+  \,.
+\]
+The principal downset ${\downarrow}\, s$ for a play $s$
+is the set $\{t \mid t \sqsubseteq s\}$ of all its prefixes.
+Since it is downward-closed, it constitutes a valid strategy.
+The strategy includes all possible return values
+following the write action,
+reflecting the non-deterministic environment behavior.
+
+Unlike the previous example,
+the strategy only contains plays of one execution.
+Section \ref{sec:strat:regular-closure} will show
+that the regular closure $(-)^*$
+enables the process to restart after it terminates.
+
+% \todo{add specification for decode and the overall strategy}
+
+\subsubsection{Strategy from Stateful Lens}
+
+The following example
+derives a strategy from a stateful lens.
+
+\begin{definition}[Strategy Interpretation of Stateful Lenses]
+  \label{def:strat:stateful-lens}
+  A stateful lens $f : U \leftrightarrows V$ with states in $P$
+  can be given a strategy interpretation
+  $[f] : [U] \rightarrow [V]$
+  using simple effect signatures of the form
+  $[U] := \{u : U \mid u \in U\}$.
+  For a state $p \in P$,
+  the strategy $[f]_p : [U] \rightarrow [V]$ is defined by
+  \begin{center}
+    \begin{prooftree}
+      \infer0{\epsilon \in [f]_p}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{s \in [f]_p^v}
+      \infer1{vs \in [f]_p}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\kw{get}_f(v, p) = u}
+      \hypo{s \in [f]_p^{vu}}
+      \infer2{\underline{u}s \in [f]_p^v}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{v = v'}
+      \hypo{s \in [f]_p}
+      \infer2{\underline{v'}s \in [f]_p^v}
+    \end{prooftree}
+    \\
+    \vspace{10pt}
+    \begin{prooftree}
+      \infer0{\epsilon \in [f]_p^{vu}}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\kw{set}_f(v, p, u') = (v', p')}
+      \hypo{s \in [f]_{p'}^{v'}}
+      \infer2{u's \in [f]_p^{vu}}
+    \end{prooftree}
+  \end{center}
+\end{definition}
+
+Notice that the definition above
+includes a non-deterministic choice from the system.
+At the position $[f]^v_p$,
+there are two possible next moves,
+either returning $v$ unchanged
+or passing on the $u$ component as an outgoing questions
+and updating it based on the corresponding answer.
+This underlines that the interpretation $[f]$
+is not meant to be used as is
+but is expected to be combined with a ``real'' strategy
+from which it will inherit these scheduling choices.
+In principle,
+this phenomenon is similar to the situation with
+transition systems as discussed in \S\ref{sec:ox:lens}.
+
+% At the same time,
+% the strategy interpretation
+% is quite useful as an intermediate construction.
+% In particular,
+% it allows us to reuse
+% refinement conventions of type
+% $\mathbf{R} : [U] \leftrightarrow [V]$
+% and refinement squares of type
+% $[f] \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} [g]$
+% in order to complement the horizontal structure
+% defined for stateful lenses
+% with the same vertical constructions we used for strategies.
+% The following definition will be useful in this context.
+
+\subsection{Behavioral Refinement and Determinism}
+
+The space of strategies
+is equipped with the least element $\varnothing$,
+and the partial order $\subseteq$.
+However,
+this ordering is not immediately
+suitable as a notion of behavioral refinement.
+As seen in preceding examples,
+both system and environment non-deterministic behaivors
+can be encoded within the strategy.
+Consequently,
+a larger strategy
+may permit
+additional behaviors from the environment, the system, or both.
+
+To address this issue,
+I adopt set inclusion
+as a working notion of behavioral refinement,
+under the assumption that
+all non-determinism arises from the environment.
+A more comprehensive notion of refinement relation%
+---capable of handling both sources of non-determinism---
+will be introduced in \S\ref{ch:rc}.
+The determinism of a strategy
+is formalized via the coherence relation.
+\begin{definition}[Coherence]
+  The \emph{coherence} relation ${\coh} \subseteq P_{E,F} \times P_{E,F}$
+  is defined by the following rules:
+  \[
+    \begin{array}{cccc}
+      \begin{prooftree}
+        \infer0{\epsilon \coh s}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \infer0{s \coh \epsilon}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \infer0{\epsilon \coh^{qm} s}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \infer0{s \coh^{qm} \epsilon}
+      \end{prooftree}
+      \\[2ex]
+      \begin{prooftree}
+        \hypo{q_1 = q_2 \Rightarrow s_1 \coh^{q_1} s_2}
+        \infer1{q_1 s_1 \coh q_2 s_2}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \hypo{s_1 \coh s_2}
+        \infer1{\underline{r} s_1 \coh^q \underline{r} s_2}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \hypo{s_1 \coh^{qm} s_2}
+        \infer1{\underline{m} s_1 \coh^q \underline{m} s_2}
+      \end{prooftree}
+      &
+      \begin{prooftree}
+        \hypo{n_1 = n_2 \Rightarrow s_1 \coh^q s_2}
+        \infer1{n_1 s_1 \coh^{qm} n_2 s_2}
+      \end{prooftree}
+    \end{array}
+  \]
+\end{definition}
+The empty play $\epsilon$ is coherent with all plays.
+More generally,
+two plays are coherent if,
+whenever the environment actions are the same,
+the corresponding system responses must be identical.
+This effectively eliminates the non-deterministic choices from the system.
+
+\begin{definition}[Deterministic Strategy]
+  A strategy $\sigma : E \rightarrow F$ is \emph{deterministic}
+  if:
+  \[
+    \forall s_1, s_2 \in \sigma, \quad s_1 \coh s_2
+  \]
+\end{definition}
+Then for deterministic strategies $\sigma$ and $\tau$,
+a simple refinement relation can be defined:
+\[
+  \sigma \le \tau \quad :\Leftrightarrow\quad \sigma \subseteq \tau
+\]
+
+\section{Composition}
+\label{sec:strat:composition}
+
+The previous section
+illustrates how strategies are defined
+as sets of plays.
+While this provides a foundation for understanding strategy behavior,
+real systems require building complex strategies from simpler components.
+In this section,
+I show that strategies can be defined
+by composing smaller strategies,
+enabling modular construction of system specifications.
+
+\subsection{Layered Composition}
+
+The layered
+composition of
+$\sigma : F \rightarrow G$ with
+$\tau : E \rightarrow F$
+allows the strategies to synchronize
+over the signature $F$.
+Their interaction over the intermediate signature is then hidden from
+the composite strategy $\sigma \odot \tau : E \rightarrow G$.
+Layered composition can be defined
+at the level of individual plays.
+
+\begin{definition}[Layered Composition of Strategies] \label{def:lcomp} %{{{
+  The \emph{identity} strategy $\kw{id}_E : E \rightarrow E$
+  is defined as:
+  \[
+    \kw{id}_E :=
+    \bigl(
+      \{\epsilon\} \cup
+      \{ m \underline{m} \mid m \in E \} \cup
+      \{ m \underline{m} n \underline{n} \mid m \in E, n \in \kw{ar}(m) \}
+    \bigr)^*
+    \,.
+  \]
+  In addition, two strategies
+  $\sigma : F \rightarrow G$ and
+  $\tau : E \rightarrow F$
+  compose to yield a strategy
+  $\sigma \odot \tau : E \rightarrow G$.
+  Individual plays compose
+  according to the relations:
+  \begin{align*}
+    {\odot} : P_{F,G} \times P_{E,F}
+    &\rightarrow \mathcal{P}(P_{E,G}) &
+    \epsilon \odot t &:= \{ \epsilon \} \\&&
+    qs \odot t &:= \{ qw \mid w \in s \odot^q t \}
+    \\
+    {\odot}^q : P_{F,G}^q \times P_{E,F}
+    &\rightarrow \mathcal{P}(P_{E,G}^q) &
+    \underline{r} s \odot^q t &:=
+    \{ \underline{r} w \mid w \in s \odot t \} \\&&
+    \underline{m} s \odot^q t &:=
+    \{ w \mid \exists t' \cdot t = mt' \wedge w \in s \odot^{qm} t' \}
+    \\
+    {\odot}^{qm} : P_{F,G}^{qm} \times P_{E,F}^m
+    &\rightarrow \mathcal{P}(P_{E,G}^q) &
+    s \odot^{qm} \underline{u} t &:=
+    \{ \underline{u} w \mid w \in s \odot^{qmu} t \} \\&&
+    s \odot^{qm} \underline{n} t &:=
+    \{ w \mid \exists s' \cdot s = ns' \wedge w \in s' \odot^q t \}
+    \\
+    {\odot}^{qmu} : P_{F,G}^{qm} \times P_{E,F}^{mu}
+    &\rightarrow \mathcal{P}(P_{E,G}^{qu}) &
+    s \odot^{qmu} \epsilon &:= \{ \epsilon \} \\&&
+    s \odot^{qmu} v t &:= \{ v w \mid w \in s \odot^{qm} t \}
+  \end{align*}
+  The \emph{layered composition} of $\sigma$ and $\tau$ can then be defined as
+  $
+  \sigma \odot \tau \: := \:
+  \bigcup_{(s,t) \in \sigma \times \tau}
+  s \odot t
+  $.
+\end{definition}
+
+\begin{theorem}
+  \label{thm:strat:comp}
+  The composition $\odot$ is associative
+  and admits the identity strategy $\kw{id}_E : E \rightarrow E$ as units.
+  Thus,
+  strategies form a category $\mathbf{Strat}$.
+\end{theorem}
+
+\subsection{Flat Composition}
+In addition to layered composition,
+strategies can also be combined side-by-side.
+Specifically, two strategies
+$\sigma_1 : E \rightarrow F_1$ and
+$\sigma_2 : E \rightarrow F_2$
+can be used to independently handle
+the two components of an incoming effect signature $F_1 \oplus F_2$.
+The strategy
+$\sigma_1 \oplus \sigma_2 : E_1 \oplus E_2 \rightarrow F_1 \oplus F_2$
+is straightforward and lets $\sigma_1$ and $\sigma_2$ operate independently.
+When a question $q \in F_1$ is asked
+in the left-hand side component of $F_1 \oplus F_2$,
+it is used to activate $\sigma_1$ which executes
+until the question is answered.
+$\sigma_2$ handles the questions of $F_2$ in a similar way.
+
+I now introduce
+a composition operation $\oplus$ operating on the effect signatures themselves,
+which will act on all higher-dimensional objects as well.
+
+\begin{definition}[Sum of signatures]
+  A family $(E_i)_{i \in I}$ of effect signatures can be combined into
+  \[
+    \bigoplus_{i \in I} E_i \, := \,
+    \{ \iota_i(m) \mathbin: N \mid i \in I,\, (m \mathbin: N) \in E_i \}
+    \,,
+  \]
+  which uses the set of operations $\iota_i(m) \in \sum_i E_i$
+  and uses for each one the arity assigned to it
+  in its signature of origin $E_i$.
+  The binary case where $i \in \{1, 2\}$
+  will be written as $E_1 \oplus E_2$.
+\end{definition}
+
+The signature $E \oplus F$ contains the combined questions of $E$ and $F$.
+Each question retains the same set of answers.
+Many of the signatures seen so far can be decomposed using $\oplus$.
+
+\begin{example}[Per-file interfaces]
+  Processes can be modeled as
+  strategies of type $P : \mathcal{S} \rightarrow \mathcal{P}$,
+  where the signature $\mathcal{S}$ contains questions for
+  each file descriptor $i \in \mathbb{N}$.
+  This signature can be decomposed as
+  $
+  \mathcal{S} \: = \: \bigoplus_{i \in \mathbb{N}} \: \mathcal{F}
+  $, where $
+  \mathcal{F} \: := \:
+  \{ \kw{read}[n] : \Sigma^*, \kw{write}[s] : \mathbb{N} \mid n \in \mathbb{N}, s \in \Sigma^* \}
+  $.
+  Since the examples focus on standard input ($i=0$) and output ($i=1$),
+  it can be simplified as
+  \[\mathcal{S} := \mathcal{F} \oplus \mathcal{F}\,.\]
+\end{example}
+
+Additional strategies
+can be defined in relation to $\oplus$, namely
+\[
+  \Delta_E : E \rightarrow E \oplus E \,,
+  \qquad
+  \gamma_{E,F} : E \oplus F \cong F \oplus E \,,
+  \qquad
+  \pi_1^{E,F} : E \oplus F \rightarrow E \,,
+  \qquad
+  \pi_2^{E,F} : E \oplus F \rightarrow F \,.
+\]
+The strategy $\Delta_E$ passes along
+questions received in two independent copies of $E$
+but consolidates them into a single copy.
+The projections $\pi_i^{E,F}$
+can be used to ``forget'' the unused summand
+of the signature $E \oplus F$.
+These constructions are useful
+for composing processes in the next section.
+
+\begin{definition}[Flat Composition]
+  \label{def:strat:flat-comp}
+  The strategy $\pi_i : E_1 \oplus E_2 \rightarrow E_i$
+  can be defined as:
+  \[
+    \pi_i := \bigl(
+      \{ \epsilon \} \cup
+      \{ m \, \underline{\iota_i(m)} \mid m \in E_i \} \cup
+      \{ m \, \underline{\iota_i(m)} \, n \, \underline{n} \mid
+      m \in E_i, n \in \kw{ar}(m) \}
+    \big)^*
+    \,.
+  \]
+  Moreover,
+  two strategies
+  $\sigma_1 : E \rightarrow F_1$ and
+  $\sigma_2 : E \rightarrow F_2$
+  can be combined into
+  $\langle \sigma_1, \sigma_2 \rangle : E \rightarrow F_1 \oplus F_2$.
+  Individual plays combine as follows:
+  \begin{align*}
+    \langle qs_1 , s_2 \rangle &:=
+    \{ \iota_1(q) \, w \mid w \in \langle s_1, s_2 \rangle^q_1 \} &
+    \langle s_1 , qs_2 \rangle &:=
+    \{ \iota_2(q) \, w \mid w \in \langle s_1, s_2 \rangle^q_2 \}
+    \\
+    \langle \underline{r} s_1, s_2 \rangle_1^q &:=
+    \{ \underline{r} w \mid w \in \langle s_1, s_2 \rangle \} &
+    \langle s_1, \underline{r} s_2 \rangle_2^q &:=
+    \{ \underline{r} w \mid w \in \langle s_1, s_2 \rangle \}
+    \\
+    \langle \underline{m} s_1, s_2 \rangle_1^q &:=
+    \{ \underline{m} w \mid w \in \langle s_1, s_2 \rangle^{qm}_1 \} &
+    \langle s_1, \underline{m} s_2 \rangle_2^q &:=
+    \{ \underline{m} w \mid w \in \langle s_1, s_2 \rangle^{qm}_2 \}
+    \\
+    \langle n s_1, s_2 \rangle^{qm}_1 &:=
+    \{ n w \mid w \in \langle s_1, s_2 \rangle^q_1 \} &
+    \langle s_1, n s_2 \rangle^{qm}_2 &:=
+    \{ n w \mid w \in \langle s_1, s_2 \rangle^q_2 \}
+  \end{align*}
+  Then
+  $\langle \sigma_1, \sigma_2 \rangle :=
+  \bigcup_{(s_1, s_2) \in \sigma_1 \times \sigma_2}
+  \langle s_1, s_2 \rangle$.
+  In addition,
+  for $\sigma_1 : E_1 \rightarrow F_1$ and
+  $\sigma_2 : E_2 \rightarrow F_2$,
+  the flat composition is defined as
+  \[
+    \sigma_1 \oplus \sigma_2 \: := \:
+    \langle \sigma_1 \odot \pi_1, \, \sigma_2 \odot \pi_2 \rangle
+    \: : \:
+    E_1 \oplus E_2 \rightarrow F_1 \oplus F_2
+    \,.
+  \]
+\end{definition}
+
+\begin{theorem}[Properties of $\oplus$]
+  The flat composition is compatible
+  with the layered composition in the following sense:
+  \[
+    \begin{array}{r@{}l}
+      (L_1 \odot L_2) \oplus (L_1' \odot L_2') & {} \equiv
+      (L_1 \oplus L_1') \odot (L_2 \oplus L_2') \\
+      \kw{id}_E \oplus \kw{id}_F & {} \equiv \kw{id}_{E \oplus F}
+    \end{array}
+  \]
+  In other words, the $\oplus$ operator defines a bifunctor
+  on the category of strategies:
+  \[
+    \oplus : \mathbf{Strat} \times \mathbf{Strat} \rightarrow \mathbf{Strat}
+  \]
+\end{theorem}
+
+%Note that despite the notations we have used,
+%flat composition does not constitute a cartesian product of strategies,
+%because there are strategies of type
+%$E \rightarrow F_1 \oplus F_2$
+%which do not take the form $\langle \sigma_1, \sigma_2 \rangle$.
+%For example,
+%questions in $F_1$ may determine
+%how later questions in $F_2$ are answered.
+
+\subsection{Composing processes}
+\label{sec:strat:compose-process}
+
+Shell-like operators can be defined for composing processes.
+Two processes $P, Q : \mathcal{S} \rightarrow \mathcal{P}$
+can be combined into
+$(P \mathbin\texttt{;} Q) : \mathcal{S} \rightarrow \mathcal{P}$.
+To this end,
+I define the scheduling component
+$\kw{seq} : \mathcal{P} \oplus \mathcal{P} \rightarrow \mathcal{P}$
+which invokes one process, then the other:
+\[
+  \kw{seq} \vDash
+  \kw{run} \cdot (\underline{\kw{run}_1} \cdot n) \cdot (\underline{\kw{run}_2} \cdot m) \cdot m
+\]
+This component can be used to define:
+\[
+  P \mathbin\texttt{;} Q \: := \:
+  \kw{seq} \odot (P \oplus Q)
+  \odot (\mathcal{F} \oplus \gamma \oplus \mathcal{F})
+  \odot (\Delta \oplus \Delta)
+\]
+The $P \oplus Q$ component
+emits the system events with signature $(\mathcal{F} \oplus \mathcal{F}) \oplus (\mathcal{F} \oplus \mathcal{F})$.
+The auxiliary component
+$(\mathcal{F} \oplus \gamma \oplus \mathcal{F})$
+and
+$(\Delta \oplus \Delta)$
+combine the events on standard input and output
+into a unified effect signature
+of the form $\mathcal{F} \oplus \mathcal{F}$,
+which is used by a regular process.
+
+The shell operators $\texttt{\&\&}$ and $\texttt{||}$ could likewise be modeled
+by replacing $\kw{seq}$ with different scheduling policies.
+Beyond sequencing,
+\emph{data flow} can also be modeled
+between processes.
+To this end,
+I introduce
+$\kw{fifo} : \mathbf{0} \rightarrow \mathcal{F}$
+representing a FIFO buffer.
+Operationally,
+$\kw{fifo}$ can accept writes
+and serve reads
+according to the following rules:
+\[
+  \kw{fifo} := \sigma_\epsilon
+  \qquad
+  \begin{prooftree}
+    \hypo{w \in \sigma_{s_1 \cdot s_2}}
+    \infer1{\kw{write}[s_2] \cdot \underline{\kw{len}(s_2)} \cdot w \in \sigma_{s_1}}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s = s_1 \cdot s_2}
+    \hypo{\kw{len}(s_1) = n}
+    \hypo{w \in \sigma_s}
+    \infer3{\kw{read}[n] \cdot \underline{s_1} \cdot w \in \sigma_s}
+  \end{prooftree}
+\]
+This fifo buffer accepts write events
+and accumulates the written data in order.
+When a read event occurs with a specified amount,
+it returns that number of characters
+from the front of the buffer,
+maintaining the first-in-first-out ordering
+of the stored data.
+For example, $\kw{fifo}$ has the following behavior:
+{\small
+  \[
+    \kw{fifo} \: \vDash \:
+    (\kw{write}[\texttt{"hello, "}] \rightarrowtail 7) \leadsto
+    (\kw{write}[\texttt{"world!\textbackslash{}n"}] \rightarrowtail 7) \leadsto
+    (\kw{read}[100] \rightarrowtail \texttt{"hello, world!\textbackslash{}n"})
+  \]
+}%
+With $\kw{fifo}$ serving as an intermediate buffer,
+the pipe operator can be defined:
+\[
+  P \mathbin\texttt{|} Q \: := \:
+  \kw{seq} \odot (P \oplus Q)
+  \odot (\mathcal{F} \oplus (\Delta \odot \kw{fifo}) \oplus \mathcal{F})
+  \,.
+\]
+Intuitively, the pipe connects
+the output of P to the input of Q via the buffer,
+while the sequencing ensures that
+the communication proceeds in an orderly fashion.
+The structure of this composition is illustrated
+in the following diagram.
+\begin{center}
+  \begin{tikzpicture}[
+      box/.style = {draw, minimum width=10mm, minimum height=8mm, align=center},
+      wire/.style = {thick},
+      dot/.style  = {circle, fill, inner sep=1.3pt}
+    ]
+
+    % --- blocks
+    \node[box]                                  (seq)  {seq};
+    \node[box, right=10mm of seq, yshift= 8mm]  (P)    {P};
+    \node[box, right=10mm of seq, yshift=-8mm]  (Q)    {Q};
+    \node[box, right=35mm of seq]               (fifo) {fifo};
+    \node[right=40mm of P, yshift= 2mm]         (Px)   {$\mathcal{F}$};
+    \node[right=40mm of Q, yshift=-2mm]         (Qx)   {$\mathcal{F}$};
+    \node[left=10mm of seq]                     (Sx)   {$\mathcal{P}$};
+    \node[left=3mm of P]                        (Pl)   {$\mathcal{P}$};
+    \node[left=3mm of Q]                        (Ql)   {$\mathcal{P}$};
+    \node[right=5mm of P, yshift=-2mm]          (Pr)   {$\mathcal{F}$};
+    \node[right=5mm of Q, yshift=+2mm]          (Qr)   {$\mathcal{F}$};
+
+    % merge dot
+    \node[dot, right=28mm of seq] (m) {};
+
+    % convenient left/right x positions for long wires
+
+    \coordinate (TopL) at ($(seq.north)+(0,8mm)$);
+    \coordinate (TopR) at ($(fifo.north)+(0,8mm)$);
+    \coordinate (BotL) at ($(seq.south)+(0,-8mm)$);
+    \coordinate (BotR) at ($(fifo.south)+(0,-8mm)$);
+
+    % --- internal wiring
+    \draw[wire] (Sx) -- (seq.west);
+    \draw[wire] (seq.east)+(0,2mm) to[out=0,in=180,looseness=1.2] (P.west);
+    \draw[wire] (seq.east)+(0,-2mm) to[out=0,in=180,looseness=1.2] (Q.west);
+    \draw[wire] (P.east)+(0,-1mm) to[out=0,in=120,looseness=1.2] (m);
+    \draw[wire] (Q.east)+(0,+1mm) to[out=0,in=240,looseness=1.2] (m);
+    \draw[wire] (m) -- (fifo.west);
+    \draw[wire] (P.east)+(0,+2mm) -- (Px);
+    \draw[wire] (Q.east)+(0,-2mm) -- (Qx);
+
+    % --- dashed enclosure with label
+    \node[
+      fit=(seq)(P)(Q)(fifo)(TopL)(TopR)(BotL)(BotR),
+      draw, dashed, rounded corners, inner sep=8mm,
+      label={[anchor=north west]north west:{\small $P \mid Q$}}
+    ] {};
+  \end{tikzpicture}
+\end{center}
+
+Using this construction,
+the relationship between the behaviors can be expressed
+$\Gamma_\kw{secret}$ and $\Gamma_\kw{encode}$
+to formulate a partial account of property (\ref{eqn:hellospec}).
+% Specifically,
+% we expect the behavior
+% \[
+%   \Gamma_{(\ref{eqn:hellospec})} \vDash \kw{run}
+%   \rightarrowtail (\kw{write}_1[\texttt{"hello, world!\textbackslash{}n"}] \leadsto 14)
+%   \rightarrowtail 0
+% \]
+% to admit the refinement square
+% $
+% \phi_{(\ref{eqn:hellospec})} :
+% \Gamma_{(\ref{eqn:hellospec})} \le
+% \Gamma_\kw{secret} \mathbin{\texttt{|}} \Gamma_\kw{decode}
+% $.
+\[
+  \phi_{(\ref{eqn:hellospec})} :
+  \Gamma_{(\ref{eqn:hellospec})} \subseteq
+  \Gamma_\kw{secret} \mathbin{\texttt{|}} \Gamma_\kw{decode}
+  \,.
+\]
+
+Note that since this model does not support concurrency,
+the construction $P \mathbin{\texttt{|}} Q$ above
+can only offer a sequential approximation of
+the corresponding Unix shell operator.
+The example shown in
+\autoref{fig:readwritehello}
+to illustrate the issues that come up
+when the horizon of verification
+is pushed beyond the boundary of a fixed language or model,
+but providing a realistic account of Unix processes
+remains beyond the scope of the present work.
+
+\subsection{Spatial Composition}
+
+The spatial composition equips strategies
+with external states.
+Inspired by the approach in \S\ref{sec:ox:lens},
+the spatial composition is defined
+as a special case of the tensor product.
+
+Like the sum used by flat composition,
+the tensor product is another well-known operation on effect signatures,
+which expects the client to
+\emph{simultaneously} ask a question in each component:
+\[
+  \bigotimes_{i \in I} E_i \, := \,
+  \textstyle
+  \big\{ \langle m_i \rangle_{i\in I} : \prod_{i \in I} N_i \mathrel{\big|}
+  \forall i \mathbin. (m_i \mathbin: N_i) \in E_i \big\}
+\]
+
+\begin{definition}
+  The tensor product
+  $\sigma_1 \otimes \sigma_2 : E_1 \otimes E_2 \rightarrow F_1 \otimes F_2$
+  of the strategies
+  $\sigma_1 : E_1 \rightarrow F_1$ and
+  $\sigma_2 : E_2 \rightarrow F_2$
+  is defined by pairing up their plays pairwise
+  when they exhibit a similar structure, on a move-by-move basis.
+  The process can be described by the following rules:
+  \begin{align*}
+    \epsilon \otimes \epsilon & := \{ \epsilon \} \\
+    q_1 s_1 \otimes q_2 s_2 & := \{ (q_1, q_2) s \mid s \in s_1 \otimes^{q_1, q_2} s_2 \}\\
+    \underline{r}_1 s_1 \otimes^{q_1,q_2} \underline{r}_2 s_2 & := \{ \underline{(r_1, r_2)} s \mid s \in s_1 \otimes s_2 \} \\
+    \epsilon \otimes^{q_1m_1,q_2m_2} \epsilon & := \{ \epsilon \} \\
+    \underline{m}_1 s_1 \otimes^{q_1,q_2} \underline{m}_2 s_2 & := \{ \underline{(m_1, m_2)} s \mid s \in s_1 \otimes^{q_1m_1, q_2m_2} s_2 \} \\
+    n_1s_1 \otimes^{q_1m_1,q_2m_2} n_2s_2 & := \{ (n_1, n_2) s \mid s \in s_1 \otimes^{q_1, q_2} s_2 \}
+  \end{align*}
+  The resulting strategy can be given as
+  $\sigma_1 \otimes \sigma_2 :=
+  \bigcup_{(s_1, s_2) \in \sigma_1 \times \sigma_2} s_1 \otimes s_2$.
+\end{definition}
+
+\begin{definition}
+  \label{def:strat:spatial-comp}
+  The spatial composition operator $\mathbin@$ is defined:
+  \begin{itemize}
+    \item for an effect signature $E$ and a set $U$,
+      as $E \mathbin@ U := E \otimes [U]$;
+    \item for a strategy $\sigma$ and a stateful lens $f$,
+      as $\sigma \mathbin@ f := \sigma \otimes [f]$.
+      % \item for the refinement conventions $\mathbf{R}$ and $\mathbf{S}$
+      %   as $\mathbf{R} \mathbin@ \mathbf{S} := \mathbf{R} \otimes \mathbf{S}$.
+  \end{itemize}
+\end{definition}
+
+\begin{theorem}[Properties of $\at$]
+  The spatial composition is compatible
+  with the layered composition in the following sense:
+  \[
+    \begin{array}{r@{}l}
+      (L_1 \odot L_2) \mathbin@ (f \circ g) & {} \equiv
+      (L_1 \mathbin@ f) \odot (L_2 \mathbin@ g) \\
+      \kw{id}_A \mathbin@ \kw{id}_U & {} \equiv \kw{id}_{A \mathbin@ U}
+    \end{array}
+  \]
+  In other words, the $\at$ operator defines a bifunctor
+  on the category of strategies and stateful lenses:
+  \[
+    \at : \mathbf{Strat} \times \mathbf{Lens} \rightarrow \mathbf{Strat}
+  \]
+\end{theorem}
+
+\section{Regular Closure}
+\label{sec:strat:regular-closure}
+
+The composition operations introduced in the previous section
+provide powerful tools for building complex strategies.
+However, unlike $\sigma_{\vec{q}}$ above,
+many strategies of interest are stateless
+in the sense that every incoming question
+is handled in the same way
+regardless of any previous history.
+Following \citet{objsem},
+such strategies are called \emph{regular}.
+
+A common approach to
+construct a regular strategy
+is to define a \emph{single-use} strategy
+that describes the behavior of one execution,
+and then apply the regular closure operator
+to repeat the execution
+infinitely many times.
+Plays in the single-use strategy are of the form
+$ q \underline{m_1} n_1 \cdots \underline{m_k} n_k \underline{r} $
+or prefixes thereof.
+
+\begin{definition}[Single-use Strategy]
+  A strategy $\sigma$ is \emph{single-use}
+  when its plays are of the form
+  $ q \underline{m_1} n_1 \cdots \underline{m_k} n_k \underline{r} $
+  or prefixes thereof.
+\end{definition}
+
+Because processes do not retain state
+from one execution to the next,
+the strategies $\Gamma_\kw{secret}$ and $\Gamma_\kw{encode}$
+are both single-use.
+They can no longer respond to subsequent questions
+after they have terminated.
+The regular closure operator
+extends the single-use strategy
+by repeating itself
+
+\begin{definition}[Regular Closure]
+  Consider a strategy $\sigma : E \rightarrow F$.
+  Given two plays $s, t \in P_{E,F}$
+  the play $s \rhd t$ initially proceeds as $s$
+  but goes on to proceed as $t$ if $s$ ends
+  with $\epsilon \in P_{E,F}$
+  when a question $q \in F$ is expected.
+  Formally,
+  I can define
+  $\rhd^x : P_{E,F}^x \times P_{E,F} \rightarrow P_{E,F}^x$
+  as follows:
+  \begin{align*}
+    qs \rhd t &:= q ( s \rhd^q t ) &
+    \underline{m} s \rhd^q t &:= \underline{m} (s \rhd^{qm} t) &
+    n s \rhd^{qm} t &:= n (s \rhd^q t) \\
+    \epsilon \rhd t &:= t &
+    \underline{r} s \rhd^q t &:= \underline{r} (s \rhd t) &
+    \epsilon \rhd^{qm} t &:= \epsilon
+  \end{align*}
+
+  The \emph{regular closure} $\sigma^* : E \rightarrow F$
+  allows the strategy $\sigma$
+  to start over with each new incoming question:
+  \[
+    \epsilon \in \sigma^*
+    \qquad \qquad
+    s \in \sigma \wedge t \in \sigma^* \Rightarrow
+    s \rhd t \in \sigma^*
+  \]
+\end{definition}
+
+With the regular closure applied,
+the process $\Gamma^*_\kw{secret}$ restarts
+after each execution,
+yielding an unbounded sequence of identical executions:
+\begin{align*}
+  \Gamma^*_\kw{secret}
+  \:\vDash\:
+  & \big(\kw{run}
+    \sysstep (\kw{write}_1[\texttt{\textnormal{"uryyb, jbeyq!\textbackslash{}n"}}] \envstep 14)
+  \sysstep 0\big) \\
+  \:\envstep\:
+  & \big(\kw{run}
+    \sysstep (\kw{write}_1[\texttt{\textnormal{"uryyb, jbeyq!\textbackslash{}n"}}] \envstep 14)
+  \sysstep 0\big) \\
+  \envstep
+  & \cdots
+\end{align*}
+
+Formally, I define a regular strategy
+as the regular closure of a single-use strategy.
+\begin{definition}[Regular Strategy]
+  $\sigma$ is a \emph{regular strategy}
+  when it is the regular closure $\sigma = \tau^*$
+  of a single-use strategy $\tau$.
+\end{definition}
+
+\subsection{Properties of Regular Closure}
+
+The regular closure enjoys several important properties.
+
+\begin{theorem}
+  \label{thm:regular-closure}
+  The regular closure perserves determinism and refinement order:
+  \[
+    \begin{prooftree}
+      \hypo{\sigma \ \kw{deterministic}}
+      \hypo{\sigma \ \kw{single\text{-}use}}
+      \infer2{\sigma^* \ \kw{deterministic}}
+    \end{prooftree}
+    \qquad
+    \begin{prooftree}
+      \hypo{\phi : \sigma \subseteq \tau}
+      \infer1{\phi^* : \sigma^* \subseteq \tau^*}
+    \end{prooftree}
+    \,,
+  \]
+\end{theorem}
+
+The determinism of $\sigma^*$
+depends crucially on $\sigma$ being single-use.
+If $\sigma$ were not single-use,
+the repeated restarts could introduce non-deterministic behavior.
+For instance,
+consider the counter strategy $\sigma_\kw{inc}$
+which is deterministic on its own,
+but becomes non-deterministic
+under the regular closure.
+\[
+  \sigma_\kw{inc} := \downarrow
+  \kw{inc} \cdot \underline{0} \cdot \kw{inc} \cdot \underline{1}
+\]
+Particularly, the regular closure $\sigma_\kw{inc}^*$ is not deterministic
+because it admits the following two plays
+that violate the determinism:
+\[
+  \sigma_\kw{inc}^* \vDash \kw{inc} \cdot \underline{0} \cdot \kw{inc} \cdot \underline{1}
+  \qquad
+  \sigma_\kw{inc}^* \vDash \kw{inc} \cdot \underline{0} \cdot \kw{inc} \cdot \underline{0}
+\]
+
+Regular closure operator also interacts well
+with other operators.
+\begin{lemma}[Regular Closure Compatibility] \label{lem:regular-closure-comp}
+  Let $\sigma$ be a single-use strategy,
+  and $\tau$ a regular strategy.
+  The regular closure operator
+  is compatible with composition on the right by $\tau$,
+  in the sense that
+  \[
+    \sigma^* \odot \tau = (\sigma \odot \tau)^*
+    \,.
+  \]
+  Moreover,
+  the regular closure operator
+  commutes with state lifting:
+  \[
+    \sigma^* \at U = (\sigma \at U)^*
+    \,.
+  \]
+  In other words,
+  regular closure can be ``pushed through''
+  both composition with a regular strategy
+  and the addition of external state.
+\end{lemma}
+These commutativity properties are particularly useful
+when CompCertO semantics are embedded.
+
+\subsection{Embedding CompCertO semantics}
+
+The language semantics and correctness properties
+defined by the certified compiler CompCertO
+can be used within this model.
+
+CompCertO
+uses a notion of \emph{open} transition system
+to describe interactions across component boundaries.
+These boundaries are specified using
+language interfaces of the form
+$A := \langle A^\que, A^\ans \rangle$,
+which translate to effect signatures
+$\llbracket A \rrbracket := \{ q : A^\ans \mid q \in A^\que \}$.
+
+Recall that
+a CompCertO \emph{transition system} $L : A \twoheadrightarrow B$
+is a tuple $L = \langle S, {\rightarrow}, I, X, Y, F \rangle$
+where executions take the form
+\[
+  q \mathrel{I} s_0 \rightarrow^*
+  s_1 \mathrel{X} q_1 \leadsto
+  r_1 \mathrel{Y^{s_1}} s_1' \rightarrow^*
+  s_2 \mathrel{\cdots}
+  s_n \mathrel{X} q_n \leadsto
+  r_n \mathrel{Y^{s_n}} s_n' \rightarrow^*
+  s_f \mathrel{F} r
+  \,,
+\]
+corresponding to an interaction trace
+$
+q \rightarrowtail
+(q_1 \leadsto r_1) \rightarrowtail
+\cdots \rightarrowtail
+(q_n \leadsto r_n) \rightarrowtail
+r
+$.
+
+To describe the strategy associated with a CompCertO transition system,
+I first formalize the set of plays generated by an internal state $s \in S$ as follows:
+\[
+  \begin{prooftree}
+    \hypo{s \rightarrow^* s' \: X \: m \leadsto n \: Y^{s'} \: s''}
+    \hypo{s'' \Vdash w}
+    \infer2{s \Vdash \underline{m}nw}
+  \end{prooftree}
+  \qquad
+  \begin{prooftree}
+    \hypo{s \rightarrow^* s' \: F \: r}
+    \infer1{s \Vdash \underline{r}}
+  \end{prooftree}
+\]
+For an invocation on the transition system,
+the play $qw$ will then result when $q \mathrel{I} s \vDash w$.
+To handle subsequent invocations,
+the process is iterated using the regular closure operator
+defined in \S\ref{sec:strat:regular-closure}:
+\[
+  \llbracket L \rrbracket \: := \:
+  \Big(\bigcup_{q \in B^\que} \{ qw \mid \exists s \cdot q \: I \: s \wedge s \Vdash w \} \Big)^*
+  \,.
+\]
+
+Using \autoref{thm:regular-closure} and \autoref{lem:regular-closure-comp},
+the following properties of the embedding hold:
+\begin{theorem}[Embedding properties]
+  \label{thm:strat:embedding}
+  Given transition systems $L_1: B \twoheadrightarrow C$ and $L_2: A \twoheadrightarrow B$,
+  \[
+    \llbracket L_1 \rrbracket \odot \llbracket L_2 \rrbracket
+    \subseteq \llbracket L_1 \odot L_2 \rrbracket
+    \,.
+  \]
+  In other words,
+  the embedding defines an oplax functor
+  from the category of transition systems
+  to the category of strategies:
+  \[
+    \llbracket - \rrbracket : \mathbf{LTS} \rightarrow \mathbf{Strat} \,.
+  \]
+\end{theorem}
+
+\section{Loaders}
+\label{sec:strat:loaders}
+
+Having established the foundational theory of strategies and their composition,
+I now turn to practical applications.
+Verifying functionalities
+of library code substantially benefits from
+CompCertO's open semantics.
+However,
+the openness hinders reasoning
+on the behavior of executables.
+For the executables,
+it is desirable to
+model them
+in terms of the \textit{process behavior};
+the behaviors are self-contained,
+and can be characterized
+by the sequence of system calls
+they perform.
+To bridge the gap
+between the open semantics of
+the process behavior,
+I introduce the notion of a \textit{loader}.
+
+\subsection{Assembly Loader}
+
+An assembly-level transition system
+$L : \mathcal{A} \twoheadrightarrow \mathcal{A}$
+is loaded via the loader:
+\[
+  \kw{load}_\mathcal{A}(L)
+  : \mathcal{S} \rightarrow \mathcal{P}
+  \::=\: \kw{entry}_\mathcal{A} \: \odot \: L
+  \: \odot \: \kw{runtime}_\mathcal{A}
+  \,.
+\]
+
+On one end,
+the loader launches
+the component as a process
+by using the
+$\kw{entry}_\mathcal{A} : \mathcal{A} \rightarrow \mathcal{P}$
+to invoke its main function:
+\[
+  \kw{entry}_\mathcal{A} \:\vDash\:
+  \kw{run} \rightarrowtail
+  (\vec{rs_0}[\kw{PC}\mapsto \kw{main},
+      \kw{RA} \mapsto \kw{null},
+    \kw{RSP}\mapsto \kw{null}]@m_0 \leadsto
+  \vec{rs}[\kw{RAX} \mapsto r]@m) \rightarrowtail r \,.
+\]
+The registers $\vec{rs_0}$ and the memory $m_0$ are
+initialized that
+the program counter $\kw{PC}$ holds a pointer value
+that points to
+the $\kw{main}$ function,
+and the static variables
+are properly initialized in the memory.
+The return address $\kw{RA}$
+and the stack pointer $\kw{RSP}$
+are initialized to $\kw{null}$
+according to CompCertO's simulation convention.
+At the end,
+the value stored in $\kw{RAX}$ is returned.
+
+On the other end,
+the $\kw{runtime} : \mathcal{S} \rightarrow \mathcal{A}$
+acts as the conduit for runtime libraries
+to interface the program with the operating system.
+In this scenario,
+the programs only use $\kw{read}$ and $\kw{write}$
+functions from $\kw{unistd.h}$
+to perform I/O operations.
+Thus, I implement the minimalist runtime:
+
+{\footnotesize
+  \begin{align*}
+    \kw{runtime}_\mathcal{A} & \:\vDash\:
+    \vec{rs}[\kw{PC} \mapsto \kw{read},
+      \kw{RDI} \mapsto 0,
+      \kw{RSI} \mapsto b,
+    \kw{RDX} \mapsto n]@m[b \mapsto unspecified] \\
+    & \rightarrowtail (\kw{read}_0[n] \leadsto s)
+    \rightarrowtail \vec{rs'}[\kw{RAX} \mapsto \kw{len}(s)]@m[b \mapsto s] \\
+    \kw{runtime}_\mathcal{A} & \:\vDash\:
+    \vec{rs}[\kw{PC} \mapsto \kw{write},
+      \kw{RDI} \mapsto 1,
+      \kw{RSI} \mapsto b,
+    \kw{RDX} \mapsto n]@m[b \mapsto s] \\
+    &  \rightarrowtail
+    (\kw{write}_1[s[0:n]] \leadsto n')
+    \rightarrowtail \vec{rs'}[\kw{RAX} \mapsto n']@m[b \mapsto s]
+  \end{align*}
+}
+
+Following the x86 conventions,
+arguments are passed via
+the \kw{RDI}, \kw{RSI}, and \kw{RDX} registers.
+The \kw{read} function
+loads a sequence of bytes
+from the standard input,
+stores them into the memory
+where the pointer value $b$ points to,
+and returns the length of the byte sequence.
+Conversely, the \kw{write} function
+writes the first $n$ bytes
+of the byte sequence $s$
+to the standard output,
+and the return value $n'$ indicates
+the number of bytes that are successfully written.
+
+With the assembly loader,
+I then formally formulate the property (\ref{eqn:hellospec})
+as follows:
+\[
+  \Gamma_\kw{(\ref{eqn:hellospec})} \subseteq
+  \kw{load}_\mathcal{A}(\llbracket \kw{Asm}(\kw{secret.s} + \kw{rot13.s}) \rrbracket)
+  \mid
+  \kw{load}_\mathcal{A}(\llbracket \kw{Asm}(\kw{decode.s} + \kw{rot13.s}) \rrbracket)
+  \,.
+\]
+
+\subsection{Clight Loader}
+
+Reasoning about the process behavior
+directly at the level of assembly programs
+is intricate because of
+the large abstraction gap between
+the strategy-level specifications
+and the assembly semantics.
+Therefore,
+I also introduce a $\kw{Clight}$ loader
+to divide the proof
+into manageable pieces.
+
+\kw{Clight} programs
+are not directly loaded as processes.
+That said,
+loaded \kw{Clight} programs
+serves as an intermediate
+verification step
+to simplify the proof.
+Similar to the assembly loader,
+the \kw{Clight} loader is defined
+using the auxiliary strategies
+$\kw{entry}_\mathcal{C}$ and
+$\kw{runtime}_\mathcal{C}$:
+{\small
+  \begin{align*}
+    & \kw{entry}_\mathcal{C} \:\vDash\:
+    \kw{run} \rightarrowtail
+    (\kw{main}()@m_0 \leadsto r@m) \rightarrowtail r \\
+    & \kw{runtime}_\mathcal{C} \:\vDash\:
+    \kw{read}(0, b, n)@m[b \mapsto unspecified]
+    \rightarrowtail (\kw{read}_0[n] \leadsto s)
+    \rightarrowtail \kw{len}(s)@m[b \mapsto s] \\
+    & \kw{runtime}_\mathcal{C} \:\vDash\:
+    \kw{write}(1, b, n)@m[b \mapsto s]
+    \rightarrowtail
+    (\kw{write}_1[s[0:n]] \leadsto n')
+    \rightarrowtail n'@m[b \mapsto s]\\
+    & \kw{load}_\mathcal{C}(L)
+    \::=\: \kw{entry}_\mathcal{C} \: \odot \: L
+    \: \odot \: \kw{runtime}_\mathcal{C}
+\end{align*}}%
+
+\begin{theorem}[Loader simulation]
+  \label{thm:strat:loader-simulation}
+  The events in
+  $\kw{entry}_\mathcal{C}$ and $\kw{runtime}_\mathcal{C}$
+  have one-to-one correspondence
+  with the events in the assembly loader
+  modulo
+  the simulation convention $\mathbb{C}$.
+  Thus, the loaders
+  transport
+  the $\mathbb{C}$-related CompCertO simulations
+  into
+  refinements between process behaviors
+  in the following sense:
+  \[
+    \begin{prooftree}
+      \hypo{\phi: L_1 \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} L_2}
+      \infer1{\phi^\ell: \kw{load}_\mathcal{C}(\llbracket L_1 \rrbracket) \subseteq
+      \kw{load}_\mathcal{A}(\llbracket L_2 \rrbracket)}
+    \end{prooftree}
+  \]
+\end{theorem}
+
+\subsection{Complete Proof}
+\label{sec:strat:complete-proof}
+Revisiting
+the task formalized as property (\ref{eqn:hellospec}),
+I have shown
+the high level specification
+$\Gamma_{(\ref{eqn:hellospec})}$
+is implemented by
+piping the strategies
+$\Gamma_\kw{secret}$ and $\Gamma_\kw{decode}$
+in \S\ref{sec:strat:compose-process}.
+I now proceed to
+prove the strategies
+are respectively implemented
+by the actual programs
+by proving
+the correctness of the \kw{Clight} programs,
+and then utilizing the CompCertO's compiler correctness
+to transport the refinements
+into the assembly level.
+
+To utilize the power of
+transitive reasoning,
+I first define the
+program-level specifications
+$\Sigma_\kw{secret}$ and $\Sigma_\kw{decode}$
+that are closer
+to the \kw{Clight} programs behavior-wise.
+{\small
+  \begin{align*}
+    \Sigma_\kw{secret} & \:\vDash\: &&
+    \kw{main()}@m[b \mapsto \texttt{"hello, world!\textbackslash{}n"}] \\
+    & \rightarrowtail &&
+    (\kw{write}(1, b, 14)@m [b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}]
+    \leadsto 14@m[b \mapsto \texttt{"uryyb, jbeyq!\textbackslash{}n"}]) \\
+    & \rightarrowtail && 0@m[b \mapsto deallocated] \\
+    \Sigma_\kw{decode} & \:\vDash\ &&
+    \kw{main()}@m \\
+    & \rightarrowtail && ( \kw{read}(0, b, 100)@m[b \mapsto unspecified]
+    \leadsto \kw{len}(s)@m[b \mapsto s]) \\
+    & \rightarrowtail && (\kw{write}(1, b, \kw{len}(s))@m[b\mapsto \kw{rot13}(s)]
+    \leadsto n@m[b\mapsto \kw{rot13}(s)]) \\
+    & \rightarrowtail && 0@m[b \mapsto deallocated]
+    \,,
+\end{align*}}
+The overall proof is structured as follows:
+\begin{align}
+  \Gamma_\kw{secret}
+  & \subseteq \kw{load}_\C(\Sigma_\kw{secret}) \nonumber\\
+  & \subseteq \kw{load}_\C(\llbracket L_\kw{secret} \rrbracket
+  \odot \llbracket \kw{Clight}(\kw{rot13.c}) \rrbracket) \nonumber\\
+  & \subseteq \kw{load}_\C(\llbracket L_\kw{secret}
+  \odot \kw{Clight}(\kw{rot13.c}) \rrbracket) \tag{by \autoref{thm:strat:embedding}}\\
+  & \subseteq \kw{load}_\mathcal{A}(\llbracket \kw{Asm}(\kw{secret.s})
+  \odot \kw{Asm}(\kw{rot13.s}) \rrbracket)
+  \tag{by \autoref{thm:strat:loader-simulation}}
+  \\
+  & \subseteq \kw{load}_\mathcal{A}(\llbracket \kw{Asm}(\kw{secret.s} + \kw{rot13.s}) \rrbracket)
+  \tag{by CompCertO's linking property}
+  \\
+  \Gamma_\kw{decode}
+  & \subseteq \kw{load}_\C(\Sigma_\kw{decode}) \nonumber\\
+  & \subseteq \kw{load}_\C(\llbracket \kw{Clight}(\kw{decode.c}) \rrbracket
+  \odot \llbracket \kw{Clight}(\kw{rot13.c}) \rrbracket) \nonumber\\
+  & \subseteq \kw{load}_\C(\llbracket \kw{Clight}(\kw{decode.c})
+  \odot \kw{Clight}(\kw{rot13.c}) \rrbracket) \tag{by \autoref{thm:strat:embedding}}\\
+  & \subseteq \kw{load}_\mathcal{A}(\llbracket \kw{Asm}(\kw{decode.s})
+  \odot \kw{Asm}(\kw{rot13.s}) \rrbracket) \tag{by \autoref{thm:strat:loader-simulation}}\\
+  & \subseteq \kw{load}_\mathcal{A}(\llbracket \kw{Asm}(\kw{decode.s} + \kw{rot13.s}) \rrbracket)
+  \tag{by CompCertO's linking property}\\
+  \Gamma_{(\ref{eqn:hellospec})}
+  & \subseteq \Gamma_\kw{secret} \mid \Gamma_\kw{decode} \nonumber\\
+  & \subseteq \kw{load}_\mathcal{A}(\kw{Asm}(\kw{secret.s} + \kw{rot13.s}))
+  \mid \kw{load}_\mathcal{A}(\kw{Asm}(\kw{decode.s} + \kw{rot13.s}))\nonumber
+\end{align}
+Following the compositional approach,
+the remaining proof obligations reduce to
+verifying the correctness of individual components:
+\begin{gather*}
+  \Gamma_\kw{decode} \subseteq \kw{load}_\mathcal{C}(\Sigma_\kw{decode})
+  \qquad
+  \Sigma_\kw{decode} \subseteq
+  \llbracket \kw{Clight}(\kw{decode.c}) \rrbracket \odot \llbracket \kw{Clight}(\kw{rot13.c}) \rrbracket
+  \\
+  \Gamma_\kw{secret} \subseteq \kw{load}_\mathcal{C}(\Sigma_\kw{secret})
+  \qquad
+  \Sigma_\kw{secret} \subseteq
+  \llbracket L_\kw{secret} \rrbracket \odot \llbracket \kw{Clight}(\kw{rot13.c}) \rrbracket
+  \\
+  L_\kw{secret} \le_{\mathbb{C} \twoheadrightarrow \mathbb{C}} \kw{Asm}(\kw{secret.s})
+\end{gather*}
+Most of these obligations are straightforward to establish,
+relying on previously defined semantics and component interfaces.
+Among these,
+the last one is a CompCertO simulation
+directly proved between
+a C-level transition system
+and its corresponding assembly-level transition system,
+and such proofs are discussed in \autoref{sec:bg:simulation-between-c}.
+
+% and prove
+% they meet
+% the strategy-level specifications
+% via the loader:
+% \[
+%   \phi_\kw{decode}: \Gamma_\kw{decode} \subseteq \kw{load}_\mathcal{C}(\Sigma_\kw{decode})
+%   \qquad
+%   \phi_\kw{secret}: \Gamma_\kw{secret} \subseteq \kw{load}_\mathcal{C}(\Sigma_\kw{secret})
+%   \,.
+% \]%
+% Then, the rest of the proof
+% only involves the CompCertO semantics.
+% In particular,
+% the following properties
+% state that
+% the programs correctly implement
+% their corresponding specifications:
+% \begin{gather*}
+%   \pi_\kw{secret}: \Sigma_\kw{secret} \le L_\kw{secret} \oplus \kw{Clight}(\kw{rot13.c})
+%   \qquad
+%   \pi'_\kw{secret}: L_\kw{secret} \le_{\mathbb{C} \rightarrow \mathbb{C}} \kw{Asm}(\kw{secret.s})
+%   \\
+%   \pi_\kw{decode}: \Sigma_\kw{decode} \le \kw{Clight}(\kw{decode.c}) \oplus \kw{Clight}(\kw{rot13.c})
+%   \,.
+% \end{gather*}
+% where $L_\kw{secret}$
+% is a transition system
+% defined in terms of the $\mathcal{C}$ language interface
+% that captures the behavior of
+% the assembly program $\kw{secret.s}$.
+% Combining the above simulations
+% with CompCertO's compiler correctness,
+% we obtain:
+
+% \todo{here it should be simulation instead of refinement. maybe we can use prooftree here}
+% \begin{align*}
+%   \psi_\kw{secret} := \pi_\kw{secret} \fatsemi
+%   (\pi'_\kw{secret} \oplus \phi^\kw{cc}_\kw{rot13})
+%   \fatsemi \ell
+%   & \quad :\quad \Sigma_\kw{secret} \le_{\mathbb{C} \rightarrow \mathbb{C}}
+%   \kw{Asm}(\kw{secret.s} + \kw{rot13.s}) \\
+%   \psi_\kw{decode} := \pi_\kw{decode} \fatsemi
+%   (\phi^\kw{cc}_\kw{decode} \oplus \phi^\kw{cc}_\kw{rot13})
+%   \fatsemi \ell
+%   & \quad :\quad \Sigma_\kw{decode} \le_{\mathbb{C} \rightarrow \mathbb{C}}
+%   \kw{Asm}(\kw{decode.s} + \kw{rot13.s})
+%   \,.
+% \end{align*}
+% Note the $\oplus$ operator here
+% is CompCertO's linking operator,
+% which should not be confused
+% with the flat composition
+% on strategies.
+% Eventually,
+% the property (\ref{eqn:hellospec})
+% is witnessed by the following proof:
+% \[
+%   \phi_\kw{(\ref{eqn:hellospec})} \fatsemi
+%   (\phi_\kw{secret} \fatsemi \psi_\kw{secret}^\ell \mid
+%   \phi_\kw{decode} \fatsemi \psi_\kw{decode}^\ell) \: : \:
+%   \Gamma_\kw{(\ref{eqn:hellospec})} \le \kw{load}_\mathcal{A}(\kw{secret.s} + \kw{rot13.s})
+%   \mid \kw{load}_\mathcal{A}(\kw{decode.s} + \kw{rot13.s})
+% \]
+
+% The definitions of
+% the $\kw{Clight}$ loader and
+% the $\kw{Clight}$ level specifications,
+% and the detailed proof
+% of directly proving simulation
+% between $L_\kw{secret}$ and $\kw{Asm}(\kw{secret.s})$
+% can be found in later sections.
+
+% The program-level specification
+% implements the strategy
+% in the following sense:
+% {\small
+%   \[
+%     \begin{prooftree}
+%       \hypo{\phi_\kw{decode}: \Gamma_\kw{decode} \le \kw{load}_\mathcal{C}(\Sigma_\kw{decode})}
+%       \infer[no rule]1
+%       {\phi_\kw{secret}: \Gamma_\kw{secret} \le \kw{load}_\mathcal{C}(\Sigma_\kw{secret})}
+%     \end{prooftree}
+%     \quad
+%     \begin{array}{c}
+%       \begin{tikzcd}[row sep=2.5ex, column sep=4ex]
+%         \mathcal{S} \ar[dd, equal]
+%         \ar[rrr, "\Gamma_\kw{secret}"]
+%         &&&
+%         \mathcal{P} \ar[dd, equal] \\
+%         & &|[xshift=-4ex, overlay]| \phi_\kw{secret} & \\
+%         \mathcal{S} \ar[r, "\kw{entry}"'] & \mathcal{C} \ar[r, "\Sigma_\kw{secret}"'] & \mathcal{C}\ar[r, "\kw{runtime}"']  & \mathcal{P}
+%       \end{tikzcd}
+%     \end{array}
+%     \quad
+%     \begin{array}{c}
+%       \begin{tikzcd}[row sep=0.5ex, column sep=1ex]
+%         \mathcal{S} \ar[dd, leftrightarrow, "\kw{runtime}_*"']
+%         \ar[rr, "\Gamma_\kw{secret}"] &&
+%         \mathcal{P} \ar[dd, leftrightarrow, "\kw{entry}^*"] \\
+%         & \phi_\kw{secret} & \\
+%         \mathcal{C} \ar[rr, "\Sigma_\kw{secret}"'] &&
+%         \mathcal{C}
+%       \end{tikzcd}
+%     \end{array}
+% \]}%
+% It is worth mentioning that
+% the components $\kw{entry}_\mathcal{C}$ and $\kw{runtime}_\mathcal{C}$
+% can also be viewed as simulation conventions
+% that translates signatures $\mathcal{S}$ and $\mathcal{P}$
+% into the $\mathcal{C}$ language interface,
+% as illustrated in the diagrams above.
+
+\section{Summary}
+
+This chapter has introduced the strategy model,
+a semantic framework grounded in game semantics.
+The model occupies a ``sweet spot''
+between traditional denotational semantics
+and operational semantics:
+it retains the compositional clarity
+of the former
+while accommodating the step-by-step reasoning
+of the latter.
+In this sense,
+the strategy model can be seen
+as a hybrid approach
+that combines the strengths of both traditions.
+
+Within this model,
+I developed a rich collection of compositional structures
+that support the modular development and reasoning of systems.
+To demonstrate the expressiveness
+of the approach,
+I applied these constructions
+to a nontrivial verification task
+involving complex external interactions,
+ultimately delivering an end-to-end verification result%
+---from the high-level specification
+all the way down to the executed assembly programs.
+
+At the same time,
+this chapter highlighted a limitation of the current approach:
+the notion of refinement developed here
+remains intentionally simple.
+It ensures basic correctness properties
+but does not yet incorporate mechanisms for abstraction.
+This motivates the developments in the next chapter,
+where I will introduce
+a more sophisticated treatment of refinement
+based on refinement conventions.
+These conventions address abstraction explicitly
+and allow the strategy model
+to handle both system nondeterminism and environmental nondeterminism
+within a unified notion of play.

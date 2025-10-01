@@ -1,0 +1,903 @@
+\documentclass{article}
+
+\newcommand{\kw}[1]{\ensuremath{\mathtt{#1}}}
+
+\begin{document}
+
+\section{Example}
+
+\subsection{Slide 1: Common Verification Tasks}
+
+I will start with the running examples
+that are representative of the two common verification tasks.
+
+One is library code — things like data structures or algorithms, where the main
+job is to implement some reusable functionality.
+
+The second kind is executables — the code itself is usually pretty simple, but
+involves complex interaction patterns.
+
+\subsection{Slide 2: Bounded Queue Example}
+
+The first example is a bounded queue implemented in two compilation units.
+
+The first is rb.c, which implements a ring buffer. It maintains two counters and
+an array of size N. The inc1 and inc2 functions increment these counters and
+when a counter reaches N, it wraps back to 0. The get and set functions retrieve
+and store a value at a given position.
+
+The second is bq.c, which implements the actual bounded queue interface
+on top of the ring buffer. The enq function enqueues a value by first calling
+inc2 to get the next available write position, then calling set to store the
+value there. The deq function dequeues a value by calling inc1 to get the next
+read position, then calling get to retrieve the value from that position.
+
+The goal of our verification framework is to prove that these C programs,
+working together, correctly implement a queue data structure with proper
+first-in, first-out semantics.
+
+\subsection{Slide 3: Rot13 Example}
+
+The second example is a little more interactive, and it's based on the classic
+ROT13 encoding.
+
+There are three parts. The secret program is written in assembly. It takes the
+message 'hello, world!' and encodes it. On the top right, rot13.c implements the
+ROT13 function itself by looping over the characters in a buffer and shifting
+them. And on the bottom right, decode.c is an executable that reads from
+standard input, applies ROT13 to the data, and writes the result back out.
+
+Now if I just compile and run the assembly program by itself, it prints the
+encoded string 'uryyb, jbeyq!'. But if I pipe the secret program into the
+decoder, and I get the original message back: 'hello, world!'.
+
+\section{Challenges}
+
+\subsection{Slide 1: Problem Statement}
+
+We have just seen two examples. They look simple, but when we try to verify them
+formally, we will run into fundamental challenges that any verification
+framework must address. The framework must account for the following five key
+aspects: supporting multiple levels of abstraction, reasoning in open context,
+state encapsulation, compilation correctness with linking and loading, and
+multi-language components.
+
+I will go through each of these challenges and show how they appear in our
+examples.
+
+\subsection{Slide 2: Supporting Multiple Levels of Abstraction}
+
+When we talk about formal verification, the starting point is always to have a
+clear specification of what the system should do.
+
+In this example of a bounded queue, the most abstract way to specify its
+behavior is the first-in, first-out property. Here I'm using the 'precede' symbol
+to mean a happens-before relation: if we enqueue v1 before v2,
+then dequeue of value one must also happen before dequeue of value two. This
+relational specification doesn't talk about execution steps, it only states the
+high-level property that must always hold.
+
+We can refine this specification further into a functional one. The functional
+specification tells us how enqueue and dequeue transform a sequence of values.
+This reveals more operational details than the relational property.
+
+And at lower level, we have the C programs, which give more detailed
+descriptions. The challenge here is to build a semantic model that can
+accommodate all of these, and relate them to each other in a coherent way.
+
+\subsection{Slide 3: Supporting Multiple Levels of Abstraction}
+
+Another important aspect of abstraction is how data is represented. Let's keep
+looking at the bounded queue example.
+
+At the most abstract level, we can think of the queue just as a sequence of
+values. It goes from empty to v1, then v1, v2, and finally left with only v2
+when we dequeue.
+
+At a slightly lower level, we can describe the queue as a fixed-size buffer with
+two counters. So instead of thinking of it as an unbounded list, we represent it
+as an array of slots, plus two indices that track where to enqueue and dequeue.
+% For example, starting from all undefined slots and counters at zero, enqueuing
+% v1 places it in the first slot and increments the counter. Then enqueuing v2
+% places it in the next slot, and so on. And when we dequeue, we return the right
+% element while updating the counter.
+
+And at the lowest level, we can even go down to the memory representation itself
+— how these arrays and counters are actually laid out in memory. Again the
+verification challenge here is being able to handle the data abstraction.
+
+\subsection{Slide 4: Closed-Universe Assumption}
+
+Now let's look at verification of individual programs. Traditionally, program
+semantics use the closed-universe assumption - the behavior of bq.c is unclear
+without having the underlying ring buffer functions provided in advance.
+
+There are two options. First, verify bq.c together with
+rb.c's concrete implementation. This isn't modular obviously.
+
+The second option is to provide the behavior through a specification for the
+ring buffer, which we call Spec rb. This seems more modular at first, but it
+requires the specification to be completely fixed upfront and forces us to
+choose a particular data representation. Once we commit to Spec rb, we're locked
+into that specific way of thinking about the ring buffer's state and operations.
+
+\subsection{Slide 5: Reasoning in Open Context}
+
+So here the challenge 2 is the capability to reason in open context. The main
+idea is to verify components in isolation.
+
+For example, the specification of bq.c can be expressed in a much more flexible
+way. If the bounded queue is called via enq with value v1, we can specify that
+it will call inc2(), and then if integer i is returned from that call, it will
+call set with parameters i and v1.
+
+The key property here is that only the interaction interface of the ring buffer
+needs to be fixed.
+
+To give a formal semantics for this, we can use the trace of observable events.
+Following the order that events happen, we have trace here. The first event is
+enq, and the next is inc2, we also count the return value i as an event. Then we
+have set, and finally the dummy events. The first dummy event is return event of
+set, and the second is return event of enq.
+
+\subsection{Slide 6: Reasoning in Open Context}
+
+Open context reasoning applies beyond function calls. In our rot13 example, two
+processes communicate via pipes - the decode process can't hard-code the other
+process's behavior and must handle any possible input through the pipe
+interface.
+
+More generally, open context arises in many other real-world scenarios. Device
+drivers must handle arbitrary hardware signals without knowing the exact timing
+or sequence of those signals. Operating system kernels interact with unverified
+or foreign modules. And then there are services that aren't started by calling
+the main function - like web services - where the entry points and execution
+flow are controlled by external factors.
+
+In all these cases, components must be verified based on their interfaces rather
+than assumptions about their environment's specific behavior.
+
+\subsection{Slide 7: Reasoning about State}
+
+Now let's look at Challenge 3 - state encapsulation. This is important because
+we need state separation so that verifying one module will not be interfered
+with by another module's state.
+
+At the low level, all components typically share a global memory state. This
+creates problems because any component can potentially access or modify any part
+of the global state. So when we build up abstraction levels, we want to
+partition and encapsulate the abstract state so that each component has its own
+protected state space.
+
+To see the difference, we can consider the two traces.
+
+The first uses explicit state-passing. Each event is associated with
+its state - it starts with empty queue, then one element v1 and then another
+element v2, and then v1 is dequeued. This explicit state approach connects
+easily with low-level implementations where state is explicit in memory.
+
+The second uses state encapsulation. Here we have the same sequence of
+operations - enqueue v1, then enqueue v2, then dequeue returning v1 - but notice
+the state is hidden inside the component, and the client doesn't need to be
+aware of or manage the queue's internal state.
+
+This encapsulation is essential because other components shouldn't need to
+understand internal state representation. They just call operations and get
+results, achieving a cleaner interface and true modularity.
+
+\subsection{Slide 8: Compilation Correctness}
+
+Now let's examine Challenge 4, which is about achieving end-to-end verification.
+Starting from the overall specification, through manual proof, we show this is
+refined by the program-level specification. Next, another manual proof shows the
+program-level specification is refined by the actual C-level components.
+
+Then compiler correctness proves our C components compile correctly to assembly
+components. After compilation, linking correctness shows separate assembly
+components combine correctly into a linked program. Finally, the loading step
+transforms the linked assembly into a running process.
+
+This gives us complete guarantees from specification to executable.
+
+\subsection{Slide 9: Heterogeneity}
+
+Finally, let's look at Challenge 5 - heterogeneous components. In its simplest
+form, this means modules written in different programming languages. Software
+systems commonly mix languages for practical reasons - hand-written assembly for
+performance in critical sections, or low-level code for OS kernels requiring
+direct hardware access.
+
+Our rot13 example gives us a concrete illustration of this. Here we have
+secret.s, which is hand-written assembly code, being compiled together with
+rot13.c, which is written in C. We must be able to reason how they interact.
+
+But heterogeneity goes beyond this. More generally, it can involve components
+like the pipe operator itself is also a heterogeneous component - it's not
+written in C or assembly, but is provided by the operating system as a
+communication mechanism.
+
+The challenge here is the framework must reason about C code, assembly code,
+system calls, and inter-process communication consistently, rather than separate
+verification approaches for each component type.
+
+\section{Existing Approaches and My Contributions}
+
+\subsection{Slide 1: Existing Approaches}
+
+Now that we've identified these challenges, you might wonder: haven't existing
+verification approaches already solved these problems? The reality is that each
+existing approach handles part of these challenges, but none of them addresses
+the complete set we need for large-scale verification. The key issue lies in the
+semantic model - which is really the foundation of any verification framework.
+
+Let me walk through the main existing approaches and explain their limitations.
+
+The most commonly used approach is operational semantics with program logic
+built on top of it. These models have been developed to handle quite
+sophisticated scenarios - complex memory layouts, concurrency, and so on. But
+they enforce a fixed semantic model and fixed interaction patterns. This means
+we can develop a specialized model and program logic to handle the specific
+tasks we've shown, but when new verification tasks arise, we essentially have to
+start over and develop entirely new models.
+
+Denotational semantics is much more flexible and compositional approach. They
+associate program behavior with mathematical domains and leverage the
+compositional structures and orders in those domains to develop verification
+results. This sounds promising, but existing work on denotational semantics
+rarely connects with practical compiler correctness. There's a significant gap
+between the mathematical elegance of denotational models and the concrete
+semantic models used in certified compilers, and they often use entirely
+different notions of correctness.
+
+More recently, there has been work on compositional certified compilers. They
+use open semantics. This approach is more compositional than traditional
+operational semantics, which is a step in the right direction. However, these
+efforts focus primarily on compiler correctness rather than general verification
+tasks. They lack essential features like state abstraction and encapsulation
+that we need for modular verification.
+
+Finally, game semantics offers another option. It is a hybrid
+approach between operational and denotational semantics that describes program
+behavior in terms of traces of observable events. This is conceptually
+appealing, but most existing work focuses on traces at a single abstraction
+level, which doesn't address our need to reason across multiple levels of
+abstraction.
+
+So while each approach has its strengths, none of them adequately addresses the
+full set of challenges we've identified.
+
+\subsection{Slide 2: My Contributions}
+
+The framework that I will present addresses all the challenges we've identified.
+This work develops a generic verification framework built around three key
+technical innovations.
+
+First is the strategy model which provides semantics for the behavior of
+components. This is inspired by game semantics and can handle open context
+reasoning in a straightforward way.
+
+Second is the notion of refinement conventions and refinement squares. These are
+novel concepts that allow us to relate behaviors across different abstraction
+levels.
+
+The most importantly aspect is a three-dimensional algebraic composition
+structure within the verification framework. This is greatly improves both the
+flexibility and compositional power of the approach.
+
+The framework demonstrates its practical value through several applications. It
+can verify the examples we introduced earlier. It successfully incorporates
+CompCertO's semantics and compiler correctness results, showing it can work with
+existing certified compilation infrastructure. And it implements Certified
+Abstraction Layers, which is a powerful technique for building verified system
+software.
+
+The entire framework has been mechanized in Rocq, so these aren't just
+theoretical results - they're fully formalized and machine-checked.
+
+\section{Overview}
+
+\subsection{Slide 1: Overview of Strategy Model}
+
+Now let me give you an overview of how the framework works.
+I will start with the strategy model.
+
+The strategy model consists of several ingredients. Effect signatures describe
+interaction interfaces as sets of question and answer events. For bounded queue,
+we have $E_\kw{bq}$ containing question events like enq and deq as the
+questions. For the ring buffer, we have $E_\kw{rb}$ containing question events
+like inc1, inc2, get, and set. These signatures also include answer events like
+star for void returns, i for indices, and v for values. These signatures capture
+what operations are available and what they can return.
+
+Strategies describe component behaviors. Here, $\sigma_\kw{bq}$ is a strategy of
+type $E_\kw{rb} \rightarrow E_\kw{bq}$, meaning it implements the bounded queue
+interface using the ring buffer interface.
+
+The diagram on the right shows this visually. When the environment calls enq,
+the strategy responds by calling inc2. It takes the return value i, and then
+calls set. Finally, when that completes, the strategy returns control to the
+environment with a dummy response since enq returns void.
+
+Strategy composition builds new strategies from existing ones. We can compose
+the ring buffer strategy $\sigma_\kw{rb}$ with the bounded queue strategy
+$\sigma_\kw{bq}$ to get a complete implementation. Here zero means an empty
+signature, this reflects the fact that ring buffer has no dependencies.
+
+The bottom diagram shows this composition. The two strategies are connected
+through their shared interface $E_\kw{rb}$. The ring buffer strategy handles the
+inc2 and set calls from the bounded queue strategy, and together they
+provide a complete bounded queue implementation to the environment.
+
+\subsection{Slide 2: Effect Signature}
+
+Now let's look at effect signatures in more detail.
+
+Formally, an effect signature is defined as a set E of questions, where each
+question m is associated with a set of answers N. We write this as m : N.
+
+Let me show you some concrete examples of effect signatures that we'll use
+throughout this talk.
+
+$E_\kw{rb}$ and $E_\kw{bq}$
+are the ring buffer and bounded queue signatures respectively.
+They have been seen earlier and presented more formally here.
+
+Then we have C @ mem and A @ mem, which represent C-level and assembly-level
+program interfaces respectively. For C, the question events are function calls f
+with arguments v and a memory state m and the answers are a return value and a
+new memory state. For assembly, the arguments and return values are pass using
+register files.
+
+P represents process-level operations - here we just have 'run' which means
+calling the main function and it returns a natural number, typically an exit
+code.
+
+S represents system call operations for file I/O. We have read operations
+indexed by file descriptor i that take a length n and return a string, and write
+operations indexed by file descriptor i that take a string s and return a
+natural number indicating bytes written.
+
+\subsection{Slide 3: Strategy}
+
+Next let's look at strategies, which model component behavior as a sequence of
+interaction events. A strategy with type E to F specifies a component that uses
+interface E to implement interface F.
+
+The diagram for $\sigma_\kw{bq}$ that we saw earlier corresponds directly to
+this trace of events. The environment asks enq(v1), system asks inc2(),
+environment answers i, system asks set(i,v1), environment answers the dummy
+answer, system returns the dummy answer. This shows the back-and-forth
+interaction pattern the environment and the system make alternating moves.
+
+An important insight here is that we can use the trace history itself as state.
+Look at the $\sigma_\kw{queue}$ example. This is the strategy that specifies the
+behavior of the complete bounded queue implementation. When deq is called after
+enq(v1) and enq(v2), it returns v1 because the interaction history determines
+the queue state.
+
+There are also two other forms of strategies that are commonly used in this talk.
+
+First is program semantics. There are strategies for C-level programs that are
+invoked following the C calling convention and make external calls that also
+follow the C calling convention. Similarly for assembly components that obey the
+assembly calling convention.
+
+This trace shows the strategy for decode.c program. It starts when main is
+called. Then it calls read, which returns 14 bytes containing the encoded
+string. Next it calls rot13 to transform the buffer, turning the encoded text
+into readable 'hello, world!'. Finally, it calls write to output the
+decoded string to standard output. It finally returns 0, and deallocates the buffer.
+
+Second is process semantics. For example, $\Gamma_\kw{decode}$ has type S
+to P. This means it will be invoked by calling the main function, and during its
+execution it can perform I/O operations. When we load and run an assembly
+program, we get a strategy that has the same shape.
+
+This trace here shows the specification for the decode command. When it gets the
+trigger run, it reads up to 100 bytes from standard input and
+one possible input value is the encoded string "uryyb, jbeyq!".
+Then it writes the decoded string "hello, world!" to standard output.
+Finally, it returns 0.
+
+\subsection{Slide 4: Refinement Conventions}
+
+Next let's look at refinement conventions, which are used to relate traces of
+events at different levels of abstraction. Refinement conventions essentially
+give us a pair of relations - one that applies to questions and one that applies
+to answers.
+
+This example shows two traces representing the same queue behavior. The top
+trace hides state - just enq(v1), star, enq(v2), star, deq, v1. The bottom trace
+shows explicit state, annotating each operation with the current queue state.
+
+Here, R circle relates the questions, and R bullet relates the answers. For
+example, the first R circle relates the top trace's enq(v1) to the bottom
+trace's enq(v1) at empty list. The R bullet relates the subsequent answer events.
+
+What's crucial is that these relations are history-sensitive - they're
+subscripted with state information. When relating the deq question, it's R
+circle subscripted with list containing v1 and v2, reflecting the execution
+state at that point.
+
+\subsection{Slide 5: Refinement Squares}
+
+Now let me introduce refinement squares, which are our central notion for
+correctness properties between specification and implementation. The refinement
+conventions on the sides specify how the corresponding question and answer
+events are related.
+
+Let me show you two examples of refinement squares.
+
+The first refinement square establishes that the high-level specification
+$\Gamma_\kw{decode}$ is correctly implemented by the linked assembly programs
+decode.s and rot13.s. Since the two strategies both have type S to P,
+we can simply use the identity convention to relate them.
+
+The second refinement square is about compiler correctness. Here we're showing
+that a C program is correctly compiled to assembly. The refinement conventions C
+on the left and right sides connect the C-level calling conventions with the
+assembly-level calling conventions. This refinement square guarantees
+compilation preserves the program's behavior.
+
+These refinement squares give us a systematic way to express and prove
+correctness across different abstraction levels and compilation stages.
+
+\subsection{Slide 6: Horizontal Composition}
+
+Now let me show you the compositional properties that make the framework
+powerful and flexible.
+
+First is layered composition, which I'll denote with a dot circle symbol. If we
+strategy sigma implements F using E and tau implements G using F, we can compose
+them with the layered composition operator to get strategy that implements G
+using E.
+
+This works on refinement squares too. The left square shows ring buffer
+specification $\sigma_\kw{rb.c}$ implemented by its C program. The right square
+shows bounded queue specification $\sigma_\kw{bq.c}$ implemented by its C
+program. These compose horizontally because they share refinement convention
+$R_\kw{rb}$ on their adjoining sides.
+
+Here, the ring buffer acts as handler while the bounded queue acts as client.
+Client and handler are the terminology that I will use when I talk about the
+layered composition.
+
+Second is flat composition, which I'll denote with a circle plus symbol. This
+handles cases where components operate independently. I will explain this in
+more detail later.
+
+\subsection{Slide 7: Vertical Composition}
+
+Next is the vertical composition which composes refinement conventions. If  R
+connects E and F and S connects F and G, we can compose them vertically to
+get R semicolon S connecting E and G.
+
+The diagram shows two refinement squares stacked vertically - specification
+refined by C program above, C program refined by assembly below. Vertical
+composition chains these together, allowing us to build abstraction levels
+gradually and compose proofs for end-to-end verification.
+
+Finally, spatial composition, denoted with the at symbol, supports modular
+treatment of state that I'll explain in detail later.
+
+\subsection{Slide 8: Refresher}
+
+So far we've seen the core ingredients of the framework - strategies, refinement
+squares, and the composition. Now let's revisit the rot13 example briefly.
+
+At the top level, we have specification $\Gamma_\kw{decode}$, which captures the
+high-level behavior - read input, transform it, and write output. Below that are
+the C programs, assembly programs, and finally the loaded executable.
+
+\subsection{Slides 9 - 13: Diagrams}
+
+The proof begins with a refinement square between the specification and the
+C-level programs. This is a simplified version for presentation
+purposes. The actual proof involves more levels of abstraction.
+
+Next, we add the compilation step. Each C program is now compiled to its
+corresponding assembly version through certified compiler. Next is linking. The
+two separate assembly programs get combined into a single linked program at the
+bottom. Next is adding assembly-level runtime components. These load the linked
+program into the execution environment. Finally, we complete the proof by
+plugging in the loader definition, creating a complete refinement chain from
+specification to running executable.
+
+\subsection{Slides 14: Formulas}
+
+These formulas show the complete formal proof. The first block corresponds to
+the refinement square we just saw. The second block gives a similar proof for
+the secret program.
+
+At the bottom, we see how these two components are combined using the pipe
+operator to implement $\Gamma_\kw{hello}$ - the complete overall specification.
+And the strategy that pipe together two loaded assembly programs is the behavior
+of executing the command line.
+
+\section{Strategy Model}
+
+\subsection{Slide 1: Definition of Strategy}
+
+I will start with the definition of strategy. A strategy is a set of plays with
+the form shown here. Here I'm using q1 and q2 for questions from the
+environment, and m1 and m2 for questions from the component we are looking at.
+Similarly, r1 and r2 are the answers from the component and n1 and n2 are the
+answers from the environment. I have drawn arrows from answers to their
+corresponding questions. An important property is these arrows do not intersect,
+and this is called well-bracketed property.
+
+We have shown the specifications Gamma hello, Gamma secret, and Gamma decode.
+Here we can make the meaning of the notation more clear. Since strategy is a set
+of plays, the sequence of events shown following the strategy is an element in
+that strategy.
+
+And because strategies are sets of plays, we can use subset relation as a simple
+notion of refinement. So here we hope to prove that Gamma hello is refined by
+Gamma secret piped with Gamma decode.
+
+\subsection{Slide 2: Layered Composition}
+
+Next is the layered composition on strategies. We have discussed it earlier.
+Basically when composing sigma1 and sigma2, we are using sigma2 to handle the
+questions from sigma1. The diagram here shows this composition.
+
+And as an example, we can consider the decode.c and rot13.c composed. Here
+decode.c will call rot13.c to transform the input string.
+
+\subsection{Slide 3: Flat Composition}
+
+Next is the flat composition on strategies, which allows independent strategies
+to be combined.
+
+Here the effect signature E1 oplus E2 means the question event can be either in
+E1 or E2. And for the strategy sigma1 oplus sigma2, if the question event is in
+the first signature operand F1, the strategy sigma1 will be invoked. Using this,
+we can actually decompose the signature S which contains read and write to file
+descriptors. We can define a signature F which performs read and write on a
+particular file descriptor. And since we only care about stdin and stdout in our
+example, we can simplify the signature S to F oplus F, where the first F is
+stdin and the second is stdout.
+
+\subsection{Slide 4: Pipe Operator}
+
+Now we are ready to define the pipe operator. The first component is a
+scheduling operator seq. It takes two strategies and will invoke one after the
+other. The second component is the fifo buffer that you can write to it using
+the first file descriptor and read from it using the second file descriptor. To
+define the P pipe Q, we use seq to execute P first and then Q. During execution,
+we redirect the output of P to the input of Q via the fifo buffer. The diagram
+shows this composition.
+
+\subsection{Slide 5: CompCertO}
+
+Another important part of the framework is the incorporation of CompCertO
+semantics. CompCertO is itself a compositional compiler with many intermediate
+languages and compiler passes as shown in the table on the right. CompCertO uses
+a notion of language interface to describe the calling convention at each
+compilation phase. The semantics is given in terms of labelled transition
+systems and the correctness property is given as a forward simulation property.
+The labelled transition systems are similar to our strategies, but it also
+contains internal transition steps in order to prove the simulation.
+
+\subsection{Slide 6: Integration with CompCertO---Embedding}
+
+The transition system can be embedded into a strategy in our framework. I'm
+using double bracket here to denote the embedding. In the rest of the
+presentation, I will not be talking about CompCertO transition systems, so I
+will omit the double bracket mostly.
+
+The embedding has some important properties. The first one is that it preserves
+layered composition. This is important because it allows us to establish a
+refinement from the composition Assembly level strategies to the linked assembly
+program.
+
+\subsection{Slide 7: Integration with CompCertO---Loader}
+
+To bridge the gap between the open semantics in CompCertO and the process
+behavior, we also need the loaders. The loader has two components. The first one
+is the entry that will invoke the main function according to the calling
+convention, either at C or assembly level. The other component is the runtime,
+which turns the calls to system calls to the corresponding events.
+
+Here is event trace of the entry at assembly level. It properly setup the
+program counter to main function, and initialize the return address and stack
+pointer. And the return value is passed from the RAX register.
+
+Another important property is that compiler correctness in CompCertO can be
+turned into the refinement between the loaded program.
+
+\subsection{Slide 8: Overall Proof}
+
+Using these ingredients, we should be able complete the proof described here.
+One thing I didn't mention is how to handle the hand-written assembly program.
+For that, we implemented a C-level specification for it, and prove that the
+C-level specification captures its behavior. This is made possible because of
+the techniques like direct refinement in CompCertO. I will refer you to my
+thesis for more details.
+
+\section{Refinement Conventions}
+
+\subsection{Slide 1: Generalizing Refinement}
+
+In the rot13 example, we have been using the notion of subset relation as
+refinement, which basically says that the behavior in sigma1 is also exhibited
+by sigma2. However, this becomes insufficient when the specification and
+implementation are at different levels of abstraction, meaning they have
+different effect signatures. To handle this, we need to generalize the subset
+relation and take refinement conventions into account.
+
+\subsection{Slide 2: Duality of Choices}
+
+Recall that the simulation convention provides a relation on questions and a
+relation on answers.
+
+Here, the intuition is to generalize the idea that sigma1's behavior can be
+mirrored by sigma2. So when sigma1 makes a question event m1, we requires that
+there exists a question event m2 that sigma2 can make that is related to m1 with
+respect to the refinement convention.
+
+Similar, when sigma1 makes an answer event r1, we say there exists an answer
+event r2 that sigma2 can make and that is related to r1 with respect to the
+refinement convention.
+
+For the questions q2 it is bounded by universal quantifier because of the
+duality of choices. The incoming question q2 is the client's outgoing question,
+so it's an existential quantifier for the client. So what here as the handler of
+q2, we must be prepared to all possible choices of q2.
+
+This is similar for the answer n2. When looking at n2, we are the client now.
+So the handler can choose the answer n2 and we must be prepared to handle all
+possible choices of n2.
+
+\subsection{Slide 3: Alternating quantifiers}
+
+As a result, the refinement property roughly corresponds
+to the following property. Notice the alternating quantifiers.
+For all q1 and m1 in the specification,
+and forall q2 that's related to q1,
+there exists an m2 in the implementation that's related to m1,
+then forall n1 and m1' in the specification,
+and forall n2 that's related to n1,
+there exists an m2' so that the relation holds.
+
+This property here is only to give an intuition about the alternating choices.
+The actual refinement involves more details.
+
+\subsection{Slide 4: Refinement Conventions}
+
+Now let's look at the definition of refinement conventions. It consists of plays
+where each event is a pair of questions or a pair of answers.
+
+For example, the refinement convention that relates the encapsulated queue and
+explicit state queue is shown here. They have the same questions and answers,
+but the difference is that the second item has state explicitly with the events.
+
+In addition to the normal play, there are also two special plays. (m1, m2,
+bottom) allows the questions m1 and m2 to be related, and (m1, m2, n1, n2top)
+disallows the answers n1 and n2 to be related.
+
+\subsection{Slide 5: Ordering Refinement Conventions}
+
+The two special plays can be used to define the relation on part of questions
+and answers. But more importantly, they give the following ordering on plays in
+refinement conventions. I will not explain the details here. But the key idea is
+that when R is a subset of R', that means R' allows more pairs of questions and
+less pair of answers. This is consistent with our intuition on the duality of
+choices made by the client and handler.
+
+\subsection{Slide 6: Refinement Conventions in a Refinement Square}
+
+Now with the idea on ordering of refinement conventions, we can revisit the
+refinement squares. Let's focus on the left side simulation convention R. Here
+we are the client. So we get to choose the questions to the handler and must be
+prepared for answers return by the handler. So if R admits more pairs of
+questions, it's easier for us to prove. And if R admits less pairs of answers,
+it means less pairs of answers we need to handle, which also makes it easier.
+
+This phenomenon can be formalized as the composition on refinement squares,
+where the subset relation on refinement convention is also represented a square
+and it can be composed with phi to relax the simulation convention on the left
+side from R to a more general R'.
+
+Symmetrically, this happens on the right side as well. When we are the handler,
+it gets easier to prove if S admits less pairs of questions and allows more
+pairs of answers. This can also be reflected as the composition on refinement
+squares.
+
+Again, this is somewhat simplified here. For more details, I will refer you to
+my POPL paper or my thesis.
+
+\section{State Encapsulation}
+
+\subsection{Slide 1: Spatial Composition}
+
+We have already discussed horizontal and vertical composition in the framework.
+Not I will present the third dimension of composition, which is the spatial
+composition that handles state.
+
+For effect signature E, it can be composed with a state U so that its question
+and answer events are accompanied by the state. For the strategy sigma, it can
+also be composed with a state U. Here the behavior is sigma at U is that it will
+pass the state through. For example, if u0 is the state comes with the incoming
+question event q, the state will be passed out unchanged with the outgoing
+question event m1. And the handler may update the state and return u1 with n1.
+Then u1 will be passed to the next question event m2. This goes on with the
+following events.
+
+This is the simplest form of spatial composition. In my thesis, I discussed more
+general forms.
+
+\subsection{Slide 2: First Approach}
+
+Now let's talk about state encapsulation. We actually have two approaches to
+achieve it. The first approach we have already seen, which is to use the trace
+history to encode the state. In particular, this strategy can be defined by
+inductively specifying the plays in the strategy. Then we use the empty state as
+initial state to get the definition of the strategy sigma queue.
+
+\subsection{Slide 3: Encapsulation Primitive}
+
+Since the trace history can be used to encode the state, we can go even further
+by defining a strategy that all it does is to hide the state. It is
+parameterized by an initial state u0. It has type U to 1, meaning that it hides
+the state from the client but exposes it to the handler. When composed with the
+identity strategy, the behavior is shown in this diagram.
+
+From the client's perspective on the left, it can only see the clean interface
+q1, r1, q2, r2 and so on. So the client is not aware of the state.
+
+From the handler's perspective on the right, the state is exposed. The first
+question q1 is accompanied by the initial state u0, and the handler can update
+it and return u1 with the answer r1. When the next question q2 reaches, the last
+state u1 is passed together with q2.
+
+Such a strategy can be used to turn an explicit state passing strategy into an
+encapsulated one as we will see shortly.
+
+\subsection{Slide 4: Second Approach}
+
+So the second approach is to use the encapsulation primitive.
+Here we first define a state-passing version of the queue,
+and then use the encapsulation primitive to recover the encapsulated queue,
+and expose a clean interface to the client.
+Again we choose the empty state as the initial state.
+This diagram here shows how the composition works.
+
+More importantly, there is a refinement square between the two approaches as
+shown here. The first approach is the specification and it can be implemented
+with the one with state encapsulation. I will refer you to my thesis for more
+details on this.
+
+\subsection{Slide 5: Representation Independence}
+
+Another important application of the encapsulation is representation
+independence. This is particularly useful when we have two components that
+exhibit the same behavior but use different representations for the state. For
+example, if the specification uses U and the implementation uses V, and their
+refinement is up to a relation R, then the encapsulation primitive can be used to
+hide the relation R so that the refinement square has a cleaner interface.
+
+Concretely, the specification here is the state-passing version of the queue.
+And the implementation here is the program specification using concrete memory
+state. So here we can see the abstract queue state and memory is related by R
+and the refinement square phi2 establishes the refinement between the two. With
+the representation independence, we can provide an initial memory m0 that
+relates with the empty queue and hide the states and relation R all together.
+
+\subsection{Slide 6: Putting It All Together}
+
+Finally, vetical composition allows us to put things together. Here we obtained
+a refinement square between the toplevel specification with the state
+encapsulated and the low level implementation using concrete memory state. And
+by state encapsulation, they provide identical behavior.
+
+\section{Application and Conclusion}
+
+\subsection{ClightP}
+
+Now let me show you the first application of our framework - ClightP semantics.
+This is an intermediate language that sits between abstract specifications and
+concrete Clight programs.
+
+The motivation is to streamline the verification process between abstract state
+and concrete memory. In traditional approaches, you have to directly translate
+abstract state to detailed memory layout and prove the rest of memory isn't
+modified. This creates a large verification gap.
+
+ClightP extends Clight semantics with a persistent environment. This provides
+several benefits. First, it narrows the abstraction gap. Instead of jumping
+directly from abstract state to memory layout, using ClightP the abstract state
+$D_\kw{rb}$ maps to this structured persistent environment $\kw{penv}_\kw{rb}$,
+which is much more organized than raw memory.
+
+With ClightP, we only need to verify that the persistent environment correctly
+implements the abstract state - and because the persistent environment is
+structured, this proof is significantly easier. Then compilation from ClightP to
+Clight automatically handles the connection to the concrete memory layout.
+
+Second, ClightP automatically handles memory separation. The persistent
+environment is cleanly separated from the rest of memory, and the compilation
+process maintains this separation when translating to the concrete memory
+representation.
+
+Third, the persistent environment can be encapsulated to keep it private. This
+enforces the separation when interacting with other components and allows the
+ClightP components to be composed more easily through a clean interface.
+
+\subsection{CAL}
+
+Now let me show you the second application - the CAL framework, which stands for
+Certified Abstraction Layers. This is a generic framework for building software
+systems through layers, and our strategy model provides a much more flexible
+instance of CAL than previous approaches.
+
+Let me walk you through how CAL works. The basic idea is that you have layers
+stacked on top of each other, where each layer provides an interface to the
+layer above it. The notation L1 proves M implements L2 with relation R means
+that module M correctly implements layer L2 on top of layer L1, witnessed by
+abstraction relation R.
+
+CAL has several key ingredients. First is the layer interface - this defines
+what a layer provides to the layers above it. In our framework, this becomes an
+abstract state D1 paired with a strategy that operates on this state.
+
+Second is layer implementation. This is how you actually implement a layer on
+top of another layer. The module M gets interpreted on top of layer interface
+L1, where L1 provides the meanings for any external calls that M makes. The
+result is itself a layer interface that can be used by higher layers.
+
+Third is the abstraction relation R. This specifies how the high-level abstract
+state relates to the low-level state combined with memory fragments. This is
+crucial for connecting different levels of abstraction.
+
+Finally, there's layer correctness - the statement that M correctly implements
+L2 on top of L1. This corresponds exactly to our refinement squares, showing how
+our framework provides the mathematical foundation for CAL.
+
+The key power of CAL is composition. Once you've verified individual layers, you
+can compose them into larger systems. If you have two layers that are
+individually correct, you can compose them vertically to get correctness of the
+combined system. This allows complex software systems to be decomposed into
+manageable layers that can be verified independently and then composed together.
+
+The diagram shows the formal proof structure for this composition. What I want
+to emphasize here is how the flexibility of our semantic model makes this proof
+remarkably straightforward. Because our strategies and refinement conventions
+compose naturally through the three-dimensional structure we discussed earlier,
+the vertical composition of layers falls out almost automatically.
+
+\subsection{Conclusion}
+
+Now let me conclude by summarizing what we've accomplished. We were able to
+apply the framework in several important ways.
+
+The framework's capabilities are demonstrated by modeling the examples from our
+introduction - the bounded queue and rot13 programs. It can incorporate
+CompCertO semantics and correctness results, showing that the framework can work
+with existing certified compilation infrastructure. It introduces ClightP, a new
+intermediate language with private variables enforces proper separation between
+each component's states through the encapsulation and also bridges the gap
+between abstract specifications and concrete implementations. It constructs
+a flexible theory of certified abstraction layers that supports modular
+verification of complex systems.
+
+Looking ahead, my hope is to use frameworks like this as coarse-grained glue
+for heterogeneous verification. Rather than having separate verification
+approaches for each programming language or system component, I envision a
+unified mathematical foundation that can connect different verification tools
+and techniques. This would also serve as the basis for building libraries of
+reusable certified software components that can be composed and reused across
+different projects.
+
+To pursue this vision further, it's necessary to incorporate more existing
+verification tools like ITrees and program logics into our framework. It's also
+necessary to add support for concurrency, which is crucial for real-world
+systems. And it's also necessary to make more explicit connections to higher
+category theory, which could provide even more powerful compositional
+principles.
+
+The ultimate goal is to make formal verification more practical and scalable for
+real software systems by providing the mathematical foundations that enable true
+modularity and composition.
+
+\end{document}
