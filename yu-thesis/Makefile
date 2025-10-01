@@ -1,6 +1,6 @@
 CRUFT = aux pdf bbl blg log snm nav out toc
 
-all: thesis.pdf
+all: thesis.pdf slides.pdf
 
 %.aux: %.tex
 	pdflatex -shell-escape $* </dev/null || true
@@ -13,6 +13,7 @@ all: thesis.pdf
 	pdflatex -shell-escape $*
 
 clean:
-	$(RM) $(patsubst %,thesis.%,$(CRUFT)) 
+	$(RM) $(patsubst %,thesis.%,$(CRUFT))
+	$(RM) $(patsubst %,slides.%,$(CRUFT)) 
 	
 thesis.pdf: thesis.bbl
