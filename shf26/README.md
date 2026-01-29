@@ -3,7 +3,17 @@
 - his COA form
 - his NSF bio
 
+
 # Proposal Outline and TODOs
+
+SHF: Unifying Program Verification and Certified Compilation for Heterogeneous System Verification
+
+Heterogeneous systems consist of a multitude of components which are written in different programming languages and may capture different semantic objects at different abstraction levels.
+
+This project will develop a novel refinement-based framework for specifying, verifying, and composing heterogeneous systems. The main idea is to develop an algebraic game semantic approach to unify the formalism used for compositional program verification and compositional certified compilation while addressing challenging features such as concurrency, probablistic effects, and information-flow security.
+
+
+
 
 ## project summary (1 page)
 
