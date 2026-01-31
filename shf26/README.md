@@ -12,9 +12,6 @@ Heterogeneous systems consist of a multitude of components which are written in 
 
 This project will develop a novel refinement-based framework for specifying, verifying, and composing heterogeneous systems. The main idea is to develop an algebraic game semantic approach to unify the formalism used for compositional program verification and compositional certified compilation while addressing challenging features such as concurrency, probablistic effects, and information-flow security.
 
-
-
-
 ## project summary (1 page)
 
 CompCert has been around for more than 10 years. It is one of the
