@@ -10,269 +10,414 @@ construct large-scale, heterogeneous certified systems by using formal
 specifications as interfaces between the correctness proofs of various
 components \cite{deepspec}.  The ongoing design of suitable semantic
 frameworks is an important step towards this goal.  However,
-incorporating certified compilers into frameworks of this kind
+integrating disparate techniques for
+program verification and
+certified compilation
+into frameworks of this kind
 presents a number of difficulties.
 
-\subsection{Compositional Compiler Correctness}
-\label{ssec:intro-ccc}
-
-Compiler correctness is often formulated as a \emph{semantics
-preservation} property, asserting that the semantics of the compiled
-program $\kw{C}(p)$ are related in some particular way to the
-semantics of the source program $p$:
-\begin{equation} \label{eqn:semp}
-  \llbracket p \rrbracket_\kw{S} \sim
-  \llbracket \kw{C}(p) \rrbracket_\kw{T}
-  \,.
-\end{equation}
-For whole-program compilers, semantics preservation is straightforward
-enough.  In CompCert~\cite{compcert}, the semantics of the source and
-target programs (denoted as $\llbracket \cdot \rrbracket_\kw{S}$
-and $\llbracket \cdot \rrbracket_\kw{T}$)
-are given as labeled transition systems, and the
-relation $\sim$ is a simulation property.
-However, practical applications involve program \emph{components}
-which we want to compile and verify separately from each other.
-
-In
-principle, the use of a compositional semantics enables the
-formulation of (\ref{eqn:semp}) at the level of individual components.
-Unfortunately, traditional approaches to compositional semantics fare
-poorly in the presence of advanced language features, or of the kind
-of abstraction involved in the compilation process.  For CompCert,
-early attempts along these lines have proven challenging
-\cite{cpp15,compcompcert}.
+%\subsection{Compositional Compiler Correctness} \label{ssec:intro-ccc} %{{{
 %
-As a result, common wisdom has held semantics preservation to be a lost
-cause for compositional compiler correctness \cite{next700}.  Instead,
-research has focused on compositional reasoning methods based on
-contextual refinement, side-stepping the need for compositional
-semantics preservation \cite{sepcompcert,compcertm}.
+%Compiler correctness is often formulated as a \emph{semantics
+%preservation} property, asserting that the semantics of the compiled
+%program $\kw{C}(p)$ are related in some particular way to the
+%semantics of the source program $p$:
+%\begin{equation} \label{eqn:semp}
+%  \llbracket p \rrbracket_\kw{S} \sim
+%  \llbracket \kw{C}(p) \rrbracket_\kw{T}
+%  \,.
+%\end{equation}
+%For whole-program compilers, semantics preservation is straightforward
+%enough.  In CompCert~\cite{compcert}, the semantics of the source and
+%target programs (denoted as $\llbracket \cdot \rrbracket_\kw{S}$
+%and $\llbracket \cdot \rrbracket_\kw{T}$)
+%are given as labeled transition systems, and the
+%relation $\sim$ is a simulation property.
+%However, practical applications involve program \emph{components}
+%which we want to compile and verify separately from each other.
+%
+%In
+%principle, the use of a compositional semantics enables the
+%formulation of (\ref{eqn:semp}) at the level of individual components.
+%Unfortunately, traditional approaches to compositional semantics fare
+%poorly in the presence of advanced language features, or of the kind
+%of abstraction involved in the compilation process.  For CompCert,
+%early attempts along these lines have proven challenging
+%\cite{cpp15,compcompcert}.
+%%
+%As a result, common wisdom has held semantics preservation to be a lost
+%cause for compositional compiler correctness \cite{next700}.  Instead,
+%research has focused on compositional reasoning methods based on
+%contextual refinement, side-stepping the need for compositional
+%semantics preservation \cite{sepcompcert,compcertm}.
+%
+%%}}}
 
-\subsection{Decomposing Heterogeneous Systems}
-\label{ssec:intro-dhs}
+\begin{figure} % fig:readwritehello {{{
+\centering
+\begin{minipage}{.35\textwidth}
+%\begin{lstlisting}[title={secret.c}]
+%#include <unistd.h>
+%char msg[] = "uryyb, jbeyq!\n";
+%int main()
+%{
+%        write(1, msg, sizeof msg - 1);
+%        return 0;
+%}
+%\end{lstlisting}
+\begin{lstlisting}[title={secret.s}]
+.globl main
+main:   pushl $13
+        pushl $msg
+        call rot13
+        pushl $1
+        call write
+        addl $12, %esp
+        movl $0, %eax
+        ret
+.data
+msg:    .string "hello, world!\n"
+\end{lstlisting}
+\vspace{1em}
+\begin{lstlisting}[language=sh]
+$ cc -o secret secret.s rot13.c
+$ ./secret
+uryyb, jbeyq!
+$ cc -o decode decode.c rot13.c
+$ ./secret | ./decode
+hello, world!
+\end{lstlisting}
+\end{minipage}
+\hspace{2.5em}
+\begin{minipage}{.48\textwidth}
+\begin{lstlisting}[title={rot13.c}]
+void rot13(char *buf, int len)
+{
+  for (int i = 0; i < len; i++)
+    if ('a' <= buf[i] && buf[i] <= 'z')
+      buf[i] = (buf[i] - 'a' + 13) % 26 + 'a';
+}
+\end{lstlisting}
+\begin{lstlisting}[title={decode.c}]
+#include <unistd.h>
+extern void rot13(char *, int);
+int main()
+{
+        char buf[100];
+        int n = read(0, buf, sizeof buf);
+        rot13(buf, n);
+        write(1, buf, n);
+        return 0;
+}
+\end{lstlisting}
+\end{minipage}
+\caption{Two programs which use a common library
+  are compiled and made to
+  interact through a pipe.}
+\label{fig:readwritehello}
+\end{figure}
+%}}}
 
-Unfortunately, contextual methods share an intrinsic limitation: they
+\subsection{Verifying Heterogeneous Systems} \label{ssec:intro-dhs} %{{{
+
+Traditional verification methods
+often use compositional \emph{proof techniques}
+within the context of a closed operational semantics.
+Unfortunately, these methods share an intrinsic limitation: they
 presuppose the existence of a completed system to be proven correct,
-and compositionality only operates within its boundary.  This becomes
-a serious impediment in the context of large-scale heterogeneous
+and compositionality only operates within its boundary.
+As illustrated by the following example,
+this becomes
+a serious impediment in the context of heterogeneous
 systems.
 
-\begin{example} \label{ex:nicdriver} 
-Consider the problem of verifying a driver
-for serial port controllers (UART).
-The UART and its driver are closely coupled, but the details
-of their interaction are irrelevant to the rest of the system; these
-details should not leak into larger-scale reasoning.  Instead, we
-wish to treat the UART and its driver as a unit, and establish a direct
-relationship between C calls into the driver and
-communication over the serial line.
-
-Together, the UART and driver implement a specification
-$\sigma : \li{Ser} \rightarrow \mathcal{C}$, meaning they \emph{use}
-the interface $\li{Ser}$ modeling a serial line, and \emph{provide} the
-interface $\mathcal{C}$ modeling C function calls.
-The driver code could be specified ($\sigma_\kw{drv}$) and verified at
-the level of CompCert semantics, whereas device I/O primitives
-($\sigma_\kw{io}$) and the UART itself ($\sigma_\kw{UART}$) would be
-specified as additional components in the context of a richer model:
-\[
-  \sigma_\kw{UART} : \li{Ser} \rightarrow \li{IO}
-  \qquad
-  \sigma_\kw{io} : \li{IO} \rightarrow \mathcal{C}
-  \qquad
-  \sigma_\kw{drv} : \mathcal{C} \rightarrow \mathcal{C}
-\]
-By reasoning about their interaction, it would be possible to
-establish a relationship between the overall specification $\sigma :
-\li{Net} \rightarrow \mathcal{C}$ and the composition $\sigma_\kw{drv}
-\circ \sigma_\kw{io} \circ \sigma_\kw{UART}$.  Then a \emph{compiler of
-certified components} should help us transport specifications and
-proofs obtained at the C level to
-the compiled code operating at the level of assembly ($\sigma' :
-\li{Ser} \rightarrow \mathcal{A}$).
+\begin{example} \label{ex:readwritehello} %{{{
+The code shown in Fig.~\ref{fig:readwritehello}
+consists of two different programs which
+use a common C library and
+are designed to work together.
+As illustrated in the usage scenario we have shown,
+the 32-bit x86 assembly program \kw{secret.s} 
+outputs a coded message
+to be deciphered by \kw{decode.c}.
+In particular,
+the programs together satisfy the following informal specification:
+\begin{equation}
+  \begin{minipage}{.9\textwidth}
+  \it
+  Suppose that,
+  after compilation,
+  \kw{secret.s} and \kw{decode.c}
+  are each linked with \kw{rot13.c}.
+  If the output of the first program
+  is fed as input to the second,
+  ``hello, world!'' will be displayed.
+  \end{minipage}
+  \label{eqn:hellospec}
+\end{equation}
 \end{example}
+%}}}
 
-Under existing contextual approaches, the UART driver can only be
-specified and verified in terms of its interactions at the boundary of
-the C program, but abstracting away from these interactions is
-the role of a driver in the first place!
-To be sure, existing techniques could be extended to address this
-specific problem.  For example, the UART hardware model could be
-brought within the scope of the ``whole program'' being considered,
-and the serial communication modeled as part of its observable
-behavior.
-However,
-programmers use libraries which mediate access to
-external resources (network services, file systems, user interfaces)
-very often.
-Proper high-level specifications for software components of this kind
-must model these resources.  It would rapidly become burdensome to
-expect the verification framework to fix in advance the dozens or
-hundreds of kinds of resources which may be involved in the course of
-verifying a large-scale system.
+The situation described by Example~\ref{ex:readwritehello}
+and the programs shown in Figure~\ref{fig:readwritehello}
+are fairly simple:
+to verify that property (\ref{eqn:hellospec}) holds,
+a reader with the right background
+can mentally execute the code step by step
+and convince themselves that the expected outcome will occur.
+However, this task is complex in its own way
+because it mobilizes implicit knowledge and assumptions regarding
+the C and x86 assembly languages,
+the compiler's correctness with respect to the calling convention in use,
+and some aspects of the Unix execution environment.
+A formal account of property (\ref{eqn:hellospec})
+will need to take these aspects of the problem into account,
+and model a heterogeneous system involving
+program components in multiple languages
+interacting with one another,
+their compilation and linking into executable programs,
+the behavior of resulting programs as Unix processes,
+and their combination through the shell's pipe operator.
 
-Fortunately, advances in compositional semantics offer a realistic
-path to tackling problems of this kind.
-Game semantics provides a general and expressive framework to
-model interactions between typed components.
-Yet work on compositional semantics
-is often oriented towards theoretical understanding,
-while practitioners of formal methods and verification
-tend to rely on more concrete operational models.
+%}}}
 
-\subsection{Research Direction and Challenges}
+\begin{figure} % fig:paradigms {{{
+  \small
+  \[
+    \begin{tikzcd}[column sep=-1em, row sep=small]
+      &
+      \begin{array}{c} \text{program} \\ \text{logic} \end{array}
+      \ar[ddr, leftrightarrow] &
+      \begin{array}{c} \text{logical} \\ \text{relation} \end{array}
+      \ar[dd, leftrightarrow] &
+      \begin{array}{c} \text{compositional} \\ \text{semantics} \end{array}
+      \ar[ddl, leftrightarrow]
+      \\
+      {} \ar[rrrr, dotted, dash] &&&& {}
+      \\
+      & &
+      \begin{array}{c} \text{operational} \\ \text{semantics} \end{array}
+    \end{tikzcd}
+    \qquad
+    \begin{tikzcd}[column sep=-2.5em, row sep=tiny]
+      &
+      \begin{array}{c} \text{manual} \\ \text{proof} \end{array}
+      \ar[ddr, leftrightarrow] &&
+      \begin{array}{c}
+        \text{compiler correctness} \\
+        \text{and related results}
+      \end{array}
+      \ar[ddl, leftrightarrow]
+      %\ar[ddd, leftrightarrow]
+      \ar[ddr, leftrightarrow] &&
+      \begin{array}{c} \text{program} \\ \text{logic} \end{array}
+      \ar[ddl, leftrightarrow]
+      \\
+      {} \ar[rrrrrr, dotted, dash] &&&&&& {}
+      \\
+      &&
+      \begin{array}{c}
+        \text{compositional} \\
+        \text{semantics}
+      \end{array}
+      \ar[dr, leftrightarrow, bend right]
+      &&
+      \hspace{-2em}
+      \begin{array}{c}
+        \text{compositional} \\
+        \text{semantics}
+      \end{array}
+      \ar[dl, leftrightarrow, bend left]
+      \\
+      &&&
+      \begin{array}{c}
+        \text{environment} \\ \text{model}
+      \end{array}
+    \end{tikzcd}
+  \]
+  \caption{
+    Approaches to program verification.
+    The system being verified
+    is modeled using the facilities shown below the line,
+    and the techniques shown above
+    are used to reason about its properties.
+    Traditionally (left),
+    the whole universe in which the computation occurs
+    must be modeled in a monolithic and closed operational semantics.
+    By using compositional semantics instead (right),
+    both the model and reasoning techniques
+    can be constructed out of reusable building blocks
+    and adapted to various contexts and situations.
+  }
+  \label{fig:paradigms}
+\end{figure}
+%}}}
 
-Our ambition is to show that %beyond theoretical interest,
-game semantics
-can serve as the foundation
-for a rich and compositional framework
-suitable for the end-to-end verification of
-large-scale, heterogeneous systems.
-This framework would
-bring together strands of research
-which to date have only been considered separately,
-and would enable
-the verification of large-scale heterogeneous systems.
+\subsection{Research Direction and Challenges} \label{ssec:direction} %{{{
 
-In recent work, we proposed
-integrating dual nondeterminism and refinement into game semantics,
-extending it with powerful mechanisms to account for abstraction
-\cite{koenig20,layered22}.
-On a more practical level,
-we have developed CompCertO \cite{compcerto},
-a version of CompCert which
-%borrows ideas from game semantics and certified abstraction layers
-provides a correctness theorem for CompCert
-stated in terms of a compositional semantics.
-This work points in the direction of a two-dimensional algebra 
-of systems and abstraction, and
-provides preliminary evidence
-for the thesis outlined above.
-%for the suitability of game semantics for the problem at hand.
+The main difficulty with Example~\ref{ex:readwritehello},
+before any verification attempts occurs,
+is the construction of a model
+involving components of different natures
+operating at different levels of abstraction.
 
-Nonetheless,
-many theoretical and practical challenges remain
-in bringing our vision to life.
-The situation described in Example~\ref{ex:nicdriver}
-illustrates many of these challenges:
-\begin{itemize} \itemsep 0pt
-  \item the interfaces involved in different parts of the system
-    are very different in nature;
-  \item a system composed of a UART and CPU
-    is inherently concurrent;
-  \item the UART carries persistent state
-    which is isolated from the rest of the system;
-  \item it must be possible to reason at different levels of abstraction---%
-    in terms of byte streams and C function calls
-    but also low-level serial communication and device I/O---%
-    ideally down to machine code;
-%  \item the example relies on general categorical structures for composition $\circ$,
-%    rather than ad-hoc composition principles tailored to a particular application;
-  \item it is not only a theoretical but also an engineering problem---%
-    the mathematics involved in solving it must be
-    amenable to mechanization in a proof assistant.
-    %and must integrate with a certified compiler.
-\end{itemize}
-There has been
-extensive research
-addressing each of these challenges individually.
-Yet designing a compositional framework tackling all of them
-is not simply a matter of juxtaposing existing solutions.
+In a traditional setting
+involving programs in a single programming language,
+it is usually possible to reuse
+a fixed semantic model, program logic, and other reasoning techniques
+across verification properties and tasks.
+By contrast,
+because property (\ref{eqn:hellospec})
+involves a complex execution environment,
+a generic verification framework for C, assembly,
+or even a combination of the two,
+would be unable to capture the desired specification
+or help us check that the programs in Figure~\ref{fig:readwritehello}
+realize the desired behavior.
+
+We propose to use compositional semantics techniques
+in a novel way to address this problem.
+As illustrated in Fig.~\ref{fig:paradigms},
+we believe that sophisticated approaches to compositional semantics
+can be used to build complex models and verification techniques
+from reusable building blocks.
 For example,
-to support both concurrency and abstraction,
-it is not sufficient to separately borrow
-a theory of concurrent traces and
-another theory to describe
-how interactions at different abstraction levels
-correspond to one another.
-We must also work out how the structures
-of the former
-fit into the latter's methodology.
+a framework providing a unified account of
+language semantics for C and assembly,
+program logics,
+compiler correctness results,
+and a basic model of the Unix environment
+would allow us to tackle the problem posed in
+Example~\ref{ex:readwritehello}.
 
-Our interest in game semantics
-stems in part from this fact:
-not only has existing work in the field
-addressed many of the issues above,
-it has done so in a context where games and strategies
-provide a unifying point of articulation
-between these different strands of research.
-This has allowed researchers
-to establish \emph{semantic cubes}
-encompassing certain combinations of features.
+There is substantial evidence of the merits of this approach.
+For example,
+\emph{interaction trees} \cite{itrees} have been used
+as a generic semantic model for complex verification tasks
+mechanized in the Rocq Prover.
+The DimSum framework \cite{dimsum}
+employs the approach depicted in Figure~\ref{fig:paradigms}
+to tackle multi-language semantics and verification:
+the framework can be used to stitch together
+independent semantics for individual languages,
+and to reason about refinement within and across
+these languages.
+Finally,
+our work on CompCert \cite{compcerto}
+and compositional verification frameworks \cite{compcertoe}
+shows that a combination of game semantics,
+refinement-based approaches, and
+explicit abstraction mechanisms
+can capture a broad range of
+semantic models,
+reasoning techniques and
+program and compiler correctness results
+within a unified refinement framework
+where they can be interfaced with one another
+to handle situations like Example~\ref{ex:readwritehello}
+(see \S\ref{sec:compcertoe}).
 
-Likewise,
-our focus on compilation
-is not just a matter of practical utility.
-Certified compilers constitute a nexus where
-many of the challenges above appear organically
-(a compiler's \emph{calling convention} is an abstraction relationship
-between the operation of its input and output programs),
-or must be taken into account
-(a compiler proven correct for sequential code
-does not necessarily remain so in the presence of concurrency).
+At the same time,
+while interoperable building blocks for compositional semantics,
+mechanized in general-purpose proof assistants like Rocq,
+show significant promise
+for large-scale heterogeneous verification,
+there are numerous aspects of real-world systems that
+remain difficult to handle in the current state of the art:
+\begin{description}
+  \item[Concurrency]
+    Most complex systems involve concurrency.
+    Even in the relatively simple situation depicted
+    in Figure~\ref{fig:readwritehello},
+    concurrency is necessary to give an accurate account
+    of the way the two processes run simultaneously
+    and interact through a pipe.
+    In systems which involve network resources,
+    hardware devices, etc.\@ concurrency is ubiquitous.
+  \item[Nondeterminism]
+    The semantics of concurrent systems
+    usually involve a high degree of nondeterminism.
+    In addition,
+    it may not always be possible or desirable to
+    fully describe the behavior of a complex system,
+    resulting in non-deterministic specifications.
+  \item[Probabilistic Effects]
+    Correctness properties for large-scale systems
+    often involve measurable uncertainty.
+    For example,
+    in the presence of
+    unreliable networks,
+    cryptographic primitives,
+    randomized algorithms,
+    etc.\@ 
+    it may only be possible to meet a certain specification
+    \emph{almost surely} or \emph{with high probability}.
+  \item[Information Flow Security]
+    Finally,
+    many of the features above
+    complicate the obtention of certain security properties.
+    For example,
+    the use of nondeterministic specifications
+    may introduce the possibility of unexpected information leaks,
+    even as information flow security properties
+    are some of the most important targets for verification
+    in real-world applications.
+\end{description}
+This proposal seeks to tackle these challenges
+in the context of heterogeneous system verification.
+
+%}}}
 
 \subsection{Intellectual Merit}
 \label{ssec:intro-itm}
 
-Our proposal seeks to build on existing research
-on the certified compiler CompCert
-to consolidate and extend its capabilities in various directions,
-focusing in particular on the interactions between
-compositionality,
-the management of \emph{state},
-concurrency, and
-modeling of low-level interfaces and mechanisms.
-%
-%In addition to these deficiencies, the current CompCert is not end-to-end
-%in that it can only produce assembly code but not actual binary
-%machine code. There are still no certified linker and loader that can
-%work directly with ELF binaries.  CompCert also does not support secure
-%compilation: source program that is provably information-flow secure
-%can still be compiled into target code that contains information leaks.
-%
+Our recent work shows that
+a higher-dimensional refinement algebra
+based on game semantics
+can serve as a unified framework for heterogeneous system verification,
+capturing in a mechanized compositional semantics framework
+building blocks as varied as:
+program verification results,
+compositional correctness for the CompCert C compiler,
+framing properties and representation independence for encapsulated state,
+certified abstraction layer frameworks, and more \cite{compcertoe}.
+We propose to extend this framework
+to address the challenges listed in \S\ref{ssec:direction} and
+to enable the verification of large-scale heterogeneous systems.
+
 Concretely,
-we propose to develop a novel verified compilation
-toolchain that would tackle these challenges simultaneously. Our
-proposed research consists of the following four components:
+we will develop a novel
+verification toolchain for complex heterogeneous systems,
+mechanized in the Rocq prover.
+Our proposed research consists of the following three components:
 \begin{itemize} \itemsep 0pt
 %%%%%%%%%%%%%%%
-\item First, we will contribute new technologies for supporting {\em
-  compositional verified compilation} and its connection with {\em
-  compositional program verification}. 
-  We will develop a new game-semantics framework
-  based on {\em effect signatures} and {\em refinement conventions}
-  encompassing the capabilities of the CompCertO model
-  and incorporating support for {\em compositional and encapsulated states}.
+\item First, we will extend our heterogeneous refinement framework,
+  described in \S\ref{sec:compcertoe} and based on game semantics,
+  with support for \emph{effects}
+  including nondeterministic and probabilistic choices.
+  To manage complexity,
+  we will pay particular attention on the interplay between
+  the pure and effectful components of a system,
+  and set up ways to carefully separate them.
+  Among other benefits,
+  this will allow us to use program verification
+  and compiler correctness results
+  obtained for deterministic code
+  within the context of a larger system
+  with probabilistic and nondeterministic effects.
 %%%%%%%%%%%%%%%
-\item Second, to overcome challenges which arise
-  in a compositional treatment of state,
-  we will address existing inflexibilities
-  in CompCert's block-based memory model.
-  Our approach is based on \emph{nominal
-  techniques}~\cite{pitts-nominal,gabby2002}. By generalizing block
-  ids to {\em atomic names} and valid blocks to {\em supports},
-  we will lift certain global constraints on memory states and develop a
-  novel {\em nominal memory model} that enables flexible memory
-  structures for open and concurrent programs.
+\item Second,
+  we will incorporate \emph{concurrency} within this framework.
+  Once again,
+  by carefully decoupling the sequential component of the code from
+  potentially concurrent primitives it invokes,
+  we will ensure that sequential code remains easy to verify
+  and that our compiler correctness statement for CompCert
+  can be used, under certain conditions,
+  in the context of concurrent programs.
 %%%%%%%%%%%%%%%  
-\item Third, we will develop an {\em end-to-end and compositional
-  verified compiler} that can compile C components all the way into
-  ELF object files. We will compile open programs and threads with
-  nominal memory models into those with concrete machine-level memory
-  layout. We will also build a verified compositional assembler,
-  linker, and loader that can work directly with ELF binaries.
-%%%%%%%%%%%%%%%    
-%\item Fourth, based upon our prior work on compositional semantics
-%  for certified abstraction layers~\cite{dscal15,ccal18,koenig20,layered22},
-%  we will support {\em verified security-preserving
-%  compilation}~\cite{costanzo16} by developing a general framework
-%  for the specification, abstraction, and refinement of heterogeneous
-%  components.
-%%%%%%%%%%%%%%%  
-\item Fourth, to demonstrate the power and real-world applicability of
-  our new verified compiler, we will apply it to build more advanced
-  certified concurrent OS kernels and hypervisors (e.g., CertiKOS~\cite{certikos-osdi16}
-  and SeKVM~\cite{sekvm21a,sekvm21b,tao21}) and certified programming tools
-    (e.g., DeepSEA~\cite{deepsea19} and VST~\cite{appel11:vst}).
+\item Third, to establish the power and real-world applicability of
+  our new framework, we will demonstrate several applications including
+  XXX, XXX, XXX
 \end{itemize}
