@@ -1,59 +1,309 @@
+\newpage
 \section{Effects}
 \label{sec:effects}
 
-\subsection{Approach}
-
-Typical thing:
-almost completely pure,
-and we invoke a handful of effectful primitives
-at the bottom layer (flip coin).
-The effects percolate up into the abstraction layers
-when components use an effectful underlay.
-So we separate a one-sided object semantics
-which is allowed to have effect,
-from the two-sided horizontal components.
-
-
-\subsection{Object Semantics with Effects}
-
-coalgebra,
-we incorporate a monad in the corresponding $\Pi \Sigma$ endofunctor.
-
-One-sidedness means $\mathbin@$ is much easier to deal with, can just be $\otimes$.
-
-One goal is to figure out what the terminal coalgebra looks like.
-
-Another question is how the monad interacts with abstraction:
-translating objects semantics through refinement conventions.
-
-\subsection{Nondeterminism}
-
-Monad: $\mathcal{P}$
-
-How it interacts with refinement conventions:
-we can just formulate a standard simulation property
-where we must handle all target choices
-and get to pick source choices.
-
-\subsection{Probability}
-
-Monad: Distributions with finite support
-
-\subsection{Information Flow Security}
-
-When the spec is deterministic we could just verify a property of the spec but:
+This section describes our approach and plans for
+incorporating \emph{side-effects} into our refinement framework.
+Enriching the framework described in \S\ref{sec:compcertoe} with effects
+is a non-trivial endeavor.
+The effects potentially triggered by component behaviors
+become a concern in almost all of the framework's constructions,
+raising questions like:
 \begin{itemize}
-  \item what could this property look like;
-  \item what would it mean through abstraction relationships
-    which introduct nondeterminism;
-  \item how does it interact with our extra nondeterminism,
+  \item What notion of refinement should apply
+    between effectful components?
+  \item How should refinement conventions and effects interact?
+  \item Can stateful lenses trigger effects,
+    and if so how will effects compose spatially?
 \end{itemize}
+To make it easier to address these questions,
+we will restrict the scope of our work in two ways.
+First, we will restrict effects to a specific class of
+self-contained, one-sided components
+with types of the form $\emptysig \twoheadrightarrow E$,
+which we term \emph{effectful layer specifications};
+this is discussed below in \S\ref{ssec:lspec}.
+Second,
+we will focus on incorporating specific effects
+into the framework,
+including nondeterminism and probabilistic choices,
+rather than attempt a systematic treatment of
+side-effects in game semantics
+through generic monadic or algebraic effect constructions.
+
+With these restrictions in mind,
+in order to lay out general principles,
+we will first discuss connections between
+algebraic effects and game semantics (\S\ref{ssec:ags}).
+We then outline our approach to layer specifications (\S\ref{ssec:lspec})
+and conclude the section with a discussion of
+planned work (\S\ref{ssec:effects:work}).
+
+\subsection{Algebraic Effects and Game Semantics} \label{ssec:ags}
+
+Our refinement framework uses \emph{effect signatures}
+as a simple form of games.
+This type of signatures come from
+the \emph{algebraic effects} literature,
+where operations denote the available effects
+and effectful computations are understood as
+terms in an algebra over the signature.
+Specifically,
+if $m \mathbin: N \in E$
+is an operation of arity $N$ in the signature $E$,
+the expression $m(k_1, \ldots, k_N)$
+denotes a computation which first triggers the effect $m$,
+and $k_1, \ldots, k_N$ are
+the possible continuations of the computation
+available to the effect $m$.
+A formal variable $x \in X$ denotes
+a terminating computation with the corresponding outcome.
+A particular interpretation of an effect signature $E$
+then defines a monad $M(X)$
+further equipped with an algebra
+providing an interpretation of the operations of $E$
+over the domain $M(X)$.
+
+When effects remain uninterpreted,
+$M(X)$ is the \emph{free monad} associated with $E$,
+in other words a freely generated set of terms
+based on the operations of $E$ and
+possible terminating outcomes in $X$.
+From the perspective of game semantics,
+terms in the free monad can also be understood as
+\emph{strategy trees},
+where operations denote moves of the system and
+argument positions denote the possible moves of the environment \cite{act21}.
+Within our framework,
+this rougly corresponds to a strategy of type
+$E \twoheadrightarrow \{ {*} \mathbin: X \}$,
+that is a component which can be invoked by a trivial question ($*$),
+perform operations over $E$,
+and terminate with an answer in $X$.
+
+Uninterpreted effects can be resolved by \emph{effect handlers}.
+Handler correspond roughly to strategies of type $E \twoheadrightarrow F$:
+they \emph{use} the effects in a signature $E$
+to \emph{provide} an interpretation for the effects in $F$.
+In so doing they define a monad homomorphism from
+the free monad associated with $F$ into
+the free monad associated with $E$.
+Finally,
+\emph{runners} of algebraic effects
+provide a final interpretation,
+roughly corresponding to strategies of type $\emptysig \twoheadrightarrow E$.
+
+While we do not intend to mechanize and use
+the theory of algebraic effects directly for our work,
+the ``rosetta stone'' presented above is useful to guide our understanding
+of the possible interactions and correspondence between 
+game semantic strategies and
+external effects.
+It is a useful conceptual framework
+we will be able to use as a guide and
+in heavily specialized form
+for the work proposed in this section.
+
+\subsection{Effectful Layer Specifications} \label{ssec:lspec}
+
+In almost all practical applications,
+only very few self-contained primitives
+can ultimately trigger side-effects.
+For example,
+a system involving randomness
+will usually almost entirely consist of deterministic code,
+whose probabilistic behavior only emerges through
+the invocation of a ``coin flip'' primitive
+which will access an external resource to obtain a random bit.
+Because of this,
+the semantics and analysis of random programs of this kind
+can usually be largely carried out in a deterministic setting,
+while reasoning involving probability distributions
+can be carried out as a final step when a deterministic component
+is composed with a probabilistic specification
+of the primitives it uses.
+
+To reflect this pattern and
+take advantage of it to control complexity,
+we will restrict the range of components which can perform side-effects
+to self-contained \emph{layer specifications}.
+In essence,
+layer specifications are \emph{runners},
+or components whose type is of the form $\emptysig \twoheadrightarrow E$:
+they can handle incoming questions over the signature $E$
+and provide a corresponding answer
+but do not perform any outgoing actions.
+A component of this kind can be specified through an initial state $s \in S$,
+together with a coalgebra
+\[
+   \delta \: : \: S \rightarrow \prod_{m \in E} \sum_{n \in \kw{ar}(m)} S
+   \,,
+\]
+for for each state and incoming question $m \in E$
+specifies an answer $n \in \kw{ar}(m)$
+and a successor state to be used to handle the next question.
+We expect this process to validate the following identities:
+\[
+  \kw{id}[L] = L
+  \,, \qquad
+  (\sigma \circ \tau)[L] = \sigma[\tau[L]]
+  \,.
+\]
+Note that the strategies for $\emptysig \twoheadrightarrow E$
+constitute a \emph{terminal} coalgebra,
+and every state $s \in S$ can be mapped to the corresponding strategy
+by taking the set of traces generated by the possible sequences of inputs.
+
+Because of the relative simplicity of layer specifications,
+it is straightforward to incorporate residual effects described by a monad $M$
+into our notion of layer specification.
+A layer specification for a signature $E$ with effects in $M$,
+denoted $L : M \looparrowright E$,
+is given by an initial state $s \in S$ and a coalgebra
+\[
+    \delta \: : \: S \rightarrow
+       \prod_{m \in E} M \Big( \sum_{n \in \kw{ar}(m)} S \Big)
+    \,.
+\]
+That is,
+for every possible state and question $m \in E$,
+$\delta$ will provide a computation with effects in $M$
+producing as outcome an answer $n \in \kw{ar}(m)$ and successor state.
+
+\subsection{Interaction with Strategies and Refinement Squares}
+
+A layer specification $L : M \looparrowright E$
+can be made to interact with
+a strategy $\sigma : E \twoheadrightarrow F$
+to yield a new specification $\sigma[L]$.
+To handle an incoming question,
+the layer specification $\sigma[L]$
+first executes the strategy $\sigma$.
+When $\sigma$ performs an outgoing call,
+we take a step in $L$ to determine its outcome.
+The monad structure of $M$ is used to
+accumulate the effects triggered by $L$
+as we interpret the successive outgoing calls
+performed by $\sigma$.
+
+We also expect effectful layer specifications
+to be equipped with a notion of refinement modulo convention.
+Given
+$L_1 : M \looparrowright E_1$ and 
+$L_2 : M \looparrowright E_2$,
+and given a refinement convention
+$\mathbf{R} : E_1 \leftrightarrow E_2$,
+we write
+$L_1 \le_R L_2$
+when $L_1$ is refined by $L_2$
+up to the abstraction relation captured by $\mathbf{R}$.
+Crucially,
+we expect this notion of refinement to be compatible with
+strategy interaction,
+so that in addition to the obvious vertical composition principle
+(refinement transitivity),
+the following horizontal composition principle holds:
+\[
+  \begin{prooftree}
+    \hypo{L_1 \le_\mathbf{R} L_2}
+    \hypo{\sigma_1 \le_{\mathbf{R} \twoheadrightarrow \mathbf{S}} \sigma_2}
+    \infer2{\sigma_1[L_1] \: \le_\mathbf{S} \: \sigma_2[L_2]}
+  \end{prooftree}
+  \qquad
+  \qquad
+    \begin{tikzcd}[sep=tiny]
+       M \ar[dd,equal] \ar[rr,hookrightarrow,"L_1"] &&
+       E_1 \ar[dd,leftrightarrow,"\mathbf{R}"]
+           \ar[rr,twoheadrightarrow,"\sigma_1"] &&
+       F_1 \ar[dd,leftrightarrow,"\mathbf{S}"] \\
+       & \le && \le & \\
+       M \ar[rr,hookrightarrow,"L_2"'] &&
+       E_2 \ar[rr,twoheadrightarrow,"\sigma_2"'] &&
+       F_2
+    \end{tikzcd}
+\]
+
+Note that while the definition of $\sigma[L]$ is fairly generic,
+refinement is more tied to exact nature of $M$.
+For example,
+in the context of demonic nondeterministic choices,
+we expect our notion of refinement to reflect
+a \emph{reduction} in the possible choices
+exhibited by the layer specification.
+Moreover,
+the exact interaction between these choices and
+the abstraction choices embedded in the refinement convention $\mathbf{R}$
+will need to be elucidated.
+Likewise,
+modeling probabilistic effects will require
+a careful choice of probability distribution monad,
+and careful thinking about the ways in which
+the abstraction choices made by $\mathbf{R}$
+should be expected to interact with probabilistic choices.
+
+%\subsection{Information Flow Security}
+%
+%When the spec is deterministic we could just verify a property of the spec but:
+%\begin{itemize}
+%  \item what could this property look like;
+%  \item what would it mean through abstraction relationships
+%    which introduce nondeterminism;
+%  \item how does it interact with our extra nondeterminism,
+%\end{itemize}
 
 \subsection{Proposed Work}
 
-\paragraph{Task 1a: Nondeterministic Object Semantics}
+Based on the principles outlined above,
+we propose to extend the refinement framework
+described in \S\ref{sec:compcertoe}
+to incorporate various kinds of
+effectful layer specifications.
+
+\paragraph{Task 1a: Nondeterministic Layer Specifications}
+\label{ssec:effects:work}
+
+The first effects we wish to incorporate are
+\emph{demonic nondeterministic choices}.
+Choices of this kind allow specifications to be under-constrained,
+an important feature in practical applications.
+In addition,
+demonic nondeterminism will lay the groundwork for
+supporting concurrency,
+as it can be used to account for the
+variation in behaviors that could be observed
+for a given system
+depending on the way its threads are scheduled.
+Hence,
+our first task will be to
+choose an appropriate demonic choice monad
+and implement a nondeterministic extension
+to our framework.
 
 \paragraph{Task 1b: Probabilistic Object Semantics}
 
+Probabilistic choices are more complex than simple nondeterminism,
+as they involve a quantitative component.
+However they are necessary in many applications
+involving randomized algorithms, cryptographic primitives or
+unreliable networks.
+Therefore,
+once we successfully develop a version of our refinement framework
+with nondeterminism support,
+we will refine this extension to incorporate
+a distribution monad allowing us to model probabilistic computation.
+
 \paragraph{Task 1c: Security Properties}
+
+Finally,
+in the presence of abstraction, nondeterminism and probabilistic computation,
+information flow security properties become
+harder to formulate and reason about.
+Yet in practical applications,
+noninterference and similar properties
+are often some of the most important results we wish to obtain.
+To address this,
+we will investigate ways in which information security properties
+can be expressed and reasoned about
+in the context of our extended refinement framework.
+Possible approaches are explored in \cite[\S{}II]{yuyang}.
 
