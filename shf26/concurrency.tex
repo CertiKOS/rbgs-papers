@@ -74,14 +74,14 @@ a sequential layer specification as described in \S\ref{sec:effects}
 operating over a signature
 \newcommand\parr{!}
 \[
-  \parr E := \{ \alpha \mathbin. m \mathbin: N \mid
-           \alpha \in \varGamma \wedge
+  \parr E := \{ \alpha . m \mathbin: N \mid
+           \alpha \in \Upsilon \wedge
            (m \mathbin: N) \in E \}
   \,,
 \]
 where each operation is annotated with
 a thread identifier $\alpha$
-taken from a predefined, fixed set of thread names $\varGamma$.
+taken from a predefined, fixed set of thread names $\Upsilon$.
 In this form,
 linearized specifications are much easier to
 incorporate in a framework with effects and refinement conventions,
@@ -91,13 +91,13 @@ which are inherently sequential in many aspects.
 
 With this in mind,
 following the strategy established in \S\ref{sec:effects},
-the concurrent version of our refinement framework
+a concurrent version of our refinement framework
 will be constructed using:
 \begin{itemize}
   \item linearized atomic layer specifications as described above;
   \item the sequential (per-thread) implementation strategies
     found in our base framework;
-  \item a notion of layer correctness described below.
+  \item the following notion of layer correctness.
 \end{itemize}
 We will write
 $\Gamma \vdash_\mathbf{R} \sigma : \Delta$
@@ -115,15 +115,15 @@ this situation can be depicted as
   \qquad \qquad
   \begin{tikzcd}
     M \ar[d, equal] \ar[rr, "\Delta"] & &
-    F_1 \ar[d, "\mathbf{R}", leftrightarrow] \\
+    !F_1 \ar[d, "\mathbf{R}", leftrightarrow] \\
     M \ar[r, "\Gamma"] &
-    E \ar[r, "\sigma", twoheadrightarrow] & F_2
+    !E \ar[r, "!\sigma", twoheadrightarrow] & !F_2
   \end{tikzcd}
   \label{eqn:concref}
 \end{equation}
 However,
 note that in general
-the composite $\sigma[Gamma]$
+the composite $\sigma[\Gamma]$
 cannot be defined,
 as a \emph{most general linearized atomic specification}
 implemented by $\sigma$ may not exist.
@@ -135,20 +135,186 @@ linking the four components $\Delta$, $\Gamma$, $\sigma$ and $\mathbf{R}$.
 Nevertheless,
 the visualization provided above
 is useful to understand how
-concurrent refinements
+concurrent refinements compose and
 interact with our sequential implementations framework.
-
-
+In particular,
+the following composition principle
+can be used to construct
+larger layer correctness properties
+from elementary ones:
+\[
+  \begin{prooftree}
+    \hypo{\Gamma \vdash_\mathbf{R} \sigma : \Delta}
+    \hypo{\Delta \vdash_\mathbf{S} \tau_2 : \Sigma}
+    \hypo{\tau_2 \le_{\mathbf{R} \rightarrow \mathbf{T}} \tau_3}
+    \infer3{\Gamma \vdash_{\mathbf{S} \mathbin; \mathbf{T}} \tau_3 \circ \sigma : \Sigma}
+  \end{prooftree}
+  \qquad \qquad
+  \begin{tikzcd}
+    \bullet \ar[rrr, "\Sigma"] \ar[d, equal] & & &
+    !G_1 \ar[d, "\mathbf{S}", leftrightarrow] \\
+    \bullet \ar[rr, "\Delta"] \ar[d, equal] & &
+    !F_2 \ar[r, "\tau_2"] \ar[d, "\mathbf{R}"', leftrightarrow] &
+    !G_2 \ar[d, "\mathbf{T}", leftrightarrow] \\
+    \bullet \ar[r, "\Gamma"'] &
+    !E_3 \ar[r, "\sigma"'] &
+    !F_3 \ar[r, "\tau_3"'] &
+    !G_3
+  \end{tikzcd}
+\]
 
 \subsection{Effects}
 
-\subsection{Liveness}
+Taking an atomic linearized view of concurrent objects
+also simplifies incorporating effects into the concurrent framework.
+In general,
+the way in which effects triggered by different threads may combine
+is not obvious.
+However,
+the sequential ordering induced by linearized atomic specifications
+provides an unambiguous answer to this question.
+
+Because of this,
+we expect it will be possible to incorporate
+effects such as nondeterminism and probabilistic computation
+into the concurrent version of the framework
+with reasonable effort.
+This will enable a variety of important real-world applications,
+including in areas such as cryptographic or consensus protocols.
+
+%XXX: could add somthing about how information security
+%fits into the picture
+
+\subsection{Progress and Liveness Properties}
+
+While linearized atomic specifications
+provide a convenient way to describe the behavior of concurrent objects,
+by themselves they can only capture \emph{safety} properties.
+
+When a concurrent object is given a linearized atomic specification,
+the object is free to handle
+concurrent method invocations by multiple client threads
+in an arbitrary order,
+introducing a form of demonic nondeterminism.
+Unfortunately,
+these demonic choices leave open the possibility that
+client threads will be starved,
+making it hard to provide any guarantees to the client code
+based on the linearized atomic specification alone.
+To deal with this,
+concurrent object specifications are usually augmented
+with the choice of a \emph{progress} property
+(such as race-freedom, deadlock-freedom, etc)
+which constrains the object's behavior in addition to its
+linearized atomic specification.
+This could be incorporated into our approach
+by hard-coding a set number of progress properties
+into our definition of layer correctness.
+
+However,
+the work of PI Shao and other members of our group show that
+a more systematic approach to liveness properties
+is possible in the context of linearizability.
+We plan to investigate ways in which these techniques
+could be incorporated into our paradigm.
 
 \subsection{Shared Memory}
 
-Mention memory PCM and angelic CompCert sem?
+At first blush,
+our approach of isolating concurrency
+from per-thread language semantics
+seems at odd with a treatment of shared-memory concurrency:
+in this paradigm,
+threads rely only on their local state and
+any interactions with other threads
+must involve calls to underlay primitives;
+whereas accesses to shared memory
+would seem to involve a form of cross-thread communication
+which by nature must be built into the language semantics.
+However,
+the combined use of \emph{angelic} nondeterminism
+and memory separation constructions
+makes it possible to resolve this apparent limitation.
 
-\subsection{Non-atomic Objects}
+In programs making use of shared-memory concurrency,
+accesses to (non-atomic) shared memory regions
+must be carefully synchronized between threads to avoid any data races---%
+situations where potentially conflicting memory accesses
+could lead to undefined behaviors.
+As a consequence,
+in a race-free execution,
+at any point in time shared memory can be decomposed
+into individual per-thread memory shares
+which assign permissions to individual locations
+in a way that is consistent with race-free accesses
+across the different threads.
+Under this paradigm,
+between calls to underlay primitives,
+the memory share associated with each thread
+can be viewed as a form of private state,
+as accesses which are consistent with assigned permissions
+cannot interfere with the execution of other threads.
+
+Any actual communication through shared memory
+must be carefully synchronized,
+for example by acquiring a lock associated with
+a particular memory region.
+This synchronization will involve
+invoking underlay primitives,
+which gives us the opportunity to update
+the memory share associated with the current thread,
+for example by importing exclusive memory permissions
+for the region in question.
+By incorporating this ``share update'' mechanism
+into the specifications of synchronization primitives,
+we can bridge the gap between the view of threads as
+self-contained sequential computations operating on private state and
+the non-atomic shared memory access mechanism
+that are required for real-world concurrent programming.
+
+However,
+in many low-level languages---%
+for example C programs invoking \textsf{pthread} primitives---%
+locks and other synchronization mechanisms
+are not explicitly linked to the regions of memory they protect,
+so that it is impossible for the corresponding primitive specifications
+to know in advance how the repartition of memory shares across threads
+ought to be updated.
+This remaining issue can be addressed using angelic nondeterminism:
+under this paradigm, specifications for synchronization primitives
+simply enumerate all possible permission updates
+which would leave the overall memory unchanged,
+in the form of a nondeterministic choice.
+In a race-free program,
+there will be a way to resolve these choices
+such that subsequent memory accesses across all threads will remain valid.
+If a proper assignment of permissions if impossible to exhibit,
+this signifies the presence of a data race and
+will trigger an undefined behavior in the program's semantics.
+Since the choice operates on permissions only,
+the nondeterminism introduced for distributing shared memory
+across thread cannot influence the program's eventual output,
+but only whether or not this output is well-defined.
+
+Concretely,
+implementing this approach to shared memory
+will involve the definition of an appropriate separation algebra
+for the CompCert memory model,
+as well as incorporating angelic nondeterminism
+using the techniques described in the rest of this proposal.
+In addition to a treatment of shared memory
+which suits our overall paradigm,
+we expect this approach to play well with existing separation logic techniques,
+and enable us to integrate our framework with
+existing tools such as Iris and VST.
+
+%\subsection{Non-atomic Objects}
+%
+%[Things like interval linearizability, etc.
+%All the way up to Arthur-style nonatomic linearization.
+%How do we make those fit into a (co)algebraic framework?]
+
+\subsection{Proposed work}
 
 \paragraph{Task 2a: LinCCAL-style correctness with atomic linearized specs}
 
